@@ -17,7 +17,7 @@ def test_get_local_version_info():
     assert info.base_version == "0.1.0"
     assert info.commit_hash != "unknown"
     assert len(info.commit_hash) >= 4
-    assert info.branch in ["main", "feature/auto-versioning-sync"]
+    assert isinstance(info.branch, str) and len(info.branch) > 0
     assert "v0.1.0-" in info.full_version
 
 
@@ -33,3 +33,6 @@ def test_version_info_status_display():
 
     info.sync_status = "modified"
     assert "📝" in info.status_display
+
+    info.sync_status = "offline"
+    assert "🔌" in info.status_display

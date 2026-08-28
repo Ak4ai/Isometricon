@@ -80,10 +80,14 @@ def get_local_version_info() -> VersionInfo:
     if commit:
         info.commit_hash = commit
 
-    # 2. Branch atual
-    branch = _run_git_cmd(["rev-parse", "--abbrev-ref", "HEAD"])
-    if branch:
-        info.branch = branch
+    # 2. Branch atual (com fallback para variáveis de ambiente de CI como GitHub Actions)
+    ci_branch = os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME")
+    if ci_branch:
+        info.branch = ci_branch
+    else:
+        branch = _run_git_cmd(["rev-parse", "--abbrev-ref", "HEAD"])
+        if branch:
+            info.branch = branch
 
     # 3. Verificar se há alterações não commitadas (dirty)
     status = _run_git_cmd(["status", "--porcelain"])
