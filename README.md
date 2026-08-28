@@ -3,6 +3,7 @@
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Wiki](https://img.shields.io/badge/Docs-GitHub%20Wiki-blueviolet?logo=github)](https://github.com/Ak4ai/Isometricon/wiki)
 [![OpenGL](https://img.shields.io/badge/OpenGL-3.3%2B%20Core-5586A4?logo=opengl&logoColor=white)](https://www.opengl.org/)
 [![GLSL](https://img.shields.io/badge/Shaders-GLSL%20330-orange.svg)](docs/SHADERS.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Modular%20Voxel%20Engine-brightgreen)](docs/ARCHITECTURE.md)
@@ -10,7 +11,7 @@
 
 **Um motor gráfico 3D isométrico baseado em blocos (Voxel-based Virtual Tabletop Engine) para mesas de RPG tático.**
 
-[Documentação](docs/ARCHITECTURE.md) • [Shaders](docs/SHADERS.md) • [Contrato de Integração](docs/INTEGRATION_SPEC.md) • [Proposta Completa](proposta.md)
+[📖 Acessar GitHub Wiki](https://github.com/Ak4ai/Isometricon/wiki) • [🏛️ Arquitetura](docs/ARCHITECTURE.md) • [🎨 Shaders](docs/SHADERS.md) • [🔗 Integração](docs/INTEGRATION_SPEC.md) • [📋 Proposta](proposta.md)
 
 </div>
 
