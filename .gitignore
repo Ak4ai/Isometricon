@@ -101,3 +101,5 @@ logs/
 *.swp
 *~
 scratch/
+wiki_export/
+.wiki/
