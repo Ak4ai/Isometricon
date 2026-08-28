@@ -1,0 +1,34 @@
+name: Isometricon CI
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-assets:
+    name: Validate Shaders & Assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check GLSL Shader Syntax Integrity
+        run: |
+          echo "Checking GLSL Shaders..."
+          for file in assets/shaders/*; do
+            if [ -f "$file" ]; then
+              echo "Found shader: $file"
+              head -n 1 "$file" | grep -q "#version" || { echo "Missing #version in $file"; exit 1; }
+            fi
+          done
+          echo "All shaders verified."
+
+      - name: Verify Documentation & Structural Integrity
+        run: |
+          test -f README.md || exit 1
+          test -f docs/ARCHITECTURE.md || exit 1
+          test -f docs/INTEGRATION_SPEC.md || exit 1
+          test -f docs/SHADERS.md || exit 1
+          echo "Project documentation and structural layout are valid."

@@ -1,0 +1,103 @@
+# ==============================================================================
+# Isometricon - Git Ignore
+# Suporte a Java/LWJGL, Python, C/C++, WebGL/JS, IDEs e Arquivos de Sistema
+# ==============================================================================
+
+# Compilação & Build
+build/
+bin/
+out/
+target/
+dist/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.so
+*.dll
+*.dylib
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+
+# Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+develop-eggs/
+eggs/
+.eggs/
+parts/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / WebGL / TS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env
+.env.local
+
+# IDEs & Editores
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+*.sublime-project
+.classpath
+.project
+.settings/
+
+# Sistema Operacional
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs & Temporários
+logs/
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+scratch/
