@@ -126,12 +126,36 @@ gantt
 
 ---
 
-## 💻 Requisitos e Execução
+## 💻 Como Rodar o Projeto
 
 ### Pré-requisitos
-* **OpenGL:** Suporte a OpenGL 3.3 Core Profile ou superior.
-* **Placas Gráficas:** Intel HD Graphics 4000+, NVIDIA GeForce 400+ ou AMD Radeon HD 5000+.
-* **Ferramentas de Desenvolvimento:** Git, C++ / Java 21+ / Python 3.10+ conforme módulo selecionado.
+* **Python 3.10+** (recomendado 3.12)
+* **OpenGL 3.3 Core Profile** ou superior
+* **Git** e **VS Code** (opcional, mas recomendado)
+
+### 🚀 Execução Rápida (3 Passos)
+
+1. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/Ak4ai/Isometricon.git
+   cd Isometricon
+   ```
+
+2. **Instale as dependências:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Inicie o motor gráfico:**
+   ```bash
+   python src/main.py
+   ```
+   *(Ou abra a pasta no VS Code e pressione **F5**!)*
+
+### 🧪 Executando os Testes Unitários
+```bash
+pytest -v
+```
 
 ---
 
