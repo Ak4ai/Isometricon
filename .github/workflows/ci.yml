@@ -32,3 +32,17 @@ jobs:
           test -f docs/INTEGRATION_SPEC.md || exit 1
           test -f docs/SHADERS.md || exit 1
           echo "Project documentation and structural layout are valid."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Unit Tests
+        run: |
+          pytest tests/ -v
