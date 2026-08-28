@@ -1,15 +1,20 @@
 ## 📌 Descrição das Alterações
-<!-- Resuma o que foi implementado, refatorado ou corrigido. -->
+<!-- Descreva de forma concisa o que foi implementado ou corrigido neste Pull Request. -->
 
-## 🔗 Issue Relacionada
+## 🔗 Issue Vinculada
+<!-- Use 'Closes #NUMERO' para que o GitHub feche a issue automaticamente após o merge -->
 Closes #
 
-## 🔬 Checklist de Computação Gráfica
-- [ ] Testado em resolução nativa sem deformação de aspect ratio.
-- [ ] Shaders compilam sem warnings/erros de GLSL.
-- [ ] Recursos alocados (VAO, VBO, Shaders, Texturas) são liberados corretamente na destruição.
-- [ ] Otimizações de CPU/GPU mantêm a taxa de quadros estável.
-- [ ] Não quebra a interface de integração documentada em `docs/INTEGRATION_SPEC.md`.
+## 🛠️ Tipo de Alteração
+- [ ] ✨ Nova funcionalidade (`feat`)
+- [ ] 🐛 Correção de bug (`fix`)
+- [ ] 🎨 Melhoria gráfica / Shaders (`shader`)
+- [ ] ⚡ Otimização de performance / Culling (`perf`)
+- [ ] 📝 Documentação (`docs`)
+- [ ] 🧪 Testes (`test`)
 
-## 📸 Screenshots / Demonstração Visual
-<!-- Adicione imagens ou GIFs da renderização quando aplicável -->
+## ✅ Checklist de Qualidade e Validação
+- [ ] O código foi testado localmente executando `python src/main.py`
+- [ ] Os testes unitários passaram com sucesso (`pytest`)
+- [ ] Não há erros de compilação de shaders GLSL
+- [ ] Segue a arquitetura e padrões do projeto
