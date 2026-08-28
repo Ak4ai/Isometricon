@@ -9,9 +9,24 @@ from typing import Optional
 import urllib.error
 import urllib.request
 
-BASE_VERSION = "0.1.0"
+def _load_base_version() -> str:
+    """Lê a versão base a partir do arquivo VERSION na raiz do projeto."""
+    try:
+        version_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "VERSION"))
+        if os.path.exists(version_file):
+            with open(version_file, "r", encoding="utf-8") as f:
+                ver = f.read().strip()
+                if ver:
+                    return ver
+    except Exception:
+        pass
+    return "0.1.0"
+
+
+BASE_VERSION = _load_base_version()
 DEFAULT_REPO = "Ak4ai/Isometricon"
 DEFAULT_BRANCH = "main"
+
 
 
 @dataclass
