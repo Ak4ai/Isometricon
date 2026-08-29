@@ -32,7 +32,7 @@ Utilizamos o padrão de [Conventional Commits](https://www.conventionalcommits.o
 * `feat(shader): implementa compilador de shaders GLSL 330 (closes #3)`
 * `feat(world): adiciona algoritmo de face culling na CPU (closes #6)`
 * `fix(camera): corrige proporção ortográfica ao redimensionar viewport`
-* `test(version): adiciona testes unitarios para deteccao de branch`
+* `test(version): adiciona testes unitários para detecção de branch`
 
 ---
 
@@ -44,10 +44,16 @@ Antes de enviar sua branch para o GitHub, certifique-se de que tudo está funcio
    ```bash
    python src/main.py
    ```
+   *(Ou pressione **F5** no VS Code).*
 2. **Execute a suíte de testes unitários**:
    ```bash
    pytest -v
    ```
+3. **(Opcional) Teste a compilação do executável**:
+   ```bash
+   python scripts/build.py
+   ```
+   *(Ou pressione **Ctrl + Shift + B** no VS Code).*
 
 ---
 
@@ -67,7 +73,16 @@ Assim que a esteira de CI validar os testes e o PR for aprovado e mesclado na `m
 
 ---
 
-## 📐 5. Padrões de Código em Computação Gráfica (OpenGL Raiz)
+## 🏷️ 5. Lançando uma Nova Release Oficial
+
+Quando a equipe atingir um marco ou Milestone:
+1. Abra o arquivo [`VERSION.txt`](VERSION.txt) na raiz e atualize o número de versão (ex: de `0.1.0` para `0.2.0`).
+2. Envie o commit para a `main` via Pull Request.
+3. O GitHub Actions iniciará automaticamente a pipeline de release e publicará os 3 pacotes compilados (Windows Portable, Windows Installer e Linux) na aba **[Releases](https://github.com/Ak4ai/Isometricon/releases)**.
+
+---
+
+## 📐 6. Padrões de Código em Computação Gráfica (OpenGL Raiz)
 
 1. **Memória de GPU:** Todo recurso gerado via `glGen*` (buffers, VAO, VBO, shaders) deve ter sua correspondente desalocação `glDelete*`.
 2. **Nomes Matemáticos Claros:** Variáveis de matrizes e vetores devem seguir convenções claras (`model_matrix`, `view_matrix`, `projection_matrix`, `normal_vec`).
