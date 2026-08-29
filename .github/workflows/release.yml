@@ -4,6 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
+      - 'VERSION.txt'
       - 'VERSION'
     tags:
       - 'v*'
@@ -31,6 +32,9 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG="${GITHUB_REF_NAME}"
             VERSION="${TAG#v}"
+          elif [ -f VERSION.txt ]; then
+            VERSION=$(cat VERSION.txt | tr -d '[:space:]')
+            TAG="v${VERSION}"
           else
             VERSION=$(cat VERSION | tr -d '[:space:]')
             TAG="v${VERSION}"

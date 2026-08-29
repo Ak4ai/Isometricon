@@ -10,16 +10,18 @@ import urllib.error
 import urllib.request
 
 def _load_base_version() -> str:
-    """Lê a versão base a partir do arquivo VERSION na raiz do projeto."""
-    try:
-        version_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "VERSION"))
+    """Lê a versão base a partir do arquivo VERSION.txt (ou VERSION) na raiz do projeto."""
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    for filename in ["VERSION.txt", "VERSION", "version.txt"]:
+        version_file = os.path.join(root_dir, filename)
         if os.path.exists(version_file):
-            with open(version_file, "r", encoding="utf-8") as f:
-                ver = f.read().strip()
-                if ver:
-                    return ver
-    except Exception:
-        pass
+            try:
+                with open(version_file, "r", encoding="utf-8") as f:
+                    ver = f.read().strip()
+                    if ver:
+                        return ver
+            except Exception:
+                pass
     return "0.1.0"
 
 
