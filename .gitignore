@@ -22,6 +22,10 @@ dist/
 *.obj
 *.a
 *.lib
+*.spec
+*.zip
+*.tar.gz
+
 
 # Gradle
 .gradle/
