@@ -159,6 +159,40 @@ pytest -v
 
 ---
 
+## 📦 Compilação Local de Executáveis (.exe / Linux)
+
+O projeto conta com um script unificado de compilação multiplataforma ([`scripts/build.py`](scripts/build.py)) que empacota o interpretador Python, dependências e Shaders:
+
+```bash
+# Compilar automaticamente para o seu sistema operacional atual:
+python scripts/build.py
+
+# Compilar para Windows (.exe portátil e instalador standalone):
+python scripts/build.py --windows --onefile
+
+# Compilar para Linux a partir do Windows (usa WSL automaticamente):
+python scripts/build.py --linux
+
+# Limpar arquivos temporários de compilação:
+python scripts/build.py --clean
+```
+
+> 💡 **Atalho no VS Code**: Pressione **`Ctrl + Shift + B`** para abrir o menu rápido de compilação!
+
+---
+
+## 🏷️ Versionamento Automático & Releases
+
+* **Arquivo de Versão Central ([`VERSION.txt`](VERSION.txt))**: Controla a versão semântica do projeto (ex: `0.1.0`).
+* **Sincronização em Tempo Real**: Ao iniciar a engine, uma thread assíncrona compara o commit local com a `origin/main` do GitHub e exibe o status no console e no título da janela (`✅ Synced` / `⚠️ Outdated` / `📝 Modified`).
+* **Esteira de Releases ([`.github/workflows/release.yml`](.github/workflows/release.yml))**: Sempre que a versão no `VERSION.txt` é alterada na `main`, o GitHub Actions compila automaticamente os 3 pacotes e publica na aba **[Releases](https://github.com/Ak4ai/Isometricon/releases)**:
+  - 📦 `Isometricon-v<VER>-Windows-Portable.zip`
+  - 💿 `Isometricon-v<VER>-Windows-Installer.exe`
+  - 🐧 `Isometricon-v<VER>-Linux-Portable.tar.gz`
+
+
+---
+
 ## 👥 Autores & Contribuições
 
 * **Equipe A (Motor do Mundo):** Desenvolvimento do motor central de renderização e voxels.
