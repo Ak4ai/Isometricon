@@ -8,8 +8,8 @@ Agradecemos o interesse em contribuir com o **Isometricon**! Para manter a quali
 
 Cada funcionalidade ou correção deve ser desenvolvida em uma branch dedicada conectada a uma **Issue**:
 
-### 🥇 Opção 1: Direto pelo GitHub Web (1 Clique)
-1. Abra a Issue que você vai fazer no GitHub (ex: [Issue #2](https://github.com/Ak4ai/Isometricon/issues/2)).
+### 🥇 Opção 1: Direto pelo GitHub Web (1 Clique - Recomendado)
+1. Abra a Issue que você vai fazer no GitHub (ex: [Issue #3](https://github.com/Ak4ai/Isometricon/issues/3)).
 2. Na coluna lateral direita, na seção **Development**, clique em **"Create a branch"**.
 3. O GitHub criará a branch e fornecerá os dois comandos para rodar no seu terminal:
    ```bash
@@ -36,7 +36,7 @@ Utilizamos o padrão de [Conventional Commits](https://www.conventionalcommits.o
 
 ---
 
-## 🧪 3. Validação Local Antes de Abrir o PR
+## 🧪 3. Validação Local Antes de Enviar o Código
 
 Antes de enviar sua branch para o GitHub, certifique-se de que tudo está funcionando:
 
@@ -57,23 +57,33 @@ Antes de enviar sua branch para o GitHub, certifique-se de que tudo está funcio
 
 ---
 
-## 🚀 4. Abrindo o Pull Request (PR)
+## 🚀 4. Como Enviar (Push) sem Erros de Terminal
 
-Envie sua branch para o GitHub:
+Quando os nomes das branches forem longos, para evitar que o terminal quebre o texto em várias linhas, use o atalho:
+
 ```bash
-git push -u origin <NOME-DA-SUA-BRANCH>
+git push -u origin HEAD
 ```
-
-Em seguida, abra o Pull Request pelo GitHub Web ou pela CLI:
-```bash
-gh pr create
-```
-
-Assim que a esteira de CI validar os testes e o PR for aprovado e mesclado na `main`, a issue correspondente será fechada automaticamente.
+> 💡 **Dica de Ouro**: O comando `git push -u origin HEAD` envia a sua branch atual diretamente para o GitHub sem você precisar copiar ou digitar o nome dela!
 
 ---
 
-## 🏷️ 5. Lançando uma Nova Release Oficial
+## 📋 5. Abrindo e Preenchendo o Pull Request (PR)
+
+1. Acesse o repositório no GitHub: [https://github.com/Ak4ai/Isometricon](https://github.com/Ak4ai/Isometricon)
+2. Clique no botão verde **"Compare & pull request"**.
+3. O GitHub carregará o **formulário padrão** na caixa de descrição. Preencha-o da seguinte forma:
+   - **Descrição**: Explique resumidamente o que foi feito.
+   - **Issue Vinculada**: Coloque `Closes #NUMERO_DA_ISSUE` (ex: `Closes #3`). Isso fará o GitHub fechar a issue sozinho após o merge!
+   - **Tipo de Alteração**: Marque com um `x` entre os colchetes (ex: `- [x] ✨ Nova funcionalidade`).
+   - **Checklist de Validação**: Marque com `[x]` os itens que você testou.
+4. Clique em **"Create pull request"**.
+5. Aguarde a esteira de testes (CI) validar o código em verde ✅.
+6. Clique em **"Squash and merge"** -> **"Confirm squash and merge"**.
+
+---
+
+## 🏷️ 6. Lançando uma Nova Release Oficial
 
 Quando a equipe atingir um marco ou Milestone:
 1. Abra o arquivo [`VERSION.txt`](VERSION.txt) na raiz e atualize o número de versão (ex: de `0.1.0` para `0.2.0`).
@@ -82,7 +92,7 @@ Quando a equipe atingir um marco ou Milestone:
 
 ---
 
-## 📐 6. Padrões de Código em Computação Gráfica (OpenGL Raiz)
+## 📐 7. Padrões de Código em Computação Gráfica (OpenGL Raiz)
 
 1. **Memória de GPU:** Todo recurso gerado via `glGen*` (buffers, VAO, VBO, shaders) deve ter sua correspondente desalocação `glDelete*`.
 2. **Nomes Matemáticos Claros:** Variáveis de matrizes e vetores devem seguir convenções claras (`model_matrix`, `view_matrix`, `projection_matrix`, `normal_vec`).
