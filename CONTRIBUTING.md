@@ -73,8 +73,9 @@ git push -u origin HEAD
 1. Acesse o repositório no GitHub: [https://github.com/Ak4ai/Isometricon](https://github.com/Ak4ai/Isometricon)
 2. Clique no botão verde **"Compare & pull request"**.
 3. O GitHub carregará o **formulário padrão** na caixa de descrição. Preencha-o da seguinte forma:
-   - **Descrição**: Explique resumidamente o que foi feito.
-   - **Issue Vinculada**: Coloque `Closes #NUMERO_DA_ISSUE` (ex: `Closes #3`). Isso fará o GitHub fechar a issue sozinho após o merge!
+   - **Issue Vinculada**:
+     - Se este PR conclui a issue por completo: coloque `Closes #NUMERO` (ex: `Closes #3`) para fechá-la automaticamente.
+     - Se este PR faz apenas parte da tarefa: coloque `Part of #NUMERO` ou `Refs #NUMERO` (a issue continuará aberta).
    - **Tipo de Alteração**: Marque com um `x` entre os colchetes (ex: `- [x] ✨ Nova funcionalidade`).
    - **Checklist de Validação**: Marque com `[x]` os itens que você testou.
 4. Clique em **"Create pull request"**.

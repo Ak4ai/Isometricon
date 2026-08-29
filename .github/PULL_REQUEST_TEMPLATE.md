@@ -2,8 +2,12 @@
 <!-- Descreva de forma concisa o que foi implementado ou corrigido neste Pull Request. -->
 
 ## 🔗 Issue Vinculada
-<!-- Use 'Closes #NUMERO' para que o GitHub feche a issue automaticamente após o merge -->
-Closes #
+<!-- 
+  - Se este PR conclui 100% da tarefa: use 'Closes #NUMERO' (fecha a issue automaticamente no merge)
+  - Se este PR faz apenas parte da tarefa: use 'Part of #NUMERO' ou 'Refs #NUMERO' (mantém a issue aberta)
+-->
+Closes # 
+
 
 ## 🛠️ Tipo de Alteração
 - [ ] ✨ Nova funcionalidade (`feat`)
