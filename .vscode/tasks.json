@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "📦 Build Executável (OS Atual)",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} scripts/build.py",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "🪟 Build Windows .exe",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} scripts/build.py --windows --onefile",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🐧 Build Linux (via WSL se no Windows)",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} scripts/build.py --linux",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🧹 Limpar pastas de build",
+            "type": "shell",
+            "command": "${command:python.interpreterPath} scripts/build.py --clean",
+            "problemMatcher": []
+        }
+    ]
+}
