@@ -5,10 +5,7 @@
             "label": "📦 Build Executável (OS Atual)",
             "type": "shell",
             "command": "${command:python.interpreterPath} scripts/build.py",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
+            "group": "build",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
@@ -16,7 +13,7 @@
             }
         },
         {
-            "label": "🪟 Build Windows .exe",
+            "label": "🪟 Build Windows .exe (OneFile Standalone)",
             "type": "shell",
             "command": "${command:python.interpreterPath} scripts/build.py --windows --onefile",
             "group": "build",
@@ -30,9 +27,10 @@
             "problemMatcher": []
         },
         {
-            "label": "🧹 Limpar pastas de build",
+            "label": "🧹 Limpar pastas de build e dist",
             "type": "shell",
             "command": "${command:python.interpreterPath} scripts/build.py --clean",
+            "group": "build",
             "problemMatcher": []
         }
     ]
