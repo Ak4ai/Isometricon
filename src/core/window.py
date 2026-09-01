@@ -154,6 +154,15 @@ class Window:
 
         return self._delta_time
 
+    def get_time(self) -> float:
+        """Retorna o tempo decorrido desde a inicialização do GLFW em segundos."""
+        return float(glfw.get_time())
+
+    @property
+    def time(self) -> float:
+        """Retorna o tempo decorrido desde a inicialização do GLFW em segundos."""
+        return float(glfw.get_time())
+
     @property
     def delta_time(self) -> float:
         """Tempo decorrido (em segundos) desde o último frame."""
