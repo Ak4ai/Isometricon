@@ -1,0 +1,53 @@
+"""Módulo matemático de vetores e matrizes para o Isometricon."""
+
+from src.math.matrix import (
+    mat4_identity,
+    mat4_inverse,
+    mat4_look_at,
+    mat4_multiply,
+    mat4_ortho,
+    mat4_perspective,
+    mat4_rotate,
+    mat4_rotate_x,
+    mat4_rotate_y,
+    mat4_rotate_z,
+    mat4_scale,
+    mat4_translate,
+    transform_point,
+    transform_vector,
+)
+from src.math.vector import (
+    cross,
+    distance,
+    dot,
+    length,
+    normalize,
+    vec2,
+    vec3,
+    vec4,
+)
+
+__all__ = [
+    "vec2",
+    "vec3",
+    "vec4",
+    "length",
+    "distance",
+    "normalize",
+    "dot",
+    "cross",
+    "mat4_identity",
+    "mat4_translate",
+    "mat4_scale",
+    "mat4_rotate_x",
+    "mat4_rotate_y",
+    "mat4_rotate_z",
+    "mat4_rotate",
+    "mat4_look_at",
+    "mat4_ortho",
+    "mat4_perspective",
+    "mat4_inverse",
+    "mat4_multiply",
+    "transform_point",
+    "transform_vector",
+]
