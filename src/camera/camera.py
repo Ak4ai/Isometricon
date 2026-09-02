@@ -73,6 +73,8 @@ class IsometricCamera:
         # Rotação lógica do tabuleiro.
         # Valores possíveis: 0, 90, 180, 270.
         self.board_rotation = 0
+        self.current_rotation = 0
+        self.rotation_speed = 10.0  # Velocidade de rotação do tabuleiro
     # ------------------------------------------------------------------
     # Propriedades da câmera
     # ------------------------------------------------------------------
@@ -170,12 +172,22 @@ class IsometricCamera:
             self.near,
             self.far,
         )
+    def update(self, dt: float) -> None:
+        """Interpola suavemente o angulo atual da camera em direção do angulo alvo"""
+        diff = float(self.board_rotation) - self.current_rotation
+        diff = (diff + 180.0) % 360.0 - 180.0
+        self.current_rotation += diff * min(self.rotation_speed * float(dt), 1.0)
+
     def get_model_matrix(self) -> np.ndarray:
-        #Retorna a matriz de rotação do tabuleiro.
-        #A rotação ocorre exclusivamente no eixo Y e em passos exatos
-        #de 90 graus
+        """Retorna a matriz de rotação do tabuleiro no passo atual."""
         angle = math.radians(self.board_rotation)
         return mat4_rotate_y(angle)
+
+    def get_animated_model_matrix(self) -> np.ndarray:
+        """Retorna a matriz de rotação suave interpolada do tabuleiro."""
+        angle = math.radians(self.current_rotation)
+        return mat4_rotate_y(angle)
+
     # ------------------------------------------------------------------
     # Zoom
     # ------------------------------------------------------------------
@@ -236,22 +248,18 @@ class IsometricCamera:
         self.target += movement
         # O pan da câmera ocorre somente no plano XZ.
         self.target[1] = 0.0
-    # ------------------------------------------------------------------
-    # Rotação do tabuleiro
-    # ------------------------------------------------------------------
     def rotate_left(self) -> None:
-        #Rotaciona o tabuleiro 90° para a esquerda
-        self.board_rotation = (
-            self.board_rotation - 90
-        ) % 360
+        """Rotaciona o tabuleiro 90° para a esquerda (anti-horário)."""
+        self.board_rotation = (self.board_rotation - 90) % 360
+
     def rotate_right(self) -> None:
-        #Rotaciona o tabuleiro 90° para a direita
-        self.board_rotation = (
-            self.board_rotation + 90
-        ) % 360
+        """Rotaciona o tabuleiro 90° para a direita (horário)."""
+        self.board_rotation = (self.board_rotation + 90) % 360
+
     def reset_rotation(self) -> None:
-        #Retorna a rotação do tabuleiro para 0°
+        """Retorna a rotação do tabuleiro para 0°."""
         self.board_rotation = 0
+        self.current_rotation = 0.0
     # ------------------------------------------------------------------
     # Input
     # ------------------------------------------------------------------
