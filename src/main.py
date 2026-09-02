@@ -1,6 +1,7 @@
 """Ponto de entrada principal do Isometricon (OpenGL 3.3 Core Profile)."""
 
 import os
+import random
 import sys
 
 # Garante que o diretório raiz e o diretório 'src' estejam no PYTHONPATH
@@ -10,9 +11,44 @@ PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# ---------------------------------------------------------------------------
+# Forçar GPU dedicada (NVIDIA Optimus / AMD PowerXpress) ANTES do OpenGL/GLFW
+# No Windows, os drivers verificam esses símbolos exportados pelo executável.
+# Como Python não exporta esses símbolos nativamente, usamos ctypes para
+# carregar as DLLs de hint dos fabricantes antes de qualquer contexto GL.
+# ---------------------------------------------------------------------------
+if sys.platform == "win32":
+    import ctypes
+
+    # Hint de variável de ambiente para pilhas de driver com suporte a GPU Switchable
+    os.environ.setdefault("SHIM_MCCOMPAT", "0x800000001")
+
+    # --- NVIDIA Optimus ---
+    # O driver NVIDIA expõe a DLL NvOptimusEnablement via nvapi64.
+    # Simplesmente carregar a DLL já sinaliza ao driver que queremos GPU discreta.
+    try:
+        _nv = ctypes.WinDLL("nvapi64.dll")
+        # Exportar o símbolo mágico que o driver verifica
+        _NvOptimusEnablement = ctypes.c_ulong(0x00000001)
+    except OSError:
+        pass  # NVIDIA não instalada ou não disponível
+
+    # --- AMD PowerXpress ---
+    # Mesmo mecanismo: carregar a DLL de hint do driver AMD.
+    try:
+        _amd = ctypes.WinDLL("amdxx64.dll")
+        _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
+    except OSError:
+        try:
+            _amd = ctypes.WinDLL("atiadlxx.dll")
+            _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
+        except OSError:
+            pass  # AMD não instalada ou não disponível
+
 import glfw
 import OpenGL.GL as gl
 import numpy as np
+from PIL import Image
 
 from src.camera import IsometricCamera
 from src.core.version import (
@@ -21,8 +57,8 @@ from src.core.version import (
     start_github_sync_check,
 )
 from src.core.window import Window
-from src.math import vec3
-from src.rendering import Mesh, Shader
+from src.math import mat4_rotate_y, vec3
+from src.rendering import Mesh, Shader, TexturedMesh
 
 
 def setup_opengl_state() -> None:
@@ -40,47 +76,66 @@ def setup_opengl_state() -> None:
     gl.glClearColor(0.08, 0.10, 0.13, 1.0)
 
 
-def create_cube_mesh() -> Mesh:
+def load_texture(texture_path: str) -> int:
+    """Carrega uma textura a partir de um arquivo e retorna o ID da textura OpenGL."""
+    img = Image.open(texture_path).convert("RGBA")
+    img = img.transpose(Image.FLIP_TOP_BOTTOM)
+    img_data = img.tobytes()
+    
+    tex_id = gl.glGenTextures(1)
+    gl.glBindTexture(gl.GL_TEXTURE_2D, tex_id)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)             
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)             
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)        
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+    gl.glTexImage2D(
+        gl.GL_TEXTURE_2D, 0, gl.GL_RGBA,
+        img.width, img.height, 0,
+        gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img_data
+    )
+    return tex_id
+
+
+def create_cube_mesh() -> TexturedMesh:
     """Cria uma malha 3D de cubo unitário centralizado para testes de renderização."""
-    # Layout por vértice:
-    # [x, y, z, nx, ny, nz, r, g, b]
-    vertices = np.array([
-        # Face Topo (+Y) - Grama verde viva
-        -0.5,  0.5, -0.5,   0.0,  1.0,  0.0,   0.34, 0.76, 0.28,
-         0.5,  0.5, -0.5,   0.0,  1.0,  0.0,   0.34, 0.76, 0.28,
-         0.5,  0.5,  0.5,   0.0,  1.0,  0.0,   0.34, 0.76, 0.28,
-        -0.5,  0.5,  0.5,   0.0,  1.0,  0.0,   0.34, 0.76, 0.28,
-
-        # Face Frontal (+Z) - Terra marrom
-        -0.5, -0.5,  0.5,   0.0,  0.0,  1.0,   0.55, 0.38, 0.24,
-         0.5, -0.5,  0.5,   0.0,  0.0,  1.0,   0.55, 0.38, 0.24,
-         0.5,  0.5,  0.5,   0.0,  0.0,  1.0,   0.55, 0.38, 0.24,
-        -0.5,  0.5,  0.5,   0.0,  0.0,  1.0,   0.55, 0.38, 0.24,
-
-        # Face Direita (+X) - Terra marrom
-         0.5, -0.5,  0.5,   1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-         0.5, -0.5, -0.5,   1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-         0.5,  0.5, -0.5,   1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-         0.5,  0.5,  0.5,   1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-
-        # Face Traseira (-Z) - Terra marrom
-         0.5, -0.5, -0.5,   0.0,  0.0, -1.0,   0.45, 0.30, 0.18,
-        -0.5, -0.5, -0.5,   0.0,  0.0, -1.0,   0.45, 0.30, 0.18,
-        -0.5,  0.5, -0.5,   0.0,  0.0, -1.0,   0.45, 0.30, 0.18,
-         0.5,  0.5, -0.5,   0.0,  0.0, -1.0,   0.45, 0.30, 0.18,
-
-        # Face Esquerda (-X) - Terra marrom
-        -0.5, -0.5, -0.5,  -1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-        -0.5, -0.5,  0.5,  -1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-        -0.5,  0.5,  0.5,  -1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-        -0.5,  0.5, -0.5,  -1.0,  0.0,  0.0,   0.50, 0.34, 0.20,
-
-        # Face Fundo (-Y) - Rocha escura
-        -0.5, -0.5,  0.5,   0.0, -1.0,  0.0,   0.30, 0.30, 0.32,
-         0.5, -0.5,  0.5,   0.0, -1.0,  0.0,   0.30, 0.30, 0.32,
-         0.5, -0.5, -0.5,   0.0, -1.0,  0.0,   0.30, 0.30, 0.32,
-        -0.5, -0.5, -0.5,   0.0, -1.0,  0.0,   0.30, 0.30, 0.32,
-    ], dtype=np.float32)
+    # Layout: [x, y, z, nx, ny, nz, u, v, r, g, b] (11 floats por vértice)               
+    vertices = np.array([                                                                
+        # Face Topo (+Y)                                                                 
+        -0.5,  0.5,  0.5,   0.0,  1.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
+         0.5,  0.5,  0.5,   0.0,  1.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
+         0.5,  0.5, -0.5,   0.0,  1.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
+        -0.5,  0.5, -0.5,   0.0,  1.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
+                                                                                            
+        # Face Frontal (+Z)                                                              
+        -0.5, -0.5,  0.5,   0.0,  0.0,  1.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
+         0.5, -0.5,  0.5,   0.0,  0.0,  1.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
+         0.5,  0.5,  0.5,   0.0,  0.0,  1.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
+        -0.5,  0.5,  0.5,   0.0,  0.0,  1.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
+                                                                                            
+        # Face Direita (+X)                                                              
+         0.5, -0.5,  0.5,   1.0,  0.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
+         0.5, -0.5, -0.5,   1.0,  0.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
+         0.5,  0.5, -0.5,   1.0,  0.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
+         0.5,  0.5,  0.5,   1.0,  0.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
+                                                                                            
+        # Face Traseira (-Z)                                                             
+         0.5, -0.5, -0.5,   0.0,  0.0, -1.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
+        -0.5, -0.5, -0.5,   0.0,  0.0, -1.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
+        -0.5,  0.5, -0.5,   0.0,  0.0, -1.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
+         0.5,  0.5, -0.5,   0.0,  0.0, -1.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
+                                                                                            
+        # Face Esquerda (-X)                                                             
+        -0.5, -0.5, -0.5,  -1.0,  0.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
+        -0.5, -0.5,  0.5,  -1.0,  0.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
+        -0.5,  0.5,  0.5,  -1.0,  0.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
+        -0.5,  0.5, -0.5,  -1.0,  0.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
+                                                                                            
+        # Face Fundo (-Y)                                                                
+        -0.5, -0.5, -0.5,   0.0, -1.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
+         0.5, -0.5, -0.5,   0.0, -1.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
+         0.5, -0.5,  0.5,   0.0, -1.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
+        -0.5, -0.5,  0.5,   0.0, -1.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
+    ], dtype=np.float32) 
 
     # Índices com enrolamento anti-horário (CCW)
     indices = np.array([
@@ -92,7 +147,7 @@ def create_cube_mesh() -> Mesh:
         20, 21, 22,  22, 23, 20,    # Fundo
     ], dtype=np.uint32)
 
-    return Mesh(vertices, indices)
+    return TexturedMesh(vertices, indices)
 
 
 def print_system_info(version_info: VersionInfo) -> None:
@@ -119,7 +174,7 @@ def print_system_info(version_info: VersionInfo) -> None:
     print(f"🔹 OpenGL Version : {version}")
     print(f"🔹 GLSL Version   : {glsl_version}")
     print("=" * 68)
-    print("⌨️  [Q/E] Rotacionar | [Mouse Wheel] Zoom | [MMB] Pan | [ESC] Sair\n")
+    print("⌨️  [Q/E] Rotacionar | [Mouse Wheel] Zoom | [Espaço + Arrastar / MMB] Pan | [ESC] Sair\n")
 
 
 def main() -> None:
@@ -155,18 +210,42 @@ def main() -> None:
         PROJECT_ROOT,
         "assets",
         "shaders",
-        "world.vert",
+        "world_textured.vert",
     )
 
     shader_frag = os.path.join(
         PROJECT_ROOT,
         "assets",
         "shaders",
-        "world.frag",
+        "world_textured.frag",
     )
 
     shader = Shader(shader_vert, shader_frag)
     cube_mesh = create_cube_mesh()
+    
+    # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
+    textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
+    all_pngs = [f for f in os.listdir(textures_dir) if f.lower().endswith(".png")]
+    
+    # Exclui itens conhecidos que não são blocos sólidos (plantas, tochas, portas, trilhos, etc.)
+    non_solid_keywords = (
+        "door", "trapdoor", "torch", "flower", "sapling", "pane", "glass",
+        "leaves", "rail", "chain", "lantern", "vine", "bush", "wire", "lever",
+        "button", "crop", "stem", "roots", "fungus", "coral", "fan", "dust",
+        "redstone", "candle", "bars", "ladder", "sprout", "lichen", "egg"
+    )
+    png_files = [f for f in all_pngs if not any(k in f for k in non_solid_keywords)]
+    if not png_files:
+        png_files = all_pngs
+
+    initial_png = random.choice(png_files)
+    # Estado de textura ativa
+    current_texture = {
+        "id": load_texture(os.path.join(textures_dir, initial_png)),
+        "name": initial_png,
+    }
+    texture_timer = 0.0
+    TEXTURE_CHANGE_INTERVAL = 0.5  # Alterar textura a cada 0.5 segundos
 
     # ------------------------------------------------------------------
     # 4. Inicializar câmera isométrica
@@ -183,6 +262,7 @@ def main() -> None:
         "active": False,
         "last_x": 0.0,
         "last_y": 0.0,
+        "shift_pressed": False,
     }
 
     # ------------------------------------------------------------------
@@ -196,8 +276,12 @@ def main() -> None:
         mods: int,
     ) -> None:
         """Encaminha eventos de teclado para a câmera."""
-        del scancode
-        del mods
+        del scancode,mods
+        
+        if key == glfw.KEY_LEFT_SHIFT:
+            pan_state["shift_pressed"] = action != glfw.RELEASE
+            if action == glfw.RELEASE and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
+                pan_state["active"] = False
 
         camera.handle_key(key, action)
 
@@ -208,26 +292,33 @@ def main() -> None:
     ) -> None:
         """Controla o início e fim do pan com o botão central."""
         del mods
-
-        if button != glfw.MOUSE_BUTTON_MIDDLE:
-            return
+        
+        is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
+        is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(glfw.KEY_LEFT_SHIFT)) 
 
         if action == glfw.PRESS:
-            pan_state["active"] = True
+            if is_middle or is_left_with_shift:
+                pan_state["active"] = True
 
-            x, y = window.get_cursor_pos()
+                x, y = window.get_cursor_pos()
 
-            pan_state["last_x"] = x
-            pan_state["last_y"] = y
+                pan_state["last_x"] = x
+                pan_state["last_y"] = y
 
         elif action == glfw.RELEASE:
-            pan_state["active"] = False
+            if button in (glfw.MOUSE_BUTTON_MIDDLE, glfw.MOUSE_BUTTON_LEFT):
+                pan_state["active"] = False
 
     def handle_cursor_position(
         x: float,
         y: float,
     ) -> None:
         """Move o ponto focal enquanto o botão central estiver pressionado."""
+        if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
+            if not window.is_key_pressed(glfw.KEY_LEFT_SHIFT):
+                pan_state["active"] = False
+                return
+        
         if not pan_state["active"]:
             return
 
@@ -266,23 +357,23 @@ def main() -> None:
 
     shader.set_vec3(
         "u_LightDir",
-        0.6,
+        0.5,
         1.0,
-        0.4,
+        0.7,
     )
 
     shader.set_vec3(
         "u_LightColor",
-        1.0,
-        0.98,
-        0.90,
+        0.9,
+        0.9,
+        0.9,
     )
 
     shader.set_vec3(
         "u_AmbientColor",
         0.35,
         0.35,
-        0.38,
+        0.35,
     )
 
     shader.set_bool(
@@ -295,6 +386,17 @@ def main() -> None:
     # ------------------------------------------------------------------
     while not window.should_close():
         dt = window.update_delta_time()
+        camera.update(dt)
+        texture_timer += dt
+        
+        if texture_timer >= TEXTURE_CHANGE_INTERVAL:
+            texture_timer = 0.0
+            random_png = random.choice(png_files)
+            
+            # Libera textura anterior
+            gl.glDeleteTextures(1, [current_texture["id"]])
+            current_texture["id"] = load_texture(os.path.join(textures_dir, random_png))
+            current_texture["name"] = random_png
 
         # --------------------------------------------------------------
         # Atualizar título da janela
@@ -348,7 +450,7 @@ def main() -> None:
 
         # Matriz do tabuleiro.
         # Rotação em passos de 90° através de Q/E.
-        model = camera.get_model_matrix()
+        model = camera.get_animated_model_matrix()
 
         # --------------------------------------------------------------
         # Renderizar
@@ -369,6 +471,11 @@ def main() -> None:
             "u_Model",
             model,
         )
+        
+        # Vincular a textura atual
+        gl.glActiveTexture(gl.GL_TEXTURE0)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
+        shader.set_int("u_TextureAtlas", 0)    
 
         cube_mesh.draw()
 
@@ -380,6 +487,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 8. Liberar recursos
     # ------------------------------------------------------------------
+    gl.glDeleteTextures(1, [current_texture["id"]])
     cube_mesh.delete()
     shader.delete()
     window.close()
