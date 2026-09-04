@@ -44,3 +44,18 @@ def get_block_color(block_type: BlockType | int) -> tuple[float, float, float]:
     # A cor de AIR é apenas um fallback; não representa opacidade ou solidez.
     # IDs desconhecidos geram ValueError; valores não inteiros geram TypeError.
     return BLOCK_COLORS[_as_block_type(block_type)]
+
+
+_OPAQUE_BLOCKS = frozenset({
+    BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD,
+})
+
+
+def is_opaque(block_type: BlockType | int) -> bool:
+    """Indica oclusão completa de faces, não solidez para colisão.
+
+    AIR, WATER e LEAVES não ocluem. A política é lógica e independente
+    do alfa da textura; não configura blending nem materiais na GPU.
+    IDs e tipos inválidos seguem a validação de get_block_color.
+    """
+    return _as_block_type(block_type) in _OPAQUE_BLOCKS
