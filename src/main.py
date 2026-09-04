@@ -60,8 +60,9 @@ from src.core.version import (
     start_github_sync_check,
 )
 from src.core.window import Window
-from src.math import mat4_rotate_y, vec3
-from src.rendering import Mesh, Shader, TexturedMesh
+from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
+from src.rendering import Shader, TexturedMesh
+from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator
 
 
 def setup_opengl_state() -> None:
@@ -153,6 +154,36 @@ def create_cube_mesh() -> TexturedMesh:
     return TexturedMesh(vertices, indices)
 
 
+def create_terrain_meshes() -> list[tuple[TexturedMesh, np.ndarray]]:
+    """Demonstração finita 2x2, com culling entre vizinhos e sem WorldManager."""
+    chunks = TerrainGenerator(seed=1234).generate_region(
+        (x, 0, z) for x in (-1, 0) for z in (-1, 0)
+    )
+
+    def neighbor_at(x: int, y: int, z: int) -> BlockType:
+        size = Chunk3D.SIZE
+        chunk = chunks.get((x // size, y // size, z // size))
+        if chunk is None:
+            return BlockType.AIR
+        return chunk.get_block(*chunk.world_to_local(x, y, z))
+
+    meshes = []
+    try:
+        for chunk in chunks.values():
+            data = ChunkMesher().build(chunk, neighbor_at)
+            mesh = TexturedMesh(data.vertices, data.indices)
+            # Escala apenas visual para enquadrar o tabuleiro na câmera existente.
+            transform = mat4_scale(0.2, 0.2, 0.2) @ mat4_translate(
+                *chunk.local_to_world(0, 0, 0)
+            )
+            meshes.append((mesh, transform))
+    except Exception:
+        for mesh, _ in meshes:
+            mesh.delete()
+        raise
+    return meshes
+
+
 def print_system_info(version_info: VersionInfo) -> None:
     """Imprime informações de hardware, versão de build e status do repositório."""
     vendor = gl.glGetString(gl.GL_VENDOR).decode("utf-8")
@@ -224,7 +255,9 @@ def main() -> None:
     )
 
     shader = Shader(shader_vert, shader_frag)
-    cube_mesh = create_cube_mesh()
+    terrain_demo = "--terrain" in sys.argv[1:]
+    meshes = (create_terrain_meshes() if terrain_demo else
+              [(create_cube_mesh(), mat4_identity())])
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
     textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
@@ -241,7 +274,8 @@ def main() -> None:
     if not png_files:
         png_files = all_pngs
 
-    initial_png = random.choice(png_files)
+    # Textura neutra modula as cores dos BlockTypes sem criar um atlas/material.
+    initial_png = "white_concrete.png" if terrain_demo else random.choice(png_files)
     # Estado de textura ativa
     current_texture = {
         "id": load_texture(os.path.join(textures_dir, initial_png)),
@@ -254,8 +288,8 @@ def main() -> None:
     # 4. Inicializar câmera isométrica
     # ------------------------------------------------------------------
     camera = IsometricCamera(
-        target=vec3(0.0, 0.0, 0.0),
-        ortho_size=2.0,
+        target=vec3(0.0, 1.0 if terrain_demo else 0.0, 0.0),
+        ortho_size=4.2 if terrain_demo else 2.0,
         near=0.1,
         far=100.0,
     )
@@ -392,7 +426,7 @@ def main() -> None:
         camera.update(dt)
         texture_timer += dt
         
-        if texture_timer >= TEXTURE_CHANGE_INTERVAL:
+        if not terrain_demo and texture_timer >= TEXTURE_CHANGE_INTERVAL:
             texture_timer = 0.0
             random_png = random.choice(png_files)
             
@@ -480,7 +514,9 @@ def main() -> None:
         gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
         shader.set_int("u_TextureAtlas", 0)    
 
-        cube_mesh.draw()
+        for mesh, transform in meshes:
+            shader.set_mat4("u_Model", model @ transform)
+            mesh.draw()
 
         # --------------------------------------------------------------
         # Apresentar frame
@@ -491,7 +527,8 @@ def main() -> None:
     # 8. Liberar recursos
     # ------------------------------------------------------------------
     gl.glDeleteTextures(1, [current_texture["id"]])
-    cube_mesh.delete()
+    for mesh, _ in meshes:
+        mesh.delete()
     shader.delete()
     window.close()
 
