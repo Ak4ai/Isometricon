@@ -45,6 +45,9 @@ if sys.platform == "win32":
         except OSError:
             pass  # AMD não instalada ou não disponível
 
+# Inicializa o pacote e seleciona o backend antes de importar OpenGL.
+import src
+
 import glfw
 import OpenGL.GL as gl
 import numpy as np
