@@ -1,0 +1,9 @@
+# Textos: LF no índice e no checkout, inclusive no Windows.
+* text=auto eol=lf
+
+# PowerShell pode usar CRLF no checkout; o índice permanece normalizado.
+*.ps1 text eol=crlf
+
+# Assets binários nunca passam por conversão de fim de linha.
+*.png binary
+*.schem binary
