@@ -131,14 +131,13 @@ class BlockHighlightRenderer:
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.ebo_lines)
         line_alpha = 0.85 * pulse
         self.shader.set_vec4("u_HighlightColor", r, g, b, line_alpha)
-        gl.glLineWidth(2.5)
         gl.glDrawElements(gl.GL_LINES, self.line_count, gl.GL_UNSIGNED_INT, None)
 
         # Restaura estado OpenGL
-        gl.glLineWidth(1.0)
         gl.glDepthMask(gl.GL_TRUE)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glBindVertexArray(0)
+
 
     def delete(self) -> None:
         """Libera os recursos OpenGL alocados."""
