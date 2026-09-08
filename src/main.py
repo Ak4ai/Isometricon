@@ -154,11 +154,12 @@ def create_cube_mesh() -> TexturedMesh:
     return TexturedMesh(vertices, indices)
 
 
-def create_terrain_meshes() -> list[tuple[TexturedMesh, np.ndarray]]:
+def create_terrain_meshes(seed: int = 0) -> list[tuple[TexturedMesh, np.ndarray]]:
     """Demonstração finita 2x2 com cavernas 3D, culling entre vizinhos e sem WorldManager."""
-    chunks = TerrainGenerator(seed=1234, enable_caves=True).generate_region(
+    chunks = TerrainGenerator(seed=seed, enable_caves=True).generate_region(
         (x, 0, z) for x in (-1, 0) for z in (-1, 0)
     )
+
 
 
     def neighbor_at(x: int, y: int, z: int) -> BlockType:
@@ -257,8 +258,29 @@ def main() -> None:
 
     shader = Shader(shader_vert, shader_frag)
     terrain_demo = "--terrain" in sys.argv[1:]
-    meshes = (create_terrain_meshes() if terrain_demo else
+    custom_seed = None
+    for i, arg in enumerate(sys.argv[1:]):
+        if arg == "--seed" and i + 1 < len(sys.argv[1:]):
+            try:
+                custom_seed = int(sys.argv[1:][i + 1])
+            except ValueError:
+                pass
+        elif arg.startswith("--seed="):
+            try:
+                custom_seed = int(arg.split("=", 1)[1])
+            except ValueError:
+                pass
+
+    active_seed = {
+        "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
+    }
+
+    if terrain_demo:
+        print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (Pressione [R] para regenerar com nova seed)")
+
+    meshes = (create_terrain_meshes(active_seed["value"]) if terrain_demo else
               [(create_cube_mesh(), mat4_identity())])
+
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
     textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
@@ -316,12 +338,21 @@ def main() -> None:
         """Encaminha eventos de teclado para a câmera."""
         del scancode,mods
         
+        if terrain_demo and key == glfw.KEY_R and action == glfw.PRESS:
+            new_seed = random.randint(1, 999_999)
+            active_seed["value"] = new_seed
+            print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
+            for m, _ in meshes:
+                m.delete()
+            meshes[:] = create_terrain_meshes(new_seed)
+
         if key == glfw.KEY_LEFT_SHIFT:
             pan_state["shift_pressed"] = action != glfw.RELEASE
             if action == glfw.RELEASE and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
                 pan_state["active"] = False
 
         camera.handle_key(key, action)
+
 
     def handle_mouse_button(
         button: int,
@@ -453,12 +484,15 @@ def main() -> None:
             )
         )
 
+        seed_badge = f"Seed: {active_seed['value']} ([R] reload) | " if terrain_demo else ""
         window.set_title(
             f"Isometricon {version_info.full_version} | "
             f"{sync_badge} | "
+            f"{seed_badge}"
             f"{window.fps:.1f} FPS "
             f"({dt * 1000:.1f}ms)"
         )
+
 
         # --------------------------------------------------------------
         # Processar eventos de I/O
