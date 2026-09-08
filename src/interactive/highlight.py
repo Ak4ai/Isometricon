@@ -136,6 +136,7 @@ class BlockHighlightRenderer:
         # Restaura estado OpenGL
         gl.glDepthMask(gl.GL_TRUE)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        gl.glDisable(gl.GL_BLEND)
         gl.glBindVertexArray(0)
 
 

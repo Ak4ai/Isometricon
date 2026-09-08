@@ -68,7 +68,7 @@ from src.core.version import (
 from src.core.window import Window
 from src.interactive import BlockHighlightRenderer, PlayerToken
 from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
-from src.rendering import Shader, TexturedMesh
+from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
 
 
@@ -285,15 +285,17 @@ def main() -> None:
 
     if terrain_demo:
         print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
+        atlas = TextureAtlas()
         generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True)
-        world_manager = WorldManager(generator=generator, render_distance=2)
+        world_manager = WorldManager(generator=generator, render_distance=2, atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
         player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0)
         player_token.position[1] = float(start_surface_y) + 1.0
-        world_manager.update(player_token.position[0], player_token.position[2])
+        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         highlight_renderer = BlockHighlightRenderer()
         meshes = []
     else:
+        atlas = None
         world_manager = None
         player_token = None
         highlight_renderer = None
@@ -321,6 +323,14 @@ def main() -> None:
         "id": load_texture(os.path.join(textures_dir, initial_png)),
         "name": initial_png,
     }
+    # Textura sólida 1x1 branca (RGBA 255, 255, 255, 255) para renderizar a miniatura com cores puras e opacidade 100%
+    white_pixel = np.array([255, 255, 255, 255], dtype=np.uint8)
+    token_tex_id = gl.glGenTextures(1)
+    gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, 1, 1, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, white_pixel)
+
     texture_timer = 0.0
     TEXTURE_CHANGE_INTERVAL = 0.5  # Alterar textura a cada 0.5 segundos
 
@@ -331,7 +341,7 @@ def main() -> None:
         target=vec3(0.5, float(start_surface_y) + 1.0, 0.5) if terrain_demo else vec3(0.0, 0.0, 0.0),
         ortho_size=4.5 if terrain_demo else 2.0,
         near=0.1,
-        far=150.0,
+        far=400.0,
     )
 
 
@@ -369,7 +379,7 @@ def main() -> None:
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0
-            world_manager.update(player_token.position[0], player_token.position[2])
+            world_manager.load_initial_region(player_token.position[0], player_token.position[2])
 
         if key == glfw.KEY_LEFT_SHIFT:
             pan_state["shift_pressed"] = action != glfw.RELEASE
@@ -479,6 +489,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 7. Game Loop de Renderização
     # ------------------------------------------------------------------
+    title_update_timer = 0.25  # Atualiza imediatamente no primeiro frame
     while not window.should_close():
         dt = window.update_delta_time()
         camera.update(dt)
@@ -511,30 +522,33 @@ def main() -> None:
                 current_texture["name"] = random_png
 
         # --------------------------------------------------------------
-        # Atualizar título da janela
+        # Atualizar título da janela (amortizado a cada 0.25s para evitar micro-stutters no Win32)
         # --------------------------------------------------------------
-        sync_badge = (
-            "✅ Synced"
-            if version_info.sync_status == "synced"
-            else (
-                "⚠️ Outdated"
-                if version_info.sync_status == "outdated"
+        title_update_timer += dt
+        if title_update_timer >= 0.25:
+            title_update_timer = 0.0
+            sync_badge = (
+                "✅ Synced"
+                if version_info.sync_status == "synced"
                 else (
-                    "📝 Modified"
-                    if version_info.sync_status == "modified"
-                    else "🔄 Checking"
+                    "⚠️ Outdated"
+                    if version_info.sync_status == "outdated"
+                    else (
+                        "📝 Modified"
+                        if version_info.sync_status == "modified"
+                        else "🔄 Checking"
+                    )
                 )
             )
-        )
 
-        seed_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | " if terrain_demo else ""
-        window.set_title(
-            f"Isometricon {version_info.full_version} | "
-            f"{sync_badge} | "
-            f"{seed_badge}"
-            f"{window.fps:.1f} FPS "
-            f"({dt * 1000:.1f}ms)"
-        )
+            seed_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | " if terrain_demo else ""
+            window.set_title(
+                f"Isometricon {version_info.full_version} | "
+                f"{sync_badge} | "
+                f"{seed_badge}"
+                f"{window.fps:.1f} FPS "
+                f"({dt * 1000:.1f}ms)"
+            )
 
         # --------------------------------------------------------------
         # Processar eventos de I/O
@@ -562,6 +576,10 @@ def main() -> None:
         # --------------------------------------------------------------
         # Renderizar
         # --------------------------------------------------------------
+        gl.glDisable(gl.GL_BLEND)
+        gl.glDepthMask(gl.GL_TRUE)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+
         shader.use()
         shader.set_mat4("u_Projection", projection)
         shader.set_mat4("u_View", view)
@@ -573,14 +591,14 @@ def main() -> None:
         shader.set_int("u_TextureAtlas", 0)    
 
         if terrain_demo:
-            # 1. Renderiza os chunks de terreno e cavernas
-            world_manager.render(shader, model)
+            # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
+            shader.set_int("u_TextureAtlas", 0)
+            view_projection = projection @ view
+            world_manager.render(shader, model, view_projection)
 
-            # 2. Renderiza a miniatura 3D do personagem
-            shader.set_mat4("u_Model", model @ player_token.get_model_matrix())
-            player_token.draw()
-
-            # 3. Renderiza o bloco abaixo do token reluzindo em branco pulsante
+            # 2. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
             highlight_renderer.render(
                 view,
@@ -592,7 +610,20 @@ def main() -> None:
                 time=window.time,
                 base_color=(1.0, 1.0, 1.0),
             )
+
+            # 3. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
+            shader.use()
+            shader.set_mat4("u_Projection", projection)
+            shader.set_mat4("u_View", view)
+            shader.set_mat4("u_Model", model @ player_token.get_model_matrix())
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
+            shader.set_int("u_TextureAtlas", 0)
+            player_token.draw()
         else:
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
+            shader.set_int("u_TextureAtlas", 0)
             for mesh, transform in meshes:
                 shader.set_mat4("u_Model", model @ transform)
                 mesh.draw()
@@ -606,7 +637,10 @@ def main() -> None:
     # 8. Liberar recursos
     # ------------------------------------------------------------------
     gl.glDeleteTextures(1, [current_texture["id"]])
+    gl.glDeleteTextures(1, [token_tex_id])
     if terrain_demo:
+        if atlas is not None:
+            atlas.delete()
         world_manager.delete()
         player_token.delete()
         highlight_renderer.delete()

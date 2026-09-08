@@ -97,3 +97,148 @@ def test_world_manager_chunk_streaming_logic():
     manager.delete()
     assert len(manager.chunks) == 0
     assert len(manager.meshes) == 0
+
+
+def test_token_mesh_winding_and_normals():
+    """Valida que os triângulos do token têm enrolamento CCW voltado para fora (evita culling indevido)."""
+    from src.interactive.token_system import _build_cylinder, _build_disc
+
+    v_data = []
+    i_data = []
+    slices = 8
+    color = (0.2, 0.2, 0.2)
+
+    # 1. Testa cilindro
+    _build_cylinder(1.0, 1.0, 0.0, 1.0, slices, color, v_data, i_data)
+    vertices = np.array(v_data)
+
+    for idx in range(0, len(i_data), 3):
+        i0, i1, i2 = i_data[idx], i_data[idx + 1], i_data[idx + 2]
+        p0 = vertices[i0, 0:3]
+        p1 = vertices[i1, 0:3]
+        p2 = vertices[i2, 0:3]
+        normal = np.cross(p1 - p0, p2 - p0)
+        center = (p0 + p1 + p2) / 3.0
+        # A normal deve apontar no mesmo sentido que o centro radial (para fora)
+        assert np.dot(normal[:3], [center[0], 0.0, center[2]]) > 0.0
+
+    # 2. Testa tampa superior
+    v_disc = []
+    i_disc = []
+    _build_disc(1.0, 1.0, slices, 1.0, color, v_disc, i_disc)
+    v_disc_arr = np.array(v_disc)
+    for idx in range(0, len(i_disc), 3):
+        i0, i1, i2 = i_disc[idx], i_disc[idx + 1], i_disc[idx + 2]
+        p0 = v_disc_arr[i0, 0:3]
+        p1 = v_disc_arr[i1, 0:3]
+        p2 = v_disc_arr[i2, 0:3]
+        normal = np.cross(p1 - p0, p2 - p0)
+        # Normal deve apontar para +Y
+        assert normal[1] > 0.0
+
+
+def test_world_manager_load_initial_region():
+    """Valida que load_initial_region carrega síncronamente a vizinhança inicial no spawn."""
+    gen = TerrainGenerator(seed=123, enable_caves=False)
+    manager = WorldManager(generator=gen, render_distance=1, create_gl_meshes=False, async_loading=False)
+
+    manager.load_initial_region(0.0, 0.0)
+    # render_distance=1 gera grade 3x3 = 9 colunas
+    assert len(manager.chunks) == 9
+    assert (0, 0, 0) in manager.chunks
+
+    manager.delete()
+    assert len(manager.chunks) == 0
+
+
+def test_world_manager_pending_deletions_amortization():
+    """Valida que a deleção de malhas na GPU é amortizada por frame e limpa no shutdown."""
+    gen = TerrainGenerator(seed=123, enable_caves=False)
+    manager = WorldManager(generator=gen, render_distance=1, create_gl_meshes=False, async_loading=False)
+
+    deleted_count = 0
+
+    class MockMesh:
+        def delete(self):
+            nonlocal deleted_count
+            deleted_count += 1
+
+    # Adiciona 3 malhas falsas à fila de deleção pendente
+    m1, m2, m3 = MockMesh(), MockMesh(), MockMesh()
+    manager._pending_mesh_deletions.extend([m1, m2, m3])
+    assert len(manager._pending_mesh_deletions) == 3
+
+    # update() consome 1 por frame
+    manager.update(0.0, 0.0)
+    assert deleted_count == 1
+    assert len(manager._pending_mesh_deletions) == 2
+
+    # Próximo update consome mais 1
+    manager.update(0.0, 0.0)
+    assert deleted_count == 2
+    assert len(manager._pending_mesh_deletions) == 1
+
+    # delete() limpa todos os restantes
+    manager.delete()
+    assert deleted_count == 3
+    assert len(manager._pending_mesh_deletions) == 0
+
+
+def test_world_manager_result_queue_safe_without_gl():
+    """Valida que itens na _result_queue são consumidos sem erro quando create_gl_meshes=False."""
+    gen = TerrainGenerator(seed=123, enable_caves=False)
+    manager = WorldManager(generator=gen, render_distance=1, create_gl_meshes=False, async_loading=False)
+
+    from src.world.chunk import Chunk3D
+    from src.world.mesher import ChunkMeshData
+    dummy_data = ChunkMeshData(np.empty((0, 11), dtype=np.float32), np.empty(0, dtype=np.uint32))
+    dummy_chunk = Chunk3D(0, 0, 0)
+    manager.chunks[(0, 0, 0)] = dummy_chunk
+    manager._in_progress.add((0, 0, 0))
+    manager._result_queue.put(((0, 0, 0), dummy_chunk, dummy_data))
+
+    manager.delete()
+
+
+def test_world_manager_frustum_culling_rendering():
+    """Valida que render() com view_projection aplica Frustum Culling e descarta chunks fora da tela."""
+    gen = TerrainGenerator(seed=123, enable_caves=False)
+    manager = WorldManager(generator=gen, render_distance=2, create_gl_meshes=False, async_loading=False)
+
+    drawn = []
+
+    class MockMesh:
+        def __init__(self, name):
+            self.name = name
+        def draw(self):
+            drawn.append(self.name)
+
+    class MockShader:
+        def set_mat4(self, name, mat):
+            pass
+
+    from src.math import mat4_translate
+    # Adiciona 1 chunk na origem e 1 chunk muito distante
+    manager.meshes[(0, 0, 0)] = (MockMesh("near"), mat4_translate(0, 0, 0))
+    manager.meshes[(100, 0, 100)] = (MockMesh("far"), mat4_translate(1600, 0, 1600))
+
+    # Câmera focada na origem
+    from src.camera.camera import IsometricCamera
+    from src.math import vec3, mat4_identity
+    cam = IsometricCamera(target=vec3(0.0, 0.0, 0.0), ortho_size=4.0)
+    vp = cam.get_projection_matrix(1280, 720) @ cam.get_view_matrix()
+
+    # Sem view_projection: desenha todos (2)
+    count_all = manager.render(MockShader(), mat4_identity())
+    assert count_all == 2
+    assert len(drawn) == 2
+
+    # Com view_projection: descarta o chunk distante a 1600 blocos
+    drawn.clear()
+    count_culled = manager.render(MockShader(), mat4_identity(), view_projection=vp)
+    assert count_culled == 1
+    assert drawn == ["near"]
+
+    manager.delete()
+
+
