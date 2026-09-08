@@ -155,10 +155,11 @@ def create_cube_mesh() -> TexturedMesh:
 
 
 def create_terrain_meshes() -> list[tuple[TexturedMesh, np.ndarray]]:
-    """Demonstração finita 2x2, com culling entre vizinhos e sem WorldManager."""
-    chunks = TerrainGenerator(seed=1234).generate_region(
+    """Demonstração finita 2x2 com cavernas 3D, culling entre vizinhos e sem WorldManager."""
+    chunks = TerrainGenerator(seed=1234, enable_caves=True).generate_region(
         (x, 0, z) for x in (-1, 0) for z in (-1, 0)
     )
+
 
     def neighbor_at(x: int, y: int, z: int) -> BlockType:
         size = Chunk3D.SIZE

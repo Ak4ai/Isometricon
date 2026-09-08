@@ -37,6 +37,9 @@ class TerrainGenerator:
     lacunarity: float = 2.0
     dirt_depth: int = 3
     sea_level: int = 7
+    enable_caves: bool = False
+    cave_chance: float = 0.60
+    allow_sparse_depth: bool = True
 
     def __post_init__(self) -> None:
         for name in ('seed', 'base_height', 'octaves', 'dirt_depth', 'sea_level'):
@@ -48,6 +51,16 @@ class TerrainGenerator:
             if not isfinite(value):
                 raise ValueError(f'{name} deve ser finito.')
             object.__setattr__(self, name, float(value))
+        for name in ('enable_caves', 'allow_sparse_depth'):
+            value = getattr(self, name)
+            if not isinstance(value, (bool, np.bool_)):
+                raise TypeError(f'{name} deve ser booleano.')
+            object.__setattr__(self, name, bool(value))
+        if isinstance(self.cave_chance, (bool, np.bool_)) or not isinstance(self.cave_chance, Real):
+            raise TypeError('cave_chance deve ser um número real.')
+        if not isfinite(self.cave_chance) or not 0.0 <= self.cave_chance <= 1.0:
+            raise ValueError('cave_chance deve estar em [0, 1].')
+        object.__setattr__(self, 'cave_chance', float(self.cave_chance))
         if self.amplitude < 0 or self.frequency <= 0:
             raise ValueError('amplitude >= 0 e frequency > 0 são necessárias.')
         if self.octaves < 1 or self.dirt_depth < 0:
@@ -60,6 +73,7 @@ class TerrainGenerator:
             raise ValueError('Frequência das oitavas excede o limite numérico.') from exc
         if not isfinite(highest_frequency):
             raise ValueError('Frequência das oitavas deve ser finita.')
+
 
     def _lattice_value(self, x: int, z: int) -> float:
         # Hash estável da stdlib, sem hash() do Python nem estado aleatório global.
@@ -129,4 +143,13 @@ class TerrainGenerator:
                 chunk = Chunk3D(*key)
                 self.populate_chunk(chunk)
                 chunks[key] = chunk
+        if self.enable_caves and chunks:
+            from src.world.caves import CaveCarver
+            carver = CaveCarver(
+                seed=self.seed,
+                cave_chance=self.cave_chance,
+                allow_sparse_depth=self.allow_sparse_depth,
+            )
+            carver.carve_region(chunks, self)
         return chunks
+

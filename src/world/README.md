@@ -268,5 +268,15 @@ seeds diferentes/zero/negativas, limites, continuidade X/Z, camadas e água,
 chunks Y positivos/negativos, armazenamento/AABB, ordem, preenchimento repetido,
 validação da API e geometria/índices do mesher sem contexto gráfico.
 
-Fora desta etapa: WorldManager/streaming, save/load, cavernas, biomas, vegetação,
+### Cavernas 3D (CaveCarver)
+
+`CaveCarver` implementa vermes escavadores 3D determinísticos (estilo Minecraft clássico):
+- Totalmente vinculado à `seed` global e às coordenadas de chunks via `blake2b` + gerador determinístico.
+- Gera túneis sinuosos, salões subterrâneos esféricos e entradas na superfície.
+- Protege corpos d'água (`WATER` nunca é destruída).
+- Suporta profundidade esparsa (`allow_sparse_depth=True`), instanciando chunks subterrâneos em $Y < 0$ sob demanda apenas onde cavernas profundas passam.
+- Integrado diretamente ao `TerrainGenerator(enable_caves=True)`.
+
+Fora desta etapa: WorldManager/streaming, save/load, biomas, vegetação,
 estruturas, greedy meshing, frustum culling, materiais avançados e Equipe B.
+
