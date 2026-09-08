@@ -95,11 +95,16 @@ def test_sparse_subterranean_chunks():
     region = gen_sparse.generate_region([(0, 0, 0)])
     has_negative_y = any(cy < 0 for _, cy, _ in region.keys())
 
-    # Se desceu para Y=-1, o chunk deve conter blocos de ar escavados em meio a rocha
+    # Se desceu para Y=-1, o chunk é uma casca orgânica e NÃO um bloco maciço de 4096 pedras
     if has_negative_y:
         sub_chunk = [c for k, c in region.items() if k[1] < 0][0]
-        assert np.any(sub_chunk.blocks == int(BlockType.AIR))
-        assert np.any(sub_chunk.blocks == int(BlockType.STONE))
+        stone_count = np.count_nonzero(sub_chunk.blocks == int(BlockType.STONE))
+        air_count = np.count_nonzero(sub_chunk.blocks == int(BlockType.AIR))
+        assert stone_count > 0
+        assert air_count > 0
+        # A rocha é apenas a casca esculpida ao redor do túnel, consumindo muito menos que o chunk todo
+        assert stone_count < 4096 * 0.4
+
 
 
 def test_disabled_sparse_depth_prevents_negative_chunks():
