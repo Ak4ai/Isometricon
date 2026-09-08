@@ -6,7 +6,7 @@ from typing import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from src.world.block import BlockType, get_block_color, is_opaque
+from src.world.block import BlockType, BLOCK_COLORS, get_block_color, is_opaque
 from src.world.chunk import Chunk3D
 
 
@@ -54,6 +54,14 @@ class ChunkMeshData:
         return len(self.indices)
 
 
+_OPAQUE_LUT = np.zeros(256, dtype=bool)
+_OPAQUE_LUT[[int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD)]] = True
+
+_COLOR_LUT = np.zeros((256, 3), dtype=np.float32)
+for _bt, _c in BLOCK_COLORS.items():
+    _COLOR_LUT[int(_bt)] = _c
+
+
 class ChunkMesher:
     """Converte voxels em quads visíveis: O(n) tempo, O(f) memória de saída.
 
@@ -61,6 +69,9 @@ class ChunkMesher:
     descartam faces. WATER/LEAVES geram geometria, mas não ocultam faces,
     inclusive entre dois blocos transparentes do mesmo tipo.
     """
+
+    def __init__(self, atlas: object = None) -> None:
+        self.atlas = atlas
 
     def build(
         self,
@@ -74,39 +85,89 @@ class ChunkMesher:
         O chamador deve retornar AIR para chunks desconhecidos e reconstruir
         malhas afetadas quando vizinhos mudarem. Erros do callback propagam.
         """
-        size = chunk.SIZE
-        origin_x, origin_y, origin_z = chunk.local_to_world(0, 0, 0)
-        faces = []
-        # X varia mais rápido, acompanhando o armazenamento Fortran do chunk.
-        for z in range(size):
-            for y in range(size):
-                for x in range(size):
-                    block = chunk.get_block(x, y, z)
-                    if block == BlockType.AIR:
-                        continue
-                    for face, (dx, dy, dz) in enumerate(_NORMALS):
-                        nx, ny, nz = x + dx, y + dy, z + dz
-                        if 0 <= nx < size and 0 <= ny < size and 0 <= nz < size:
-                            neighbor = chunk.get_block(nx, ny, nz)
-                        elif neighbor_at is not None:
-                            neighbor = neighbor_at(
-                                origin_x + nx, origin_y + ny, origin_z + nz,
-                            )
-                        else:
-                            neighbor = BlockType.AIR
-                        if not is_opaque(neighbor):
-                            faces.append((x, y, z, face, block))
+        blocks = chunk.blocks
+        if not np.any(blocks):
+            return ChunkMeshData(np.empty((0, 11), dtype=np.float32), np.empty(0, dtype=np.uint32))
 
-        # Uma descrição por face, sem objetos por vértice. Alocação exata,
-        # inclusive para saída vazia; quatro vértices e seis índices por quad.
-        vertices = np.empty((len(faces) * 4, 11), dtype=np.float32)
-        indices = np.empty(len(faces) * 6, dtype=np.uint32)
-        for i, (x, y, z, face, block) in enumerate(faces):
-            base = i * 4
-            quad = vertices[base:base + 4]
-            quad[:, :3] = _CORNERS[face] + (x, y, z)
-            quad[:, 3:6] = _NORMALS[face]
-            quad[:, 6:8] = _TOP_UVS if face == 2 else _UVS
-            quad[:, 8:11] = get_block_color(block)
-            indices[i * 6:i * 6 + 6] = _QUAD_INDICES + base
+        origin_x, origin_y, origin_z = chunk.local_to_world(0, 0, 0)
+
+        padded = np.zeros((18, 18, 18), dtype=bool)
+        padded[1:17, 1:17, 1:17] = _OPAQUE_LUT[blocks]
+
+        if neighbor_at is not None:
+            y_idx, z_idx = np.where(blocks[15, :, :] != BlockType.AIR)
+            for y, z in zip(y_idx, z_idx):
+                padded[17, y + 1, z + 1] = is_opaque(neighbor_at(origin_x + 16, origin_y + y, origin_z + z))
+
+            y_idx, z_idx = np.where(blocks[0, :, :] != BlockType.AIR)
+            for y, z in zip(y_idx, z_idx):
+                padded[0, y + 1, z + 1] = is_opaque(neighbor_at(origin_x - 1, origin_y + y, origin_z + z))
+
+            x_idx, z_idx = np.where(blocks[:, 15, :] != BlockType.AIR)
+            for x, z in zip(x_idx, z_idx):
+                padded[x + 1, 17, z + 1] = is_opaque(neighbor_at(origin_x + x, origin_y + 16, origin_z + z))
+
+            x_idx, z_idx = np.where(blocks[:, 0, :] != BlockType.AIR)
+            for x, z in zip(x_idx, z_idx):
+                padded[x + 1, 0, z + 1] = is_opaque(neighbor_at(origin_x + x, origin_y - 1, origin_z + z))
+
+            x_idx, y_idx = np.where(blocks[:, :, 15] != BlockType.AIR)
+            for x, y in zip(x_idx, y_idx):
+                padded[x + 1, y + 1, 17] = is_opaque(neighbor_at(origin_x + x, origin_y + y, origin_z + 16))
+
+            x_idx, y_idx = np.where(blocks[:, :, 0] != BlockType.AIR)
+            for x, y in zip(x_idx, y_idx):
+                padded[x + 1, y + 1, 0] = is_opaque(neighbor_at(origin_x + x, origin_y + y, origin_z - 1))
+
+        non_air = (blocks != BlockType.AIR)
+
+        vis = [
+            non_air & (~padded[2:18, 1:17, 1:17]),  # +X (0)
+            non_air & (~padded[0:16, 1:17, 1:17]),  # -X (1)
+            non_air & (~padded[1:17, 2:18, 1:17]),  # +Y (2)
+            non_air & (~padded[1:17, 0:16, 1:17]),  # -Y (3)
+            non_air & (~padded[1:17, 1:17, 2:18]),  # +Z (4)
+            non_air & (~padded[1:17, 1:17, 0:16]),  # -Z (5)
+        ]
+
+        total_faces = sum(int(v.sum()) for v in vis)
+        if total_faces == 0:
+            return ChunkMeshData(np.empty((0, 11), dtype=np.float32), np.empty(0, dtype=np.uint32))
+
+        vertices = np.empty((total_faces * 4, 11), dtype=np.float32)
+        indices = np.empty(total_faces * 6, dtype=np.uint32)
+
+        use_atlas = self.atlas is not None and hasattr(self.atlas, "uv_table")
+        uv_table = self.atlas.uv_table if use_atlas else None
+        color_table = self.atlas.color_table if use_atlas else None
+
+        base_idx = np.arange(total_faces, dtype=np.uint32) * 4
+        quad_offsets = np.tile(_QUAD_INDICES, total_faces).reshape(total_faces, 6)
+        indices[:] = (quad_offsets + base_idx[:, None]).ravel()
+
+        current_face_idx = 0
+        for face in range(6):
+            mask = vis[face]
+            count = int(mask.sum())
+            if count == 0:
+                continue
+            xs, ys, zs = np.where(mask)
+            blk = blocks[xs, ys, zs]
+
+            face_v_start = current_face_idx * 4
+            face_v_end = face_v_start + count * 4
+            current_face_idx += count
+
+            v_slice = vertices[face_v_start:face_v_end].reshape(count, 4, 11)
+            offsets = np.stack([xs, ys, zs], axis=-1)[:, None, :]
+            v_slice[:, :, :3] = _CORNERS[face] + offsets
+            v_slice[:, :, 3:6] = _NORMALS[face]
+
+            if use_atlas:
+                v_slice[:, :, 6:8] = uv_table[blk, face]
+                v_slice[:, :, 8:11] = color_table[blk, face][:, None, :]
+            else:
+                v_slice[:, :, 6:8] = _TOP_UVS if face == 2 else _UVS
+                v_slice[:, :, 8:11] = _COLOR_LUT[blk][:, None, :]
+
         return ChunkMeshData(vertices, indices)

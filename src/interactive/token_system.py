@@ -54,7 +54,8 @@ def _build_cylinder(
         i2 = start_index + (i + 1) * 2
         i3 = start_index + (i + 1) * 2 + 1
 
-        indices_list.extend([i0, i2, i1, i1, i2, i3])
+        # Enrolamento CCW voltado para fora do cilindro (Front Face)
+        indices_list.extend([i0, i1, i2, i1, i3, i2])
 
 
 def _build_disc(
@@ -91,10 +92,11 @@ def _build_disc(
     for i in range(slices):
         p0 = start_perimeter + i
         p1 = start_perimeter + i + 1
+        # Enrolamento CCW correto: visto de cima para ny>0, visto de baixo para ny<0
         if ny > 0:
-            indices_list.extend([center_idx, p0, p1])
-        else:
             indices_list.extend([center_idx, p1, p0])
+        else:
+            indices_list.extend([center_idx, p0, p1])
 
 
 def create_token_mesh() -> TexturedMesh:
@@ -111,10 +113,11 @@ def create_token_mesh() -> TexturedMesh:
     i_data: list[int] = []
     slices = 16
 
-    # 1. Base / Pedestal (r=0.36, y de 0.0 a 0.12) - Ardósia
+    # 1. Base / Pedestal (r=0.36, y de 0.005 a 0.12) - Ardósia sólida e fechada
     slate_color = (0.22, 0.24, 0.28)
-    _build_disc(0.36, 0.0, slices, -1.0, slate_color, v_data, i_data)
-    _build_cylinder(0.36, 0.36, 0.0, 0.12, slices, slate_color, v_data, i_data)
+    _build_disc(0.36, 0.005, slices, -1.0, slate_color, v_data, i_data)
+    _build_cylinder(0.36, 0.36, 0.005, 0.12, slices, slate_color, v_data, i_data)
+    _build_disc(0.36, 0.12, slices, 1.0, slate_color, v_data, i_data)
 
     # 2. Anel de destaque dourado (r=0.34, y de 0.12 a 0.16) - Ouro
     gold_color = (0.95, 0.78, 0.18)
@@ -209,6 +212,7 @@ class PlayerToken:
 
         # Consulta altura da superfície sólida abaixo da miniatura
         surface_y = terrain_height_func(self.position[0], self.position[2])
+        self.current_surface_y = int(surface_y)
         # A base do token deve descansar no topo do bloco (surface_y + 1.0)
         target_y = float(surface_y) + 1.0
 
@@ -219,7 +223,7 @@ class PlayerToken:
         """Retorna a coordenada inteira (X, Y, Z) do bloco sobre o qual o token está pisando."""
         bx = int(math.floor(self.position[0]))
         bz = int(math.floor(self.position[2]))
-        by = int(round(self.position[1] - 1.0))
+        by = getattr(self, "current_surface_y", int(round(self.position[1] - 1.0)))
         return bx, by, bz
 
     def get_model_matrix(self) -> np.ndarray:
@@ -229,7 +233,10 @@ class PlayerToken:
     def draw(self) -> None:
         """Desenha a malha da miniatura."""
         if self.mesh is not None:
+            import OpenGL.GL as gl
+            gl.glDisable(gl.GL_CULL_FACE)
             self.mesh.draw()
+            gl.glEnable(gl.GL_CULL_FACE)
 
     def delete(self) -> None:
         """Libera os buffers OpenGL."""
