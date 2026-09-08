@@ -60,9 +60,11 @@ from src.core.version import (
     start_github_sync_check,
 )
 from src.core.window import Window
+from src.interactive import BlockHighlightRenderer, PlayerToken
 from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh
-from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator
+from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
+
 
 
 def setup_opengl_state() -> None:
@@ -276,11 +278,20 @@ def main() -> None:
     }
 
     if terrain_demo:
-        print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (Pressione [R] para regenerar com nova seed)")
-
-    meshes = (create_terrain_meshes(active_seed["value"]) if terrain_demo else
-              [(create_cube_mesh(), mat4_identity())])
-
+        print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
+        generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True)
+        world_manager = WorldManager(generator=generator, render_distance=2)
+        start_surface_y = generator.get_height(0, 0)
+        player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0)
+        player_token.position[1] = float(start_surface_y) + 1.0
+        world_manager.update(player_token.position[0], player_token.position[2])
+        highlight_renderer = BlockHighlightRenderer()
+        meshes = []
+    else:
+        world_manager = None
+        player_token = None
+        highlight_renderer = None
+        meshes = [(create_cube_mesh(), mat4_identity())]
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
     textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
@@ -311,11 +322,12 @@ def main() -> None:
     # 4. Inicializar câmera isométrica
     # ------------------------------------------------------------------
     camera = IsometricCamera(
-        target=vec3(0.0, 1.0 if terrain_demo else 0.0, 0.0),
-        ortho_size=4.2 if terrain_demo else 2.0,
+        target=vec3(0.5, float(start_surface_y) + 1.0, 0.5) if terrain_demo else vec3(0.0, 0.0, 0.0),
+        ortho_size=4.5 if terrain_demo else 2.0,
         near=0.1,
-        far=100.0,
+        far=150.0,
     )
+
 
     # Estado utilizado pelo pan com botão central do mouse.
     pan_state = {
@@ -329,22 +341,29 @@ def main() -> None:
     # 5. Callbacks de entrada
     # ------------------------------------------------------------------
 
+    keys_pressed: dict[int, bool] = {}
+
     def handle_camera_key(
         key: int,
         scancode: int,
         action: int,
         mods: int,
     ) -> None:
-        """Encaminha eventos de teclado para a câmera."""
-        del scancode,mods
+        """Encaminha eventos de teclado para a câmera e registra teclas ativas."""
+        del scancode, mods
+
+        keys_pressed[key] = (action != glfw.RELEASE)
         
         if terrain_demo and key == glfw.KEY_R and action == glfw.PRESS:
             new_seed = random.randint(1, 999_999)
             active_seed["value"] = new_seed
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
-            for m, _ in meshes:
-                m.delete()
-            meshes[:] = create_terrain_meshes(new_seed)
+            world_manager.delete()
+            world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True)
+            # Reposiciona o token no topo do novo relevo
+            new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
+            player_token.position[1] = float(new_surface) + 1.0
+            world_manager.update(player_token.position[0], player_token.position[2])
 
         if key == glfw.KEY_LEFT_SHIFT:
             pan_state["shift_pressed"] = action != glfw.RELEASE
@@ -352,6 +371,7 @@ def main() -> None:
                 pan_state["active"] = False
 
         camera.handle_key(key, action)
+
 
 
     def handle_mouse_button(
@@ -456,16 +476,33 @@ def main() -> None:
     while not window.should_close():
         dt = window.update_delta_time()
         camera.update(dt)
-        texture_timer += dt
-        
-        if not terrain_demo and texture_timer >= TEXTURE_CHANGE_INTERVAL:
-            texture_timer = 0.0
-            random_png = random.choice(png_files)
-            
-            # Libera textura anterior
-            gl.glDeleteTextures(1, [current_texture["id"]])
-            current_texture["id"] = load_texture(os.path.join(textures_dir, random_png))
-            current_texture["name"] = random_png
+
+        if terrain_demo:
+            # 1. Movimentação do token de personagem com WASD e aderência ao relevo
+            player_token.update(
+                dt,
+                keys_pressed,
+                camera._forward_direction(),
+                camera._right_direction(),
+                world_manager.get_height,
+            )
+
+            # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
+            world_manager.update(player_token.position[0], player_token.position[2])
+
+            # 3. Câmera acompanha a posição do personagem suavemente
+            cam_speed = 8.0
+            camera.target[0] += (player_token.position[0] - camera.target[0]) * min(dt * cam_speed, 1.0)
+            camera.target[2] += (player_token.position[2] - camera.target[2]) * min(dt * cam_speed, 1.0)
+            camera.target[1] += (player_token.position[1] - camera.target[1]) * min(dt * cam_speed, 1.0)
+        else:
+            texture_timer += dt
+            if texture_timer >= TEXTURE_CHANGE_INTERVAL:
+                texture_timer = 0.0
+                random_png = random.choice(png_files)
+                gl.glDeleteTextures(1, [current_texture["id"]])
+                current_texture["id"] = load_texture(os.path.join(textures_dir, random_png))
+                current_texture["name"] = random_png
 
         # --------------------------------------------------------------
         # Atualizar título da janela
@@ -484,7 +521,7 @@ def main() -> None:
             )
         )
 
-        seed_badge = f"Seed: {active_seed['value']} ([R] reload) | " if terrain_demo else ""
+        seed_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | " if terrain_demo else ""
         window.set_title(
             f"Isometricon {version_info.full_version} | "
             f"{sync_badge} | "
@@ -492,7 +529,6 @@ def main() -> None:
             f"{window.fps:.1f} FPS "
             f"({dt * 1000:.1f}ms)"
         )
-
 
         # --------------------------------------------------------------
         # Processar eventos de I/O
@@ -510,48 +546,50 @@ def main() -> None:
         # --------------------------------------------------------------
         # Matrizes da câmera
         # --------------------------------------------------------------
-
-        # Projeção ortográfica.
         projection = camera.get_projection_matrix(
             window.width,
             window.height,
         )
-
-        # View Matrix da câmera isométrica.
         view = camera.get_view_matrix()
-
-        # Matriz do tabuleiro.
-        # Rotação em passos de 90° através de Q/E.
         model = camera.get_animated_model_matrix()
 
         # --------------------------------------------------------------
         # Renderizar
         # --------------------------------------------------------------
         shader.use()
+        shader.set_mat4("u_Projection", projection)
+        shader.set_mat4("u_View", view)
+        shader.set_mat4("u_Model", model)
 
-        shader.set_mat4(
-            "u_Projection",
-            projection,
-        )
-
-        shader.set_mat4(
-            "u_View",
-            view,
-        )
-
-        shader.set_mat4(
-            "u_Model",
-            model,
-        )
-        
-        # Vincular a textura atual
+        # Vincular a textura ativa
         gl.glActiveTexture(gl.GL_TEXTURE0)
         gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
         shader.set_int("u_TextureAtlas", 0)    
 
-        for mesh, transform in meshes:
-            shader.set_mat4("u_Model", model @ transform)
-            mesh.draw()
+        if terrain_demo:
+            # 1. Renderiza os chunks de terreno e cavernas
+            world_manager.render(shader, model)
+
+            # 2. Renderiza a miniatura 3D do personagem
+            shader.set_mat4("u_Model", model @ player_token.get_model_matrix())
+            player_token.draw()
+
+            # 3. Renderiza o bloco abaixo do token reluzindo em branco pulsante
+            bx, by, bz = player_token.get_current_block()
+            highlight_renderer.render(
+                view,
+                projection,
+                model,
+                bx,
+                by,
+                bz,
+                time=window.time,
+                base_color=(1.0, 1.0, 1.0),
+            )
+        else:
+            for mesh, transform in meshes:
+                shader.set_mat4("u_Model", model @ transform)
+                mesh.draw()
 
         # --------------------------------------------------------------
         # Apresentar frame
@@ -562,10 +600,16 @@ def main() -> None:
     # 8. Liberar recursos
     # ------------------------------------------------------------------
     gl.glDeleteTextures(1, [current_texture["id"]])
-    for mesh, _ in meshes:
-        mesh.delete()
+    if terrain_demo:
+        world_manager.delete()
+        player_token.delete()
+        highlight_renderer.delete()
+    else:
+        for mesh, _ in meshes:
+            mesh.delete()
     shader.delete()
     window.close()
+
 
     print("Aplicação encerrada com sucesso.")
 
