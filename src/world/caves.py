@@ -229,6 +229,9 @@ class CaveCarver:
         if not self.allow_sparse_depth and min_y < 1:
             min_y = 1
 
+        has_generator = terrain_generator is not None and hasattr(terrain_generator, "get_height")
+        sea = getattr(terrain_generator, "sea_level", 7) if has_generator else 7
+
         for bx in range(min_x, max_x + 1):
             dx = bx - px
             for bz in range(min_z, max_z + 1):
@@ -237,7 +240,13 @@ class CaveCarver:
                 if dxz_sq > r_sq:
                     continue
 
-                for by in range(min_y, max_y + 1):
+                limit_y = max_y
+                if has_generator:
+                    surf = terrain_generator.get_height(bx, bz)
+                    if surf < sea and limit_y >= surf:
+                        limit_y = surf - 1
+
+                for by in range(min_y, limit_y + 1):
                     dy = by - py
                     if dxz_sq + dy * dy > r_sq:
                         continue
@@ -258,12 +267,6 @@ class CaveCarver:
                     current = chunk.blocks[lx, ly, lz]
                     if current == BlockType.WATER:
                         continue
-
-                    if terrain_generator is not None and hasattr(terrain_generator, "get_height"):
-                        surf = terrain_generator.get_height(bx, bz)
-                        sea = getattr(terrain_generator, "sea_level", 7)
-                        if surf < sea and by >= surf:
-                            continue
 
                     if current in (BlockType.STONE, BlockType.DIRT, BlockType.GRASS):
                         chunk.blocks[lx, ly, lz] = BlockType.AIR
