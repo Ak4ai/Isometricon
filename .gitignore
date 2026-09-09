@@ -106,4 +106,5 @@ logs/
 *~
 scratch/
 wiki_export/
+wiki_temp/
 .wiki/

@@ -21,9 +21,9 @@ class IsometricCamera:
         math.asin(math.tan(math.radians(30.0)))
     )
     DEFAULT_ORTHO_SIZE = 2.0
-    DEFAULT_DISTANCE = 10.0
+    DEFAULT_DISTANCE = 100.0
     DEFAULT_NEAR = 0.1
-    DEFAULT_FAR = 100.0
+    DEFAULT_FAR = 400.0
     MIN_ORTHO_SIZE = 0.25
     MAX_ORTHO_SIZE = 100.0
     # Fator de zoom por unidade de scroll.

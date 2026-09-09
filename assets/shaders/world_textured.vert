@@ -23,7 +23,7 @@ void main()
 {
     vec4 worldPos = u_Model * vec4(aPos, 1.0);
     v_FragPos = worldPos.xyz;
-    v_Normal = mat3(transpose(inverse(u_Model))) * aNormal;
+    v_Normal = mat3(u_Model) * aNormal;
     v_TexCoord = aTexCoord;
     v_Color = aColor;
 

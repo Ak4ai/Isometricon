@@ -416,3 +416,20 @@ def test_invalid_clip_planes():
             near=10.0,
             far=5.0,
         )
+
+
+def test_camera_foreground_not_clipped_by_near_plane():
+    """Objetos no primeiro plano (frente do target / parte inferior da tela) não devem ser cortados pelo near plane."""
+    camera = IsometricCamera()
+    view = camera.get_view_matrix()
+
+    # Um ponto a 20 unidades à frente do target (em direção à câmera)
+    offset = camera._camera_position() - camera.target
+    offset_dir = offset / np.linalg.norm(offset)
+
+    foreground_point = camera.target + offset_dir * 20.0
+    view_pos = transform_point(view, foreground_point)
+
+    # No espaço de visualização OpenGL, a câmera olha para -Z.
+    # Pontos à frente da câmera devem ter Z negativo e magnitude > near.
+    assert view_pos[2] < -camera.near
