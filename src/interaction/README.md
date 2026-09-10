@@ -59,7 +59,8 @@ sincronizados enquanto o grid está desligado. Em regiões contíguas de
 streaming, alturas, bloqueadores e segmentos compartilhados são calculados em
 arrays NumPy; snapshots com ilhas muito distantes usam um caminho esparso para
 não alocar a área vazia entre elas. Revisões consecutivas de uma mesma sequência
-de streaming são coalescidas até uma revisão persistir no frame seguinte. A
+de streaming são coalescidas e o snapshot só é sincronizado quando não há
+solicitações, geração ou resultados pendentes no `WorldManager`. A
 renderização usa as mesmas matrizes `Projection`, `View` e `Model` animada do terreno, mantém
 o depth test ativo, desativa escrita de profundidade e aplica apenas esse
 pequeno offset contra z-fighting. `G` alterna a visibilidade por evento PRESS.
