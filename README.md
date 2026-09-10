@@ -109,9 +109,11 @@ Para cada bloco em $(x, y, z)$, seus 6 vizinhos são inspecionados. Faces adjace
 #### 4. 🎯 Raycasting 3D (Mouse Picking)
 Converte o clique 2D do mouse em um raio 3D no espaço do mundo:
 
-$$\vec{d} = \text{normalize}\left(\mathbf{V}^{-1} \times \mathbf{P}^{-1} \times (x_{\text{ndc}}, y_{\text{ndc}}, 1, 0)\right)$$
+$$\vec{o}=\operatorname{unproject}(x_{ndc},y_{ndc},-1),\qquad
+\vec{d}=\operatorname{normalize}(\operatorname{unproject}(x_{ndc},y_{ndc},1)-\vec{o})$$
 
-Testa interseção do raio com as AABBs dos blocos (Slab Method) para determinar o bloco clicado.
+Percorre a grade em ordem com 3D DDA e consulta somente os voxels atravessados;
+o Slab Method fica disponível para AABBs de objetos isolados.
 
 #### 5. 🖼️ Shaders de Destaque
 Fragment Shader com efeito pulsante via `sin(u_Time)` e blending aditivo para hover e seleção.

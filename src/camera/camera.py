@@ -246,8 +246,6 @@ class IsometricCamera:
             + forward * dy
         ) * sensitivity * self.ortho_size
         self.target += movement
-        # O pan da câmera ocorre somente no plano XZ.
-        self.target[1] = 0.0
     def rotate_left(self) -> None:
         """Rotaciona o tabuleiro 90° para a esquerda (anti-horário)."""
         self.board_rotation = (self.board_rotation - 90) % 360

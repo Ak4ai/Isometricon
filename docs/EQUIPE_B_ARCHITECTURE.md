@@ -96,44 +96,69 @@ A Equipe B executa seu pipeline **após** o pipeline da Equipe A no mesmo loop d
 
 O **Mouse Picking** resolve o problema de selecionar objetos 3D clicando com o mouse em uma tela 2D. No contexto da projeção ortográfica isométrica da câmera, o algoritmo é:
 
-### 4.2. Algoritmo de Unprojection
+### 4.2. Unprojection ortográfica
 
-```python
-def screen_to_ray(mouse_x: float, mouse_y: float,
-                  viewport: tuple, view: mat4, proj: mat4) -> tuple[vec3, vec3]:
-    """
-    Converte coordenadas de tela para um raio no espaço do mundo.
+As coordenadas do cursor GLFW começam no topo esquerdo, enquanto NDC usa o
+centro e cresce para cima:
 
-    Returns:
-        (origin, direction) - origem e direção do raio normalizado
-    """
-    w, h = viewport[2], viewport[3]
+$$x_{NDC}=\frac{2x_{mouse}}{W}-1,\qquad
+y_{NDC}=1-\frac{2y_{mouse}}{H}$$
 
-    # 1. Converter para NDC [-1, 1]
-    xNDC = (2.0 * mouse_x / w) - 1.0
-    yNDC = 1.0 - (2.0 * mouse_y / h)
+O renderer aplica matrizes a vetores-coluna na ordem
+$\mathbf{P}\mathbf{V}\mathbf{M}$. A matriz $\mathbf{M}$ é a rotação animada do
+tabuleiro usada durante Q/E. Definindo $\mathbf{Q}=\mathbf{P}\mathbf{V}\mathbf{M}$:
 
-    # 2. Desprojetar: NDC -> espaço da câmera (eye space)
-    ray_clip = np.array([xNDC, yNDC, -1.0, 1.0], dtype=np.float32)
-    ray_eye  = np.linalg.inv(proj) @ ray_clip
-    ray_eye  = np.array([ray_eye[0], ray_eye[1], -1.0, 0.0], dtype=np.float32)
+$$\mathbf{p}_{near}=\operatorname{dehom}\!\left(
+\mathbf{Q}^{-1}(x_{NDC},y_{NDC},-1,1)^T\right)$$
 
-    # 3. Desprojetar: eye space -> espaço do mundo
-    ray_world = np.linalg.inv(view) @ ray_eye
-    direction = ray_world[:3] / np.linalg.norm(ray_world[:3])
+$$\mathbf{p}_{far}=\operatorname{dehom}\!\left(
+\mathbf{Q}^{-1}(x_{NDC},y_{NDC},1,1)^T\right)$$
 
-    # Origem: posição da câmera
-    origin = np.linalg.inv(view)[:3, 3]
-    return origin, direction
-```
+$$\mathbf{o}=\mathbf{p}_{near},\qquad
+\mathbf{d}=\frac{\mathbf{p}_{far}-\mathbf{p}_{near}}
+{\lVert\mathbf{p}_{far}-\mathbf{p}_{near}\rVert}$$
 
-### 4.3. Ray-AABB Intersection
+Em projeção ortográfica, pixels diferentes geram origens diferentes no plano
+near e direções paralelas. Incluir $\mathbf{M}$ na inversa devolve o raio no
+espaço lógico da grade; assim as coordenadas globais continuam corretas durante
+toda a animação de rotação. Pan, zoom e resize entram pelas matrizes e dimensões
+recalculadas no frame. Em telas HiDPI, o cursor é convertido para pixels do
+framebuffer antes da transformação.
 
-Para testar qual bloco o raio atinge, usamos o teste de interseção Ray-AABB (Slab Method):
+### 4.3. Percurso de voxels com 3D DDA
 
-$$t_{\min} = \max\left(\frac{B_{\min} - O}{\vec{d}}\right), \quad t_{\max} = \min\left(\frac{B_{\max} - O}{\vec{d}}\right)$$
+O voxel inicial é $\lfloor\mathbf{o}\rfloor$, usando `floor` em cada eixo para
+preservar coordenadas negativas. Para cada eixo $i$:
 
-Se $t_{\min} \leq t_{\max}$ e $t_{\max} \geq 0$, o raio intersecta a AABB do bloco.
+$$s_i=\operatorname{sign}(d_i),\qquad
+\Delta t_i=\left|\frac{1}{d_i}\right|$$
+
+$t_{max,i}$ guarda a distância até a próxima fronteira da célula. O algoritmo
+avança pelo eixo de menor $t_{max}$, soma $\Delta t_i$ e consulta apenas a nova
+célula por `VoxelGridProvider.get_block_at()`. Se $d_i=0$, ambos os valores são
+$+\infty$ naquele eixo, evitando divisão por zero. Empates usam ordem X, Y, Z
+para tornar hits em arestas e cantos determinísticos.
+
+O primeiro bloco diferente de `AIR` vence; `WATER` e `LEAVES` são atingíveis,
+mesmo sendo transparentes para o mesher. Chunks não carregados retornam `AIR` e
+o raycast não força streaming. O alcance padrão é 256 unidades. Ao entrar numa
+célula avançando por $+i$, a normal da face é $-s_i$ naquele eixo. Se a origem
+já estiver dentro de um bloco atingível, a distância é zero e a normal é
+`(0, 0, 0)`, pois não existe uma única face de entrada.
+
+### 4.4. Interseção Ray-AABB auxiliar
+
+O slab method permanece disponível para picking futuro de tokens, sem ser usado
+para varrer todos os voxels:
+
+$$t_{enter}=\max_i\left(\min\left(\frac{B_{min,i}-O_i}{d_i},
+\frac{B_{max,i}-O_i}{d_i}\right)\right)$$
+
+$$t_{exit}=\min_i\left(\max\left(\frac{B_{min,i}-O_i}{d_i},
+\frac{B_{max,i}-O_i}{d_i}\right)\right)$$
+
+Há hit quando $t_{enter}\le t_{exit}$, $t_{exit}\ge0$ e a interseção respeita
+o alcance máximo.
 
 ---
 
