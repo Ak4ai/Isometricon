@@ -200,6 +200,37 @@ def test_world_manager_result_queue_safe_without_gl():
     manager.delete()
 
 
+def test_world_manager_reports_each_pending_streaming_stage():
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=1,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    assert not manager.has_pending_streaming_work()
+
+    manager._in_progress.add((0, 0, 0))
+    assert manager.has_pending_streaming_work()
+    manager._in_progress.clear()
+
+    manager._request_queue.put([(0, 0, 0)])
+    assert manager.has_pending_streaming_work()
+    manager._request_queue.get_nowait()
+    manager._request_queue.task_done()
+
+    manager._worker_busy.set()
+    assert manager.has_pending_streaming_work()
+    manager._worker_busy.clear()
+
+    manager._result_queue.put(object())
+    assert manager.has_pending_streaming_work()
+    manager._result_queue.get_nowait()
+    manager._result_queue.task_done()
+
+    assert not manager.has_pending_streaming_work()
+    manager.delete()
+
+
 def test_world_manager_frustum_culling_rendering():
     """Valida que render() com view_projection aplica Frustum Culling e descarta chunks fora da tela."""
     gen = TerrainGenerator(seed=123, enable_caves=False)
@@ -306,5 +337,4 @@ def test_modular_character_walk_cycle_animation():
     assert abs(coxa_e.local_rot[0]) < 0.05
 
     char.delete()
-
 

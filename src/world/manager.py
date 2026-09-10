@@ -63,6 +63,7 @@ class WorldManager:
         self._request_queue: queue.Queue = queue.Queue()
         self._result_queue: queue.Queue = queue.Queue()
         self._stop_event = threading.Event()
+        self._worker_busy = threading.Event()
         self._in_progress: Set[Tuple[int, int, int]] = set()
         self._worker_thread: Optional[threading.Thread] = None
 
@@ -92,6 +93,7 @@ class WorldManager:
             if positions is None or self._stop_event.is_set():
                 break
 
+            self._worker_busy.set()
             try:
                 # Descarta requisições obsoletas se o jogador já se afastou muito
                 if self._last_center is not None:
@@ -121,6 +123,7 @@ class WorldManager:
             except Exception:
                 pass
             finally:
+                self._worker_busy.clear()
                 self._request_queue.task_done()
 
     def neighbor_at(self, x: int, y: int, z: int) -> BlockType:
@@ -287,6 +290,15 @@ class WorldManager:
         """Retorna a revisão atual sem alocar um snapshot dos chunks."""
         with self._chunks_lock:
             return self._chunk_revision
+
+    def has_pending_streaming_work(self) -> bool:
+        """Indica se a sequência atual ainda pode alterar os chunks carregados."""
+        return bool(
+            self._in_progress
+            or self._worker_busy.is_set()
+            or not self._request_queue.empty()
+            or not self._result_queue.empty()
+        )
 
     def render(
         self,

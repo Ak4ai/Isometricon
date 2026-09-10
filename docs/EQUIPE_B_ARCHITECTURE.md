@@ -219,6 +219,12 @@ encontra o maior suporte em cada coluna X/Z dos chunks carregados e cria contorn
 compartilhados. Em um degrau, os dois contornos ficam em suas respectivas
 alturas, sem uma diagonal que atravesse blocos.
 
+O caminho normal de streaming representa alturas e bloqueadores em matrizes
+NumPy da região contígua e gera somente uma cópia das arestas compartilhadas.
+Para snapshots esparsos com ilhas muito distantes, o algoritmo preserva um
+fallback baseado em coordenadas, evitando alocação proporcional à distância
+entre os grupos de chunks.
+
 `WATER` não cria uma célula tática e também exclui a grade do leito submerso;
 movimentação aquática continua fora de escopo. Folhas não substituem o suporte
 abaixo delas. A etapa atual representa somente a superfície externa;
@@ -229,8 +235,11 @@ pisos internos de cavernas e múltiplos andares não são enumerados.
 `WorldManager` expõe uma revisão monotônica barata e
 `get_loaded_chunks_snapshot()`, uma cópia rasa protegida por lock. O snapshot
 e `GridOverlayRenderer` só refaz seu VBO quando essa revisão muda e a grade está
-visível; o caminho
-normal é um único `glDrawArrays(GL_LINES, ...)`. Os shaders `grid.vert` e
+visível. Revisões que mudam em frames consecutivos continuam coalescidas, mas o
+snapshot só é sincronizado depois que solicitações, geração, integração e fila
+de resultados da sequência atual terminam. Isso evita reconstruir a grade para
+estados intermediários mesmo quando a worker cede tempo à thread principal. O
+caminho normal é um único `glDrawArrays(GL_LINES, ...)`. Os shaders `grid.vert` e
 `grid.frag` aplicam as mesmas `Projection`, `View` e `Model` animada do terreno,
 mantendo alinhamento durante pan, zoom, resize e Q/E.
 
