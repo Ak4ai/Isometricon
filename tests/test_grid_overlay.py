@@ -2,6 +2,7 @@
 
 import numpy as np
 
+import src.interactive.grid_overlay as grid_overlay
 from src.integration import VoxelGridProvider
 from src.interaction import is_tactical_column, is_tactical_surface
 from src.interactive.grid_overlay import (
@@ -105,6 +106,39 @@ def test_highest_support_across_vertical_chunks_is_used():
     np.testing.assert_allclose(vertices[:, 1], 19.0 + SURFACE_EPSILON)
 
 
+def test_surface_at_negative_one_preserves_grid_at_world_zero():
+    lower = chunk(0, -1, 0)
+    lower.set_block(3, 15, 4, BlockType.STONE)
+
+    vertices = build_surface_grid_vertices({(0, -1, 0): lower})
+
+    assert line_count(vertices) == 4
+    np.testing.assert_allclose(vertices[:, 1], SURFACE_EPSILON)
+
+
+def test_contiguous_chunks_use_vectorized_geometry_path(monkeypatch):
+    def unexpected_sparse_fallback(*args, **kwargs):
+        raise AssertionError("região contígua não deve usar o fallback esparso")
+
+    monkeypatch.setattr(
+        grid_overlay,
+        "_build_sparse_surface_grid_vertices",
+        unexpected_sparse_fallback,
+    )
+    chunks = {}
+    for chunk_x in range(2):
+        for chunk_z in range(2):
+            source = chunk(chunk_x, 0, chunk_z)
+            source.blocks[:, 2, :] = BlockType.STONE
+            chunks[(chunk_x, 0, chunk_z)] = source
+
+    vertices = build_surface_grid_vertices(chunks)
+
+    width = depth = 2 * Chunk3D.SIZE
+    expected_lines = (width + 1) * depth + (depth + 1) * width
+    assert line_count(vertices) == expected_lines
+
+
 def test_added_and_removed_chunks_change_only_loaded_geometry():
     first = chunk()
     first.set_block(0, 1, 0, BlockType.STONE)
@@ -115,6 +149,19 @@ def test_added_and_removed_chunks_change_only_loaded_geometry():
 
     assert line_count(before) == 8
     assert line_count(after) == 4
+
+
+def test_distant_chunk_islands_use_sparse_geometry_without_filling_the_gap():
+    first = chunk(-100, 0, 0)
+    second = chunk(100, 0, 0)
+    first.set_block(0, 1, 0, BlockType.STONE)
+    second.set_block(0, 1, 0, BlockType.STONE)
+
+    vertices = build_surface_grid_vertices(
+        {(-100, 0, 0): first, (100, 0, 0): second}
+    )
+
+    assert line_count(vertices) == 8
 
 
 def test_voxel_provider_chunks_are_usable_without_graphics_context():
@@ -156,9 +203,25 @@ def test_visibility_toggle_skips_snapshot_sync_when_hidden_without_gl_context():
     renderer = object.__new__(GridOverlayRenderer)
     renderer.visible = True
     renderer._chunk_revision = 4
+    renderer._pending_chunk_revision = None
 
     assert renderer.needs_sync(5)
     assert renderer.toggle_visibility() is False
     assert not renderer.needs_sync(5)
     assert renderer.toggle_visibility() is True
     assert renderer.needs_sync(5)
+
+
+def test_streaming_revisions_are_coalesced_until_stable():
+    renderer = object.__new__(GridOverlayRenderer)
+    renderer.visible = True
+    renderer._chunk_revision = 4
+    renderer._pending_chunk_revision = None
+
+    assert not renderer.should_sync(5)
+    assert not renderer.should_sync(6)
+    assert renderer.should_sync(6)
+
+    renderer._chunk_revision = 6
+    assert not renderer.should_sync(6)
+    assert renderer._pending_chunk_revision is None
