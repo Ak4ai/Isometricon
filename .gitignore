@@ -108,3 +108,25 @@ scratch/
 wiki_export/
 wiki_temp/
 .wiki/
+
+# Blender Backups & Temporary Files
+*.blend1
+*.blend2
+*backup*.blend
+assets/models/*.png
+assets/models/*.mtl
+assets/models/2character_male.blend
+
+# Experimental / Scratch scripts
+scripts/build_blueprint_character.py
+scripts/build_clean_lowpoly_male.py
+scripts/build_modular_male_character.py
+scripts/clean_ai_model.py
+scripts/generate_face_texture.py
+scripts/generate_male_character.py
+scripts/measure_anatomy.py
+scripts/poll_and_import_rodin.py
+scripts/test_blender.py
+scripts/test_sharp_remesh.py
+scripts/test_smooth_dissolve.py
+

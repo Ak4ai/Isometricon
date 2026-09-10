@@ -242,3 +242,69 @@ def test_world_manager_frustum_culling_rendering():
     manager.delete()
 
 
+def test_modular_character_loading_and_fk():
+    """Valida o carregamento da hierarquia modular e avaliação FK a partir do JSON."""
+    import os
+    from src.interactive.token_system import ModularCharacter
+
+    json_path = os.path.join("assets", "models", "character_modular.json")
+    if not os.path.exists(json_path):
+        pytest.skip("character_modular.json não encontrado")
+
+    char = ModularCharacter(json_path, create_mesh=False)
+    assert len(char.parts) == 14
+    assert "pelve" in char.parts
+    assert "torso" in char.parts
+    assert "coxa esquerda" in char.parts
+    assert "canela esquerda" in char.parts
+
+    # Garante que 'pelve' (raiz) é processada antes de 'torso' e 'coxas'
+    pelve_idx = char.topological_order.index("pelve")
+    torso_idx = char.topological_order.index("torso")
+    coxa_e_idx = char.topological_order.index("coxa esquerda")
+    assert pelve_idx < torso_idx
+    assert pelve_idx < coxa_e_idx
+
+    # Matrizes de mundo devem ter formato (4, 4) e tipo float32
+    for part in char.parts.values():
+        assert part.world_matrix.shape == (4, 4)
+        assert part.world_matrix.dtype == np.float32
+
+    char.delete()
+    assert len(char.parts) == 0
+
+
+def test_modular_character_walk_cycle_animation():
+    """Valida a alteração dos ângulos articulares durante a passada e retorno ao repouso."""
+    import os
+    from src.interactive.token_system import ModularCharacter
+
+    json_path = os.path.join("assets", "models", "character_modular.json")
+    if not os.path.exists(json_path):
+        pytest.skip("character_modular.json não encontrado")
+
+    char = ModularCharacter(json_path, create_mesh=False)
+
+    # Estado de repouso inicial
+    coxa_e = char.parts["coxa esquerda"]
+    assert abs(coxa_e.local_rot[0]) < 1e-4
+
+    # Simula passada andando no ápice do avanço do quadril (walk_time = 0)
+    char.update_animation(dt=0.1, is_moving=True, walk_time=0.0)
+    assert abs(coxa_e.local_rot[0]) > 0.05
+
+    # Simula passada no ápice da flexão do joelho ao avançar a perna (fase swing: 1.5 * pi)
+    canela_e = char.parts["canela esquerda"]
+    char.update_animation(dt=0.1, is_moving=True, walk_time=1.5 * math.pi)
+    assert canela_e.local_rot[0] > 0.1
+
+    # Simula parada (repouso) por vários frames
+    for _ in range(30):
+        char.update_animation(dt=0.05, is_moving=False, walk_time=0.0)
+
+    # Ângulo do quadril deve amortecer de volta para perto de zero
+    assert abs(coxa_e.local_rot[0]) < 0.05
+
+    char.delete()
+
+
