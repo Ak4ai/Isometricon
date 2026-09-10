@@ -12,6 +12,11 @@ A implementação Python está disponível em:
 O provider abstrai a organização dos voxels em chunks e expõe consultas
 usando coordenadas globais `(x, y, z)`.
 
+Para mundos estáticos, ele recebe um mapeamento de chunks. Para o mundo com
+streaming, `block_lookup=world_manager.neighbor_at` mantém as consultas ligadas
+aos chunks atualmente carregados. Uma região ausente continua retornando
+`AIR`; a consulta não carrega chunks nem aguarda o worker assíncrono.
+
 ### Consultas
 
     get_block_at(x, y, z)
