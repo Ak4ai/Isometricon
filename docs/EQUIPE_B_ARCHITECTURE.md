@@ -209,30 +209,35 @@ gl.glDisable(gl.GL_BLEND)
 
 ## 6. Módulo 3: Grid Overlay
 
-### 6.1. Geração da Malha do Grid
+### 6.1. Geração da malha e regra de superfície
 
-```python
-def build_grid_mesh(width: int, depth: int, y_offset: float = 0.01) -> np.ndarray:
-    """
-    Gera os vértices das linhas do grid para um terreno de (width x depth) blocos.
-    Retorna array de float32 com pares de pontos (GL_LINES).
-    """
-    lines = []
-    for x in range(width + 1):
-        lines += [x, y_offset, 0,   x, y_offset, depth]   # linhas em Z
-    for z in range(depth + 1):
-        lines += [0, y_offset, z,   width, y_offset, z]   # linhas em X
-    return np.array(lines, dtype=np.float32)
-```
+`src/interaction/surface.py` é a fonte única da política de célula tática:
+`DIRT`, `GRASS`, `STONE` e `WOOD` sustentam tokens; `AIR`, `WATER` e `LEAVES`
+não. Água acima de um suporte também invalida a coluna. `build_surface_grid_vertices()`
+encontra o maior suporte em cada coluna X/Z dos chunks carregados e cria contornos horizontais `GL_LINES` em
+`surface_y + 1 + 0.002`. Segmentos iguais em células planas adjacentes são
+compartilhados. Em um degrau, os dois contornos ficam em suas respectivas
+alturas, sem uma diagonal que atravesse blocos.
 
-### 6.2. Renderização
+`WATER` não cria uma célula tática e também exclui a grade do leito submerso;
+movimentação aquática continua fora de escopo. Folhas não substituem o suporte
+abaixo delas. A etapa atual representa somente a superfície externa;
+pisos internos de cavernas e múltiplos andares não são enumerados.
 
-```python
-# No loop:
-gl.glLineWidth(1.0)
-grid_shader.set_vec4("u_GridColor", (0.2, 0.2, 0.2, 0.6))
-gl.glDrawArrays(gl.GL_LINES, 0, grid_vertex_count)
-```
+### 6.2. Streaming, renderização e profundidade
+
+`WorldManager` expõe uma revisão monotônica barata e
+`get_loaded_chunks_snapshot()`, uma cópia rasa protegida por lock. O snapshot
+e `GridOverlayRenderer` só refaz seu VBO quando essa revisão muda e a grade está
+visível; o caminho
+normal é um único `glDrawArrays(GL_LINES, ...)`. Os shaders `grid.vert` e
+`grid.frag` aplicam as mesmas `Projection`, `View` e `Model` animada do terreno,
+mantendo alinhamento durante pan, zoom, resize e Q/E.
+
+O depth test continua ativo, a grade não escreve no depth buffer e o offset
+vertical de 0.002 evita z-fighting. Assim linhas atrás de blocos permanecem
+ocultas. `G` alterna a visibilidade por evento de tecla PRESS, sem repetir
+enquanto a tecla está pressionada.
 
 ---
 
