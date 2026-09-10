@@ -55,8 +55,12 @@ invalida o leito submerso antes de gerar geometria.
 O `WorldManager` expõe uma revisão monotônica barata e
 `get_loaded_chunks_snapshot()`, uma cópia rasa protegida por lock. O snapshot e
 o VBO só são obtidos/refeitos quando a revisão muda, e não são sequer
-sincronizados enquanto o grid está desligado. A renderização
-usa as mesmas matrizes `Projection`, `View` e `Model` animada do terreno, mantém
+sincronizados enquanto o grid está desligado. Em regiões contíguas de
+streaming, alturas, bloqueadores e segmentos compartilhados são calculados em
+arrays NumPy; snapshots com ilhas muito distantes usam um caminho esparso para
+não alocar a área vazia entre elas. Revisões consecutivas de uma mesma sequência
+de streaming são coalescidas até uma revisão persistir no frame seguinte. A
+renderização usa as mesmas matrizes `Projection`, `View` e `Model` animada do terreno, mantém
 o depth test ativo, desativa escrita de profundidade e aplica apenas esse
 pequeno offset contra z-fighting. `G` alterna a visibilidade por evento PRESS.
 Não há suporte a múltiplos andares ou navegação de cavernas nesta etapa.
