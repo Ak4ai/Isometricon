@@ -1,10 +1,12 @@
 """Testes unitários e invariantes do gerador de cavernas 3D (CaveCarver)."""
 
 from itertools import product
+import threading
 
 import numpy as np
 import pytest
 
+import src.world.caves as caves_module
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator
 from src.world.caves import CaveCarver
 
@@ -130,6 +132,42 @@ def test_caved_chunk_meshing():
         assert mesh.face_count > 0
         assert mesh.vertices.shape == (mesh.face_count * 4, 11)
         assert mesh.indices.shape == (mesh.face_count * 6,)
+
+
+def test_cave_carver_yields_only_when_running_in_background(monkeypatch):
+    main = object()
+    worker = object()
+    sleeps = []
+
+    monkeypatch.setattr(caves_module.threading, "main_thread", lambda: main)
+    monkeypatch.setattr(caves_module.threading, "current_thread", lambda: main)
+    monkeypatch.setattr(caves_module.time, "sleep", sleeps.append)
+
+    caves_module._yield_to_main_thread()
+    assert sleeps == []
+
+    monkeypatch.setattr(caves_module.threading, "current_thread", lambda: worker)
+    caves_module._yield_to_main_thread()
+    assert sleeps == [caves_module._BACKGROUND_YIELD_SECONDS]
+
+
+def test_background_generation_preserves_deterministic_cave_geometry():
+    positions = [(0, 0, 0)]
+    generator = TerrainGenerator(seed=1234, enable_caves=True, cave_chance=1.0)
+    expected = generator.generate_region(positions)
+    generated = {}
+
+    def generate() -> None:
+        generated.update(generator.generate_region(positions))
+
+    worker = threading.Thread(target=generate)
+    worker.start()
+    worker.join(timeout=2.0)
+
+    assert not worker.is_alive()
+    assert set(generated) == set(expected)
+    for key in expected:
+        np.testing.assert_array_equal(generated[key].blocks, expected[key].blocks)
 
 
 @pytest.mark.parametrize("kwargs,error", [
