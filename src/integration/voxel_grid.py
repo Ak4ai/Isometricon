@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from numbers import Integral
 import numpy as np
 from src.math.aabb import AABB
@@ -24,8 +24,11 @@ class VoxelGridProvider:
     def __init__(
         self,
         chunks: Mapping[tuple[int, int, int], Chunk3D] | None = None,
+        *,
+        block_lookup: Callable[[int, int, int], BlockType] | None = None,
     ) -> None:
         self._chunks: dict[tuple[int, int, int], Chunk3D] = {}
+        self._block_lookup = block_lookup
         if chunks is not None:
             for position, chunk in chunks.items():
                 self.add_chunk(position, chunk)
@@ -88,7 +91,12 @@ class VoxelGridProvider:
         world_y: int,
         world_z: int,
     ) -> BlockType:
-        # Retorna o tipo de bloco em coordenadas globais.
+        # Valida sempre antes de delegar a uma fonte dinâmica.
+        world_x = _coordinate(world_x)
+        world_y = _coordinate(world_y)
+        world_z = _coordinate(world_z)
+        if self._block_lookup is not None:
+            return BlockType(self._block_lookup(world_x, world_y, world_z))
         # Coordenadas fora de chunks carregados retornam AIR.
         chunk, local = self._locate_chunk(
             world_x,

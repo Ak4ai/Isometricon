@@ -66,6 +66,8 @@ from src.core.version import (
     start_github_sync_check,
 )
 from src.core.window import Window
+from src.integration import VoxelGridProvider
+from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, PlayerToken
 from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
@@ -292,12 +294,14 @@ def main() -> None:
         player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0)
         player_token.position[1] = float(start_surface_y) + 1.0
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+        voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
         meshes = []
     else:
         atlas = None
         world_manager = None
         player_token = None
+        voxel_provider = None
         highlight_renderer = None
         meshes = [(create_cube_mesh(), mat4_identity())]
     
@@ -352,6 +356,11 @@ def main() -> None:
         "last_y": 0.0,
         "shift_pressed": False,
     }
+    picking_state = {
+        "click_pending": False,
+        "hover_hit": None,
+        "clicked_hit": None,
+    }
 
     # ------------------------------------------------------------------
     # 5. Callbacks de entrada
@@ -404,11 +413,14 @@ def main() -> None:
         if action == glfw.PRESS:
             if is_middle or is_left_with_shift:
                 pan_state["active"] = True
+                picking_state["hover_hit"] = None
 
                 x, y = window.get_cursor_pos()
 
                 pan_state["last_x"] = x
                 pan_state["last_y"] = y
+            elif terrain_demo and button == glfw.MOUSE_BUTTON_LEFT:
+                picking_state["click_pending"] = True
 
         elif action == glfw.RELEASE:
             if button in (glfw.MOUSE_BUTTON_MIDDLE, glfw.MOUSE_BUTTON_LEFT):
@@ -507,11 +519,12 @@ def main() -> None:
             # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
             world_manager.update(player_token.position[0], player_token.position[2])
 
-            # 3. Câmera acompanha a posição do personagem suavemente
-            cam_speed = 8.0
-            camera.target[0] += (player_token.position[0] - camera.target[0]) * min(dt * cam_speed, 1.0)
-            camera.target[2] += (player_token.position[2] - camera.target[2]) * min(dt * cam_speed, 1.0)
-            camera.target[1] += (player_token.position[1] - camera.target[1]) * min(dt * cam_speed, 1.0)
+            # 3. Câmera acompanha o personagem fora do gesto de pan.
+            if not pan_state["active"]:
+                cam_speed = 8.0
+                camera.target[0] += (player_token.position[0] - camera.target[0]) * min(dt * cam_speed, 1.0)
+                camera.target[2] += (player_token.position[2] - camera.target[2]) * min(dt * cam_speed, 1.0)
+                camera.target[1] += (player_token.position[1] - camera.target[1]) * min(dt * cam_speed, 1.0)
         else:
             texture_timer += dt
             if texture_timer >= TEXTURE_CHANGE_INTERVAL:
@@ -573,6 +586,37 @@ def main() -> None:
         view = camera.get_view_matrix()
         model = camera.get_animated_model_matrix()
 
+        # O hover fica suspenso durante o drag para não disputar o gesto de pan.
+        # Como os eventos são processados acima, ele retorna no frame do release.
+        if terrain_demo and not pan_state["active"]:
+            mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
+            mouse_ray = screen_to_world_ray(
+                mouse_x,
+                mouse_y,
+                window.width,
+                window.height,
+                view,
+                projection,
+                model,
+            )
+            picking_state["hover_hit"] = raycast_voxels(
+                mouse_ray,
+                voxel_provider,
+            )
+            if picking_state["click_pending"]:
+                picking_state["clicked_hit"] = picking_state["hover_hit"]
+                clicked_hit = picking_state["clicked_hit"]
+                if clicked_hit is None:
+                    print("[Picking] Clique sem bloco atingido.")
+                else:
+                    print(
+                        f"[Picking] Bloco {clicked_hit.block} "
+                        f"({clicked_hit.block_type.name}), "
+                        f"face {clicked_hit.normal}, "
+                        f"distância {clicked_hit.distance:.3f}."
+                    )
+                picking_state["click_pending"] = False
+
         # --------------------------------------------------------------
         # Renderizar
         # --------------------------------------------------------------
@@ -611,7 +655,22 @@ def main() -> None:
                 base_color=(1.0, 1.0, 1.0),
             )
 
-            # 3. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
+            # 3. Destaca em amarelo o primeiro voxel sob o cursor.
+            hover_hit = picking_state["hover_hit"]
+            if hover_hit is not None:
+                hx, hy, hz = hover_hit.block
+                highlight_renderer.render(
+                    view,
+                    projection,
+                    model,
+                    hx,
+                    hy,
+                    hz,
+                    time=window.time,
+                    base_color=(1.0, 0.72, 0.18),
+                )
+
+            # 4. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
             shader.use()
             shader.set_mat4("u_Projection", projection)
             shader.set_mat4("u_View", view)

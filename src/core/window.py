@@ -135,6 +135,17 @@ class Window:
         """Retorna a posição atual do cursor (x, y)."""
         return glfw.get_cursor_pos(self._window)
 
+    def get_cursor_pos_framebuffer(self) -> Tuple[float, float]:
+        """Retorna o cursor na mesma escala em pixels usada pelo viewport."""
+        x_pos, y_pos = self.get_cursor_pos()
+        window_width, window_height = glfw.get_window_size(self._window)
+        if window_width <= 0 or window_height <= 0:
+            return x_pos, y_pos
+        return (
+            x_pos * self.width / window_width,
+            y_pos * self.height / window_height,
+        )
+
     def get_aspect_ratio(self) -> float:
         """Retorna o aspect ratio atual da janela (largura / altura)."""
         return float(self.width) / float(self.height) if self.height > 0 else 1.0

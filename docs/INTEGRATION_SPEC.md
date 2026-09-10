@@ -136,17 +136,25 @@ class CameraStateProvider:
 
 ### Matemática do Raycasting (Projeção Ortográfica)
 
-Para projeção ortográfica, a direção do raio é **constante** (= direção frontal da câmera). Apenas a origem varia conforme a posição do mouse:
+Para projeção ortográfica, pixels diferentes produzem origens diferentes e
+direções paralelas. O raycast desprojeta os dois planos de recorte. Como o
+renderer gira o tabuleiro com uma matriz Model animada, usa-se a mesma matriz
+na composição $\mathbf{Q}=\mathbf{P}\mathbf{V}\mathbf{M}$:
 
 $$x_{NDC} = \frac{2 \cdot x_{mouse}}{W} - 1, \qquad y_{NDC} = 1 - \frac{2 \cdot y_{mouse}}{H}$$
 
-$$\text{ray\_clip} = (x_{NDC},\; y_{NDC},\; -1,\; 1)$$
+$$\mathbf{p}_{near}=\operatorname{dehom}\left(\mathbf{Q}^{-1}
+(x_{NDC},y_{NDC},-1,1)^T\right)$$
 
-$$\text{ray\_eye} = \mathbf{P}^{-1} \times \text{ray\_clip} \quad \rightarrow \quad (x_{eye},\; y_{eye},\; -1,\; 0)$$
+$$\mathbf{p}_{far}=\operatorname{dehom}\left(\mathbf{Q}^{-1}
+(x_{NDC},y_{NDC},1,1)^T\right)$$
 
-$$\text{ray\_world\_origin} = \mathbf{V}^{-1} \times \mathbf{P}^{-1} \times (x_{NDC},\; y_{NDC},\; -1,\; 1)$$
+$$\mathbf{o}=\mathbf{p}_{near}$$
 
-$$\text{ray\_dir} = \text{normalize}\!\left(\mathbf{V}^{-1} \times (0,\; 0,\; -1,\; 0)\right)$$
+$$\mathbf{d}=\operatorname{normalize}(\mathbf{p}_{far}-\mathbf{p}_{near})$$
+
+O resultado fica no espaço lógico dos voxels, coerente com as coordenadas
+globais do `VoxelGridProvider` durante pan, zoom, resize e rotação Q/E.
 
 ---
 

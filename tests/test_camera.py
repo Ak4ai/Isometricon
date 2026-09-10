@@ -211,7 +211,7 @@ def test_pan_moves_target_on_xz_plane():
 
 def test_screen_pan_keeps_target_on_xz_plane():
     """Pan pelo mouse não deve modificar a altura do target."""
-    camera = IsometricCamera()
+    camera = IsometricCamera(target=vec3(2.0, 14.0, -3.0))
 
     camera.pan_screen(
         100.0,
@@ -220,7 +220,7 @@ def test_screen_pan_keeps_target_on_xz_plane():
 
     assert np.isclose(
         camera.target[1],
-        0.0,
+        14.0,
     )
 
 
