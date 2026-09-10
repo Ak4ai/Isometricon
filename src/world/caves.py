@@ -4,11 +4,22 @@ from dataclasses import dataclass
 from hashlib import blake2b
 from math import cos, floor, isfinite, sin
 from numbers import Real
+import threading
+import time
 
 import numpy as np
 
 from src.world.block import BlockType
 from src.world.chunk import Chunk3D, _coordinate
+
+_BACKGROUND_YIELD_INTERVAL = 1
+_BACKGROUND_YIELD_SECONDS = 0.0005
+
+
+def _yield_to_main_thread() -> None:
+    """Cede o GIL entre etapas do carver quando a geração roda em background."""
+    if threading.current_thread() is not threading.main_thread():
+        time.sleep(_BACKGROUND_YIELD_SECONDS)
 
 
 @dataclass(frozen=True)
@@ -141,13 +152,17 @@ class CaveCarver:
 
             # Passo 1: Construir a casca orgânica ao redor das cavernas que descem para Y < 0
             if self.allow_sparse_depth:
-                for px, py, pz, radius in spheres:
+                for sphere_index, (px, py, pz, radius) in enumerate(spheres, start=1):
                     if py - radius - self.shell_thickness < 0:
                         self._build_organic_shell(px, py, pz, radius, chunks)
+                    if sphere_index % _BACKGROUND_YIELD_INTERVAL == 0:
+                        _yield_to_main_thread()
 
             # Passo 2: Escavar o ar no interior de todas as esferas do túnel
-            for px, py, pz, radius in spheres:
+            for sphere_index, (px, py, pz, radius) in enumerate(spheres, start=1):
                 self._carve_tunnel_air(px, py, pz, radius, chunks, terrain_generator)
+                if sphere_index % _BACKGROUND_YIELD_INTERVAL == 0:
+                    _yield_to_main_thread()
 
     def _build_organic_shell(
         self,

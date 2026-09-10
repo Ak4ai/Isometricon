@@ -235,10 +235,11 @@ pisos internos de cavernas e múltiplos andares não são enumerados.
 `WorldManager` expõe uma revisão monotônica barata e
 `get_loaded_chunks_snapshot()`, uma cópia rasa protegida por lock. O snapshot
 e `GridOverlayRenderer` só refaz seu VBO quando essa revisão muda e a grade está
-visível. Revisões que mudam em frames consecutivos são coalescidas até uma
-revisão persistir por um frame, evitando reconstruir toda a grade para estados
-intermediários da mesma sequência de streaming. O caminho
-normal é um único `glDrawArrays(GL_LINES, ...)`. Os shaders `grid.vert` e
+visível. Revisões que mudam em frames consecutivos continuam coalescidas, mas o
+snapshot só é sincronizado depois que solicitações, geração, integração e fila
+de resultados da sequência atual terminam. Isso evita reconstruir a grade para
+estados intermediários mesmo quando a worker cede tempo à thread principal. O
+caminho normal é um único `glDrawArrays(GL_LINES, ...)`. Os shaders `grid.vert` e
 `grid.frag` aplicam as mesmas `Projection`, `View` e `Model` animada do terreno,
 mantendo alinhamento durante pan, zoom, resize e Q/E.
 
