@@ -514,11 +514,12 @@ def main() -> None:
 
         if terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
+            movement_forward, movement_right = camera.get_movement_directions()
             player_token.update(
                 dt,
                 keys_pressed,
-                camera._forward_direction(),
-                camera._right_direction(),
+                movement_forward,
+                movement_right,
                 world_manager.get_height,
             )
 

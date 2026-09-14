@@ -13,7 +13,14 @@ from __future__ import annotations
 import math
 from typing import Tuple
 import numpy as np
-from src.math import mat4_look_at, mat4_ortho, mat4_rotate_y, vec3
+from src.math import (
+    mat4_look_at,
+    mat4_ortho,
+    mat4_rotate_y,
+    mat4_translate,
+    transform_vector,
+    vec3,
+)
 
 class IsometricCamera:
     DEFAULT_YAW_DEGREES = 45.0
@@ -123,6 +130,15 @@ class IsometricCamera:
             [forward[0], 0.0, forward[2]],
             dtype=np.float32,
         )
+    def get_movement_directions(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Retorna forward/right lógicos relativos à orientação visual discreta."""
+        inverse_board_rotation = mat4_rotate_y(
+            -math.radians(self.board_rotation_degrees)
+        )
+        return (
+            transform_vector(inverse_board_rotation, self._forward_direction()),
+            transform_vector(inverse_board_rotation, self._right_direction()),
+        )
     def _camera_position(self) -> np.ndarray:
         #Calcula a posição da câmera a partir do target e dos ângulos.
         cos_pitch = math.cos(self.pitch)
@@ -178,15 +194,23 @@ class IsometricCamera:
         diff = (diff + 180.0) % 360.0 - 180.0
         self.current_rotation += diff * min(self.rotation_speed * float(dt), 1.0)
 
+    def _rotation_model_matrix(self, angle_degrees: float) -> np.ndarray:
+        """Rotaciona o tabuleiro em torno do mesmo foco usado pela View."""
+        focus_x, focus_y, focus_z = self.target
+        return np.ascontiguousarray(
+            mat4_translate(focus_x, focus_y, focus_z)
+            @ mat4_rotate_y(math.radians(angle_degrees))
+            @ mat4_translate(-focus_x, -focus_y, -focus_z),
+            dtype=np.float32,
+        )
+
     def get_model_matrix(self) -> np.ndarray:
-        """Retorna a matriz de rotação do tabuleiro no passo atual."""
-        angle = math.radians(self.board_rotation)
-        return mat4_rotate_y(angle)
+        """Retorna a rotação discreta do tabuleiro em torno do foco atual."""
+        return self._rotation_model_matrix(float(self.board_rotation))
 
     def get_animated_model_matrix(self) -> np.ndarray:
-        """Retorna a matriz de rotação suave interpolada do tabuleiro."""
-        angle = math.radians(self.current_rotation)
-        return mat4_rotate_y(angle)
+        """Retorna a rotação animada do tabuleiro em torno do foco atual."""
+        return self._rotation_model_matrix(self.current_rotation)
 
     # ------------------------------------------------------------------
     # Zoom
@@ -245,6 +269,13 @@ class IsometricCamera:
             -right * dx
             + forward * dy
         ) * sensitivity * self.ortho_size
+        # O target pertence ao espaço lógico anterior ao Model pivotado.
+        # Converte o gesto de tela pela rotação inversa para preservar a
+        # direção visual do pan em qualquer ponto da animação Q/E.
+        movement = transform_vector(
+            mat4_rotate_y(-math.radians(self.current_rotation)),
+            movement,
+        )
         self.target += movement
     def rotate_left(self) -> None:
         """Rotaciona o tabuleiro 90° para a esquerda (anti-horário)."""
