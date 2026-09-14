@@ -15,7 +15,7 @@ Este pacote contém toda a lógica de interação do usuário com o tabuleiro:
 
 ## Dependências
 
-- `src/integration/` — Pontos de contato com a Equipe A (VoxelGridProvider, HighlightBridge, CameraStateProvider)
+- `src/integration/` — Consulta de terreno compartilhada (`VoxelGridProvider`)
 - `src/rendering/` — TexturedMesh para renderização dos tokens
 - `src/camera/` — IsometricCamera para cálculos de raycasting
 
