@@ -60,10 +60,16 @@ mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
 
 Esses valores são passados diretamente a `screen_to_world_ray`,
 `WorldManager.render`, `GridOverlayRenderer.render` e
-`BlockHighlightRenderer.render`. O raycasting usa a inversa de
+`BlockHighlightRenderer.render`. O `Model` rotaciona o tabuleiro em torno do
+`camera.target` usado pela `View` no mesmo frame, mantendo o foco invariável
+durante toda a animação Q/E. O raycasting usa a inversa de
 `Projection @ View @ Model`, mantendo o espaço lógico de voxels consistente
 durante pan, zoom, resize e rotação Q/E. Uma `CameraStateProvider` duplicaria
 esse estado sem adicionar um limite arquitetural útil.
+
+O WASD usa os vetores forward/right transformados pela inversa de
+`board_rotation`. Assim, o controle acompanha a orientação visual discreta sem
+depender da interpolação em `current_rotation`.
 
 ## Highlight e grid
 
