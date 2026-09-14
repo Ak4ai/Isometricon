@@ -43,9 +43,9 @@ Responsável pelo armazenamento, geração e otimização dos dados de blocos do
   permanecem inteiras. O cubo de demonstração centrado em main.py precisará
   ser posicionado no centro da célula pela futura renderização.
 
-O contrato VoxelGridProvider permanece futuro: consultas globais, solidez,
-topo de coluna e AABB por bloco serão compostas sobre esta fundação.
-A representação AABB contém somente dados; raycasting permanece fora deste módulo.
+`VoxelGridProvider` já compõe sobre esta fundação consultas globais, ocupação,
+topo de coluna e AABB por bloco. A representação AABB contém somente dados;
+raycasting permanece fora deste módulo.
 
 ## Meshing CPU (Issue #6)
 
@@ -279,4 +279,3 @@ validação da API e geometria/índices do mesher sem contexto gráfico.
 
 Fora desta etapa: WorldManager/streaming, save/load, biomas, vegetação,
 estruturas, greedy meshing, frustum culling, materiais avançados e Equipe B.
-
