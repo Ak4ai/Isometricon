@@ -4,7 +4,9 @@ import math
 import numpy as np
 import pytest
 
+from src.camera import IsometricCamera
 from src.interactive.token_system import PlayerToken
+from src.math import transform_point, vec3
 from src.world import TerrainGenerator, WorldManager
 
 
@@ -71,6 +73,114 @@ def test_player_token_yaw_alignment():
     # O ângulo deve girar para a direita (+X, ou seja, pi/2 radianos)
     assert token.position[0] > 0.0
     assert token.yaw > 0.0
+
+
+@pytest.mark.parametrize("quarter_turns", [0, 1, 2, 3, 4])
+@pytest.mark.parametrize(
+    ("key_name", "expected_axis", "expected_sign"),
+    [
+        ("W", 1, 1.0),
+        ("S", 1, -1.0),
+        ("A", 0, -1.0),
+        ("D", 0, 1.0),
+    ],
+)
+def test_wasd_movement_stays_screen_relative(
+    quarter_turns,
+    key_name,
+    expected_axis,
+    expected_sign,
+):
+    """WASD deve manter seu significado visual nas quatro orientações."""
+    import glfw
+
+    token = PlayerToken(
+        start_x=-137.5,
+        start_z=-88.25,
+        speed=10.0,
+        create_mesh=False,
+    )
+    camera = IsometricCamera(target=token.position, ortho_size=8.0)
+    for _ in range(quarter_turns):
+        camera.rotate_right()
+    camera.current_rotation = float(quarter_turns * 90)
+
+    projection_view_model = (
+        camera.get_projection_matrix(1280, 720)
+        @ camera.get_view_matrix()
+        @ camera.get_animated_model_matrix()
+    )
+    before_position = token.position.copy()
+    before_screen = transform_point(projection_view_model, before_position)
+    forward, right = camera.get_movement_directions()
+    token.update(
+        0.1,
+        {getattr(glfw, f"KEY_{key_name}"): True},
+        forward,
+        right,
+        lambda x, z: 9,
+    )
+    after_screen = transform_point(projection_view_model, token.position)
+    screen_delta = after_screen[:2] - before_screen[:2]
+
+    assert screen_delta[expected_axis] * expected_sign > 0.0
+    assert np.isclose(screen_delta[1 - expected_axis], 0.0, atol=1e-5)
+    assert np.isclose(
+        np.linalg.norm(token.position[[0, 2]] - before_position[[0, 2]]),
+        token.speed * 0.1,
+        atol=1e-5,
+    )
+
+
+@pytest.mark.parametrize("quarter_turns", [0, 1, 2, 3, 4])
+@pytest.mark.parametrize(
+    ("key_names", "expected_signs"),
+    [
+        (("W", "A"), (-1.0, 1.0)),
+        (("W", "D"), (1.0, 1.0)),
+        (("S", "A"), (-1.0, -1.0)),
+        (("S", "D"), (1.0, -1.0)),
+    ],
+)
+def test_diagonal_movement_stays_screen_relative_and_normalized(
+    quarter_turns,
+    key_names,
+    expected_signs,
+):
+    """Diagonais preservam quadrante visual e velocidade normalizada."""
+    import glfw
+
+    token = PlayerToken(
+        start_x=23.5,
+        start_z=-41.25,
+        speed=10.0,
+        create_mesh=False,
+    )
+    camera = IsometricCamera(target=token.position, ortho_size=8.0)
+    for _ in range(quarter_turns):
+        camera.rotate_right()
+    camera.current_rotation = float(quarter_turns * 90)
+
+    projection_view_model = (
+        camera.get_projection_matrix(1280, 720)
+        @ camera.get_view_matrix()
+        @ camera.get_animated_model_matrix()
+    )
+    before_position = token.position.copy()
+    before_screen = transform_point(projection_view_model, before_position)
+    keys = {getattr(glfw, f"KEY_{key_name}"): True for key_name in key_names}
+    forward, right = camera.get_movement_directions()
+    token.update(0.1, keys, forward, right, lambda x, z: 9)
+    after_screen = transform_point(projection_view_model, token.position)
+    screen_delta = after_screen[:2] - before_screen[:2]
+
+    assert screen_delta[0] * expected_signs[0] > 0.0
+    assert screen_delta[1] * expected_signs[1] > 0.0
+    assert np.isclose(
+        np.linalg.norm(token.position[[0, 2]] - before_position[[0, 2]]),
+        token.speed * 0.1,
+        atol=1e-5,
+    )
 
 
 def test_world_manager_chunk_streaming_logic():
@@ -273,6 +383,46 @@ def test_world_manager_frustum_culling_rendering():
     manager.delete()
 
 
+@pytest.mark.parametrize("quarter_turns", [0, 1, 2, 3])
+def test_frustum_culling_keeps_distant_focus_chunk_visible(quarter_turns):
+    """O culling deve usar o mesmo Model pivotado da região focal distante."""
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=2,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    drawn = []
+
+    class MockMesh:
+        def draw(self):
+            drawn.append("focus")
+
+    class MockShader:
+        def set_mat4(self, name, mat):
+            pass
+
+    from src.camera import IsometricCamera
+    from src.math import mat4_translate, vec3
+
+    chunk_origin = (128.0, 0.0, -96.0)
+    manager.meshes[(8, 0, -6)] = (MockMesh(), mat4_translate(*chunk_origin))
+    camera = IsometricCamera(target=vec3(136.0, 8.0, -88.0), ortho_size=12.0)
+    for _ in range(quarter_turns):
+        camera.rotate_right()
+
+    view_projection = camera.get_projection_matrix(1280, 720) @ camera.get_view_matrix()
+    count = manager.render(
+        MockShader(),
+        camera.get_model_matrix(),
+        view_projection=view_projection,
+    )
+
+    assert count == 1
+    assert drawn == ["focus"]
+    manager.delete()
+
+
 def test_modular_character_loading_and_fk():
     """Valida o carregamento da hierarquia modular e avaliação FK a partir do JSON."""
     import os
@@ -337,4 +487,3 @@ def test_modular_character_walk_cycle_animation():
     assert abs(coxa_e.local_rot[0]) < 0.05
 
     char.delete()
-
