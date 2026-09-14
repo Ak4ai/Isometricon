@@ -25,7 +25,7 @@ O **Motor Interativo (Interactive Engine)** é o subprojeto da **Equipe B** resp
 +-----------------------------+       +-------------------------------+
          |                                       |
          +----------- src/integration/ ----------+
-                  VoxelGridProvider / Bridge
+                   VoxelGridProvider
 ```
 
 ---
@@ -40,11 +40,9 @@ src/
 │   ├── grid_overlay.py        # Renderização do grid quadriculado
 │   ├── token_manager.py       # Gerenciamento de miniaturas/tokens
 │   └── ui_renderer.py         # Overlay de UI (fichas de RPG)
-├── integration/               # 🔌 Ponte Equipe A <-> Equipe B
+├── integration/               # 🔌 Consulta compartilhada A <-> B
 │   ├── __init__.py
-│   ├── voxel_provider.py      # VoxelGridProvider (implementação)
-│   ├── highlight_bridge.py    # HighlightBridge (ativa hover shader)
-│   └── camera_provider.py     # CameraStateProvider (matrizes)
+│   └── voxel_grid.py          # VoxelGridProvider (implementação)
 assets/
 ├── shaders/
 │   ├── highlight.vert         # 🟦 Shader de destaque/hover (vertex)
@@ -315,9 +313,9 @@ Consulte o documento completo em [docs/INTEGRATION_SPEC.md](INTEGRATION_SPEC.md)
 
 | Interface | Provedor | Consumidor | Finalidade |
 |-----------|----------|------------|------------|
-| `VoxelGridProvider` | Equipe A | Equipe B | Consulta blocos e colisão |
-| `HighlightBridge` | Equipe A | Equipe B | Ativa hover shader |
-| `CameraStateProvider` | Equipe A | Equipe B | Matrizes View/Proj para raycasting |
+| `VoxelGridProvider` | Motor do Mundo | Motor Interativo | Consulta blocos carregados |
+| Matrizes de frame | `src.main` | Raycast e renderizadores | View, Projection, Model e viewport passados diretamente |
+| Renderizadores de overlay | Motor Interativo | Loop principal | Controlam hover e visibilidade da grade diretamente |
 
 ---
 
