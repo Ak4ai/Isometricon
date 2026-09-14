@@ -525,7 +525,10 @@ def main() -> None:
             # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
             world_manager.update(player_token.position[0], player_token.position[2])
             grid_revision = world_manager.get_loaded_chunk_revision()
-            if grid_renderer.needs_sync(grid_revision):
+            if (
+                not world_manager.has_pending_streaming_work()
+                and grid_renderer.should_sync(grid_revision)
+            ):
                 revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
                 grid_renderer.sync_chunks(loaded_chunks, revision)
 
