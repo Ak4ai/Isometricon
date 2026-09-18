@@ -1105,6 +1105,11 @@ def main() -> None:
         False,
     )
 
+    shader.set_bool(
+        "u_WaterMode",
+        False,
+    )
+
     shader.set_float(
         "u_PlayerY",
         0.0,
@@ -1414,6 +1419,11 @@ def main() -> None:
                 underground_mode,
             )
 
+            shader.set_bool(
+                "u_WaterMode",
+                player_token.in_water,
+            )
+
             shader.set_float(
                 "u_PlayerY",
                 float(player_token.position[1]),
@@ -1609,6 +1619,11 @@ def main() -> None:
             # A miniatura não deve herdar o cutaway do terreno.
             shader.set_bool(
                 "u_UndergroundMode",
+                False,
+            )
+
+            shader.set_bool(
+                "u_WaterMode",
                 False,
             )
 

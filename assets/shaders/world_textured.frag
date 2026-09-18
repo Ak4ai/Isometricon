@@ -22,6 +22,7 @@ uniform bool u_UndergroundMode; // Jogador está abaixo da superfície
 uniform float u_PlayerY;        // Altura mundial dos pés do jogador
 uniform float u_CutawayAlpha;   // Alfa das estruturas acima do jogador
 uniform float u_CutawayFade;    // Atenuação vertical das camadas superiores
+uniform bool u_WaterMode;       // Token está dentro de água
 uniform int u_CutawayPass;      // 0 = opaco; 1 = transparentes acima
 
 void main()
@@ -75,6 +76,13 @@ void main()
         // paredes distantes com o piso onde o token está.
         float luminance = dot(material_color, vec3(0.299, 0.587, 0.114));
         material_color = mix(material_color, vec3(luminance * 0.72), 0.72);
+    }
+
+    if (u_WaterMode) {
+        // Filtro de imersão: preserva formas, mas deixa claro que o espaço
+        // está sendo visto através de água.
+        material_color = mix(material_color, vec3(0.12, 0.40, 0.72), 0.42);
+        lighting = mix(lighting, lighting * vec3(0.72, 0.88, 1.12), 0.65);
     }
 
     vec3 result = lighting * material_color * v_Color;

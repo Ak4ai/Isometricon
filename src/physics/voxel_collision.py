@@ -82,7 +82,7 @@ class VoxelCollisionController:
             block = BlockType(self.provider.get_block_at(x, y, z))
         except (TypeError, ValueError):
             return False
-        return block is not BlockType.AIR
+        return block not in (BlockType.AIR, BlockType.WATER)
 
     def _candidate_ranges(
         self,

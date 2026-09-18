@@ -419,6 +419,7 @@ class PlayerToken:
         self.walk_time: float = 0.0
         self.vertical_velocity: float = 0.0
         self.grounded: bool = False
+        self.in_water: bool = False
         self.current_surface_y: int = int(math.floor(self.position[1] - 1.0))
         self._collision_controller: VoxelCollisionController | None = None
         self._collision_provider: object | None = None
@@ -506,6 +507,7 @@ class PlayerToken:
         self.position[:] = result.position
         self.vertical_velocity = result.vertical_velocity
         self.grounded = result.grounded
+        self.in_water = self._is_in_water(collision_provider)
 
         if result.ground_block is not None:
             self.current_surface_y = result.ground_block[1]
@@ -515,6 +517,22 @@ class PlayerToken:
         # Atualiza a animação procedural modular.
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
+
+    def _is_in_water(self, provider: object) -> bool:
+        """Detecta água ocupando o volume central do token."""
+        get_block_at = getattr(provider, "get_block_at", None)
+        if get_block_at is None:
+            return False
+        x = int(math.floor(float(self.position[0])))
+        z = int(math.floor(float(self.position[2])))
+        bottom_y = int(math.floor(float(self.position[1])))
+        for y in range(bottom_y, bottom_y + 2):
+            try:
+                if BlockType(get_block_at(x, y, z)) is BlockType.WATER:
+                    return True
+            except (TypeError, ValueError):
+                return False
+        return False
 
     def get_current_block(self) -> Tuple[int, int, int]:
         """Retorna o voxel sob os pés do token."""
