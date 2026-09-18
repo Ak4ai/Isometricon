@@ -87,6 +87,28 @@ def test_player_stops_on_surface_block():
     assert result.ground_block == (0, 4, 0)
 
 
+def test_water_does_not_block_vertical_movement():
+    water = {(0, y, 0) for y in range(1, 4)}
+    stone = {(0, 0, 0)}
+
+    class WaterWorld:
+        def get_block_at(self, x: int, y: int, z: int) -> BlockType:
+            if (x, y, z) in water:
+                return BlockType.WATER
+            if (x, y, z) in stone:
+                return BlockType.STONE
+            return BlockType.AIR
+
+    world = WaterWorld()
+    controller = VoxelCollisionController(world)
+    position = np.array([0.5, 8.0, 0.5], dtype=np.float32)
+
+    result = simulate(controller, position, frames=120)
+
+    assert result.grounded
+    assert np.isclose(result.position[1], 1.0, atol=1e-5)
+
+
 def test_horizontal_collision_blocks_wall():
     world = DictWorld({(1, 0, 0)})
     config = VoxelCollisionConfig(gravity=-24.0)
