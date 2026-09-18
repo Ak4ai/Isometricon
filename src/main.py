@@ -64,7 +64,12 @@ from src.core.version import (
 from src.core.window import Window
 from src.integration import VoxelGridProvider
 from src.interaction import raycast_voxels, screen_to_world_ray
-from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
+from src.interactive import (
+    BlockHighlightRenderer,
+    CoordinateOverlayRenderer,
+    GridOverlayRenderer,
+    PlayerToken,
+)
 from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import (
@@ -717,6 +722,7 @@ def main() -> None:
             start_surface_y = loaded_spawn_y
 
         highlight_renderer = BlockHighlightRenderer()
+        coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
         meshes = []
 
@@ -726,6 +732,7 @@ def main() -> None:
         player_token = None
         voxel_provider = None
         highlight_renderer = None
+        coordinate_overlay = None
         grid_renderer = None
 
         meshes = [
@@ -1082,9 +1089,9 @@ def main() -> None:
 
     shader.set_vec3(
         "u_AmbientColor",
-        0.35,
-        0.35,
-        0.35,
+        0.28,
+        0.28,
+        0.28,
     )
 
     shader.set_bool(
@@ -1390,14 +1397,14 @@ def main() -> None:
             # ----------------------------------------------------------
             # Determinar modo subterrâneo
             # ----------------------------------------------------------
-            surface_y = world_manager.get_height(
-                player_token.position[0],
-                player_token.position[2],
-            )
-
             underground_mode = (
                 player_token.position[1]
-                < float(surface_y) + 0.25
+                < float(
+                    voxel_provider.get_top_solid_block(
+                        int(np.floor(float(player_token.position[0]))),
+                        int(np.floor(float(player_token.position[2]))),
+                    )
+                ) + 0.25
             )
 
             shader.use()
@@ -1414,7 +1421,12 @@ def main() -> None:
 
             shader.set_float(
                 "u_CutawayAlpha",
-                0.16,
+                0.30,
+            )
+
+            shader.set_float(
+                "u_CutawayFade",
+                0.28,
             )
 
             shader.set_int(
@@ -1489,10 +1501,10 @@ def main() -> None:
                     gl.GL_BLEND
                 )
 
-                # O passe translúcido pode compartilhar a profundidade de
-                # faces do primeiro passe sem perder superfícies coplanares.
+                # O cutaway deve aparecer mesmo quando a superfície acima
+                # estiver atrás da geometria opaca gravada no primeiro passe.
                 gl.glDepthFunc(
-                    gl.GL_LEQUAL
+                    gl.GL_ALWAYS
                 )
 
                 gl.glBlendFunc(
@@ -1644,6 +1656,13 @@ def main() -> None:
                 base_model=base_model,
             )
 
+            coordinate_overlay.render(
+                window.width,
+                window.height,
+                player_token.position,
+            )
+            shader.use()
+
         else:
 
             gl.glActiveTexture(
@@ -1716,6 +1735,7 @@ def main() -> None:
         world_manager.delete()
         player_token.delete()
         highlight_renderer.delete()
+        coordinate_overlay.delete()
         grid_renderer.delete()
 
     else:
