@@ -51,6 +51,29 @@ def test_player_falls_through_open_cave_to_lower_floor():
     assert result.ground_block == (0, -3, 0)
 
 
+def test_player_stops_at_virtual_world_floor_when_cave_is_open():
+    world = DictWorld(set())
+    controller = VoxelCollisionController(world)
+    position = np.array([0.5, 8.0, 0.5], dtype=np.float32)
+
+    result = simulate(controller, position, frames=240)
+
+    assert result.grounded
+    assert np.isclose(result.position[1], -63.0, atol=1e-5)
+    assert result.ground_block == (0, -64, 0)
+
+
+def test_large_frame_delta_cannot_tunnel_through_virtual_floor():
+    world = DictWorld(set())
+    controller = VoxelCollisionController(world)
+    position = np.array([0.5, 8.0, 0.5], dtype=np.float32)
+
+    result = controller.move(position, np.zeros(3), 10.0, -32.0)
+
+    assert result.grounded
+    assert np.isclose(result.position[1], -63.0, atol=1e-5)
+
+
 def test_player_stops_on_surface_block():
     world = DictWorld({(0, 4, 0)})
     controller = VoxelCollisionController(world)
