@@ -599,7 +599,9 @@ def main() -> None:
         shader_frag,
     )
 
-    terrain_demo = "--terrain" in sys.argv[1:]
+    # O modo jogável é o padrão; o cubo isolado fica disponível para smoke
+    # tests gráficos através de ``--demo``.
+    terrain_demo = "--demo" not in sys.argv[1:]
 
     custom_seed = None
 
@@ -671,6 +673,48 @@ def main() -> None:
         voxel_provider = VoxelGridProvider(
             block_lookup=world_manager.neighbor_at
         )
+
+        # A caverna pode remover a célula que a altura procedural indicou como
+        # superfície. Reancora o token no topo realmente carregado antes do
+        # primeiro frame para evitar que a câmera seja levada ao vazio.
+        requested_spawn_x = int(np.floor(float(player_token.position[0])))
+        requested_spawn_z = int(np.floor(float(player_token.position[2])))
+        spawn_x = requested_spawn_x
+        spawn_z = requested_spawn_z
+        loaded_spawn_y = -1
+        for search_radius in range(0, 9):
+            candidates = [
+                (requested_spawn_x + dx, requested_spawn_z + dz)
+                for dx in range(-search_radius, search_radius + 1)
+                for dz in range(-search_radius, search_radius + 1)
+                if max(abs(dx), abs(dz)) == search_radius
+            ]
+            valid_candidates = [
+                (x, z, voxel_provider.get_top_solid_block(x, z))
+                for x, z in candidates
+            ]
+            valid_candidates = [
+                candidate for candidate in valid_candidates if candidate[2] >= 0
+            ]
+            if valid_candidates:
+                spawn_x, spawn_z, loaded_spawn_y = min(
+                    valid_candidates,
+                    key=lambda candidate: (
+                        (candidate[0] - requested_spawn_x) ** 2
+                        + (candidate[1] - requested_spawn_z) ** 2,
+                        -candidate[2],
+                    ),
+                )
+                break
+
+        if loaded_spawn_y >= 0:
+            player_token.position[0] = float(spawn_x) + 0.5
+            player_token.position[2] = float(spawn_z) + 0.5
+            player_token.position[1] = float(loaded_spawn_y + 1)
+            player_token.vertical_velocity = 0.0
+            player_token.grounded = True
+            player_token.current_surface_y = loaded_spawn_y
+            start_surface_y = loaded_spawn_y
 
         highlight_renderer = BlockHighlightRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -1073,6 +1117,7 @@ def main() -> None:
     # 7. Game Loop de Renderização
     # ------------------------------------------------------------------
     title_update_timer = 0.25
+    terrain_render_reported = False
 
     while not window.should_close():
 
@@ -1095,6 +1140,11 @@ def main() -> None:
                 movement_forward,
                 movement_right,
                 voxel_provider,
+            )
+
+            camera.follow_target(
+                player_token.position,
+                dt,
             )
 
             # ----------------------------------------------------------
@@ -1302,6 +1352,7 @@ def main() -> None:
         gl.glDisable(gl.GL_BLEND)
         gl.glDepthMask(gl.GL_TRUE)
         gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glDepthFunc(gl.GL_LESS)
 
         shader.use()
 
@@ -1402,15 +1453,31 @@ def main() -> None:
                 gl.GL_BLEND
             )
 
+            gl.glDisable(
+                gl.GL_CULL_FACE
+            )
+
             gl.glDepthMask(
                 gl.GL_TRUE
             )
 
-            world_manager.render(
+            drawn_chunks = world_manager.render(
                 shader,
                 model,
                 view_projection,
             )
+
+            if drawn_chunks == 0 and not terrain_render_reported:
+                print(
+                    "[Terrain] Nenhum chunk foi desenhado: "
+                    f"meshes={len(world_manager.meshes)} "
+                    f"chunks={len(world_manager.chunks)} "
+                    f"token={player_token.position.tolist()} "
+                    f"camera={camera.target.tolist()}"
+                )
+                terrain_render_reported = True
+            elif drawn_chunks > 0:
+                terrain_render_reported = False
 
             # ----------------------------------------------------------
             # 2. Segundo passe:
@@ -1420,6 +1487,12 @@ def main() -> None:
 
                 gl.glEnable(
                     gl.GL_BLEND
+                )
+
+                # O passe translúcido pode compartilhar a profundidade de
+                # faces do primeiro passe sem perder superfícies coplanares.
+                gl.glDepthFunc(
+                    gl.GL_LEQUAL
                 )
 
                 gl.glBlendFunc(
@@ -1446,6 +1519,10 @@ def main() -> None:
                     gl.GL_TRUE
                 )
 
+                gl.glDepthFunc(
+                    gl.GL_LESS
+                )
+
                 gl.glDisable(
                     gl.GL_BLEND
                 )
@@ -1454,6 +1531,10 @@ def main() -> None:
                     "u_CutawayPass",
                     0,
                 )
+
+            gl.glEnable(
+                gl.GL_CULL_FACE
+            )
 
             # ----------------------------------------------------------
             # 3. Grade tática

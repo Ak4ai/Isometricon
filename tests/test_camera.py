@@ -50,6 +50,17 @@ def test_camera_default_target():
     )
 
 
+def test_camera_follows_token_target():
+    """O foco acompanha a posição do token sem saltar instantaneamente."""
+    camera = IsometricCamera()
+    target = vec3(4.0, -6.0, 8.0)
+
+    camera.follow_target(target, 1.0 / 60.0)
+
+    assert np.all(camera.target != target)
+    assert np.linalg.norm(target - camera.target) < np.linalg.norm(target)
+
+
 def test_camera_view_matrix_shape_and_type():
     """A View Matrix deve estar pronta para ser enviada ao OpenGL."""
     camera = IsometricCamera()

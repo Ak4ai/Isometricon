@@ -340,6 +340,27 @@ class IsometricCamera:
             float(y),
             float(z),
         )
+
+    def follow_target(
+        self,
+        target: np.ndarray,
+        dt: float,
+        response: float = 12.0,
+    ) -> None:
+        """Move suavemente o foco para acompanhar uma entidade do mundo."""
+        target = np.asarray(target, dtype=np.float32)
+        if target.shape != (3,):
+            raise ValueError("target deve ser um vetor 3D.")
+        if dt < 0.0 or not math.isfinite(float(dt)):
+            raise ValueError("dt deve ser finito e não negativo.")
+        if response <= 0.0 or not math.isfinite(float(response)):
+            raise ValueError("response deve ser finito e maior que zero.")
+        if dt == 0.0:
+            return
+
+        factor = 1.0 - math.exp(-float(response) * float(dt))
+        self.target += (target - self.target) * np.float32(factor)
+
     def set_ortho_size(self, value: float) -> None:
         #Define diretamente o tamanho ortográfico
         if value <= 0.0:

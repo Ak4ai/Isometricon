@@ -28,6 +28,7 @@ class VoxelCollisionConfig:
     max_fall_speed: float = 32.0
     step_height: float = 1.02
     skin: float = 0.001
+    world_floor_y: int = -64
 
     def __post_init__(self) -> None:
         if self.radius <= 0.0:
@@ -42,6 +43,8 @@ class VoxelCollisionConfig:
             raise ValueError("step_height não pode ser negativo.")
         if self.skin < 0.0:
             raise ValueError("skin não pode ser negativo.")
+        if isinstance(self.world_floor_y, bool) or not isinstance(self.world_floor_y, int):
+            raise TypeError("world_floor_y deve ser um inteiro.")
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,8 @@ class VoxelCollisionController:
         self.config = config or VoxelCollisionConfig()
 
     def _is_solid(self, x: int, y: int, z: int) -> bool:
+        if y <= self.config.world_floor_y:
+            return True
         try:
             block = BlockType(self.provider.get_block_at(x, y, z))
         except (TypeError, ValueError):
@@ -300,8 +305,11 @@ class VoxelCollisionController:
         if dt < 0.0 or not math.isfinite(float(dt)):
             raise ValueError("dt deve ser finito e não negativo.")
 
-        pos = np.asarray(position, dtype=np.float32).copy()
-        delta = np.asarray(horizontal_delta, dtype=np.float32)
+        # Use precisão dupla while accumulating substeps. Repeated float32
+        # additions otherwise shorten diagonal movement enough to fail at the
+        # movement scale used by the token.
+        pos = np.asarray(position, dtype=np.float64).copy()
+        delta = np.asarray(horizontal_delta, dtype=np.float64)
         if delta.shape != (3,):
             raise ValueError("horizontal_delta deve ser um vetor 3D.")
         delta = delta.copy()
@@ -330,6 +338,27 @@ class VoxelCollisionController:
         vertical_delta = vy * float(dt)
         candidate = pos.copy()
         candidate[1] += vertical_delta
+
+        floor_feet_y = float(self.config.world_floor_y + 1)
+        if candidate[1] <= floor_feet_y:
+            pos[1] = floor_feet_y
+            vy = 0.0
+            grounded = True
+            grounded_block = (
+                math.floor(float(pos[0])),
+                self.config.world_floor_y,
+                math.floor(float(pos[2])),
+            )
+            return CollisionResult(
+                position=pos.astype(np.float32),
+                vertical_velocity=vy,
+                grounded=grounded,
+                ground_block=grounded_block,
+                collided_x=collided_x,
+                collided_z=collided_z,
+                collided_vertical=True,
+            )
+
         vertical_collisions = self._colliding_blocks(candidate)
         collided_vertical = bool(vertical_collisions)
 
