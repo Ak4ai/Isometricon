@@ -17,6 +17,8 @@ from src.math import (
     vec3,
 )
 from src.rendering.mesh import TexturedMesh
+from src.world import BlockType
+from src.physics import VoxelCollisionController
 
 
 def _build_cylinder(
@@ -389,6 +391,17 @@ class ModularCharacter:
         self.parts.clear()
 
 
+class _HeightMapVoxelProvider:
+    """Adaptador de compatibilidade para a antiga API baseada em altura."""
+
+    def __init__(self, height_func: Callable[[float, float], int]) -> None:
+        self.height_func = height_func
+
+    def get_block_at(self, world_x: int, world_y: int, world_z: int) -> BlockType:
+        height = int(self.height_func(float(world_x), float(world_z)))
+        return BlockType.STONE if world_y <= height else BlockType.AIR
+
+
 class PlayerToken:
     """Controlador de miniatura 3D com movimentação contínua estilo RPG e animação modular procedural."""
 
@@ -404,6 +417,11 @@ class PlayerToken:
         self.speed: float = speed
         self.is_moving: bool = False
         self.walk_time: float = 0.0
+        self.vertical_velocity: float = 0.0
+        self.grounded: bool = False
+        self.current_surface_y: int = int(math.floor(self.position[1] - 1.0))
+        self._collision_controller: VoxelCollisionController | None = None
+        self._collision_provider: object | None = None
 
         json_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -422,10 +440,33 @@ class PlayerToken:
         keys_pressed: dict[int, bool],
         forward_dir: np.ndarray,
         right_dir: np.ndarray,
-        terrain_height_func: Callable[[float, float], int],
+        voxel_provider: object,
     ) -> None:
-        """Atualiza a posição do token com WASD, rotação suave, altura do terreno e animação."""
+        """Atualiza movimento, colisão voxel, gravidade e animação.
+
+        Aceita tanto o novo VoxelGridProvider quanto a antiga função
+        terrain_height_func(x, z), preservando os testes e consumidores legados.
+        """
         import glfw
+
+        if hasattr(voxel_provider, "get_block_at"):
+            collision_provider = voxel_provider
+        elif callable(voxel_provider):
+            collision_provider = _HeightMapVoxelProvider(voxel_provider)
+        else:
+            raise TypeError(
+                "voxel_provider deve implementar get_block_at(x, y, z) "
+                "ou ser uma função terrain_height_func(x, z)."
+            )
+
+        if (
+            self._collision_controller is None
+            or self._collision_provider is not voxel_provider
+        ):
+            self._collision_provider = voxel_provider
+            self._collision_controller = VoxelCollisionController(
+                collision_provider
+            )
 
         move_vec = np.zeros(3, dtype=np.float32)
         if keys_pressed.get(glfw.KEY_W, False):
@@ -437,44 +478,54 @@ class PlayerToken:
         if keys_pressed.get(glfw.KEY_A, False):
             move_vec -= right_dir
 
-        # Ignora componente vertical para o vetor de deslocamento
         move_vec[1] = 0.0
         length = float(np.linalg.norm(move_vec))
 
+        horizontal_delta = np.zeros(3, dtype=np.float32)
         if length > 1e-4:
             self.is_moving = True
             norm_move = move_vec / length
-            self.position[0] += norm_move[0] * self.speed * dt
-            self.position[2] += norm_move[2] * self.speed * dt
+            horizontal_delta = norm_move * self.speed * float(dt)
 
-            # Alinha o olhar da miniatura na direção em que ela caminha
+            # Alinha o olhar da miniatura na direção em que ela caminha.
             target_yaw = math.atan2(norm_move[0], norm_move[2])
             angle_diff = (target_yaw - self.yaw + math.pi) % (2.0 * math.pi) - math.pi
-            self.yaw += angle_diff * min(dt * 14.0, 1.0)
+            self.yaw += angle_diff * min(float(dt) * 14.0, 1.0)
 
-            # Avança o acumulador do ciclo de passos proporcional à velocidade
-            self.walk_time += dt * (self.speed * 2.2)
+            # Avança o acumulador do ciclo de passos proporcional à velocidade.
+            self.walk_time += float(dt) * (self.speed * 2.2)
         else:
             self.is_moving = False
 
-        # Consulta altura da superfície sólida abaixo da miniatura
-        surface_y = terrain_height_func(self.position[0], self.position[2])
-        self.current_surface_y = int(surface_y)
-        # A base do token deve descansar no topo do bloco (surface_y + 1.0)
-        target_y = float(surface_y) + 1.0
+        result = self._collision_controller.move(
+            self.position,
+            horizontal_delta,
+            float(dt),
+            self.vertical_velocity,
+        )
+        self.position[:] = result.position
+        self.vertical_velocity = result.vertical_velocity
+        self.grounded = result.grounded
 
-        # Interpolação suave para subir/descer colinas e degraus
-        self.position[1] += (target_y - self.position[1]) * min(dt * 18.0, 1.0)
+        if result.ground_block is not None:
+            self.current_surface_y = result.ground_block[1]
+        else:
+            self.current_surface_y = int(math.floor(float(self.position[1]) - 1.0))
 
-        # Atualiza a animação procedural modular
+        # Atualiza a animação procedural modular.
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
 
     def get_current_block(self) -> Tuple[int, int, int]:
-        """Retorna a coordenada inteira (X, Y, Z) do bloco sobre o qual o token está pisando."""
+        """Retorna o voxel sob os pés do token."""
         bx = int(math.floor(self.position[0]))
         bz = int(math.floor(self.position[2]))
-        by = getattr(self, "current_surface_y", int(round(self.position[1] - 1.0)))
+
+        if self.grounded:
+            by = int(self.current_surface_y)
+        else:
+            by = int(math.floor(float(self.position[1]) - 1.0))
+
         return bx, by, bz
 
     def get_model_matrix(self) -> np.ndarray:

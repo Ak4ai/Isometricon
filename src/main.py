@@ -26,21 +26,16 @@ if PROJECT_ROOT not in sys.path:
 if sys.platform == "win32":
     import ctypes
 
-    # Hint de variável de ambiente para pilhas de driver com suporte a GPU Switchable
     os.environ.setdefault("SHIM_MCCOMPAT", "0x800000001")
 
     # --- NVIDIA Optimus ---
-    # O driver NVIDIA expõe a DLL NvOptimusEnablement via nvapi64.
-    # Simplesmente carregar a DLL já sinaliza ao driver que queremos GPU discreta.
     try:
         _nv = ctypes.WinDLL("nvapi64.dll")
-        # Exportar o símbolo mágico que o driver verifica
         _NvOptimusEnablement = ctypes.c_ulong(0x00000001)
     except OSError:
-        pass  # NVIDIA não instalada ou não disponível
+        pass
 
     # --- AMD PowerXpress ---
-    # Mesmo mecanismo: carregar a DLL de hint do driver AMD.
     try:
         _amd = ctypes.WinDLL("amdxx64.dll")
         _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
@@ -49,7 +44,8 @@ if sys.platform == "win32":
             _amd = ctypes.WinDLL("atiadlxx.dll")
             _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
         except OSError:
-            pass  # AMD não instalada ou não disponível
+            pass
+
 
 # Inicializa o pacote e seleciona o backend antes de importar OpenGL.
 import src
@@ -71,22 +67,24 @@ from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
 from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
-from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
-
+from src.world import (
+    BlockType,
+    Chunk3D,
+    ChunkMesher,
+    TerrainGenerator,
+    WorldManager,
+)
 
 
 def setup_opengl_state() -> None:
     """Configura o pipeline fixo inicial e estados de profundidade e culling."""
-    # Teste de profundidade (Z-Buffer) para correta oclusão 3D
     gl.glEnable(gl.GL_DEPTH_TEST)
     gl.glDepthFunc(gl.GL_LESS)
 
-    # Face Culling na GPU
     gl.glEnable(gl.GL_CULL_FACE)
     gl.glCullFace(gl.GL_BACK)
     gl.glFrontFace(gl.GL_CCW)
 
-    # Cor de fundo padrão
     gl.glClearColor(0.08, 0.10, 0.13, 1.0)
 
 
@@ -95,104 +93,432 @@ def load_texture(texture_path: str) -> int:
     img = Image.open(texture_path).convert("RGBA")
     img = img.transpose(Image.FLIP_TOP_BOTTOM)
     img_data = img.tobytes()
-    
+
     tex_id = gl.glGenTextures(1)
     gl.glBindTexture(gl.GL_TEXTURE_2D, tex_id)
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_REPEAT)             
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_REPEAT)             
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)        
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
-    gl.glTexImage2D(
-        gl.GL_TEXTURE_2D, 0, gl.GL_RGBA,
-        img.width, img.height, 0,
-        gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img_data
+
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D,
+        gl.GL_TEXTURE_WRAP_S,
+        gl.GL_REPEAT,
     )
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D,
+        gl.GL_TEXTURE_WRAP_T,
+        gl.GL_REPEAT,
+    )
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D,
+        gl.GL_TEXTURE_MIN_FILTER,
+        gl.GL_NEAREST,
+    )
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D,
+        gl.GL_TEXTURE_MAG_FILTER,
+        gl.GL_NEAREST,
+    )
+
+    gl.glTexImage2D(
+        gl.GL_TEXTURE_2D,
+        0,
+        gl.GL_RGBA,
+        img.width,
+        img.height,
+        0,
+        gl.GL_RGBA,
+        gl.GL_UNSIGNED_BYTE,
+        img_data,
+    )
+
     return tex_id
 
 
 def create_cube_mesh() -> TexturedMesh:
     """Cria uma malha 3D de cubo unitário centralizado para testes de renderização."""
-    # Layout: [x, y, z, nx, ny, nz, u, v, r, g, b] (11 floats por vértice)               
-    vertices = np.array([                                                                
-        # Face Topo (+Y)                                                                 
-        -0.5,  0.5,  0.5,   0.0,  1.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
-         0.5,  0.5,  0.5,   0.0,  1.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
-         0.5,  0.5, -0.5,   0.0,  1.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
-        -0.5,  0.5, -0.5,   0.0,  1.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
-                                                                                            
-        # Face Frontal (+Z)                                                              
-        -0.5, -0.5,  0.5,   0.0,  0.0,  1.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
-         0.5, -0.5,  0.5,   0.0,  0.0,  1.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
-         0.5,  0.5,  0.5,   0.0,  0.0,  1.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
-        -0.5,  0.5,  0.5,   0.0,  0.0,  1.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
-                                                                                            
-        # Face Direita (+X)                                                              
-         0.5, -0.5,  0.5,   1.0,  0.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
-         0.5, -0.5, -0.5,   1.0,  0.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
-         0.5,  0.5, -0.5,   1.0,  0.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
-         0.5,  0.5,  0.5,   1.0,  0.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
-                                                                                            
-        # Face Traseira (-Z)                                                             
-         0.5, -0.5, -0.5,   0.0,  0.0, -1.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
-        -0.5, -0.5, -0.5,   0.0,  0.0, -1.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
-        -0.5,  0.5, -0.5,   0.0,  0.0, -1.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
-         0.5,  0.5, -0.5,   0.0,  0.0, -1.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
-                                                                                            
-        # Face Esquerda (-X)                                                             
-        -0.5, -0.5, -0.5,  -1.0,  0.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
-        -0.5, -0.5,  0.5,  -1.0,  0.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
-        -0.5,  0.5,  0.5,  -1.0,  0.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
-        -0.5,  0.5, -0.5,  -1.0,  0.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
-                                                                                            
-        # Face Fundo (-Y)                                                                
-        -0.5, -0.5, -0.5,   0.0, -1.0,  0.0,   0.0, 0.0,   1.0, 1.0, 1.0,                
-         0.5, -0.5, -0.5,   0.0, -1.0,  0.0,   1.0, 0.0,   1.0, 1.0, 1.0,                
-         0.5, -0.5,  0.5,   0.0, -1.0,  0.0,   1.0, 1.0,   1.0, 1.0, 1.0,                
-        -0.5, -0.5,  0.5,   0.0, -1.0,  0.0,   0.0, 1.0,   1.0, 1.0, 1.0,                
-    ], dtype=np.float32) 
+    vertices = np.array(
+        [
+            # Face Topo (+Y)
+            -0.5,
+            0.5,
+            0.5,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            0.5,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            -0.5,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            0.5,
+            -0.5,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
 
-    # Índices com enrolamento anti-horário (CCW)
-    indices = np.array([
-         0,  1,  2,   2,  3,  0,    # Topo
-         4,  5,  6,   6,  7,  4,    # Frente
-         8,  9, 10,  10, 11,  8,    # Direita
-        12, 13, 14,  14, 15, 12,    # Traseira
-        16, 17, 18,  18, 19, 16,    # Esquerda
-        20, 21, 22,  22, 23, 20,    # Fundo
-    ], dtype=np.uint32)
+            # Face Frontal (+Z)
+            -0.5,
+            -0.5,
+            0.5,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            -0.5,
+            0.5,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            0.5,
+            0.5,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+
+            # Face Direita (+X)
+            0.5,
+            -0.5,
+            0.5,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            -0.5,
+            -0.5,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            -0.5,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            0.5,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+
+            # Face Traseira (-Z)
+            0.5,
+            -0.5,
+            -0.5,
+            0.0,
+            0.0,
+            -1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            -0.5,
+            -0.5,
+            0.0,
+            0.0,
+            -1.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            0.5,
+            -0.5,
+            0.0,
+            0.0,
+            -1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            0.5,
+            -0.5,
+            0.0,
+            0.0,
+            -1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+
+            # Face Esquerda (-X)
+            -0.5,
+            -0.5,
+            -0.5,
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            -0.5,
+            0.5,
+            -1.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            0.5,
+            0.5,
+            -1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            0.5,
+            -0.5,
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+
+            # Face Fundo (-Y)
+            -0.5,
+            -0.5,
+            -0.5,
+            0.0,
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            -0.5,
+            -0.5,
+            0.0,
+            -1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.5,
+            -0.5,
+            0.5,
+            0.0,
+            -1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -0.5,
+            -0.5,
+            0.5,
+            0.0,
+            -1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+        ],
+        dtype=np.float32,
+    )
+
+    indices = np.array(
+        [
+            0,
+            1,
+            2,
+            2,
+            3,
+            0,
+            4,
+            5,
+            6,
+            6,
+            7,
+            4,
+            8,
+            9,
+            10,
+            10,
+            11,
+            8,
+            12,
+            13,
+            14,
+            14,
+            15,
+            12,
+            16,
+            17,
+            18,
+            18,
+            19,
+            16,
+            20,
+            21,
+            22,
+            22,
+            23,
+            20,
+        ],
+        dtype=np.uint32,
+    )
 
     return TexturedMesh(vertices, indices)
 
 
-def create_terrain_meshes(seed: int = 0) -> list[tuple[TexturedMesh, np.ndarray]]:
+def create_terrain_meshes(
+    seed: int = 0,
+) -> list[tuple[TexturedMesh, np.ndarray]]:
     """Demonstração finita 2x2 com cavernas 3D, culling entre vizinhos e sem WorldManager."""
-    chunks = TerrainGenerator(seed=seed, enable_caves=True).generate_region(
-        (x, 0, z) for x in (-1, 0) for z in (-1, 0)
+    chunks = TerrainGenerator(
+        seed=seed,
+        enable_caves=True,
+    ).generate_region(
+        (x, 0, z)
+        for x in (-1, 0)
+        for z in (-1, 0)
     )
-
-
 
     def neighbor_at(x: int, y: int, z: int) -> BlockType:
         size = Chunk3D.SIZE
-        chunk = chunks.get((x // size, y // size, z // size))
+        chunk = chunks.get(
+            (
+                x // size,
+                y // size,
+                z // size,
+            )
+        )
+
         if chunk is None:
             return BlockType.AIR
-        return chunk.get_block(*chunk.world_to_local(x, y, z))
+
+        return chunk.get_block(
+            *chunk.world_to_local(x, y, z)
+        )
 
     meshes = []
+
     try:
         for chunk in chunks.values():
-            data = ChunkMesher().build(chunk, neighbor_at)
-            mesh = TexturedMesh(data.vertices, data.indices)
-            # Escala apenas visual para enquadrar o tabuleiro na câmera existente.
-            transform = mat4_scale(0.2, 0.2, 0.2) @ mat4_translate(
+            data = ChunkMesher().build(
+                chunk,
+                neighbor_at,
+            )
+
+            mesh = TexturedMesh(
+                data.vertices,
+                data.indices,
+            )
+
+            transform = mat4_scale(
+                0.2,
+                0.2,
+                0.2,
+            ) @ mat4_translate(
                 *chunk.local_to_world(0, 0, 0)
             )
-            meshes.append((mesh, transform))
+
+            meshes.append(
+                (
+                    mesh,
+                    transform,
+                )
+            )
+
     except Exception:
         for mesh, _ in meshes:
             mesh.delete()
         raise
+
     return meshes
 
 
@@ -220,7 +546,10 @@ def print_system_info(version_info: VersionInfo) -> None:
     print(f"🔹 OpenGL Version : {version}")
     print(f"🔹 GLSL Version   : {glsl_version}")
     print("=" * 68)
-    print("⌨️  [Q/E] Rotacionar | [G] Grid | [Mouse Wheel] Zoom | [Espaço + Arrastar / MMB] Pan | [ESC] Sair\n")
+    print(
+        "⌨️  [Q/E] Rotacionar | [G] Grid | [Mouse Wheel] Zoom | "
+        "[Espaço + Arrastar / MMB] Pan | [ESC] Sair\n"
+    )
 
 
 def main() -> None:
@@ -244,7 +573,6 @@ def main() -> None:
 
     setup_opengl_state()
 
-    # Aguardar até 0.2s para a thread de sync responder
     sync_thread.join(timeout=0.2)
 
     print_system_info(version_info)
@@ -266,38 +594,88 @@ def main() -> None:
         "world_textured.frag",
     )
 
-    shader = Shader(shader_vert, shader_frag)
+    shader = Shader(
+        shader_vert,
+        shader_frag,
+    )
+
     terrain_demo = "--terrain" in sys.argv[1:]
+
     custom_seed = None
+
     for i, arg in enumerate(sys.argv[1:]):
         if arg == "--seed" and i + 1 < len(sys.argv[1:]):
             try:
-                custom_seed = int(sys.argv[1:][i + 1])
+                custom_seed = int(
+                    sys.argv[1:][i + 1]
+                )
             except ValueError:
                 pass
+
         elif arg.startswith("--seed="):
             try:
-                custom_seed = int(arg.split("=", 1)[1])
+                custom_seed = int(
+                    arg.split("=", 1)[1]
+                )
             except ValueError:
                 pass
 
     active_seed = {
-        "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
+        "value": (
+            custom_seed
+            if custom_seed is not None
+            else random.randint(1, 999_999)
+        )
     }
 
     if terrain_demo:
-        print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
+        print(
+            f"[Terrain] Modo terreno ativo. "
+            f"Seed inicial: {active_seed['value']} "
+            f"(WASD para andar, [R] nova seed)"
+        )
+
         atlas = TextureAtlas()
-        generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True)
-        world_manager = WorldManager(generator=generator, render_distance=2, atlas=atlas)
-        start_surface_y = generator.get_height(0, 0)
-        player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0)
-        player_token.position[1] = float(start_surface_y) + 1.0
-        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-        voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
+
+        generator = TerrainGenerator(
+            seed=active_seed["value"],
+            enable_caves=True,
+        )
+
+        world_manager = WorldManager(
+            generator=generator,
+            render_distance=2,
+            atlas=atlas,
+        )
+
+        start_surface_y = generator.get_height(
+            0,
+            0,
+        )
+
+        player_token = PlayerToken(
+            start_x=0.5,
+            start_z=0.5,
+            speed=5.0,
+        )
+
+        player_token.position[1] = (
+            float(start_surface_y) + 1.0
+        )
+
+        world_manager.load_initial_region(
+            player_token.position[0],
+            player_token.position[2],
+        )
+
+        voxel_provider = VoxelGridProvider(
+            block_lookup=world_manager.neighbor_at
+        )
+
         highlight_renderer = BlockHighlightRenderer()
         grid_renderer = GridOverlayRenderer()
         meshes = []
+
     else:
         atlas = None
         world_manager = None
@@ -305,59 +683,163 @@ def main() -> None:
         voxel_provider = None
         highlight_renderer = None
         grid_renderer = None
-        meshes = [(create_cube_mesh(), mat4_identity())]
-    
-    # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
-    textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
-    all_pngs = [f for f in os.listdir(textures_dir) if f.lower().endswith(".png")]
-    
-    # Exclui itens conhecidos que não são blocos sólidos (plantas, tochas, portas, trilhos, etc.)
-    non_solid_keywords = (
-        "door", "trapdoor", "torch", "flower", "sapling", "pane", "glass",
-        "leaves", "rail", "chain", "lantern", "vine", "bush", "wire", "lever",
-        "button", "crop", "stem", "roots", "fungus", "coral", "fan", "dust",
-        "redstone", "candle", "bars", "ladder", "sprout", "lichen", "egg"
+
+        meshes = [
+            (
+                create_cube_mesh(),
+                mat4_identity(),
+            )
+        ]
+
+    # Carregar lista de texturas PNG de assets
+    textures_dir = os.path.join(
+        PROJECT_ROOT,
+        "assets",
+        "textures",
+        "blocks",
     )
-    png_files = [f for f in all_pngs if not any(k in f for k in non_solid_keywords)]
+
+    all_pngs = [
+        f
+        for f in os.listdir(textures_dir)
+        if f.lower().endswith(".png")
+    ]
+
+    # Exclui itens conhecidos que não são blocos sólidos
+    non_solid_keywords = (
+        "door",
+        "trapdoor",
+        "torch",
+        "flower",
+        "sapling",
+        "pane",
+        "glass",
+        "leaves",
+        "rail",
+        "chain",
+        "lantern",
+        "vine",
+        "bush",
+        "wire",
+        "lever",
+        "button",
+        "crop",
+        "stem",
+        "roots",
+        "fungus",
+        "coral",
+        "fan",
+        "dust",
+        "redstone",
+        "candle",
+        "bars",
+        "ladder",
+        "sprout",
+        "lichen",
+        "egg",
+    )
+
+    png_files = [
+        f
+        for f in all_pngs
+        if not any(
+            keyword in f
+            for keyword in non_solid_keywords
+        )
+    ]
+
     if not png_files:
         png_files = all_pngs
 
-    # Textura neutra modula as cores dos BlockTypes sem criar um atlas/material.
-    initial_png = "white_concrete.png" if terrain_demo else random.choice(png_files)
-    # Estado de textura ativa
+    initial_png = (
+        "white_concrete.png"
+        if terrain_demo
+        else random.choice(png_files)
+    )
+
     current_texture = {
-        "id": load_texture(os.path.join(textures_dir, initial_png)),
+        "id": load_texture(
+            os.path.join(
+                textures_dir,
+                initial_png,
+            )
+        ),
         "name": initial_png,
     }
-    # Textura sólida 1x1 branca (RGBA 255, 255, 255, 255) para renderizar a miniatura com cores puras e opacidade 100%
-    white_pixel = np.array([255, 255, 255, 255], dtype=np.uint8)
+
+    # Textura sólida 1x1 branca para a miniatura
+    white_pixel = np.array(
+        [255, 255, 255, 255],
+        dtype=np.uint8,
+    )
+
     token_tex_id = gl.glGenTextures(1)
-    gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
-    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
-    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, 1, 1, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, white_pixel)
+
+    gl.glBindTexture(
+        gl.GL_TEXTURE_2D,
+        token_tex_id,
+    )
+
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D,
+        gl.GL_TEXTURE_MIN_FILTER,
+        gl.GL_NEAREST,
+    )
+
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D,
+        gl.GL_TEXTURE_MAG_FILTER,
+        gl.GL_NEAREST,
+    )
+
+    gl.glTexImage2D(
+        gl.GL_TEXTURE_2D,
+        0,
+        gl.GL_RGBA,
+        1,
+        1,
+        0,
+        gl.GL_RGBA,
+        gl.GL_UNSIGNED_BYTE,
+        white_pixel,
+    )
 
     texture_timer = 0.0
-    TEXTURE_CHANGE_INTERVAL = 0.5  # Alterar textura a cada 0.5 segundos
+    TEXTURE_CHANGE_INTERVAL = 0.5
 
     # ------------------------------------------------------------------
     # 4. Inicializar câmera isométrica
     # ------------------------------------------------------------------
     camera = IsometricCamera(
-        target=vec3(0.5, float(start_surface_y) + 1.0, 0.5) if terrain_demo else vec3(0.0, 0.0, 0.0),
-        ortho_size=4.5 if terrain_demo else 2.0,
+        target=(
+            vec3(
+                0.5,
+                float(start_surface_y) + 1.0,
+                0.5,
+            )
+            if terrain_demo
+            else vec3(
+                0.0,
+                0.0,
+                0.0,
+            )
+        ),
+        ortho_size=(
+            4.5
+            if terrain_demo
+            else 2.0
+        ),
         near=0.1,
         far=400.0,
     )
 
-
-    # Estado utilizado pelo pan com botão central do mouse.
     pan_state = {
         "active": False,
         "last_x": 0.0,
         "last_y": 0.0,
         "shift_pressed": False,
     }
+
     picking_state = {
         "click_pending": False,
         "hover_hit": None,
@@ -367,7 +849,6 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 5. Callbacks de entrada
     # ------------------------------------------------------------------
-
     keys_pressed: dict[int, bool] = {}
 
     def handle_camera_key(
@@ -379,31 +860,71 @@ def main() -> None:
         """Encaminha eventos de teclado para a câmera e registra teclas ativas."""
         del scancode, mods
 
-        keys_pressed[key] = (action != glfw.RELEASE)
-        
+        keys_pressed[key] = (
+            action != glfw.RELEASE
+        )
+
         if terrain_demo and key == glfw.KEY_R and action == glfw.PRESS:
-            new_seed = random.randint(1, 999_999)
+            new_seed = random.randint(
+                1,
+                999_999,
+            )
+
             active_seed["value"] = new_seed
-            print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
+
+            print(
+                f"[Terrain] Regenerando mundo... "
+                f"Nova Seed: {new_seed}"
+            )
+
             world_manager.delete()
-            world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True)
-            # Reposiciona o token no topo do novo relevo
-            new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
-            player_token.position[1] = float(new_surface) + 1.0
-            world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+
+            world_manager.generator = TerrainGenerator(
+                seed=new_seed,
+                enable_caves=True,
+            )
+
+            new_surface = world_manager.get_height(
+                player_token.position[0],
+                player_token.position[2],
+            )
+
+            player_token.position[1] = (
+                float(new_surface) + 1.0
+            )
+
+            player_token.vertical_velocity = 0.0
+            player_token.grounded = True
+
+            world_manager.load_initial_region(
+                player_token.position[0],
+                player_token.position[2],
+            )
 
         if terrain_demo and key == glfw.KEY_G and action == glfw.PRESS:
             visible = grid_renderer.toggle_visibility()
-            print(f"[Grid] {'Ativado' if visible else 'Desativado'}.")
+
+            print(
+                f"[Grid] {'Ativado' if visible else 'Desativado'}."
+            )
 
         if key == glfw.KEY_LEFT_SHIFT:
-            pan_state["shift_pressed"] = action != glfw.RELEASE
-            if action == glfw.RELEASE and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
+            pan_state["shift_pressed"] = (
+                action != glfw.RELEASE
+            )
+
+            if (
+                action == glfw.RELEASE
+                and not window.is_mouse_button_pressed(
+                    glfw.MOUSE_BUTTON_MIDDLE
+                )
+            ):
                 pan_state["active"] = False
 
-        camera.handle_key(key, action)
-
-
+        camera.handle_key(
+            key,
+            action,
+        )
 
     def handle_mouse_button(
         button: int,
@@ -412,11 +933,20 @@ def main() -> None:
     ) -> None:
         """Controla o início e fim do pan com o botão central."""
         del mods
-        
-        is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
-        is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(glfw.KEY_LEFT_SHIFT)) 
+
+        is_middle = (
+            button == glfw.MOUSE_BUTTON_MIDDLE
+        )
+
+        is_left_with_shift = (
+            button == glfw.MOUSE_BUTTON_LEFT
+            and window.is_key_pressed(
+                glfw.KEY_LEFT_SHIFT
+            )
+        )
 
         if action == glfw.PRESS:
+
             if is_middle or is_left_with_shift:
                 pan_state["active"] = True
                 picking_state["hover_hit"] = None
@@ -425,11 +955,19 @@ def main() -> None:
 
                 pan_state["last_x"] = x
                 pan_state["last_y"] = y
-            elif terrain_demo and button == glfw.MOUSE_BUTTON_LEFT:
+
+            elif (
+                terrain_demo
+                and button == glfw.MOUSE_BUTTON_LEFT
+            ):
                 picking_state["click_pending"] = True
 
         elif action == glfw.RELEASE:
-            if button in (glfw.MOUSE_BUTTON_MIDDLE, glfw.MOUSE_BUTTON_LEFT):
+
+            if button in (
+                glfw.MOUSE_BUTTON_MIDDLE,
+                glfw.MOUSE_BUTTON_LEFT,
+            ):
                 pan_state["active"] = False
 
     def handle_cursor_position(
@@ -437,11 +975,18 @@ def main() -> None:
         y: float,
     ) -> None:
         """Move o ponto focal enquanto o botão central estiver pressionado."""
-        if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
-            if not window.is_key_pressed(glfw.KEY_LEFT_SHIFT):
+        if (
+            pan_state["active"]
+            and not window.is_mouse_button_pressed(
+                glfw.MOUSE_BUTTON_MIDDLE
+            )
+        ):
+            if not window.is_key_pressed(
+                glfw.KEY_LEFT_SHIFT
+            ):
                 pan_state["active"] = False
                 return
-        
+
         if not pan_state["active"]:
             return
 
@@ -456,7 +1001,6 @@ def main() -> None:
         pan_state["last_x"] = x
         pan_state["last_y"] = y
 
-    # Registrar callbacks na janela.
     window.add_scroll_callback(
         camera.handle_scroll
     )
@@ -504,56 +1048,147 @@ def main() -> None:
         False,
     )
 
+    # Controles do modo de visualização subterrânea.
+    shader.set_bool(
+        "u_UndergroundMode",
+        False,
+    )
+
+    shader.set_float(
+        "u_PlayerY",
+        0.0,
+    )
+
+    shader.set_float(
+        "u_CutawayAlpha",
+        0.16,
+    )
+
+    shader.set_int(
+        "u_CutawayPass",
+        0,
+    )
+
     # ------------------------------------------------------------------
     # 7. Game Loop de Renderização
     # ------------------------------------------------------------------
-    title_update_timer = 0.25  # Atualiza imediatamente no primeiro frame
+    title_update_timer = 0.25
+
     while not window.should_close():
+
         dt = window.update_delta_time()
+
         camera.update(dt)
 
         if terrain_demo:
-            # 1. Movimentação do token de personagem com WASD e aderência ao relevo
-            movement_forward, movement_right = camera.get_movement_directions()
+
+            # ----------------------------------------------------------
+            # 1. Movimentação do token com colisão voxel e gravidade
+            # ----------------------------------------------------------
+            movement_forward, movement_right = (
+                camera.get_movement_directions()
+            )
+
             player_token.update(
                 dt,
                 keys_pressed,
                 movement_forward,
                 movement_right,
-                world_manager.get_height,
+                voxel_provider,
             )
 
-            # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
-            world_manager.update(player_token.position[0], player_token.position[2])
-            grid_revision = world_manager.get_loaded_chunk_revision()
+            # ----------------------------------------------------------
+            # 2. Atualização contínua do streaming dos chunks
+            # ----------------------------------------------------------
+            world_manager.update(
+                player_token.position[0],
+                player_token.position[2],
+            )
+
+            grid_revision = (
+                world_manager.get_loaded_chunk_revision()
+            )
+
             if (
                 not world_manager.has_pending_streaming_work()
                 and grid_renderer.should_sync(grid_revision)
             ):
-                revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
-                grid_renderer.sync_chunks(loaded_chunks, revision)
+                revision, loaded_chunks = (
+                    world_manager.get_loaded_chunks_snapshot()
+                )
 
-            # 3. Câmera acompanha o personagem fora do gesto de pan.
+                grid_renderer.sync_chunks(
+                    loaded_chunks,
+                    revision,
+                )
+
+            # ----------------------------------------------------------
+            # 3. Câmera acompanha o personagem
+            # ----------------------------------------------------------
             if not pan_state["active"]:
+
                 cam_speed = 8.0
-                camera.target[0] += (player_token.position[0] - camera.target[0]) * min(dt * cam_speed, 1.0)
-                camera.target[2] += (player_token.position[2] - camera.target[2]) * min(dt * cam_speed, 1.0)
-                camera.target[1] += (player_token.position[1] - camera.target[1]) * min(dt * cam_speed, 1.0)
+                cam_vertical_speed = 14.0
+
+                camera.target[0] += (
+                    player_token.position[0]
+                    - camera.target[0]
+                ) * min(
+                    dt * cam_speed,
+                    1.0,
+                )
+
+                camera.target[2] += (
+                    player_token.position[2]
+                    - camera.target[2]
+                ) * min(
+                    dt * cam_speed,
+                    1.0,
+                )
+
+                camera.target[1] += (
+                    player_token.position[1]
+                    - camera.target[1]
+                ) * min(
+                    dt * cam_vertical_speed,
+                    1.0,
+                )
+
         else:
+
             texture_timer += dt
+
             if texture_timer >= TEXTURE_CHANGE_INTERVAL:
+
                 texture_timer = 0.0
-                random_png = random.choice(png_files)
-                gl.glDeleteTextures(1, [current_texture["id"]])
-                current_texture["id"] = load_texture(os.path.join(textures_dir, random_png))
+
+                random_png = random.choice(
+                    png_files
+                )
+
+                gl.glDeleteTextures(
+                    1,
+                    [current_texture["id"]],
+                )
+
+                current_texture["id"] = load_texture(
+                    os.path.join(
+                        textures_dir,
+                        random_png,
+                    )
+                )
+
                 current_texture["name"] = random_png
 
         # --------------------------------------------------------------
-        # Atualizar título da janela (amortizado a cada 0.25s para evitar micro-stutters no Win32)
+        # Atualizar título da janela
         # --------------------------------------------------------------
         title_update_timer += dt
+
         if title_update_timer >= 0.25:
+
             title_update_timer = 0.0
+
             sync_badge = (
                 "✅ Synced"
                 if version_info.sync_status == "synced"
@@ -568,7 +1203,13 @@ def main() -> None:
                 )
             )
 
-            seed_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | " if terrain_demo else ""
+            seed_badge = (
+                f"Seed: {active_seed['value']} "
+                f"(WASD: mover | [R]: reload) | "
+                if terrain_demo
+                else ""
+            )
+
             window.set_title(
                 f"Isometricon {version_info.full_version} | "
                 f"{sync_badge} | "
@@ -597,13 +1238,20 @@ def main() -> None:
             window.width,
             window.height,
         )
+
         view = camera.get_view_matrix()
+
         model = camera.get_animated_model_matrix()
 
-        # O hover fica suspenso durante o drag para não disputar o gesto de pan.
-        # Como os eventos são processados acima, ele retorna no frame do release.
+        # --------------------------------------------------------------
+        # Picking / Hover
+        # --------------------------------------------------------------
         if terrain_demo and not pan_state["active"]:
-            mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
+
+            mouse_x, mouse_y = (
+                window.get_cursor_pos_framebuffer()
+            )
+
             mouse_ray = screen_to_world_ray(
                 mouse_x,
                 mouse_y,
@@ -613,22 +1261,39 @@ def main() -> None:
                 projection,
                 model,
             )
-            picking_state["hover_hit"] = raycast_voxels(
-                mouse_ray,
-                voxel_provider,
+
+            picking_state["hover_hit"] = (
+                raycast_voxels(
+                    mouse_ray,
+                    voxel_provider,
+                )
             )
+
             if picking_state["click_pending"]:
-                picking_state["clicked_hit"] = picking_state["hover_hit"]
-                clicked_hit = picking_state["clicked_hit"]
+
+                picking_state["clicked_hit"] = (
+                    picking_state["hover_hit"]
+                )
+
+                clicked_hit = (
+                    picking_state["clicked_hit"]
+                )
+
                 if clicked_hit is None:
-                    print("[Picking] Clique sem bloco atingido.")
+
+                    print(
+                        "[Picking] Clique sem bloco atingido."
+                    )
+
                 else:
+
                     print(
                         f"[Picking] Bloco {clicked_hit.block} "
                         f"({clicked_hit.block_type.name}), "
                         f"face {clicked_hit.normal}, "
                         f"distância {clicked_hit.distance:.3f}."
                     )
+
                 picking_state["click_pending"] = False
 
         # --------------------------------------------------------------
@@ -639,28 +1304,173 @@ def main() -> None:
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         shader.use()
-        shader.set_mat4("u_Projection", projection)
-        shader.set_mat4("u_View", view)
-        shader.set_mat4("u_Model", model)
 
-        # Vincular a textura ativa
-        gl.glActiveTexture(gl.GL_TEXTURE0)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
-        shader.set_int("u_TextureAtlas", 0)    
+        shader.set_mat4(
+            "u_Projection",
+            projection,
+        )
+
+        shader.set_mat4(
+            "u_View",
+            view,
+        )
+
+        shader.set_mat4(
+            "u_Model",
+            model,
+        )
+
+        gl.glActiveTexture(
+            gl.GL_TEXTURE0
+        )
+
+        gl.glBindTexture(
+            gl.GL_TEXTURE_2D,
+            current_texture["id"],
+        )
+
+        shader.set_int(
+            "u_TextureAtlas",
+            0,
+        )
 
         if terrain_demo:
-            # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
-            gl.glActiveTexture(gl.GL_TEXTURE0)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
-            shader.set_int("u_TextureAtlas", 0)
-            view_projection = projection @ view
-            world_manager.render(shader, model, view_projection)
 
-            # 2. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
-            grid_renderer.render(projection, view, model)
+            # ----------------------------------------------------------
+            # Determinar modo subterrâneo
+            # ----------------------------------------------------------
+            surface_y = world_manager.get_height(
+                player_token.position[0],
+                player_token.position[2],
+            )
 
-            # 3. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
-            bx, by, bz = player_token.get_current_block()
+            underground_mode = (
+                player_token.position[1]
+                < float(surface_y) + 0.25
+            )
+
+            shader.use()
+
+            shader.set_bool(
+                "u_UndergroundMode",
+                underground_mode,
+            )
+
+            shader.set_float(
+                "u_PlayerY",
+                float(player_token.position[1]),
+            )
+
+            shader.set_float(
+                "u_CutawayAlpha",
+                0.16,
+            )
+
+            shader.set_int(
+                "u_CutawayPass",
+                0,
+            )
+
+            # ----------------------------------------------------------
+            # 1. Primeiro passe:
+            # terreno abaixo do jogador completamente opaco.
+            # ----------------------------------------------------------
+            gl.glActiveTexture(
+                gl.GL_TEXTURE0
+            )
+
+            gl.glBindTexture(
+                gl.GL_TEXTURE_2D,
+                atlas.texture_id,
+            )
+
+            shader.set_int(
+                "u_TextureAtlas",
+                0,
+            )
+
+            view_projection = (
+                projection @ view
+            )
+
+            shader.set_int(
+                "u_CutawayPass",
+                0,
+            )
+
+            gl.glDisable(
+                gl.GL_BLEND
+            )
+
+            gl.glDepthMask(
+                gl.GL_TRUE
+            )
+
+            world_manager.render(
+                shader,
+                model,
+                view_projection,
+            )
+
+            # ----------------------------------------------------------
+            # 2. Segundo passe:
+            # terreno acima do jogador translúcido.
+            # ----------------------------------------------------------
+            if underground_mode:
+
+                gl.glEnable(
+                    gl.GL_BLEND
+                )
+
+                gl.glBlendFunc(
+                    gl.GL_SRC_ALPHA,
+                    gl.GL_ONE_MINUS_SRC_ALPHA,
+                )
+
+                gl.glDepthMask(
+                    gl.GL_FALSE
+                )
+
+                shader.set_int(
+                    "u_CutawayPass",
+                    1,
+                )
+
+                world_manager.render(
+                    shader,
+                    model,
+                    view_projection,
+                )
+
+                gl.glDepthMask(
+                    gl.GL_TRUE
+                )
+
+                gl.glDisable(
+                    gl.GL_BLEND
+                )
+
+                shader.set_int(
+                    "u_CutawayPass",
+                    0,
+                )
+
+            # ----------------------------------------------------------
+            # 3. Grade tática
+            # ----------------------------------------------------------
+            grid_renderer.render(
+                projection,
+                view,
+                model,
+            )
+
+            # ----------------------------------------------------------
+            # 4. Highlight do bloco atual do jogador
+            # ----------------------------------------------------------
+            bx, by, bz = (
+                player_token.get_current_block()
+            )
+
             highlight_renderer.render(
                 view,
                 projection,
@@ -672,10 +1482,17 @@ def main() -> None:
                 base_color=(1.0, 1.0, 1.0),
             )
 
-            # 4. Destaca em amarelo o primeiro voxel sob o cursor.
-            hover_hit = picking_state["hover_hit"]
+            # ----------------------------------------------------------
+            # 5. Highlight do bloco sob o cursor
+            # ----------------------------------------------------------
+            hover_hit = (
+                picking_state["hover_hit"]
+            )
+
             if hover_hit is not None:
+
                 hx, hy, hz = hover_hit.block
+
                 highlight_renderer.render(
                     view,
                     projection,
@@ -684,26 +1501,113 @@ def main() -> None:
                     hy,
                     hz,
                     time=window.time,
-                    base_color=(1.0, 0.72, 0.18),
+                    base_color=(
+                        1.0,
+                        0.72,
+                        0.18,
+                    ),
                 )
 
-            # 5. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
+            # ----------------------------------------------------------
+            # 6. Renderizar miniatura
+            # ----------------------------------------------------------
             shader.use()
-            shader.set_mat4("u_Projection", projection)
-            shader.set_mat4("u_View", view)
-            base_model = model @ player_token.get_model_matrix()
-            shader.set_mat4("u_Model", base_model)
-            gl.glActiveTexture(gl.GL_TEXTURE0)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
-            shader.set_int("u_TextureAtlas", 0)
-            player_token.draw(shader=shader, base_model=base_model)
+
+            # A miniatura não deve herdar o cutaway do terreno.
+            shader.set_bool(
+                "u_UndergroundMode",
+                False,
+            )
+
+            shader.set_int(
+                "u_CutawayPass",
+                0,
+            )
+
+            shader.set_mat4(
+                "u_Projection",
+                projection,
+            )
+
+            shader.set_mat4(
+                "u_View",
+                view,
+            )
+
+            base_model = (
+                model
+                @ player_token.get_model_matrix()
+            )
+
+            shader.set_mat4(
+                "u_Model",
+                base_model,
+            )
+
+            gl.glActiveTexture(
+                gl.GL_TEXTURE0
+            )
+
+            gl.glBindTexture(
+                gl.GL_TEXTURE_2D,
+                token_tex_id,
+            )
+
+            shader.set_int(
+                "u_TextureAtlas",
+                0,
+            )
+
+            player_token.draw(
+                shader=shader,
+                base_model=base_model,
+            )
+
         else:
-            gl.glActiveTexture(gl.GL_TEXTURE0)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
-            shader.set_int("u_TextureAtlas", 0)
+
+            gl.glActiveTexture(
+                gl.GL_TEXTURE0
+            )
+
+            gl.glBindTexture(
+                gl.GL_TEXTURE_2D,
+                current_texture["id"],
+            )
+
+            shader.set_int(
+                "u_TextureAtlas",
+                0,
+            )
+
             for mesh, transform in meshes:
-                shader.set_mat4("u_Model", model @ transform)
+
+                shader.set_mat4(
+                    "u_Model",
+                    model @ transform,
+                )
+
                 mesh.draw()
+
+        # --------------------------------------------------------------
+        # Restaurar estados OpenGL
+        # --------------------------------------------------------------
+        gl.glDisable(
+            gl.GL_BLEND
+        )
+
+        gl.glDepthMask(
+            gl.GL_TRUE
+        )
+
+        shader.set_bool(
+            "u_UndergroundMode",
+            False,
+        )
+
+        shader.set_int(
+            "u_CutawayPass",
+            0,
+        )
 
         # --------------------------------------------------------------
         # Apresentar frame
@@ -713,23 +1617,37 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 8. Liberar recursos
     # ------------------------------------------------------------------
-    gl.glDeleteTextures(1, [current_texture["id"]])
-    gl.glDeleteTextures(1, [token_tex_id])
+    gl.glDeleteTextures(
+        1,
+        [current_texture["id"]],
+    )
+
+    gl.glDeleteTextures(
+        1,
+        [token_tex_id],
+    )
+
     if terrain_demo:
+
         if atlas is not None:
             atlas.delete()
+
         world_manager.delete()
         player_token.delete()
         highlight_renderer.delete()
         grid_renderer.delete()
+
     else:
+
         for mesh, _ in meshes:
             mesh.delete()
+
     shader.delete()
     window.close()
 
-
-    print("Aplicação encerrada com sucesso.")
+    print(
+        "Aplicação encerrada com sucesso."
+    )
 
 
 if __name__ == "__main__":
