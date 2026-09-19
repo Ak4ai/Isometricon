@@ -336,7 +336,27 @@ def test_world_manager_water_spreads_down_then_sideways():
     manager.update(8.0, 8.0)
 
     assert chunk.get_block(8, 7, 8) is BlockType.WATER
+    manager.delete()
+
+
+def test_world_manager_water_spreads_sideways_when_supported():
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=0,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    chunk = Chunk3D()
+    chunk.set_block(8, 7, 8, BlockType.STONE)
+    chunk.set_block(8, 8, 8, BlockType.WATER)
+    manager.chunks[(0, 0, 0)] = chunk
+    manager._last_center = (0, 0)
+    manager._water_tick = manager.water_step_interval
+
+    manager.update(8.0, 8.0)
+
     assert chunk.get_block(7, 8, 8) is BlockType.WATER
+    assert chunk.get_block(9, 8, 8) is BlockType.WATER
     manager.delete()
 
 

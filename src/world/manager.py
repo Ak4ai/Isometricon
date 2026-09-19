@@ -248,6 +248,25 @@ class WorldManager:
                     self._pending_mesh_deletions.append(mesh)
                 self.chunks.pop(key, None)
                 self._in_progress.discard((key[0], 0, key[2]))
+                origin_x = key[0] * Chunk3D.SIZE
+                origin_y = key[1] * Chunk3D.SIZE
+                origin_z = key[2] * Chunk3D.SIZE
+                self._water_sources_seen = {
+                    source for source in self._water_sources_seen
+                    if not (
+                        origin_x <= source[0] < origin_x + Chunk3D.SIZE
+                        and origin_y <= source[1] < origin_y + Chunk3D.SIZE
+                        and origin_z <= source[2] < origin_z + Chunk3D.SIZE
+                    )
+                }
+                self._water_levels = {
+                    source: level for source, level in self._water_levels.items()
+                    if not (
+                        origin_x <= source[0] < origin_x + Chunk3D.SIZE
+                        and origin_y <= source[1] < origin_y + Chunk3D.SIZE
+                        and origin_z <= source[2] < origin_z + Chunk3D.SIZE
+                    )
+                }
             if to_unload:
                 self._chunk_revision += 1
 
@@ -341,13 +360,26 @@ class WorldManager:
             if source_level <= self.water_min_level:
                 continue
             source_x, source_y, source_z = source
-            candidates = (
-                ((source_x, source_y - 1, source_z), 0.18),
-                ((source_x - 1, source_y, source_z), self.water_flow_loss),
-                ((source_x + 1, source_y, source_z), self.water_flow_loss),
-                ((source_x, source_y, source_z - 1), self.water_flow_loss),
-                ((source_x, source_y, source_z + 1), self.water_flow_loss),
-            )
+            below = (source_x, source_y - 1, source_z)
+            with self._chunks_lock:
+                below_chunk = self.chunks.get((
+                    below[0] // Chunk3D.SIZE,
+                    below[1] // Chunk3D.SIZE,
+                    below[2] // Chunk3D.SIZE,
+                ))
+                below_is_air = below_chunk is not None and below_chunk.get_block(
+                    *below_chunk.world_to_local(*below)
+                ) is BlockType.AIR
+
+            if below_is_air:
+                candidates = ((below, 0.18),)
+            else:
+                candidates = (
+                    ((source_x - 1, source_y, source_z), self.water_flow_loss),
+                    ((source_x + 1, source_y, source_z), self.water_flow_loss),
+                    ((source_x, source_y, source_z - 1), self.water_flow_loss),
+                    ((source_x, source_y, source_z + 1), self.water_flow_loss),
+                )
             for (target_x, target_y, target_z), flow_loss in candidates:
                 target_level = source_level - flow_loss
                 if target_level <= self.water_min_level:
