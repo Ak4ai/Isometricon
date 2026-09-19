@@ -153,7 +153,10 @@ class Window:
     def update_delta_time(self) -> float:
         """Calcula o delta time entre frames e atualiza a média de FPS."""
         current_time = glfw.get_time()
-        self._delta_time = current_time - self._last_frame_time
+        self._delta_time = min(
+            current_time - self._last_frame_time,
+            0.1,
+        )
         self._last_frame_time = current_time
 
         # Contagem de FPS
