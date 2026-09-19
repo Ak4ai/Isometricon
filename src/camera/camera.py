@@ -321,6 +321,12 @@ class IsometricCamera:
         if key == 69:
             self.rotate_right()
             return True
+        if key in (61, 334, 107):  # '=' / keypad add
+            self.zoom_in()
+            return True
+        if key in (45, 333, 109):  # '-' / keypad subtract
+            self.zoom_out()
+            return True
         return False
     # ------------------------------------------------------------------
     # Utilidades
