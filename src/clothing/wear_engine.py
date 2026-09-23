@@ -879,16 +879,11 @@ class RobloxWearEngine:
         total_y_span = y_max_orig - y_min_orig
         norm_scale = 1.80 / total_y_span if total_y_span > 2.0 else 1.0
         uniform_scale = 0.54 * norm_scale
-        loc_z = 1.185
-
-        # Detecção de peças curtas / biquínis (total_y_span < 1.35)
-        is_cropped = (total_y_span < 1.35) and not is_dress
-
-        # Ancoragem Vertical Inteligente para tops curtos e biquínis:
-        # Garante que o topo alcance a clavícula (Z ≈ 1.465m), impedindo que caiam 12cm sobre o umbigo
-        top_raw_z = loc_z + y_max_orig * uniform_scale
-        if is_cropped and top_raw_z < 1.450:
-            loc_z += (1.465 - top_raw_z)
+        # Ancoragem Anatômica Universal dos Ombros:
+        # No mundo real e no Roblox, roupas superiores penduram a partir dos ombros / clavícula.
+        # Topo anatômico: Z ≈ 1.485m (masculino), Z ≈ 1.472m (feminino), com +0.020m para jaquetas/bombers.
+        target_top_z = 1.505 if is_jacket else (1.472 if self.is_female else 1.485)
+        loc_z = target_top_z - y_max_orig * uniform_scale
 
         if sleeve_indices:
             sleeve_ys = verts[list(sleeve_indices), 1]
