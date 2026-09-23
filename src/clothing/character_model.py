@@ -977,6 +977,21 @@ def find_clothing_texture(asset_id: Union[int, str]) -> Optional[str]:
     return None
 
 
+def is_valid_v2_obj(path: str) -> bool:
+    """Verifica se o arquivo OBJ conformativo foi gerado pelo pipeline universal v2."""
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for _ in range(5):
+                line = f.readline()
+                if "Universal Fitted Clothing v2" in line:
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 @dataclass
 class CharacterPart:
     """Representa uma parte montada do personagem pronta para renderização."""
@@ -1353,86 +1368,38 @@ class CharacterModel:
                     parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(ab_data[0], ab_data[1]), self.white_tex_id))
             return parts
 
-        # 2. Tenta carregar os arquivos dedicados gerados pelo RobloxWearEngine.wear()
-        # Ex: character_native_arm_left_94197227825305_female.obj
-        dedicated_paths = {}
-        for side in ("left", "right"):
-            d_arm = os.path.join(MODELS_DIR, f"character_native_arm_{side}_{self.top_id}{arm_suffix}")
-            if not os.path.exists(d_arm):
-                d_arm = os.path.join(MODELS_DIR, f"character_native_arm_{side}_{self.top_id}.obj")
-            d_ab = os.path.join(MODELS_DIR, f"character_native_forearm_{side}_{self.top_id}{arm_suffix}")
-            if not os.path.exists(d_ab):
-                d_ab = os.path.join(MODELS_DIR, f"character_native_forearm_{side}_{self.top_id}.obj")
-            if os.path.exists(d_arm) or os.path.exists(d_ab):
-                dedicated_paths[side] = (d_arm, d_ab)
-
-        if len(dedicated_paths) == 2:
-            for side in ("left", "right"):
-                d_arm, d_ab = dedicated_paths[side]
-                arm_data = parse_obj_as_mesh(d_arm, default_color=skin_color, vertex_transform=arm_tf)
-                if arm_data:
-                    parts.append(CharacterPart(f"arm_{side}", TexturedMesh(arm_data[0], arm_data[1]), self.white_tex_id))
-                ab_tf = hand_tf if arm_data is None else arm_tf
-                ab_data = parse_obj_as_mesh(d_ab, default_color=skin_color, vertex_transform=ab_tf)
-                if ab_data:
-                    parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(ab_data[0], ab_data[1]), self.white_tex_id))
-            return parts
-
-        # 3. Fallback adaptativo: analisa geometria do top para calcular HSR dos braços
+        # 2. Resolução Adaptativa Universal por lado (left e right independentes)
         top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}{arm_suffix}")
         if not os.path.exists(top_obj_path):
             top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
 
-        cuff_y = 0.920
-        is_short = True
-        is_sleeveless = False
-        cuff_centers = {}
+        top_pts = []
         if os.path.exists(top_obj_path):
-            s_pts = []
             with open(top_obj_path, "r", encoding="utf-8", errors="ignore") as fp:
                 for line in fp:
                     if line.startswith("v "):
-                        p = [float(x) for x in line.strip().split()[1:4]]
-                        if abs(p[0]) > 0.18 and p[2] < 1.45:
-                            s_pts.append(p)
-            if s_pts:
-                s_zs = [p[2] for p in s_pts]
-                cuff_y = float(min(s_zs))
-                shoulder_cap_pts = [p for p in s_pts if abs(p[0]) >= 0.18 and abs(p[0]) <= 0.28 and 1.42 <= p[2] <= 1.485]
-                is_sleeveless = len(shoulder_cap_pts) < 12
-                is_short = (cuff_y >= 0.88) and not is_sleeveless
-                for side_mult, side_k in [(1, "left"), (-1, "right")]:
-                    side_pts = [p for p in s_pts if (p[0] * side_mult) > 0.18]
-                    if side_pts:
-                        s_min_z = min(p[2] for p in side_pts)
-                        ring = [p for p in side_pts if p[2] < s_min_z + 0.040]
-                        if ring:
-                            cx = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2.0
-                            cy = (min(p[1] for p in ring) + max(p[1] for p in ring)) / 2.0
-                            cuff_centers[side_k] = (cx, cy)
-            else:
-                is_sleeveless = True
-                is_short = False
-        else:
-            is_sleeveless = True
+                        top_pts.append([float(x) for x in line.strip().split()[1:4]])
 
         from src.clothing.wear_engine import slice_mesh_below_z
-        for side in ("left", "right"):
+        for side_mult, side in [(1, "left"), (-1, "right")]:
             pt_side = side_map[side]
-            if is_sleeveless:
-                arm_data = parse_clean_obj_groups(clean_path, [f"Export_braco_superior_{pt_side}"], default_color=skin_color)
+
+            side_pts = [p for p in top_pts if (p[0] * side_mult) > 0.18 and p[2] < 1.45]
+            min_z = min(p[2] for p in side_pts) if side_pts else 2.0
+            side_sleeveless = (len(side_pts) < 15 or min_z > 1.32)
+            side_long = (min_z <= 0.85) and not side_sleeveless
+            side_short = not side_sleeveless and not side_long
+
+            if side_sleeveless or side_short:
+                arm_data = parse_clean_obj_groups(clean_path, [f"Export_braco_superior_{pt_side}"], default_color=skin_color, vertex_transform=arm_tf)
                 if arm_data:
                     parts.append(CharacterPart(f"arm_{side}", TexturedMesh(arm_data[0], arm_data[1]), self.white_tex_id))
-            elif is_short:
-                # Manga curta: o braço superior é coberto pela manga da camisa;
-                # o antebraço se estende solidamente para dentro do punho da manga.
-                pass
 
             # Antebraço / Mão
             ab_data = parse_clean_obj_groups(clean_path, [f"Export_antebraco_{pt_side}"], default_color=skin_color)
             if ab_data:
                 v_arr, i_arr = ab_data
-                if is_sleeveless or is_short:
+                if side_sleeveless or side_short:
                     parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(v_arr, i_arr), self.white_tex_id))
                 else:
                     # Manga longa: fatia o antebraço logo acima da barra da manga
@@ -1440,14 +1407,17 @@ class CharacterModel:
                     pos = v_mat[:, :3]
                     world_pts = np.column_stack([pos[:, 0], -pos[:, 2], pos[:, 1]])
                     faces = i_arr.reshape(-1, 3)
-                    cut_z = min(max(cuff_y + 0.025, 0.720), 1.050)
+                    cut_z = min(max(min_z + 0.025, 0.720), 1.050)
                     s_ab_v, s_ab_f = slice_mesh_below_z(world_pts, faces, cut_z)
-                    if len(s_ab_v) > 0 and side in cuff_centers:
-                        c_x, c_y = cuff_centers[side]
+
+                    ring = [p for p in side_pts if p[2] < min_z + 0.040]
+                    if ring and len(s_ab_v) > 0:
+                        cx = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2.0
+                        cy = (min(p[1] for p in ring) + max(p[1] for p in ring)) / 2.0
                         cur_hx = float((s_ab_v[:, 0].min() + s_ab_v[:, 0].max()) / 2.0)
                         cur_hy = float((s_ab_v[:, 1].min() + s_ab_v[:, 1].max()) / 2.0)
-                        s_ab_v[:, 0] += (c_x - cur_hx)
-                        s_ab_v[:, 1] += (c_y - cur_hy)
+                        s_ab_v[:, 0] += (cx - cur_hx)
+                        s_ab_v[:, 1] += (cy - cur_hy)
                     if len(s_ab_v) > 0:
                         min_hand_z = float(np.min(s_ab_v[:, 2]))
                         bot_mask = s_ab_v[:, 2] < min_hand_z + 0.030
@@ -1724,13 +1694,13 @@ class CharacterModel:
         bottom_str = str(self.bottom_id).lower() if self.bottom_id is not None else "none"
         is_none_bottom = self.bottom_id is None or bottom_str in ("none", "0", "false", "sem", "naked")
 
-        # Resolução antecipada da calça ativa e auto-detecção do cós (Opção 1A)
+        # Resolução antecipada da calça ativa e auto-detecção do cós
         waist_geo = None
         bottom_obj_path = None
         if not is_none_bottom:
             if is_fem:
                 bottom_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.bottom_id}_female.obj")
-                if not os.path.exists(bottom_obj_path):
+                if not is_valid_v2_obj(bottom_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
                         engine = RobloxWearEngine(body_type="female")
@@ -1740,7 +1710,7 @@ class CharacterModel:
                         bottom_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.bottom_id}.obj")
             else:
                 bottom_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.bottom_id}.obj")
-                if not os.path.exists(bottom_obj_path):
+                if not is_valid_v2_obj(bottom_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
                         engine = RobloxWearEngine(body_type="male")
@@ -1758,52 +1728,12 @@ class CharacterModel:
             eff_waist = (1.00 if is_fem else 0.935) + self.waist_height_offset
             waist_tilt = 0.18 if is_fem else 0.15
 
-        eff_hem = (0.985 if is_fem else 0.890) + self.top_hem_offset
-        is_open_top = False
-
-        if not is_none_top:
-            # Pré-calcula o caminho do top para detectar eff_hem e tipo de cobertura (aberto/biquíni vs fechado)
-            _pre_top_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}_female.obj" if is_fem else f"character_native_{self.top_id}.obj")
-            if not os.path.exists(_pre_top_path):
-                _pre_top_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
-            if os.path.exists(_pre_top_path):
-                top_str = str(self.top_id).lower()
-                if os.path.exists(CLOTHING_DIR):
-                    for _cf in os.listdir(CLOTHING_DIR):
-                        if str(self.top_id) in _cf:
-                            top_str = f"{top_str} {_cf.lower()}"
-                            break
-
-                is_bikini_name = any(k in top_str for k in ["bikini", "biquini", "swimsuit", "swim", "bra", "tube", "strapless", "strappy", "regata", "jersey"])
-                is_crop_name = any(k in top_str for k in ["crop", "cropped", "tied", "short", "halter", "corset", "cutout", "strap"])
-                _hem_zs = []
-                _top_verts = []
-                with open(_pre_top_path, "r", encoding="utf-8", errors="ignore") as _fp:
-                    for _l in _fp:
-                        if _l.startswith("v "):
-                            _p = [float(x) for x in _l.strip().split()[1:4]]
-                            _top_verts.append(_p)
-                            if abs(_p[0]) < 0.15 and _p[2] > 0.50:
-                                _hem_zs.append(_p[2])
-                if _top_verts:
-                    _v_arr = np.array(_top_verts)
-                    _collar_v = len(_v_arr[(_v_arr[:, 2] > 1.40) & (abs(_v_arr[:, 0]) < 0.12)])
-                    _upper_v = len(_v_arr[_v_arr[:, 2] > 1.20])
-                    is_open_top = is_bikini_name or is_crop_name or (_collar_v < 15)
-
-                if _hem_zs:
-                    _front_zs = [_p[2] for _p in _top_verts if abs(_p[0]) < 0.15 and _p[1] < 0 and _p[2] > 0.50]
-                    _front_min = float(min(_front_zs)) if _front_zs else float(min(_hem_zs))
-                    _det_min = float(min(_hem_zs))
-                    if is_crop_name or _front_min > 1.01:
-                        eff_hem = _front_min + self.top_hem_offset
-                    else:
-                        eff_hem = _det_min + self.top_hem_offset
-
+        # Resolução antecipada do Top com geração automática v2
+        top_obj_path = None
         if not is_none_top:
             if is_fem:
                 top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}_female.obj")
-                if not os.path.exists(top_obj_path):
+                if not is_valid_v2_obj(top_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
                         engine = RobloxWearEngine(body_type="female")
@@ -1813,7 +1743,7 @@ class CharacterModel:
                         top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
             else:
                 top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
-                if not os.path.exists(top_obj_path):
+                if not is_valid_v2_obj(top_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
                         engine = RobloxWearEngine(body_type="male")
@@ -1821,7 +1751,43 @@ class CharacterModel:
                     except Exception as e:
                         print(f"[CharacterModel] Aviso: gerando top masculino com cage: {e}")
 
-            if os.path.exists(top_obj_path):
+        eff_hem = (0.985 if is_fem else 0.890) + self.top_hem_offset
+        is_open_top = False
+
+        if not is_none_top and top_obj_path and os.path.exists(top_obj_path):
+            top_str = str(self.top_id).lower()
+            if os.path.exists(CLOTHING_DIR):
+                for _cf in os.listdir(CLOTHING_DIR):
+                    if str(self.top_id) in _cf:
+                        top_str = f"{top_str} {_cf.lower()}"
+                        break
+
+            is_bikini_name = any(k in top_str for k in ["bikini", "biquini", "swimsuit", "swim", "bra", "tube", "strapless", "strappy", "regata", "jersey"])
+            is_crop_name = any(k in top_str for k in ["crop", "cropped", "tied", "short", "halter", "corset", "cutout", "strap"])
+            _hem_zs = []
+            _top_verts = []
+            with open(top_obj_path, "r", encoding="utf-8", errors="ignore") as _fp:
+                for _l in _fp:
+                    if _l.startswith("v "):
+                        _p = [float(x) for x in _l.strip().split()[1:4]]
+                        _top_verts.append(_p)
+                        if abs(_p[0]) < 0.15 and _p[2] > 0.50:
+                            _hem_zs.append(_p[2])
+            if _top_verts:
+                _v_arr = np.array(_top_verts)
+                _collar_v = len(_v_arr[(_v_arr[:, 2] > 1.40) & (abs(_v_arr[:, 0]) < 0.12)])
+                is_open_top = is_bikini_name or is_crop_name or (_collar_v < 15)
+
+            if _hem_zs:
+                _front_zs = [_p[2] for _p in _top_verts if abs(_p[0]) < 0.15 and _p[1] < 0 and _p[2] > 0.50]
+                _front_min = float(min(_front_zs)) if _front_zs else float(min(_hem_zs))
+                _det_min = float(min(_hem_zs))
+                if is_crop_name or _front_min > 1.01:
+                    eff_hem = _front_min + self.top_hem_offset
+                else:
+                    eff_hem = _det_min + self.top_hem_offset
+
+        if not is_none_top and top_obj_path and os.path.exists(top_obj_path):
                 waist_for_tuck = eff_waist if (not is_none_bottom and self.waist_height_offset > 0.02) else None
                 def top_tf(raw_v):
                     v1 = transform_sleeve_vertices(

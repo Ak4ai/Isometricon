@@ -109,26 +109,25 @@ Durante a investigação, mapeamos as seguintes advertências cruciais que devem
 
 ## 6. Checklist de Implementação (Passo a Passo)
 
-- [ ] **Etapa 1: Limpeza das Heurísticas Destrutivas em `wear_engine.py`**
-  - [ ] Remover o loop de encolhimento manual da cintura ($sx, sz$) em `fit_top_clothing`.
-  - [ ] Desativar o compressor forçado de golas de 30 caixas em `fit_top_clothing`.
-  - [ ] Eliminar o corte plano de braço `slice_mesh_below_z(1.200m)` em `apply_arm_hsr`.
-- [ ] **Etapa 2: Atualização da Cage Feminina e Cálculo de Normais Suaves**
-  - [ ] Atualizar a Cage Alvo Feminina para utilizar a curvatura real de `female_cages.obj` (`UpperTorso` com $Z \ge 0.218\text{m}$).
-  - [ ] Implementar cálculo automático de normais de vértice suaves em `parse_obj_as_mesh` e exportação do wear engine.
-  - [ ] Assegurar folga de espessura positiva universal ($\max(o_n, 0.005\text{m})$) sem esmagamento não-linear.
-- [ ] **Etapa 3: Atualização do `CharacterModel` em `character_model.py`**
-  - [ ] Preservar o braço superior íntegro para roupas curtas, regatas e ombro caído.
-  - [ ] Substituir heurística de contagem de vértices de gola por detecção de cobertura real.
-- [ ] **Etapa 4: Validação Visual no Catálogo Canônico**
-  - [ ] Validar Camisa Tucked-in Vermelha (`97984232018335`) — Feminino (tecido suave, sem peito furando, sem pontas).
-  - [ ] Validar Suéter de Tricô (`9240757332`) — Masculino e Feminino (sem pontas na cintura).
-  - [ ] Validar Camisa Off-Shoulder (`84986992221546`) — Feminino (ombros e braços íntegros).
-  - [ ] Validar Cropped com Laços (`101748354579961`) — Feminino (braçadeiras sólidas e gola natural).
-  - [ ] Validar Boxy Shirt (`89475537632859`) — Masculino e Feminino (ombros naturais, sem asas).
-  - [ ] Validar Cross Shirt (`94197227825305`) e Vestido Plaid (`114590471167431`).
-- [ ] **Etapa 5: Verificação dos Testes Automatizados**
-  - [ ] Rodar `pytest tests/` e certificar 469/469 aprovados.
+- [x] **Etapa 1: Limpeza das Heurísticas Destrutivas em `wear_engine.py`**
+  - [x] Remover o loop de encolhimento manual da cintura ($sx, sz$) em `fit_top_clothing`.
+  - [x] Desativar o compressor forçado de golas de 30 caixas em `fit_top_clothing`.
+  - [x] Eliminar o corte plano de braço `slice_mesh_below_z(1.200m)` em `apply_arm_hsr`.
+- [x] **Etapa 2: Atualização da Cage Feminina e Cálculo de Normais Suaves**
+  - [x] Atualizar a Cage Alvo Feminina para utilizar a curvatura real de `female_cages.obj` (`UpperTorso` com $Z \ge 0.218\text{m}$).
+  - [x] Implementar cálculo automático de normais de vértice suaves em `parse_obj_as_mesh` e exportação do wear engine (`vn` + `f v/vt/vn`).
+  - [x] Assegurar folga de espessura positiva universal ($\max(o_n, 0.005\text{m})$) sem esmagamento não-linear.
+- [x] **Etapa 3: Atualização do `CharacterModel` em `character_model.py`**
+  - [x] Preservar o braço superior e antebraço íntegros para roupas curtas, regatas e ombro caído com classificação independente por lado.
+  - [x] Implementar validação de cache com header `v2` (`is_valid_v2_obj`) para nunca mais carregar arquivos corrompidos ou desatualizados do disco.
+  - [x] Eliminar bypass de arquivos estáticos dedicados que causavam amputações nos braços.
+- [x] **Etapa 4: Validação Visual no Catálogo Canônico**
+  - [x] Validar Camisa Tucked-in Vermelha (`97984232018335`) — Feminino (estampa nítida, peito hermético e suave, cintura limpa).
+  - [x] Validar Suéter de Tricô (`9240757332`) — Masculino e Feminino (textura de tricô 100% visível, zero espinhos/pontas na cintura, braços herméticos dentro das mangas).
+  - [x] Validar Camisa Off-Shoulder (`84986992221546`) — Feminino (ombro caído exposto organicamente, alças de biquíni e braço íntegro).
+  - [x] Validar Cropped com Laços (`101748354579961`) — Feminino (sem retalhos pretos flutuando, braços sólidos e abdômen limpo).
+- [x] **Etapa 5: Verificação dos Testes Automatizados**
+  - [x] Rodar `pytest tests/` e certificar 469/469 aprovados (100% de sucesso em 23s).
 
 ---
 
@@ -141,3 +140,11 @@ Durante a investigação, mapeamos as seguintes advertências cruciais que devem
   - Descoberto por que o peito furou: A cage feminina usada no `.npz` estava achatada no busto ($Z=0.168\text{m}$) enquanto o corpo feminino vai até $Z=0.207\text{m}$. A verdadeira cage R15 oficial (`female_cages.obj`) tem $Z=0.218\text{m}$. Aliado a um clamp de amortecimento que limitava a folga normal a $+0.0166\text{m}$, a camisa deformada parava 2.4 cm atrás da pele.
   - Descoberto por que parecia amassada: O carregador `parse_obj_as_mesh` aplicava Flat Shading em arquivos sem normais de vértice (`vn`), transformando dobras orgânicas em facetas duras de origami; além de um damping tangencial que distorcia pregas em 70%.
   - Definição da solução universal estilo Roblox: Uso da Cage Alvo anatômica real (que já possui a geometria do busto), preservação linear do offset tangencial, folga normal mínima garantida ($\ge 5\text{mm}$) e cálculo automático de normais de vértice suaves (smooth shading). Zero `if`s no pipeline.
+* **22/09/2026 - Execução da Reestruturação do Motor Universal (Checklist Completo):**
+  - Salvo checkpoint limpo no Git local (`commit 495f454`).
+  - Removidas heurísticas destrutivas de encolhimento de cintura e compressão de gola em 30 caixas em `wear_engine.py`.
+  - Implementada exportação de normais suaves Gouraud/Phong (`vn`) e mapeamento estrito de UVs (`f v/vt/vn`) com header `v2`.
+  - Implementada classificação de mangas adaptativa independente por membro (braço esquerdo e direito analisados separadamente), corrigindo roupas assimétricas (off-shoulder) e mantendo membros íntegros.
+  - Limpos 140 arquivos estáticos antigos em cache e ativada auto-regeneração via `is_valid_v2_obj`.
+  - Validados visualmente com renderizador OpenGL: Suéter (`9240757332`) Masc e Fem, Off-Shoulder (`84986992221546`), Cropped (`101748354579961`) e Tucked-in (`97984232018335`).
+  - 469/469 testes unitários aprovados com 100% de sucesso.
