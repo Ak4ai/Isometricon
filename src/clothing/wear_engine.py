@@ -376,7 +376,30 @@ def load_r15_female_cages(obj_path):
     if current_name is not None:
         _finalize_r15_part(parts, current_name, current_verts, current_faces, global_vert_offset)
 
+    # Unifica antebraço e mão em uma única cage contínua por lado (cobre perfeitamente o antebraço feminino)
+    if "LeftLowerArm" in parts and "LeftHand" in parts:
+        parts["LeftForearm"] = _combine_r15_parts(parts["LeftLowerArm"], parts["LeftHand"])
+    if "RightLowerArm" in parts and "RightHand" in parts:
+        parts["RightForearm"] = _combine_r15_parts(parts["RightLowerArm"], parts["RightHand"])
+
     return parts
+
+
+def _combine_r15_parts(part1, part2):
+    """Combina duas partes R15 em uma única cage contínua (ex: antebraço + mão)."""
+    v1, f1 = part1["verts"], part1["faces"]
+    v2, f2 = part2["verts"], part2["faces"]
+    v_comb = np.vstack([v1, v2])
+    f_comb = np.vstack([f1, f2 + len(v1)])
+    grid = SpatialGrid3D(cell_size=0.04)
+    grid.build(v_comb)
+    return {
+        "verts": v_comb,
+        "faces": f_comb,
+        "grid": grid,
+        "bbox_min": v_comb.min(axis=0),
+        "bbox_max": v_comb.max(axis=0),
+    }
 
 
 def _finalize_r15_part(parts, name, verts_list, faces_list, vert_offset):
@@ -1348,51 +1371,59 @@ class RobloxWearEngine:
 
         return best_q, best_normal, best_dist
 
-    def deform_top_mesh_r15(self, rest_verts, faces, sleeve_indices, torso_indices):
-        """Deformação R15 nativa para peças superiores usando as 15 cages femininas diretamente.
+    def deform_top_mesh_r15(self, apose_verts, faces, sleeve_indices, torso_indices, is_jacket: bool = False, is_sleeveless: bool = False):
+        """Deformação R15 nativa por partes do corpo inspirada 100% no WrapDeformer do Roblox.
 
-        Conforma a roupa (já colocada em rest pose) diretamente na superfície das cages femininas,
-        preservando a espessura e caimento de cada peça com relaxamento Laplaciano nas costuras.
+        Cada vértice projeta sobre a cage R15 feminina correspondente, garantindo folga normal mínima positiva (>= 5mm)
+        e transferindo o caimento e volume tangencial original da peça, com interpolação contínua Hermite nas articulações dos ombros.
         """
         if not self.r15_female_cages:
-            return rest_verts
+            return apose_verts
 
-        deformed = np.zeros_like(rest_verts)
-        cage_assignment = {}  # vertex_idx -> cage_name (para detecção de costuras)
+        def project_part(p, part_name):
+            if part_name not in self.r15_female_cages:
+                part_name = "UpperTorso"
+            part = self.r15_female_cages[part_name]
+            q, n, dist = self._project_onto_r15_cage(p, part)
+            offset_vec = p - q
+            n_proj = float(np.dot(offset_vec, n))
+            tan_vec = offset_vec - n_proj * n
+            # Preserva corte da gola/decote se a normal apontar para cima (n[2] > 0.35)
+            # Na superfície do corpo, garante folga normal positiva de 5mm para nunca furar a pele
+            if n[2] > 0.35:
+                d_n = n_proj
+            else:
+                d_n = max(n_proj, 0.005)
+            return q + d_n * n + tan_vec
 
-        for i in range(len(rest_verts)):
-            p = rest_verts[i]
+        deformed = np.zeros_like(apose_verts)
+        for i in range(len(apose_verts)):
+            p = apose_verts[i]
+            ax = abs(p[0])
+            side_p = "Left" if p[0] > 0 else "Right"
 
-            # 1. Mede o offset/espessura original em relação à cage rest masculina
-            cands_m = self.grid_rest.query_nearest_candidates(p, 1) or range(len(self.cage_faces))
-            best_dm = float('inf')
-            best_qm = p
-            best_nm = np.array([0.0, 0.0, 1.0])
-            for t in cands_m:
-                q, u, v, w = closest_point_on_triangle(p, self.tri_ra[t], self.tri_rb[t], self.tri_rc[t])
-                d = float(np.linalg.norm(p - q))
-                if d < best_dm:
-                    best_dm = d
-                    best_qm = q
-                    n = np.cross(self.tri_rb[t] - self.tri_ra[t], self.tri_rc[t] - self.tri_ra[t])
-                    nl = np.linalg.norm(n)
-                    best_nm = n / nl if nl > 1e-8 else np.array([0.0, 0.0, 1.0])
+            # 1. Articulação do Ombro: interpolação suave Hermite UpperTorso <-> UpperArm
+            if p[2] > 1.15 and 0.14 <= ax <= 0.28:
+                w = smoothstep(0.14, 0.28, ax)
+                p_t = project_part(p, "UpperTorso")
+                p_a = project_part(p, f"{side_p}UpperArm")
+                deformed[i] = (1.0 - w) * p_t + w * p_a
+            elif i in sleeve_indices and not is_sleeveless:
+                # 2. Articulação do Cotovelo: interpolação suave UpperArm <-> Forearm (antebraço + mão)
+                if 1.05 <= p[2] <= 1.16:
+                    w = smoothstep(1.05, 1.16, p[2])
+                    p_u = project_part(p, f"{side_p}UpperArm")
+                    p_l = project_part(p, f"{side_p}Forearm")
+                    deformed[i] = (1.0 - w) * p_l + w * p_u
+                elif p[2] < 1.05:
+                    deformed[i] = project_part(p, f"{side_p}Forearm")
+                else:
+                    deformed[i] = project_part(p, f"{side_p}UpperArm")
+            else:
+                torso_p = "LowerTorso" if (p[2] < 0.93 and "LowerTorso" in self.r15_female_cages) else "UpperTorso"
+                deformed[i] = project_part(p, torso_p)
 
-            signed_offset = float(np.dot(p - best_qm, best_nm))
-            cloth_offset = max(0.002, min(signed_offset, 0.025))
-
-            # 2. Determina a cage feminina R15 correspondente
-            region_name = _assign_cage_region(p, _TOP_CAGE_REGIONS, self.r15_female_cages)
-            if region_name is None:
-                region_name = "UpperTorso"
-
-            cage_assignment[i] = region_name
-            part_data = self.r15_female_cages[region_name]
-            proj_q, normal, dist = self._project_onto_r15_cage(p, part_data)
-
-            deformed[i] = proj_q + cloth_offset * normal
-
-        # Adjacência de arestas para relaxamento Laplaciano
+        # Adjacência de arestas para relaxamento suave nas costuras
         adj = {}
         for face in faces:
             for fi in range(len(face)):
@@ -1400,34 +1431,22 @@ class RobloxWearEngine:
                 adj.setdefault(i0, set()).add(i1)
                 adj.setdefault(i1, set()).add(i0)
 
-        # Identifica vértices nas costuras entre cages R15 diferentes
-        seam_verts = set()
-        for f_v in faces:
-            cage_names_in_face = set()
-            for idx in f_v:
-                if idx in cage_assignment:
-                    cage_names_in_face.add(cage_assignment[idx])
-            if len(cage_names_in_face) > 1:
-                seam_verts.update(f_v)
-
-        # Expande o anel de costura em 2 anéis para suavização
-        seam_ring = set(seam_verts)
-        for _ in range(2):
-            for v_i in list(seam_ring):
-                seam_ring.update(adj.get(v_i, []))
-
-        # Relaxamento Laplaciano nas costuras entre cages
-        disp = deformed - rest_verts
+        # Identifica anel de costura na junção dos ombros
+        seam_ring = {
+            i for i in range(len(apose_verts))
+            if 0.14 <= abs(apose_verts[i, 0]) <= 0.28 and apose_verts[i, 2] > 1.12
+        }
+        disp = deformed - apose_verts
         smoothed_disp = disp.copy()
         for _ in range(8):
             new_disp = smoothed_disp.copy()
             for s_i in seam_ring:
                 nbrs = list(adj.get(s_i, []))
                 if nbrs:
-                    new_disp[s_i] = 0.5 * smoothed_disp[s_i] + 0.5 * np.mean(smoothed_disp[nbrs], axis=0)
+                    new_disp[s_i] = 0.50 * smoothed_disp[s_i] + 0.50 * np.mean(smoothed_disp[nbrs], axis=0)
             smoothed_disp = new_disp
 
-        return rest_verts + smoothed_disp
+        return apose_verts + smoothed_disp
 
     def deform_mesh_r15(self, rest_verts, faces):
         """Deformação R15 nativa para peças inferiores (calças, saias) usando as cages femininas.
@@ -1786,7 +1805,11 @@ class RobloxWearEngine:
             sleeve_label = "REGATA" if is_sleeveless else ("MANGA CURTA" if is_short else "MANGA LONGA")
             print(f"[*] Tipo de Manga: {sleeve_label} (Z cuff = {cuff_z:.3f}m, Casaco={is_jacket}, Vestido={is_dress})")
 
-            deformed_verts = self.deform_top_mesh(apose_verts, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
+            if self.is_female and self.r15_female_cages:
+                print("[R15] Deformando roupa feminina com as 15 cages R15 por parte (WrapDeformer)...")
+                deformed_verts = self.deform_top_mesh_r15(apose_verts, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
+            else:
+                deformed_verts = self.deform_top_mesh(apose_verts, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
 
             # Calibração da ponta da manga longa (Z):
             # Garante que a barra da manga termine na altura anatômica do punho (Z ≈ 0.740m),
