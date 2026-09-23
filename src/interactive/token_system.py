@@ -3,7 +3,7 @@
 import json
 import math
 import os
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, Union
 
 import numpy as np
 
@@ -383,6 +383,40 @@ class ModularCharacter:
                 shader.set_mat4("u_Model", part_model)
                 part.mesh.draw()
 
+    def equip_roblox_clothing(self, asset_id: Union[int, str]) -> dict:
+        """Carrega e veste qualquer roupa do Roblox em tempo de execução via motor 100% nativo em Python."""
+        from src.clothing.wear_engine import RobloxWearEngine
+        engine = RobloxWearEngine()
+        wear_data = engine.wear(asset_id)
+
+        # Atualiza a visibilidade e malha dos braços superiores e antebraços conforme HSR
+        if wear_data.get("arm_hsr"):
+            for arm_name, arm_info in wear_data["arm_hsr"].items():
+                if arm_name in self.parts:
+                    if not arm_info["visible"]:
+                        self.parts[arm_name].mesh = None
+                    else:
+                        s_verts = arm_info["verts"]
+                        s_faces = arm_info["faces"]
+                        v_data = []
+                        pivot = self.parts[arm_name].pivot
+                        for v in s_verts:
+                            v_local = v - pivot
+                            v_data.append([
+                                v_local[0], v_local[1], v_local[2],
+                                0.0, 1.0, 0.0,
+                                0.5, 0.5,
+                                0.85, 0.85, 0.85
+                            ])
+                        v_arr = np.array(v_data, dtype=np.float32)
+                        i_arr = np.array(s_faces.flatten(), dtype=np.uint32)
+                        self.parts[arm_name].mesh = TexturedMesh(v_arr, i_arr)
+
+        if wear_data.get("is_top") and "torso" in self.parts:
+            self.parts["torso"].mesh = None
+
+        return wear_data
+
     def delete(self) -> None:
         for part in self.parts.values():
             part.delete()
@@ -391,6 +425,12 @@ class ModularCharacter:
 
 class PlayerToken:
     """Controlador de miniatura 3D com movimentação contínua estilo RPG e animação modular procedural."""
+
+    def equip_roblox_clothing(self, asset_id: Union[int, str]) -> dict:
+        """Equipa roupa do Roblox no token usando o motor nativo."""
+        if self.modular_character is not None:
+            return self.modular_character.equip_roblox_clothing(asset_id)
+        return {}
 
     def __init__(
         self,
