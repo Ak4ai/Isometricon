@@ -757,6 +757,8 @@ class RobloxWearEngine:
                     if "/" in parts[0] and parts[0].split("/")[1]:
                         f_uv = [int(p.split("/")[1]) - 1 for p in parts]
                         face_uvs.append(f_uv)
+        if not face_uvs and len(uvs) == len(verts):
+            face_uvs = faces
 
         return (
             np.array(verts, dtype=np.float32),
@@ -917,89 +919,7 @@ class RobloxWearEngine:
                 w = t * t * (3.0 - 2.0 * t)
                 adj_verts[idx, 2] -= raw_sleeve_z_mean * w
 
-        # Tapering da Cintura e Controle de Largura para Peças Boxy/Oversized
-        # Para VESTIDOS e CROPPED TOPS:
-        # - Vestidos mantêm a saia aberta e longa até os joelhos (sem esmagar verticalmente em Z=0.985m)
-        # - Cropped tops mantêm a barra natural acima do umbigo, expondo o abdômen sem esticar até a calça
-        if not is_dress and not is_cropped:
-            torso_list = list(torso_indices)
-            torso_ys = verts[torso_list, 1] if torso_list else np.array([y_min_orig])
-            t_ymin = float(np.min(torso_ys))
-            t_ymax = float(np.max(torso_ys))
-            hem_thresh = t_ymin + 0.15 * (t_ymax - t_ymin)
-            hem_mask = [idx for idx in torso_list if verts[idx, 1] < hem_thresh]
-
-            if hem_mask:
-                hem_xs = verts[hem_mask, 0]
-                hem_zs = verts[hem_mask, 2]
-                raw_w = float(np.max(hem_xs) - np.min(hem_xs))
-                raw_d = float(np.max(hem_zs) - np.min(hem_zs))
-            else:
-                raw_w, raw_d = 0.50, 0.40
-
-            target_waist_w = 0.300
-            target_waist_d = 0.240 if self.is_female else 0.245
-            if self.is_female:
-                sc_waist_x = min(1.0, (target_waist_w / uniform_scale) / raw_w) if raw_w > 0 else 0.58
-                sc_waist_z = min(1.0, (target_waist_d / uniform_scale) / raw_d) if raw_d > 0 else 0.62
-                y_target_min = (0.985 - loc_z) / uniform_scale
-            else:
-                sc_waist_x = min(1.0, (target_waist_w / uniform_scale) / raw_w) if raw_w > 0 else 0.57
-                sc_waist_z = min(1.0, (target_waist_d / uniform_scale) / raw_d) if raw_d > 0 else 0.64
-                y_target_min = (0.890 - loc_z) / uniform_scale
-
-            y_anchor_bot = 0.15 * norm_scale
-            compression = (y_anchor_bot - y_target_min) / (y_anchor_bot - t_ymin + 1e-8)
-
-            for idx in torso_list:
-                y = adj_verts[idx, 1]
-                if y < y_anchor_bot:
-                    blend = min(max((y_anchor_bot - y) / (y_anchor_bot - t_ymin + 1e-8), 0.0), 1.0)
-                    curve = blend ** 1.2
-                    sx = 1.0 - (1.0 - sc_waist_x) * curve
-                    sz = 1.0 - (1.0 - sc_waist_z) * curve
-                    adj_verts[idx, 1] = y_anchor_bot + (y - y_anchor_bot) * compression
-                    adj_verts[idx, 0] *= sx
-                    adj_verts[idx, 2] *= sz
-
-        # Suavização Contínua de Gola e Ombros
-        # Jaquetas e casacos preservam gola alta estruturada (teto ~1.515m).
-        # Vestidos, regatas e camisas têm teto suave na clavícula/base do pescoço (1.485m female, 1.492m male),
-        # impedindo que decotes e alças escalem desmedidamente até o queixo/boca.
-        y_anchor_top = 0.35 * norm_scale
-        max_abs_x = float(np.max(np.abs(verts[:, 0])))
-        num_bins = 30
-        envelope = {}
-        for idx in range(len(verts)):
-            y = adj_verts[idx, 1]
-            if y > y_anchor_top:
-                b_idx = int(min(abs(adj_verts[idx, 0]) / (max_abs_x + 1e-8), 0.999) * num_bins)
-                envelope[b_idx] = max(envelope.get(b_idx, y_anchor_top), y)
-
-        for idx in range(len(adj_verts)):
-            y = adj_verts[idx, 1]
-            x = adj_verts[idx, 0]
-            if y > y_anchor_top:
-                b_idx = int(min(abs(x) / (max_abs_x + 1e-8), 0.999) * num_bins)
-                orig_top = envelope.get(b_idx, y)
-                if orig_top > y_anchor_top:
-                    wx = abs(x) * uniform_scale
-                    base_collar_z = 1.515 if is_jacket else (1.485 if self.is_female else 1.492)
-                    if wx < 0.20:
-                        wz = base_collar_z
-                    elif wx < 0.28:
-                        s = smoothstep(0.20, 0.28, wx)
-                        wz = base_collar_z - s * (base_collar_z - 1.480)
-                    else:
-                        # Deltoide robusto: preserva altura anatômica sem estrangular o topo do ombro
-                        s = smoothstep(0.28, 0.38, wx)
-                        wz = 1.480 - s * 0.025
-                    target_top_y = (wz - loc_z) / uniform_scale
-                    if orig_top > target_top_y:
-                        ratio = (target_top_y - y_anchor_top) / (orig_top - y_anchor_top + 1e-8)
-                        adj_verts[idx, 1] = y_anchor_top + (y - y_anchor_top) * ratio
-
-        # Transforma para o espaço 3D da A-Pose
+        # Transforma para o espaço 3D da A-Pose canônica (sem distorções destrutivas manuais)
         world_apose = np.zeros_like(adj_verts)
         world_apose[:, 0] = -adj_verts[:, 0] * uniform_scale
         world_apose[:, 1] = adj_verts[:, 2] * uniform_scale + 0.007
@@ -1767,14 +1687,8 @@ class RobloxWearEngine:
             # Slim arm moderado (apenas a pele)
             world_verts = self._slim_arm(world_verts, y_scale=0.74, x_scale=0.86)
 
-            if is_sleeveless or has_bare_shoulders:
+            if is_sleeveless or has_bare_shoulders or is_short_sleeves:
                 res[name] = {"visible": True, "verts": world_verts, "faces": f_raw}
-            elif is_short_sleeves:
-                # O braço superior fica preservado dentro da manga curta,
-                # preenchendo o interior sem penetrar o peito ou a costura do ombro
-                cut_z = 1.200 if self.is_female else 1.280
-                s_verts, s_faces = slice_mesh_below_z(world_verts, f_raw, cut_z)
-                res[name] = {"visible": True, "verts": s_verts, "faces": s_faces}
             else:
                 res[name] = {"visible": False, "verts": world_verts, "faces": f_raw}
 
@@ -1999,17 +1913,36 @@ class RobloxWearEngine:
                         with open(ab_obj_path, "w", encoding="utf-8") as f:
                             f.write("# Forearm hidden\n")
 
+        # Calcula normais suaves por vértice para Gouraud/Phong shading contínuo
+        vert_normals = np.zeros_like(deformed_verts, dtype=np.float32)
+        for f_idx in faces:
+            if len(f_idx) >= 3:
+                p0 = deformed_verts[f_idx[0]]
+                p1 = deformed_verts[f_idx[1]]
+                p2 = deformed_verts[f_idx[2]]
+                fn = np.cross(p1 - p0, p2 - p0)
+                norm = np.linalg.norm(fn)
+                if norm > 1e-8:
+                    fn /= norm
+                    for vi in f_idx:
+                        vert_normals[vi] += fn
+        vn_lens = np.linalg.norm(vert_normals, axis=1, keepdims=True)
+        vn_lens[vn_lens < 1e-8] = 1.0
+        vert_normals /= vn_lens
+
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Native Fitted Clothing: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v2: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
+            for vn in vert_normals:
+                f.write(f"vn {vn[0]:.4f} {vn[1]:.4f} {vn[2]:.4f}\n")
             for uv in uvs:
                 f.write(f"vt {uv[0]:.5f} {uv[1]:.5f}\n")
             for i, face in enumerate(faces):
                 if len(face_uvs) > i:
-                    f.write("f " + " ".join(f"{face[j]+1}/{face_uvs[i][j]+1}" for j in range(len(face))) + "\n")
+                    f.write("f " + " ".join(f"{face[j]+1}/{face_uvs[i][j]+1}/{face[j]+1}" for j in range(len(face))) + "\n")
                 else:
-                    f.write("f " + " ".join(f"{idx+1}" for idx in face) + "\n")
+                    f.write("f " + " ".join(f"{idx+1}//{idx+1}" for idx in face) + "\n")
 
         t1 = time.perf_counter()
         elapsed = (t1 - t0) * 1000
