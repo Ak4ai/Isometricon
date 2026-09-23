@@ -704,29 +704,53 @@ def transform_arm_vertices(
     hand_z_offset: float = 0.0,
     is_hand_only: bool = False,
 ) -> List[List[float]]:
-
-    """Aplica ajustes dinâmicos de largura e comprimento às malhas de braço e antebraço."""
+    """Aplica ajustes dinâmicos de largura e comprimento às malhas de braço e antebraço.
+    Suporta tanto o espaço nativo do motor (Z=altura, Y=profundidade) quanto o clean OBJ (Y=altura, Z=profundidade).
+    """
     if width_scale == 1.0 and length_scale == 1.0 and hand_z_offset == 0.0:
         return raw_v
 
     verts = [list(v) for v in raw_v]
+    if not verts:
+        return verts
+
+    sample = verts[:min(100, len(verts))]
+    max_z = max(v[2] for v in sample)
+    max_y = max(v[1] for v in sample)
+    is_native = max_z > max_y
+
     xs = [v[0] for v in verts]
-    ys = [v[1] for v in verts]
     cx = float((min(xs) + max(xs)) / 2)
-    cy = float((min(ys) + max(ys)) / 2)
-    shoulder_z = 1.482
+    shoulder_height = 1.482
 
-    for i in range(len(verts)):
-        x, y, z = verts[i]
-        if width_scale != 1.0:
-            x = cx + (x - cx) * width_scale
-            y = cy + (y - cy) * width_scale
-        if length_scale != 1.0:
-            z = shoulder_z + (z - shoulder_z) * length_scale
-        if is_hand_only and hand_z_offset != 0.0:
-            z = z - hand_z_offset
-
-        verts[i] = [x, y, z]
+    if is_native:
+        # Espaço nativo do motor: Z é altura, Y é profundidade
+        ys = [v[1] for v in verts]
+        cy = float((min(ys) + max(ys)) / 2)
+        for i in range(len(verts)):
+            x, y, z = verts[i]
+            if width_scale != 1.0:
+                x = cx + (x - cx) * width_scale
+                y = cy + (y - cy) * width_scale
+            if length_scale != 1.0:
+                z = shoulder_height + (z - shoulder_height) * length_scale
+            if is_hand_only and hand_z_offset != 0.0:
+                z = z - hand_z_offset
+            verts[i] = [x, y, z]
+    else:
+        # Espaço clean OBJ: Y é altura, Z é profundidade
+        zs = [v[2] for v in verts]
+        cz = float((min(zs) + max(zs)) / 2)
+        for i in range(len(verts)):
+            x, y, z = verts[i]
+            if width_scale != 1.0:
+                x = cx + (x - cx) * width_scale
+                z = cz + (z - cz) * width_scale
+            if length_scale != 1.0:
+                y = shoulder_height + (y - shoulder_height) * length_scale
+            if is_hand_only and hand_z_offset != 0.0:
+                y = y - hand_z_offset
+            verts[i] = [x, y, z]
 
     return verts
 
@@ -1386,12 +1410,37 @@ class CharacterModel:
 
             side_pts = [p for p in top_pts if (p[0] * side_mult) > 0.18 and p[2] < 1.45]
             min_z = min(p[2] for p in side_pts) if side_pts else 2.0
+            side_shoulder_pts = [p for p in top_pts if (p[0] * side_mult) > 0.18 and p[2] > 1.35]
             side_sleeveless = (len(side_pts) < 15 or min_z > 1.32)
             side_long = (min_z <= 0.85) and not side_sleeveless
             side_short = not side_sleeveless and not side_long
 
-            if side_sleeveless or side_short:
-                arm_data = parse_clean_obj_groups(clean_path, [f"Export_braco_superior_{pt_side}"], default_color=skin_color, vertex_transform=arm_tf)
+            # Resolução anatômica estrita:
+            # 1. Manga longa cobre integralmente o braço superior (HSR completo)
+            # 2. Sem manga (regata/top): braço 100% visível
+            # 3. Manga curta: oculta se a manga cobrir até o cotovelo (min_z <= 1.15m) e cobrir o ombro
+            if side_long:
+                upper_arm_visible = False
+            elif side_sleeveless:
+                upper_arm_visible = True
+            else:
+                has_bare_shoulder = len(side_shoulder_pts) < 15
+                upper_arm_visible = has_bare_shoulder or (min_z > 1.15)
+            if upper_arm_visible:
+                def make_side_arm_tf(is_bare):
+                    def side_arm_tf(raw_v):
+                        tf_v = transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
+                        if not is_bare:
+                            tf_v = transform_arm_vertices(tf_v, width_scale=0.88, length_scale=1.0)
+                        return tf_v
+                    return side_arm_tf
+
+                arm_data = parse_clean_obj_groups(
+                    clean_path,
+                    [f"Export_braco_superior_{pt_side}"],
+                    default_color=skin_color,
+                    vertex_transform=make_side_arm_tf(side_sleeveless)
+                )
                 if arm_data:
                     parts.append(CharacterPart(f"arm_{side}", TexturedMesh(arm_data[0], arm_data[1]), self.white_tex_id))
 
