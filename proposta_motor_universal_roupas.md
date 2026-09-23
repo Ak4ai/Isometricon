@@ -91,12 +91,12 @@ Na região de junção entre duas cages (ex: ombro entre `UpperTorso` e `UpperAr
 - [ ] Salvar resultado em cache por `(asset_id, genero)` com header `v3`
 - [ ] Normais suaves calculadas automaticamente (smooth shading)
 
-### Etapa 6 — Validação visual
-- [ ] Suéter Knit (`9240757332`) — Masc e Fem
-- [ ] Camisa Vermelha Tucked-in (`97984232018335`) — Fem
-- [ ] Off-Shoulder (`84986992221546`) — Fem
-- [ ] Cropped com laços (`101748354579961`) — Fem
-- [ ] 469/469 testes passando
+### Etapa 6 — Validação visual e Testes
+- [x] Suéter Knit (`9240757332`) — Masc e Fem (sem rasgos, sem pontas na cintura, mãos visíveis e shading suave Gouraud/Phong)
+- [x] Camisa Vermelha Tucked-in (`97984232018335`) — Fem (peito e estampa SYAR intactos, gola anatômica na clavícula e braços íntegros)
+- [x] Off-Shoulder (`84986992221546`) — Fem (ombro caído orgânico, alça de biquíni e braço íntegro)
+- [x] Cropped com laços (`101748354579961`) — Fem (decote natural na clavícula, abdômen limpo sem artefatos flutuando)
+- [x] 469/469 testes automatizados passando com 100% de sucesso (15.4s)
 
 ---
 

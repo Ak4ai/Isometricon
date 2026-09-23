@@ -880,10 +880,12 @@ class RobloxWearEngine:
         norm_scale = 1.80 / total_y_span if total_y_span > 2.0 else 1.0
         uniform_scale = 0.54 * norm_scale
         # Ancoragem Anatômica Universal dos Ombros:
-        # No mundo real e no Roblox, roupas superiores penduram a partir dos ombros / clavícula.
-        # Topo anatômico: Z ≈ 1.485m (masculino), Z ≈ 1.472m (feminino), com +0.020m para jaquetas/bombers.
-        target_top_z = 1.505 if is_jacket else (1.472 if self.is_female else 1.485)
-        loc_z = target_top_z - y_max_orig * uniform_scale
+        # A peça de roupa repousa sobre a sustentação anatômica dos ombros/clavícula.
+        # Topo anatômico do ombro: Z ≈ 1.435m (feminino), Z ≈ 1.485m (masculino), com +0.020m para jaquetas/bombers.
+        target_shoulder_z = (1.455 if is_jacket else 1.435) if self.is_female else (1.505 if is_jacket else 1.485)
+        sh_mask = (np.abs(verts[:, 0]) >= 0.35) & (np.abs(verts[:, 0]) <= 0.75) & (verts[:, 1] > 0)
+        shoulder_y = float(np.max(verts[sh_mask, 1])) if np.any(sh_mask) else y_max_orig
+        loc_z = target_shoulder_z - shoulder_y * uniform_scale
 
         if sleeve_indices:
             sleeve_ys = verts[list(sleeve_indices), 1]
@@ -1002,21 +1004,29 @@ class RobloxWearEngine:
             if not self.is_female and not is_jacket and abs(p[0]) > 0.20 and p[2] > 1.35:
                 max_n = 0.020
 
-            if n_dist > 0.016:
-                d_n = 0.016 + (n_dist - 0.016) * 0.35
-                d_n = min(d_n, max_n)
-            elif n_dist < min_n:
-                d_n = min_n
-            else:
+            # Clamping normal anatômico:
+            # Na região da gola/nuca (dst_norm[2] > 0.35): a normal aponta para cima.
+            # Preserva o offset natural da modelagem (n_dist pode ser negativo para decotes baixos/abertos),
+            # impedindo que a gola de camisas ou decotes seja forçada para cima até o queixo/cabeça.
+            if dst_norm[2] > 0.35:
                 d_n = n_dist
-
-            # Damping tangencial (evita que as laterais e a barra formem pontas excessivamente largas)
-            max_tan = 0.045 if is_jacket else (0.026 if self.is_female else 0.032)
-            tan_len = float(np.linalg.norm(tan_vec))
-            if tan_len > max_tan:
-                d_tan = tan_vec * ((max_tan + (tan_len - max_tan) * 0.30) / tan_len)
-            else:
                 d_tan = tan_vec
+            else:
+                if n_dist > 0.016:
+                    d_n = 0.016 + (n_dist - 0.016) * 0.35
+                    d_n = min(d_n, max_n)
+                elif n_dist < min_n:
+                    d_n = min_n
+                else:
+                    d_n = n_dist
+
+                # Damping tangencial no tronco (evita que a barra forme pontas excessivamente largas)
+                max_tan = 0.045 if is_jacket else (0.026 if self.is_female else 0.032)
+                tan_len = float(np.linalg.norm(tan_vec))
+                if tan_len > max_tan:
+                    d_tan = tan_vec * ((max_tan + (tan_len - max_tan) * 0.30) / tan_len)
+                else:
+                    d_tan = tan_vec
 
             # Regatas, alças finas e biquínis: conformação suave e direta sobre o busto e ombros
             if is_sleeveless and p[2] > 1.22 and not is_jacket:
@@ -1776,8 +1786,7 @@ class RobloxWearEngine:
             sleeve_label = "REGATA" if is_sleeveless else ("MANGA CURTA" if is_short else "MANGA LONGA")
             print(f"[*] Tipo de Manga: {sleeve_label} (Z cuff = {cuff_z:.3f}m, Casaco={is_jacket}, Vestido={is_dress})")
 
-            rest_verts = self.deform_top_mesh(apose_verts, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
-            deformed_verts = rest_verts
+            deformed_verts = self.deform_top_mesh(apose_verts, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
 
             # Calibração da ponta da manga longa (Z):
             # Garante que a barra da manga termine na altura anatômica do punho (Z ≈ 0.740m),
@@ -1834,11 +1843,13 @@ class RobloxWearEngine:
             # Detecção de ombros nus / mangas destacadas / tomara-que-caia:
             # Se a roupa não possui cobertura estruturada de ombro (|X| > 0.22 e Z > 1.35 com teto >= 1.42m),
             # os ombros são anatomicamente expostos e os braços superiores devem ser preservados 100% íntegros
-            shoulder_pts = deformed_verts[(np.abs(deformed_verts[:, 0]) > 0.22) & (deformed_verts[:, 2] > 1.35)]
+            sh_x_cut = 0.16 if self.is_female else 0.22
+            sh_z_ceil = 1.390 if self.is_female else 1.420
+            shoulder_pts = deformed_verts[(np.abs(deformed_verts[:, 0]) > sh_x_cut) & (deformed_verts[:, 2] > 1.35)]
             has_bare_shoulders = (
                 is_sleeveless
                 or (len(shoulder_pts) < 30)
-                or (float(shoulder_pts[:, 2].max()) < 1.420 if len(shoulder_pts) > 0 else True)
+                or (float(shoulder_pts[:, 2].max()) < sh_z_ceil if len(shoulder_pts) > 0 else True)
             )
             if has_bare_shoulders and not is_sleeveless:
                 print(f"[*] Detecção Anatômica: Ombros nus / mangas destacadas (pts={len(shoulder_pts)} -> preservando braço superior completo)")
@@ -1926,7 +1937,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v2: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v3: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:

@@ -1002,15 +1002,17 @@ def find_clothing_texture(asset_id: Union[int, str]) -> Optional[str]:
 
 
 def is_valid_v2_obj(path: str) -> bool:
-    """Verifica se o arquivo OBJ conformativo foi gerado pelo pipeline universal v2."""
+    """Verifica se o arquivo OBJ conformativo foi gerado pelo pipeline universal v2 ou v3."""
     if not os.path.exists(path):
         return False
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v2" in line:
+                if "Universal Fitted Clothing v3" in line:
                     return True
+                if "Universal Fitted Clothing v2" in line:
+                    return False  # v2 é obsoleto — força regeneração com pipeline R15
         return False
     except Exception:
         return False
@@ -1408,11 +1410,15 @@ class CharacterModel:
         for side_mult, side in [(1, "left"), (-1, "right")]:
             pt_side = side_map[side]
 
-            side_pts = [p for p in top_pts if (p[0] * side_mult) > 0.18 and p[2] < 1.45]
+            # Identificação anatômica estrita de vértices da manga (não confunde a barra da cintura com manga)
+            side_pts = [
+                p for p in top_pts
+                if (p[0] * side_mult) > (0.24 if p[2] < 1.10 else 0.18) and p[2] < 1.45
+            ]
             min_z = min(p[2] for p in side_pts) if side_pts else 2.0
             side_shoulder_pts = [p for p in top_pts if (p[0] * side_mult) > 0.18 and p[2] > 1.35]
             side_sleeveless = (len(side_pts) < 15 or min_z > 1.32)
-            side_long = (min_z <= 0.85) and not side_sleeveless
+            side_long = (min_z <= 0.76) and not side_sleeveless
             side_short = not side_sleeveless and not side_long
 
             # Resolução anatômica estrita:
