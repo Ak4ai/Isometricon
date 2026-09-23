@@ -1,8 +1,10 @@
 """Ponto de entrada principal do Isometricon (OpenGL 3.3 Core Profile)."""
 
+import math
 import os
 import random
 import sys
+from typing import Optional
 
 # Garante que o diretório raiz e o diretório 'src' estejam no PYTHONPATH
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,7 +71,7 @@ from src.core.window import Window
 from src.integration import VoxelGridProvider
 from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, PlayerToken
-from src.math import mat4_identity, mat4_scale, mat4_translate, vec3
+from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
 
@@ -268,7 +270,15 @@ def main() -> None:
 
     shader = Shader(shader_vert, shader_frag)
     terrain_demo = "--terrain" in sys.argv[1:]
+    char_demo = "--char" in sys.argv[1:] or "--character" in sys.argv[1:]
+
+    screenshot_path = None
+    max_frames = None
     custom_seed = None
+    custom_yaw = None
+    initial_cmd = None
+    open_chat = False
+    chat_text = None
     for i, arg in enumerate(sys.argv[1:]):
         if arg == "--seed" and i + 1 < len(sys.argv[1:]):
             try:
@@ -280,6 +290,42 @@ def main() -> None:
                 custom_seed = int(arg.split("=", 1)[1])
             except ValueError:
                 pass
+        elif arg == "--screenshot" and i + 1 < len(sys.argv[1:]):
+            screenshot_path = sys.argv[1:][i + 1]
+        elif arg.startswith("--screenshot="):
+            screenshot_path = arg.split("=", 1)[1]
+        elif arg == "--frames" and i + 1 < len(sys.argv[1:]):
+            try:
+                max_frames = int(sys.argv[1:][i + 1])
+            except ValueError:
+                pass
+        elif arg.startswith("--frames="):
+            try:
+                max_frames = int(arg.split("=", 1)[1])
+            except ValueError:
+                pass
+        elif arg in ("--cmd", "--command") and i + 1 < len(sys.argv[1:]):
+            initial_cmd = sys.argv[1:][i + 1]
+        elif arg.startswith("--cmd="):
+            initial_cmd = arg.split("=", 1)[1]
+        elif arg in ("--yaw", "--angle") and i + 1 < len(sys.argv[1:]):
+            try:
+                custom_yaw = float(sys.argv[1:][i + 1])
+            except ValueError:
+                pass
+        elif arg.startswith(("--yaw=", "--angle=")):
+            try:
+                custom_yaw = float(arg.split("=", 1)[1])
+            except ValueError:
+                pass
+        elif arg in ("--open-chat", "--chat"):
+            open_chat = True
+        elif arg in ("--chat-text",) and i + 1 < len(sys.argv[1:]):
+            chat_text = sys.argv[1:][i + 1]
+            open_chat = True
+        elif arg.startswith("--chat-text="):
+            chat_text = arg.split("=", 1)[1]
+            open_chat = True
 
     active_seed = {
         "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
@@ -297,13 +343,70 @@ def main() -> None:
         voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
         meshes = []
+        character_model = None
+        turntable_state = {"active": False, "yaw": 0.0}
+    elif char_demo:
+        from src.clothing.character_model import CharacterModel, parse_character_cli_args
+        char_customization, top_id, bottom_id, tool_id, auto_spin = parse_character_cli_args(sys.argv[1:])
+        print("=" * 68)
+        print("👤 ISOMETRICON - Modo Personagem 3D (Renderizador Nativo)")
+        print("=" * 68)
+        print(f"🔹 Cabeça     : {char_customization.head_type_str.upper()}")
+        print(f"🔹 Rosto      : Boca={char_customization.resolved_mouth_style} | Olhos={char_customization.resolved_eye_style}")
+        print(f"🔹 Cabelo     : {char_customization.hair_style_str} ({char_customization.hair_color_str})")
+        print(f"🔹 Roupas     : Top={top_id} | Bottom={bottom_id}")
+        if tool_id:
+            print(f"🔹 Tool/Arma  : {tool_id}")
+        print("-" * 68)
+        print("⌨️  [Q/E] Girar 90° | [Espaço] Turntable ON/OFF | [C] Wireframe Cage ON/OFF | [Mouse Wheel] Zoom | [Shift+Drag/MMB] Pan | [R] Reset Câmera\n")
+
+        character_model = CharacterModel(
+            customization=char_customization,
+            top_id=top_id,
+            bottom_id=bottom_id,
+            tool_id=tool_id,
+            create_mesh=True,
+        )
+        if "--cage" in sys.argv or "--debug-cage" in sys.argv:
+            character_model.show_cage = True
+            print("[Debug] Modo de Depuração da Cage ATIVADO por linha de comando.")
+        turntable_state = {"active": auto_spin, "yaw": custom_yaw if custom_yaw is not None else 0.0}
+        atlas = None
+        world_manager = None
+        player_token = None
+        voxel_provider = None
+        highlight_renderer = None
+        meshes = []
     else:
         atlas = None
         world_manager = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
+        character_model = None
+        turntable_state = {"active": False, "yaw": 0.0}
         meshes = [(create_cube_mesh(), mat4_identity())]
+
+    # Inicializa o console de comando e chat estilo Minecraft
+    from src.interactive.chat_console import ChatConsole, SkinCommandHandler
+    skin_command_handler = SkinCommandHandler(
+        character_model=character_model,
+        turntable_state=turntable_state,
+    )
+    chat_console = ChatConsole(
+        command_handler=skin_command_handler,
+        create_gl=True,
+        glfw_window=window._window,
+    )
+    if initial_cmd:
+        for single_cmd in initial_cmd.split(";"):
+            single_cmd = single_cmd.strip()
+            if single_cmd:
+                _, feedback, color = skin_command_handler.execute(single_cmd)
+                if feedback:
+                    chat_console.add_message(feedback, color)
+    if open_chat:
+        chat_console.open(chat_text or "")
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
     textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
@@ -341,9 +444,19 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 4. Inicializar câmera isométrica
     # ------------------------------------------------------------------
+    if terrain_demo:
+        cam_target = vec3(0.5, float(start_surface_y) + 1.0, 0.5)
+        cam_ortho = 4.5
+    elif char_demo:
+        cam_target = vec3(0.0, 0.95, 0.0)
+        cam_ortho = 1.18
+    else:
+        cam_target = vec3(0.0, 0.0, 0.0)
+        cam_ortho = 2.0
+
     camera = IsometricCamera(
-        target=vec3(0.5, float(start_surface_y) + 1.0, 0.5) if terrain_demo else vec3(0.0, 0.0, 0.0),
-        ortho_size=4.5 if terrain_demo else 2.0,
+        target=cam_target,
+        ortho_size=cam_ortho,
         near=0.1,
         far=400.0,
     )
@@ -373,9 +486,17 @@ def main() -> None:
         scancode: int,
         action: int,
         mods: int,
-    ) -> None:
+    ) -> Optional[bool]:
         """Encaminha eventos de teclado para a câmera e registra teclas ativas."""
-        del scancode, mods
+        del scancode
+
+        # Intercepta eventos de teclado para o console de chat estilo Minecraft
+        try:
+            if chat_console.handle_key(key, action, mods):
+                return True
+        except Exception as e:
+            print(f"[Input] Erro ao processar tecla no console de chat: {e}")
+            return True
 
         keys_pressed[key] = (action != glfw.RELEASE)
         
@@ -390,12 +511,30 @@ def main() -> None:
             player_token.position[1] = float(new_surface) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
 
+        if char_demo:
+            if key == glfw.KEY_SPACE and action == glfw.PRESS:
+                turntable_state["active"] = not turntable_state["active"]
+                st = "ATIVADO" if turntable_state["active"] else "PAUSADO"
+                print(f"[Turntable] Rotação automática {st}")
+            elif key == glfw.KEY_C and action == glfw.PRESS:
+                character_model.show_cage = not character_model.show_cage
+                st = "ATIVADA" if character_model.show_cage else "DESATIVADA"
+                print(f"[Debug] Visualização Wireframe da Cage: {st}")
+            elif key == glfw.KEY_R and action == glfw.PRESS:
+                camera.target = vec3(0.0, 0.95, 0.0)
+                camera.ortho_size = 1.18
+                camera.board_rotation = 0
+                camera.current_rotation = 0.0
+                turntable_state["yaw"] = 0.0
+                print("[Câmera] Posição e enquadramento resetados.")
+
         if key == glfw.KEY_LEFT_SHIFT:
             pan_state["shift_pressed"] = action != glfw.RELEASE
             if action == glfw.RELEASE and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
                 pan_state["active"] = False
 
         camera.handle_key(key, action)
+        return None
 
 
 
@@ -406,6 +545,11 @@ def main() -> None:
     ) -> None:
         """Controla o início e fim do pan com o botão central."""
         del mods
+        if chat_console.is_open:
+            if action == glfw.PRESS and button == glfw.MOUSE_BUTTON_LEFT:
+                cx, cy = window.get_cursor_pos()
+                chat_console.handle_mouse_click(cx, cy)
+            return
         
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
         is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(glfw.KEY_LEFT_SHIFT)) 
@@ -431,6 +575,8 @@ def main() -> None:
         y: float,
     ) -> None:
         """Move o ponto focal enquanto o botão central estiver pressionado."""
+        if chat_console.is_open:
+            return
         if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
             if not window.is_key_pressed(glfw.KEY_LEFT_SHIFT):
                 pan_state["active"] = False
@@ -459,6 +605,10 @@ def main() -> None:
         handle_camera_key
     )
 
+    window.add_char_callback(
+        chat_console.handle_char
+    )
+
     window.add_mouse_button_callback(
         handle_mouse_button
     )
@@ -472,26 +622,34 @@ def main() -> None:
     # ------------------------------------------------------------------
     shader.use()
 
-    shader.set_vec3(
-        "u_LightDir",
-        0.5,
-        1.0,
-        0.7,
-    )
+    if char_demo:
+        shader.set_vec3("u_LightDir", 0.5, 1.2, 0.8)
+        shader.set_vec3("u_LightColor", 0.70, 0.70, 0.70)
+        shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
+        gl.glClearColor(0.12, 0.13, 0.16, 1.0)
 
-    shader.set_vec3(
-        "u_LightColor",
-        0.9,
-        0.9,
-        0.9,
-    )
 
-    shader.set_vec3(
-        "u_AmbientColor",
-        0.35,
-        0.35,
-        0.35,
-    )
+    else:
+        shader.set_vec3(
+            "u_LightDir",
+            0.5,
+            1.0,
+            0.7,
+        )
+
+        shader.set_vec3(
+            "u_LightColor",
+            0.9,
+            0.9,
+            0.9,
+        )
+
+        shader.set_vec3(
+            "u_AmbientColor",
+            0.35,
+            0.35,
+            0.35,
+        )
 
     shader.set_bool(
         "u_UseInstancing",
@@ -502,9 +660,11 @@ def main() -> None:
     # 7. Game Loop de Renderização
     # ------------------------------------------------------------------
     title_update_timer = 0.25  # Atualiza imediatamente no primeiro frame
+    frame_index = 0
     while not window.should_close():
         dt = window.update_delta_time()
         camera.update(dt)
+        chat_console.update(dt)
 
         if terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
@@ -525,6 +685,9 @@ def main() -> None:
                 camera.target[0] += (player_token.position[0] - camera.target[0]) * min(dt * cam_speed, 1.0)
                 camera.target[2] += (player_token.position[2] - camera.target[2]) * min(dt * cam_speed, 1.0)
                 camera.target[1] += (player_token.position[1] - camera.target[1]) * min(dt * cam_speed, 1.0)
+        elif char_demo:
+            if turntable_state["active"]:
+                turntable_state["yaw"] = (turntable_state["yaw"] + dt * 45.0) % 360.0
         else:
             texture_timer += dt
             if texture_timer >= TEXTURE_CHANGE_INTERVAL:
@@ -554,11 +717,18 @@ def main() -> None:
                 )
             )
 
-            seed_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | " if terrain_demo else ""
+            if terrain_demo:
+                mode_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | "
+            elif char_demo:
+                spin_str = "Auto-spin: ON" if turntable_state["active"] else "Auto-spin: OFF"
+                mode_badge = f"👤 {char_customization.head_type_str.capitalize()} | {spin_str} | "
+            else:
+                mode_badge = ""
+
             window.set_title(
                 f"Isometricon {version_info.full_version} | "
                 f"{sync_badge} | "
-                f"{seed_badge}"
+                f"{mode_badge}"
                 f"{window.fps:.1f} FPS "
                 f"({dt * 1000:.1f}ms)"
             )
@@ -680,6 +850,11 @@ def main() -> None:
             gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
             shader.set_int("u_TextureAtlas", 0)
             player_token.draw(shader=shader, base_model=base_model)
+        elif char_demo:
+            # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
+            spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
+            char_base_model = model @ spin_mat
+            character_model.draw(shader, char_base_model)
         else:
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
@@ -687,6 +862,26 @@ def main() -> None:
             for mesh, transform in meshes:
                 shader.set_mat4("u_Model", model @ transform)
                 mesh.draw()
+
+        # --------------------------------------------------------------
+        # Renderizar interface 2D do Console de Chat (HUD estilo Minecraft)
+        # --------------------------------------------------------------
+        chat_console.render(window.width, window.height)
+
+        # --------------------------------------------------------------
+        # Captura de screenshot e limite de frames (para testes e automação)
+        # --------------------------------------------------------------
+        frame_index += 1
+        if max_frames is not None and frame_index >= max_frames:
+            if screenshot_path:
+                fb_w, fb_h = glfw.get_framebuffer_size(window._window)
+                gl.glFinish()
+                pixels = gl.glReadPixels(0, 0, fb_w, fb_h, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
+                img = Image.frombytes("RGBA", (fb_w, fb_h), pixels).transpose(Image.FLIP_TOP_BOTTOM)
+                os.makedirs(os.path.dirname(os.path.abspath(screenshot_path)), exist_ok=True)
+                img.save(screenshot_path)
+                print(f"[Screenshot] Frame capturado salvo em: {screenshot_path}")
+            break
 
         # --------------------------------------------------------------
         # Apresentar frame
@@ -698,12 +893,16 @@ def main() -> None:
     # ------------------------------------------------------------------
     gl.glDeleteTextures(1, [current_texture["id"]])
     gl.glDeleteTextures(1, [token_tex_id])
+    chat_console.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()
         world_manager.delete()
         player_token.delete()
         highlight_renderer.delete()
+    elif char_demo:
+        if character_model is not None:
+            character_model.delete()
     else:
         for mesh, _ in meshes:
             mesh.delete()

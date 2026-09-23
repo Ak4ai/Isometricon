@@ -29,11 +29,14 @@ void main()
     vec3 norm = normalize(v_Normal);
     vec3 lightDir = normalize(u_LightDir);
 
-    // Iluminação difusa (Lambert)
-    float diff = max(dot(norm, lightDir), 0.0);
+    // Iluminação difusa suave (Half-Lambert) para sombreamento orgânico estilo anime
+    float NdotL = dot(norm, lightDir);
+    float halfLambert = clamp(NdotL * 0.5 + 0.5, 0.0, 1.0);
+    float diff = halfLambert * halfLambert;
     vec3 diffuse = diff * u_LightColor;
 
     vec3 lighting = u_AmbientColor + diffuse;
+
     vec3 result = lighting * texColor.rgb * v_Color;
 
     FragColor = vec4(result, texColor.a);
