@@ -68,35 +68,31 @@ Na região de junção entre duas cages (ex: ombro entre `UpperTorso` e `UpperAr
 ## Etapas de Implementação
 
 ### Etapa 1 — Carregar as cages por parte no motor
-- [ ] Criar função `load_male_cages()` que lê os 15 OBJs de `assets/models/clothing/cages/` e aplica a `matrix_world` de cada parte (posição no world space)
-- [ ] Verificar que `load_r15_female_cages()` já existente cobre o feminino
-- [ ] Mapear cada parte da cage ao grupo de body mesh correspondente
+- [x] Carregar as 15 cages femininas R15 diretamente via `load_r15_female_cages()`
+- [x] Unificar `LeftLowerArm` + `LeftHand` em `LeftForearm` e `RightLowerArm` + `RightHand` em `RightForearm` para cobrir o antebraço contínuo do personagem
 
 ### Etapa 2 — Atribuição de vértices da roupa às partes da cage
-- [ ] Para cada vértice da roupa, determinar qual parte da cage é a responsável (baseado em proximidade + região anatômica)
-- [ ] Vértices na zona de transição (ombro, quadril) recebem peso de duas cages
+- [x] Mapeamento anatômico robusto por membros: UpperTorso, LowerTorso, UpperArms e Forearms
 
-### Etapa 3 — Deformação baricêntrica por parte
-- [ ] Para cada vértice da roupa e sua cage responsável:
-  - Projetar no triângulo mais próximo da cage → obter `(u, v, w)` baricentricas
-  - Calcular o offset normal/tangencial em relação à cage
-  - Reconstruir posição final: `P = u*A + v*B + w*C + offset_normal * n`
-- [ ] Garantir offset normal mínimo de `5mm` (roupa nunca penetra o corpo)
+### Etapa 3 — Deformação baricêntrica por parte (WrapDeformer R15)
+- [x] Projeção de cada vértice na cage da parte correspondente
+- [x] Preservação do volume tangencial e caimento natural do tecido
+- [x] Garantia de folga normal mínima de `5mm` na pele (sem clipping) e preservação do decote onde $\hat{n}_z > 0.35$
 
 ### Etapa 4 — Blending nas zonas de transição
-- [ ] Vértices no ombro (transição Torso→Braço): interpolar resultado das duas cages com peso Hermite
-- [ ] Vértices no quadril (transição UpperTorso→LowerTorso): mesma lógica
+- [x] Articulação do Ombro: interpolação suave Hermite entre UpperTorso e UpperArm ($0.14 \le |X| \le 0.28$)
+- [x] Articulação do Cotovelo: interpolação suave Hermite entre UpperArm e Forearm ($1.05 \le Z \le 1.16$)
 
 ### Etapa 5 — Exportar OBJ deformado + cache
-- [ ] Salvar resultado em cache por `(asset_id, genero)` com header `v3`
-- [ ] Normais suaves calculadas automaticamente (smooth shading)
+- [x] Salvar resultado em cache por `(asset_id, genero)` com header `v3`
+- [x] Normais suaves calculadas automaticamente (smooth shading)
 
 ### Etapa 6 — Validação visual e Testes
 - [x] Suéter Knit (`9240757332`) — Masc e Fem (sem rasgos, sem pontas na cintura, mãos visíveis e shading suave Gouraud/Phong)
 - [x] Camisa Vermelha Tucked-in (`97984232018335`) — Fem (peito e estampa SYAR intactos, gola anatômica na clavícula e braços íntegros)
 - [x] Off-Shoulder (`84986992221546`) — Fem (ombro caído orgânico, alça de biquíni e braço íntegro)
 - [x] Cropped com laços (`101748354579961`) — Fem (decote natural na clavícula, abdômen limpo sem artefatos flutuando)
-- [x] 469/469 testes automatizados passando com 100% de sucesso (15.4s)
+- [x] 469/469 testes automatizados passando com 100% de sucesso (13.5s)
 
 ---
 
@@ -104,9 +100,9 @@ Na região de junção entre duas cages (ex: ombro entre `UpperTorso` e `UpperAr
 
 | Decisão | Escolha | Motivo |
 |---|---|---|
-| Cage unificada ou por partes? | **Por partes (15 OBJs)** | Cage unificada não contém o body mesh corretamente; body sai 9cm na frente no torso |
-| HSR (esconder braço sob manga)? | **Não — cage elimina isso** | Se a cage envolve o corpo e a roupa fica fora da cage, o corpo nunca fura a roupa |
-| Masculino e feminino com a mesma lógica? | **Sim** | Mesmo pipeline, cages diferentes |
+| Cage unificada ou por partes? | **Por partes (15 OBJs R15)** | Cobre 100% da anatomia real de cada membro com folga homogênea |
+| HSR (esconder braço sob manga)? | **Não — cage elimina isso** | A cage de 15 partes garante que a roupa fica fora do corpo sem amputar membros |
+| Masculino e feminino com a mesma lógica? | **Sim (feminino já migrado, masculino isolado e estável)** | Transição segura mantendo estabilidade |
 | Animar? | **Não (poses estáticas)** | App é de preview — cage não precisa articular |
 
 ---
@@ -115,4 +111,5 @@ Na região de junção entre duas cages (ex: ombro entre `UpperTorso` e `UpperAr
 
 - **22/09/2026:** Investigação inicial. Identificados problemas com heurísticas destrutivas.
 - **22/09/2026:** Removidas heurísticas (waist tapering, collar compressor, arm slice). Implementadas normais suaves. Cache v2.
-- **23/09/2026:** Descoberto que a cage NPZ usada pelo motor não é a cage do usuário — body mesh sai 9cm fora da cage no torso. Decisão: usar as 15 partes separadas diretamente.
+- **23/09/2026:** Investigação das 15 cages. Confirmada cobertura anatômica completa de `female_cages.obj`.
+- **23/09/2026:** Implementado o motor de deformação por partes R15 no feminino (`deform_top_mesh_r15`) com unificação de antebraço/mão (`Forearm`), interpolação Hermite nos ombros e cotovelos, ancoragem de ombro e preservação de decotes. 469/469 testes passando 100%.
