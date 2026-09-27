@@ -8,7 +8,7 @@ import numpy as np
 from scripts.import_roblox_clothing import decode_roblox_mesh_to_obj
 from scripts.experimental_wrap_frames import affine_map
 from src.clothing.wrap_layer_fit import (
-    _cage_edge_stretch, _local_map, _match_reference_to_body_uv,
+    _cage_edge_stretch, _local_map, _match_outer_to_reference, _match_reference_to_body_uv,
     _signed_surface_volume, read_wrap_layer,
     retarget_garment_with_wrap_layer,
 )
@@ -118,3 +118,29 @@ def test_reference_uv_rejects_colliding_template_edits():
     import pytest
     with pytest.raises(ValueError, match="ambígua"):
         _match_reference_to_body_uv(reference, body)
+
+
+def _uv_grid(size=12):
+    uvs = np.array([(i / size, j / size) for j in range(size + 1) for i in range(size + 1)])
+    faces = []
+    for j in range(size):
+        for i in range(size):
+            a = j * (size + 1) + i
+            faces += [(a, a + 1, a + size + 2), (a, a + size + 2, a + size + 1)]
+    return uvs, np.array(faces)
+
+
+def test_outer_cage_pairing_resolves_edited_uvs_by_connectivity():
+    reference_uv, reference_faces = _uv_grid()
+    order = np.random.default_rng(3).permutation(len(reference_uv))
+    outer_uv = reference_uv[order].copy()
+    inverse = np.argsort(order)
+    outer_faces = inverse[reference_faces]
+    # Two interior outer UVs moved so each lands nearer the other's reference UV.
+    a, b = inverse[5 * 13 + 5], inverse[5 * 13 + 6]
+    outer_uv[a] += (0.12, 0.0)
+    outer_uv[b] -= (0.12, 0.0)
+
+    paired = _match_outer_to_reference(reference_uv, reference_faces, outer_uv, outer_faces)
+
+    np.testing.assert_array_equal(paired, inverse)
