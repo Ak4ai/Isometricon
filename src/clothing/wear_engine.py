@@ -750,23 +750,32 @@ class RobloxWearEngine:
                     elif sv[twin, 0] * fv[twin, 0] < 0:
                         fv[twin] = np.array([-fv[i, 0], fv[i, 1], fv[i, 2]])
 
-    def _fit_asset_wrap_layer(self, verts, meta):
+    def _fit_asset_wrap_layer(self, verts, meta, faces=None):
         """Use an asset's own cages when UVs and garment-to-cage distance validate."""
         if not self.is_female or not self.r15_female_cages or not meta.get("rbxm_path"):
             return None
         try:
             from .wrap_layer_fit import retarget_garment_with_wrap_layer
             cache = os.path.join(os.path.dirname(meta["obj_path"]), "wrap_cages")
-            result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache)
+            trace = {}
+            result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace)
             if (result[1]["median_source_distance"] > 0.05 or
                     result[1]["p99_source_distance"] > 0.2 or
                     result[1]["outer_edge_stretch_p99"] > 2.5):
                 raise ValueError("roupa distante demais da cage externa para encaixe estável")
-            print(f"[WrapLayer] Cages do asset aplicadas: {result[1]}")
-            return result
         except Exception as exc:  # Asset decoding must never stop the outfit pipeline.
             print(f"[WrapLayer] Usando encaixe anterior: {exc}")
             return None
+        if faces is not None:
+            try:
+                from .radial_prism_fit import fit_radial_prism
+                fitted, audit = fit_radial_prism(verts, faces, trace)
+                print(f"[WrapLayer] Cages do asset aplicadas (radial + prisma): {result[1]} {audit}")
+                return fitted, {**result[1], **audit, "method": "radial_prism"}
+            except Exception as exc:  # Keep the per-triangle fit if the prism fit cannot bind.
+                print(f"[WrapLayer] Radial + prisma indisponível, mantendo encaixe por triângulo: {exc}")
+        print(f"[WrapLayer] Cages do asset aplicadas: {result[1]}")
+        return result
 
     def _init_female_dual_cage(self):
         """Inicializa e pré-computa os aceleradores espaciais da Dual Cage R15 feminina bilateral."""
@@ -2255,7 +2264,7 @@ class RobloxWearEngine:
             sleeve_idx, torso_idx = self.analyze_topology(verts, faces)
             print(f"[*] Topologia: {len(sleeve_idx)} vértices manga, {len(torso_idx)} vértices torso.")
 
-            wrap_result = self._fit_asset_wrap_layer(verts, meta)
+            wrap_result = self._fit_asset_wrap_layer(verts, meta, faces)
 
             if wrap_result is not None:
                 deformed_verts = wrap_result[0]
@@ -2375,7 +2384,7 @@ class RobloxWearEngine:
 
             arm_hsr = None
         else:
-            wrap_result = self._fit_asset_wrap_layer(verts, meta)
+            wrap_result = self._fit_asset_wrap_layer(verts, meta, faces)
             if wrap_result is not None:
                 deformed_verts = wrap_result[0]
                 used_asset_wrap = True
@@ -2464,7 +2473,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v8: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v9: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:
