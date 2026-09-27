@@ -1009,10 +1009,10 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v12" in line:
+                if "Universal Fitted Clothing v13" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)):
-                    return False  # Regenerate fits made before loose hanging pieces were anchored.
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)):
+                    return False  # Regenerate fits made while WrapLayer garments were X-mirrored.
         return False
     except Exception:
         return False

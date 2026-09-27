@@ -2468,8 +2468,9 @@ class RobloxWearEngine:
                         with open(ab_obj_path, "w", encoding="utf-8") as f:
                             f.write("# Forearm hidden\n")
 
-        if self.is_female and (meta.get("is_top", False) or used_asset_wrap):
-            # Inverte X no final para leitura frontal correta de logos/texturas, invertendo winding para preservar normais externas
+        if self.is_female and meta.get("is_top", False) and not used_asset_wrap:
+            # Inverte X no final para leitura frontal correta de logos/texturas, invertendo winding para preservar normais externas.
+            # Só no encaixe antigo: o WrapLayer já sai na orientação do corpo (confere com o Roblox) e espelhá-lo invertia os textos.
             deformed_verts[:, 0] = -deformed_verts[:, 0]
             faces = [list(f)[::-1] for f in faces]
             if face_uvs is not None and len(face_uvs) > 0:
@@ -2493,7 +2494,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v12: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v13: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:
