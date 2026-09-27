@@ -1009,10 +1009,10 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v3" in line:
+                if "Universal Fitted Clothing v8" in line:
                     return True
-                if "Universal Fitted Clothing v2" in line:
-                    return False  # v2 é obsoleto — força regeneração com pipeline R15
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7)):
+                    return False  # Regenerate fits made before the LOD0-only mesh import.
         return False
     except Exception:
         return False
@@ -1101,7 +1101,7 @@ class CharacterModel:
         if head_z_offset is not None:
             self.head_z_offset: float = float(head_z_offset)
         else:
-            self.head_z_offset: float = -0.040 if self.customization.is_female else 0.0
+            self.head_z_offset: float = 0.0
 
         # Ajustes de posição e escala manual do cabelo (+/- em metros e fator multiplicador)
         self.hair_offset_x: float = float(hair_offset_x) if hair_offset_x is not None else float(getattr(self.customization, "hair_offset_x", 0.0))
@@ -1256,8 +1256,8 @@ class CharacterModel:
         self.reload()
 
     def reset_head_z_offset(self) -> None:
-        """Restaura o alinhamento postural da cabeça para o padrão (-4.0cm no feminino, 0.0 no masculino)."""
-        self.head_z_offset = -0.040 if self.customization.is_female else 0.0
+        """Restaura o alinhamento postural da cabeça para o padrão (0.0)."""
+        self.head_z_offset = 0.0
         self.reload()
 
     def set_hair_offset(
@@ -1363,7 +1363,7 @@ class CharacterModel:
 
         is_fem = self.customization.is_female
         arm_suffix = "_female.obj" if is_fem else ".obj"
-        clean_file = "character_female_clean.obj" if is_fem else "character_clean.obj"
+        clean_file = "character_female_clean_apose_stage2.obj" if (is_fem and os.path.exists(os.path.join(MODELS_DIR, "character_female_clean_apose_stage2.obj"))) else ("character_female_clean_apose.obj" if is_fem else "character_clean.obj")
         clean_path = os.path.join(MODELS_DIR, clean_file)
         side_map = {"left": "esquerdo", "right": "direito"}
 
@@ -1392,6 +1392,9 @@ class CharacterModel:
                 ab_data = parse_clean_obj_groups(clean_path, [f"Export_antebraco_{pt_side}"], default_color=skin_color)
                 if ab_data:
                     parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(ab_data[0], ab_data[1]), self.white_tex_id))
+                hand_data = parse_clean_obj_groups(clean_path, [f"Export_mao_{pt_side}"], default_color=skin_color)
+                if hand_data:
+                    parts.append(CharacterPart(f"hand_{side}", TexturedMesh(hand_data[0], hand_data[1]), self.white_tex_id))
             return parts
 
         # 2. Resolução Adaptativa Universal por lado (left e right independentes)
@@ -1413,7 +1416,7 @@ class CharacterModel:
             # Identificação anatômica estrita de vértices da manga (não confunde a barra da cintura com manga)
             side_pts = [
                 p for p in top_pts
-                if (p[0] * side_mult) > (0.24 if p[2] < 1.10 else 0.18) and p[2] < 1.45
+                if (p[0] * side_mult) > (0.28 if p[2] < 1.10 else 0.20) and p[2] < 1.45
             ]
             min_z = min(p[2] for p in side_pts) if side_pts else 2.0
             side_shoulder_pts = [p for p in top_pts if (p[0] * side_mult) > 0.18 and p[2] > 1.35]
@@ -1421,26 +1424,22 @@ class CharacterModel:
             side_long = (min_z <= 0.76) and not side_sleeveless
             side_short = not side_sleeveless and not side_long
 
-            # Resolução anatômica estrita:
-            # 1. Manga longa cobre integralmente o braço superior (HSR completo)
-            # 2. Sem manga (regata/top): braço 100% visível
-            # 3. Manga curta: oculta se a manga cobrir até o cotovelo (min_z <= 1.15m) e cobrir o ombro
-            if side_long:
-                upper_arm_visible = False
-            elif side_sleeveless:
-                upper_arm_visible = True
+            # Resolução anatômica com HSR adaptativo por comprimento de manga
+            if is_fem:
+                upper_arm_visible = not side_long
+                forearm_visible = not side_long
+                hand_visible = True
             else:
-                has_bare_shoulder = len(side_shoulder_pts) < 15
-                upper_arm_visible = has_bare_shoulder or (min_z > 1.15)
-            if upper_arm_visible:
-                def make_side_arm_tf(is_bare):
-                    def side_arm_tf(raw_v):
-                        tf_v = transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
-                        if not is_bare:
-                            tf_v = transform_arm_vertices(tf_v, width_scale=0.88, length_scale=1.0)
-                        return tf_v
-                    return side_arm_tf
+                upper_arm_visible = True
+                forearm_visible = True
+                hand_visible = False
 
+            def make_side_arm_tf(is_bare):
+                def side_arm_tf(raw_v):
+                    return transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
+                return side_arm_tf
+
+            if upper_arm_visible:
                 arm_data = parse_clean_obj_groups(
                     clean_path,
                     [f"Export_braco_superior_{pt_side}"],
@@ -1450,37 +1449,30 @@ class CharacterModel:
                 if arm_data:
                     parts.append(CharacterPart(f"arm_{side}", TexturedMesh(arm_data[0], arm_data[1]), self.white_tex_id))
 
-            # Antebraço / Mão
-            ab_data = parse_clean_obj_groups(clean_path, [f"Export_antebraco_{pt_side}"], default_color=skin_color)
-            if ab_data:
-                v_arr, i_arr = ab_data
-                if side_sleeveless or side_short:
+            # Antebraço (visível em sem manga ou manga curta)
+            if forearm_visible:
+                ab_data = parse_clean_obj_groups(
+                    clean_path,
+                    [f"Export_antebraco_{pt_side}"],
+                    default_color=skin_color,
+                    vertex_transform=make_side_arm_tf(side_sleeveless)
+                )
+                if ab_data:
+                    v_arr, i_arr = ab_data
                     parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(v_arr, i_arr), self.white_tex_id))
-                else:
-                    # Manga longa: fatia o antebraço logo acima da barra da manga
-                    v_mat = v_arr.reshape(-1, 11)
-                    pos = v_mat[:, :3]
-                    world_pts = np.column_stack([pos[:, 0], -pos[:, 2], pos[:, 1]])
-                    faces = i_arr.reshape(-1, 3)
-                    cut_z = min(max(min_z + 0.025, 0.720), 1.050)
-                    s_ab_v, s_ab_f = slice_mesh_below_z(world_pts, faces, cut_z)
 
-                    ring = [p for p in side_pts if p[2] < min_z + 0.040]
-                    if ring and len(s_ab_v) > 0:
-                        cx = (min(p[0] for p in ring) + max(p[0] for p in ring)) / 2.0
-                        cy = (min(p[1] for p in ring) + max(p[1] for p in ring)) / 2.0
-                        cur_hx = float((s_ab_v[:, 0].min() + s_ab_v[:, 0].max()) / 2.0)
-                        cur_hy = float((s_ab_v[:, 1].min() + s_ab_v[:, 1].max()) / 2.0)
-                        s_ab_v[:, 0] += (cx - cur_hx)
-                        s_ab_v[:, 1] += (cy - cur_hy)
-                    if len(s_ab_v) > 0:
-                        min_hand_z = float(np.min(s_ab_v[:, 2]))
-                        bot_mask = s_ab_v[:, 2] < min_hand_z + 0.030
-                        if np.any(bot_mask):
-                            s_ab_v[bot_mask, 2] = min_hand_z
-                    gl_v, gl_i = arm_mesh_to_gl(s_ab_v, s_ab_f, skin_color)
-                    if len(gl_v) > 0 and len(gl_i) > 0:
-                        parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(gl_v, gl_i), self.white_tex_id))
+            # Mão (separada no modelo feminino A-pose, com gênero gramatical correto: esquerda/direita)
+            if hand_visible:
+                hand_side = "esquerda" if side == "left" else "direita"
+                hand_data = parse_clean_obj_groups(
+                    clean_path,
+                    [f"Export_mao_{hand_side}", f"Export_mao_{pt_side}"],
+                    default_color=skin_color,
+                    vertex_transform=make_side_arm_tf(side_sleeveless)
+                )
+                if hand_data:
+                    v_h, i_h = hand_data
+                    parts.append(CharacterPart(f"hand_{side}", TexturedMesh(v_h, i_h), self.white_tex_id))
         return parts
 
     def _load_trunk_skin(
@@ -1607,7 +1599,7 @@ class CharacterModel:
         self.textures.append(self.white_tex_id)
 
         is_fem = self.customization.is_female
-        clean_filename = "character_female_clean.obj" if is_fem else "character_clean.obj"
+        clean_filename = "character_female_clean_apose_stage2.obj" if (is_fem and os.path.exists(os.path.join(MODELS_DIR, "character_female_clean_apose_stage2.obj"))) else ("character_female_clean_apose.obj" if is_fem else "character_clean.obj")
         clean_obj = os.path.join(MODELS_DIR, clean_filename)
         skin_color = list(self.customization.skin_color_rgb)
 
@@ -1645,8 +1637,8 @@ class CharacterModel:
             pivot_x = 0.0
             pivot_y = 1.70
             pivot_z = 0.0
-            fem_dy = -0.0138 if is_fem else 0.0
-            fem_dz = (0.0569 + self.head_z_offset) if is_fem else 0.0
+            fem_dy = 0.0
+            fem_dz = self.head_z_offset if is_fem else 0.0
 
             sx = self.hair_scale_x
             sy = self.hair_scale_y
@@ -1831,7 +1823,7 @@ class CharacterModel:
             if _top_verts:
                 _v_arr = np.array(_top_verts)
                 _collar_v = len(_v_arr[(_v_arr[:, 2] > 1.40) & (abs(_v_arr[:, 0]) < 0.12)])
-                is_open_top = is_bikini_name or is_crop_name or (_collar_v < 15)
+                is_open_top = is_bikini_name or (_collar_v < 15)
 
             if _hem_zs:
                 _front_zs = [_p[2] for _p in _top_verts if abs(_p[0]) < 0.15 and _p[1] < 0 and _p[2] > 0.50]
@@ -1940,7 +1932,9 @@ class CharacterModel:
         try:
             from src.rendering.mesh import TexturedMesh
             if is_fem:
-                female_cages_path = os.path.join(MODELS_DIR, "clothing", "female_cages.obj")
+                female_cages_path_stage2 = os.path.join(MODELS_DIR, "female_cages_apose_stage2.obj")
+                female_cages_path_old = os.path.join(MODELS_DIR, "clothing", "female_cages_apose.obj")
+                female_cages_path = female_cages_path_stage2 if os.path.exists(female_cages_path_stage2) else female_cages_path_old
                 if os.path.exists(female_cages_path):
                     v_arr = []
                     i_arr = []

@@ -1,0 +1,38 @@
+{
+  "asset": "Black_Distressed_Designer_Jeans_w__Boots_109837605892174.obj",
+  "mesh_vertices": 2701,
+  "foot_bound_vertices": 478,
+  "foot_bound_fraction": 0.1769714920399852,
+  "foot_bound_source_y_range": [
+    -2.743761420249939,
+    -2.302416443824768
+  ],
+  "foot_bound_target_z_range": [
+    -0.15609630942344666,
+    0.1434202939271927
+  ],
+  "foot_bound_faces_fraction": 0.18375532714966156,
+  "alternate_distance_p50_m": 0.27224597507400733,
+  "alternate_distance_p99_m": 0.4642725749194159,
+  "change_p50_m": 0.15578154613279796,
+  "change_p99_m": 0.33051103226520834,
+  "edge_metrics_baseline": {
+    "over_3x": 33,
+    "over_5x": 9,
+    "max_length_m": 0.3606964877075819
+  },
+  "edge_metrics_without_foot": {
+    "over_3x": 30,
+    "over_5x": 11,
+    "max_length_m": 0.33295264848021616
+  },
+  "bindings_by_part": {
+    "LeftFoot": 238,
+    "LeftLowerLeg": 304,
+    "LeftUpperLeg": 364,
+    "LowerTorso": 893,
+    "RightUpperLeg": 418,
+    "RightFoot": 240,
+    "RightLowerLeg": 244
+  }
+}

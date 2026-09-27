@@ -1,0 +1,470 @@
+{
+  "vestido": {
+    "alinhamento_stud": 1.7e-05,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 11.9,
+    "runtime atual": {
+      "mediana_cm": 1.19,
+      "acima_5cm_pct": 14.6,
+      "arestas_3x": 231,
+      "manga: acima_5cm_pct": 13.6,
+      "manga: global_cm": 9.96,
+      "terco inferior: acima_5cm_pct": 53.1,
+      "terco inferior: global_cm": 9.48,
+      "tronco/resto: acima_5cm_pct": 5.5,
+      "tronco/resto: global_cm": 6.42
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 1.19,
+      "acima_5cm_pct": 7.0,
+      "arestas_3x": 42,
+      "manga: acima_5cm_pct": 1.4,
+      "manga: global_cm": 9.6,
+      "terco inferior: acima_5cm_pct": 39.6,
+      "terco inferior: global_cm": 9.34,
+      "tronco/resto: acima_5cm_pct": 0.4,
+      "tronco/resto: global_cm": 6.28
+    },
+    "global (so global)": {
+      "mediana_cm": 1.22,
+      "acima_5cm_pct": 3.3,
+      "arestas_3x": 41,
+      "manga: acima_5cm_pct": 1.8,
+      "manga: global_cm": 9.5,
+      "terco inferior: acima_5cm_pct": 14.3,
+      "terco inferior: global_cm": 7.3,
+      "tronco/resto: acima_5cm_pct": 0.9,
+      "tronco/resto: global_cm": 6.21
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 1.03,
+      "acima_5cm_pct": 3.1,
+      "arestas_3x": 38,
+      "manga: acima_5cm_pct": 0.5,
+      "manga: global_cm": 9.56,
+      "terco inferior: acima_5cm_pct": 14.7,
+      "terco inferior: global_cm": 7.52,
+      "tronco/resto: acima_5cm_pct": 0.8,
+      "tronco/resto: global_cm": 6.25
+    }
+  },
+  "jeans com bota": {
+    "alinhamento_stud": 1.4e-05,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 17.1,
+    "runtime atual": {
+      "mediana_cm": 2.26,
+      "acima_5cm_pct": 15.3,
+      "arestas_3x": 238,
+      "terco inferior: acima_5cm_pct": 18.4,
+      "terco inferior: global_cm": 13.77,
+      "tronco/resto: acima_5cm_pct": 14.2,
+      "tronco/resto: global_cm": 8.65
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 1.87,
+      "acima_5cm_pct": 6.7,
+      "arestas_3x": 17,
+      "terco inferior: acima_5cm_pct": 11.2,
+      "terco inferior: global_cm": 12.96,
+      "tronco/resto: acima_5cm_pct": 5.1,
+      "tronco/resto: global_cm": 7.93
+    },
+    "global (so global)": {
+      "mediana_cm": 1.43,
+      "acima_5cm_pct": 7.5,
+      "arestas_3x": 26,
+      "terco inferior: acima_5cm_pct": 7.5,
+      "terco inferior: global_cm": 14.5,
+      "tronco/resto: acima_5cm_pct": 7.5,
+      "tronco/resto: global_cm": 8.85
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 1.43,
+      "acima_5cm_pct": 6.3,
+      "arestas_3x": 22,
+      "terco inferior: acima_5cm_pct": 6.5,
+      "terco inferior: global_cm": 14.12,
+      "tronco/resto: acima_5cm_pct": 6.2,
+      "tronco/resto: global_cm": 8.49
+    }
+  },
+  "camisa social": {
+    "alinhamento_stud": 0.000922,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 23.4,
+    "runtime atual": {
+      "mediana_cm": 1.76,
+      "acima_5cm_pct": 5.3,
+      "arestas_3x": 106,
+      "manga: acima_5cm_pct": 3.4,
+      "manga: global_cm": 8.82,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 6.09,
+      "tronco/resto: acima_5cm_pct": 8.6,
+      "tronco/resto: global_cm": 6.46
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 1.38,
+      "acima_5cm_pct": 0.6,
+      "arestas_3x": 21,
+      "manga: acima_5cm_pct": 0.8,
+      "manga: global_cm": 8.72,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 5.95,
+      "tronco/resto: acima_5cm_pct": 0.7,
+      "tronco/resto: global_cm": 6.04
+    },
+    "global (so global)": {
+      "mediana_cm": 1.02,
+      "acima_5cm_pct": 0.3,
+      "arestas_3x": 32,
+      "manga: acima_5cm_pct": 0.2,
+      "manga: global_cm": 8.91,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 6.0,
+      "tronco/resto: acima_5cm_pct": 0.5,
+      "tronco/resto: global_cm": 6.1
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 1.03,
+      "acima_5cm_pct": 0.2,
+      "arestas_3x": 18,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 8.76,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 5.97,
+      "tronco/resto: acima_5cm_pct": 0.3,
+      "tronco/resto: global_cm": 6.08
+    }
+  },
+  "jaqueta bomber": {
+    "alinhamento_stud": 0.000827,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 15.4,
+    "runtime atual": {
+      "mediana_cm": 1.94,
+      "acima_5cm_pct": 7.1,
+      "arestas_3x": 43,
+      "manga: acima_5cm_pct": 7.6,
+      "manga: global_cm": 16.06,
+      "terco inferior: acima_5cm_pct": 6.2,
+      "terco inferior: global_cm": 13.51,
+      "tronco/resto: acima_5cm_pct": 8.4,
+      "tronco/resto: global_cm": 8.43
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 2.02,
+      "acima_5cm_pct": 10.2,
+      "arestas_3x": 43,
+      "manga: acima_5cm_pct": 23.8,
+      "manga: global_cm": 15.07,
+      "terco inferior: acima_5cm_pct": 6.1,
+      "terco inferior: global_cm": 13.59,
+      "tronco/resto: acima_5cm_pct": 10.0,
+      "tronco/resto: global_cm": 8.22
+    },
+    "global (so global)": {
+      "mediana_cm": 1.69,
+      "acima_5cm_pct": 6.3,
+      "arestas_3x": 34,
+      "manga: acima_5cm_pct": 5.7,
+      "manga: global_cm": 16.38,
+      "terco inferior: acima_5cm_pct": 4.1,
+      "terco inferior: global_cm": 14.05,
+      "tronco/resto: acima_5cm_pct": 10.1,
+      "tronco/resto: global_cm": 8.56
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 1.57,
+      "acima_5cm_pct": 5.1,
+      "arestas_3x": 31,
+      "manga: acima_5cm_pct": 6.0,
+      "manga: global_cm": 15.92,
+      "terco inferior: acima_5cm_pct": 3.1,
+      "terco inferior: global_cm": 13.88,
+      "tronco/resto: acima_5cm_pct": 7.7,
+      "tronco/resto: global_cm": 8.43
+    }
+  },
+  "sueter oversized": {
+    "alinhamento_stud": 0.000929,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 10.8,
+    "runtime atual": {
+      "mediana_cm": 19.78,
+      "acima_5cm_pct": 98.9,
+      "arestas_3x": 456,
+      "manga: acima_5cm_pct": 100.0,
+      "manga: global_cm": 27.26,
+      "terco inferior: acima_5cm_pct": 97.2,
+      "terco inferior: global_cm": 19.82,
+      "tronco/resto: acima_5cm_pct": 100.0,
+      "tronco/resto: global_cm": 11.95
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 16.77,
+      "acima_5cm_pct": 99.9,
+      "arestas_3x": 83,
+      "manga: acima_5cm_pct": 100.0,
+      "manga: global_cm": 15.84,
+      "terco inferior: acima_5cm_pct": 99.9,
+      "terco inferior: global_cm": 13.51,
+      "tronco/resto: acima_5cm_pct": 100.0,
+      "tronco/resto: global_cm": 7.41
+    },
+    "global (so global)": {
+      "mediana_cm": 18.56,
+      "acima_5cm_pct": 100.0,
+      "arestas_3x": 93,
+      "manga: acima_5cm_pct": 100.0,
+      "manga: global_cm": 18.7,
+      "terco inferior: acima_5cm_pct": 100.0,
+      "terco inferior: global_cm": 13.89,
+      "tronco/resto: acima_5cm_pct": 100.0,
+      "tronco/resto: global_cm": 8.83
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 18.41,
+      "acima_5cm_pct": 100.0,
+      "arestas_3x": 93,
+      "manga: acima_5cm_pct": 100.0,
+      "manga: global_cm": 18.61,
+      "terco inferior: acima_5cm_pct": 100.0,
+      "terco inferior: global_cm": 13.75,
+      "tronco/resto: acima_5cm_pct": 100.0,
+      "tronco/resto: global_cm": 8.78
+    }
+  },
+  "saia-short": {
+    "alinhamento_stud": 1.3e-05,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 17.2,
+    "runtime atual": {
+      "mediana_cm": 2.99,
+      "acima_5cm_pct": 22.3,
+      "arestas_3x": 221,
+      "terco inferior: acima_5cm_pct": 73.7,
+      "terco inferior: global_cm": 7.67,
+      "tronco/resto: acima_5cm_pct": 17.5,
+      "tronco/resto: global_cm": 4.24
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 1.41,
+      "acima_5cm_pct": 9.1,
+      "arestas_3x": 145,
+      "terco inferior: acima_5cm_pct": 89.6,
+      "terco inferior: global_cm": 7.85,
+      "tronco/resto: acima_5cm_pct": 1.6,
+      "tronco/resto: global_cm": 4.07
+    },
+    "global (so global)": {
+      "mediana_cm": 1.6,
+      "acima_5cm_pct": 10.1,
+      "arestas_3x": 113,
+      "terco inferior: acima_5cm_pct": 80.0,
+      "terco inferior: global_cm": 7.51,
+      "tronco/resto: acima_5cm_pct": 3.6,
+      "tronco/resto: global_cm": 3.82
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 1.31,
+      "acima_5cm_pct": 9.2,
+      "arestas_3x": 161,
+      "terco inferior: acima_5cm_pct": 82.2,
+      "terco inferior: global_cm": 7.56,
+      "tronco/resto: acima_5cm_pct": 2.5,
+      "tronco/resto: global_cm": 3.88
+    }
+  },
+  "calca skater": {
+    "alinhamento_stud": 1.3e-05,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 14.4,
+    "runtime atual": {
+      "mediana_cm": 2.4,
+      "acima_5cm_pct": 18.6,
+      "arestas_3x": 80,
+      "terco inferior: acima_5cm_pct": 33.7,
+      "terco inferior: global_cm": 12.74,
+      "tronco/resto: acima_5cm_pct": 11.9,
+      "tronco/resto: global_cm": 8.09
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 2.44,
+      "acima_5cm_pct": 14.2,
+      "arestas_3x": 16,
+      "terco inferior: acima_5cm_pct": 31.3,
+      "terco inferior: global_cm": 12.25,
+      "tronco/resto: acima_5cm_pct": 6.6,
+      "tronco/resto: global_cm": 8.22
+    },
+    "global (so global)": {
+      "mediana_cm": 3.29,
+      "acima_5cm_pct": 37.0,
+      "arestas_3x": 35,
+      "terco inferior: acima_5cm_pct": 48.5,
+      "terco inferior: global_cm": 13.99,
+      "tronco/resto: acima_5cm_pct": 31.9,
+      "tronco/resto: global_cm": 8.98
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 2.82,
+      "acima_5cm_pct": 32.2,
+      "arestas_3x": 33,
+      "terco inferior: acima_5cm_pct": 40.2,
+      "terco inferior: global_cm": 13.74,
+      "tronco/resto: acima_5cm_pct": 28.6,
+      "tronco/resto: global_cm": 8.82
+    }
+  },
+  "calca cargo": {
+    "alinhamento_stud": 1.4e-05,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 11.0,
+    "runtime atual": {
+      "mediana_cm": 1.68,
+      "acima_5cm_pct": 12.2,
+      "arestas_3x": 66,
+      "terco inferior: acima_5cm_pct": 30.2,
+      "terco inferior: global_cm": 12.67,
+      "tronco/resto: acima_5cm_pct": 6.9,
+      "tronco/resto: global_cm": 7.33
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 1.52,
+      "acima_5cm_pct": 9.6,
+      "arestas_3x": 20,
+      "terco inferior: acima_5cm_pct": 31.6,
+      "terco inferior: global_cm": 13.01,
+      "tronco/resto: acima_5cm_pct": 3.1,
+      "tronco/resto: global_cm": 7.67
+    },
+    "global (so global)": {
+      "mediana_cm": 1.71,
+      "acima_5cm_pct": 11.4,
+      "arestas_3x": 29,
+      "terco inferior: acima_5cm_pct": 27.8,
+      "terco inferior: global_cm": 13.78,
+      "tronco/resto: acima_5cm_pct": 6.6,
+      "tronco/resto: global_cm": 8.16
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 1.5,
+      "acima_5cm_pct": 9.8,
+      "arestas_3x": 26,
+      "terco inferior: acima_5cm_pct": 25.6,
+      "terco inferior: global_cm": 13.55,
+      "tronco/resto: acima_5cm_pct": 5.1,
+      "tronco/resto: global_cm": 7.96
+    }
+  },
+  "regata": {
+    "alinhamento_stud": 1.3e-05,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 20.0,
+    "runtime atual": {
+      "mediana_cm": 0.46,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 1,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 4.86,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 5.41,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 5.39
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 0.41,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 0,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 4.86,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 5.47,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 5.46
+    },
+    "global (so global)": {
+      "mediana_cm": 0.39,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 0,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 4.9,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 5.43,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 5.4
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 0.4,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 0,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 4.86,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 5.47,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 5.45
+    }
+  },
+  "biquini": {
+    "alinhamento_stud": 4e-06,
+    "lods_extras_no_nosso_obj": 0,
+    "topologia_igual": true,
+    "Roblox dentro do corpo %": 7.6,
+    "runtime atual": {
+      "mediana_cm": 0.35,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 10,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 6.08,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 4.2,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 6.55
+    },
+    "radial 1x (so local)": {
+      "mediana_cm": 0.32,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 0,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 6.12,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 4.26,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 6.59
+    },
+    "global (so global)": {
+      "mediana_cm": 0.25,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 0,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 6.06,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 4.18,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 6.58
+    },
+    "radial<->global por combined": {
+      "mediana_cm": 0.31,
+      "acima_5cm_pct": 0.0,
+      "arestas_3x": 0,
+      "manga: acima_5cm_pct": 0.0,
+      "manga: global_cm": 6.11,
+      "terco inferior: acima_5cm_pct": 0.0,
+      "terco inferior: global_cm": 4.24,
+      "tronco/resto: acima_5cm_pct": 0.0,
+      "tronco/resto: global_cm": 6.59
+    }
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "vestido": {
+    "runtime atual": {
+      "median_cm": 1.19,
+      "p90_cm": 5.78,
+      "over_5cm_pct": 14.6,
+      "hem_median_cm": 5.11,
+      "hem_over_5cm_pct": 53.1,
+      "edges_over_3x": 231
+    },
+    "radial + prisma": {
+      "median_cm": 1.19,
+      "p90_cm": 4.38,
+      "over_5cm_pct": 7.0,
+      "hem_median_cm": 4.55,
+      "hem_over_5cm_pct": 39.6,
+      "edges_over_3x": 42
+    },
+    "cage global": {
+      "median_cm": 1.51,
+      "p90_cm": 4.54,
+      "over_5cm_pct": 7.9,
+      "hem_median_cm": 3.12,
+      "hem_over_5cm_pct": 19.9,
+      "edges_over_3x": 184
+    },
+    "cage adaptativa": {
+      "median_cm": 1.01,
+      "p90_cm": 4.39,
+      "over_5cm_pct": 7.6,
+      "hem_median_cm": 3.26,
+      "hem_over_5cm_pct": 20.1,
+      "edges_over_3x": 154
+    },
+    "cage global + prisma": {
+      "median_cm": 1.22,
+      "p90_cm": 3.38,
+      "over_5cm_pct": 3.3,
+      "hem_median_cm": 2.82,
+      "hem_over_5cm_pct": 14.3,
+      "edges_over_3x": 41
+    },
+    "vinculo na cage interna": {
+      "median_cm": 1.38,
+      "p90_cm": 5.73,
+      "over_5cm_pct": 11.6,
+      "hem_median_cm": 6.38,
+      "hem_over_5cm_pct": 61.2,
+      "edges_over_3x": 133
+    },
+    "referencia refinada L0": {
+      "median_cm": 33.68,
+      "p90_cm": 35.55,
+      "over_5cm_pct": 100.0,
+      "hem_median_cm": 26.79,
+      "hem_over_5cm_pct": 100.0,
+      "edges_over_3x": 30
+    },
+    "referencia refinada L2": {
+      "median_cm": 33.67,
+      "p90_cm": 35.54,
+      "over_5cm_pct": 100.0,
+      "hem_median_cm": 26.77,
+      "hem_over_5cm_pct": 100.0,
+      "edges_over_3x": 30
+    }
+  },
+  "jeans": {
+    "runtime atual": {
+      "median_cm": 2.26,
+      "p90_cm": 6.0,
+      "over_5cm_pct": 15.3,
+      "hem_median_cm": 3.21,
+      "hem_over_5cm_pct": 18.4,
+      "edges_over_3x": 238
+    },
+    "radial + prisma": {
+      "median_cm": 1.87,
+      "p90_cm": 4.36,
+      "over_5cm_pct": 6.7,
+      "hem_median_cm": 2.59,
+      "hem_over_5cm_pct": 11.2,
+      "edges_over_3x": 17
+    },
+    "cage global": {
+      "median_cm": 2.5,
+      "p90_cm": 5.72,
+      "over_5cm_pct": 15.7,
+      "hem_median_cm": 2.95,
+      "hem_over_5cm_pct": 18.1,
+      "edges_over_3x": 126
+    },
+    "cage adaptativa": {
+      "median_cm": 2.1,
+      "p90_cm": 5.29,
+      "over_5cm_pct": 12.4,
+      "hem_median_cm": 2.67,
+      "hem_over_5cm_pct": 14.7,
+      "edges_over_3x": 114
+    },
+    "cage global + prisma": {
+      "median_cm": 1.43,
+      "p90_cm": 4.44,
+      "over_5cm_pct": 7.5,
+      "hem_median_cm": 1.99,
+      "hem_over_5cm_pct": 7.5,
+      "edges_over_3x": 26
+    },
+    "vinculo na cage interna": {
+      "median_cm": 2.35,
+      "p90_cm": 7.03,
+      "over_5cm_pct": 21.3,
+      "hem_median_cm": 3.67,
+      "hem_over_5cm_pct": 34.0,
+      "edges_over_3x": 262
+    },
+    "referencia refinada L0": {
+      "median_cm": 23.82,
+      "p90_cm": 31.42,
+      "over_5cm_pct": 100.0,
+      "hem_median_cm": 30.84,
+      "hem_over_5cm_pct": 100.0,
+      "edges_over_3x": 66
+    },
+    "referencia refinada L2": {
+      "median_cm": 23.82,
+      "p90_cm": 31.41,
+      "over_5cm_pct": 100.0,
+      "hem_median_cm": 30.83,
+      "hem_over_5cm_pct": 100.0,
+      "edges_over_3x": 69
+    }
+  },
+  "camisa": {
+    "runtime atual": {
+      "median_cm": 1.76,
+      "p90_cm": 3.88,
+      "over_5cm_pct": 5.3,
+      "hem_median_cm": 1.58,
+      "hem_over_5cm_pct": 0.0,
+      "edges_over_3x": 106
+    },
+    "radial + prisma": {
+      "median_cm": 1.38,
+      "p90_cm": 2.86,
+      "over_5cm_pct": 0.6,
+      "hem_median_cm": 1.21,
+      "hem_over_5cm_pct": 0.0,
+      "edges_over_3x": 21
+    },
+    "cage global": {
+      "median_cm": 1.9,
+      "p90_cm": 4.75,
+      "over_5cm_pct": 8.6,
+      "hem_median_cm": 1.76,
+      "hem_over_5cm_pct": 1.5,
+      "edges_over_3x": 148
+    },
+    "cage adaptativa": {
+      "median_cm": 1.63,
+      "p90_cm": 4.15,
+      "over_5cm_pct": 6.7,
+      "hem_median_cm": 1.31,
+      "hem_over_5cm_pct": 0.0,
+      "edges_over_3x": 103
+    },
+    "cage global + prisma": {
+      "median_cm": 1.02,
+      "p90_cm": 2.74,
+      "over_5cm_pct": 0.3,
+      "hem_median_cm": 0.82,
+      "hem_over_5cm_pct": 0.0,
+      "edges_over_3x": 32
+    },
+    "vinculo na cage interna": {
+      "median_cm": 1.59,
+      "p90_cm": 3.64,
+      "over_5cm_pct": 2.4,
+      "hem_median_cm": 1.35,
+      "hem_over_5cm_pct": 0.0,
+      "edges_over_3x": 120
+    },
+    "referencia refinada L0": {
+      "median_cm": 37.63,
+      "p90_cm": 42.21,
+      "over_5cm_pct": 100.0,
+      "hem_median_cm": 34.66,
+      "hem_over_5cm_pct": 100.0,
+      "edges_over_3x": 19
+    },
+    "referencia refinada L2": {
+      "median_cm": 37.63,
+      "p90_cm": 42.2,
+      "over_5cm_pct": 100.0,
+      "hem_median_cm": 34.63,
+      "hem_over_5cm_pct": 100.0,
+      "edges_over_3x": 18
+    }
+  }
+}

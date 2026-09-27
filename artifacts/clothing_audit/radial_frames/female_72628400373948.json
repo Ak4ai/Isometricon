@@ -1,0 +1,498 @@
+{
+  "candidate": {
+    "raw_vertices": 1709,
+    "logical_vertices": 1709,
+    "bulk_scale": 0.3346216338709313,
+    "normal_covariance_rank_counts": {
+      "0": 0,
+      "1": 84,
+      "2": 309,
+      "3": 1316
+    },
+    "unused_logical_vertices": 0,
+    "influence_count_p95": 8.0,
+    "radius_factor": 1,
+    "approximation": "UV canonicalization + unit-normal SVD + RMS scale + 1e-6 edge regularizer"
+  },
+  "legacy": {
+    "outer_vertices_with_multiple_influences": 803,
+    "outer_vertices_with_only_corresponding_influence": 906,
+    "cross_index_influences": 2253,
+    "influence_count_p95": 8.0,
+    "influence_count_max": 23,
+    "source_thickness_p95": 0.2201787702641573,
+    "bulk_scale": 0.37554655552554955,
+    "radius_factor": 1
+  },
+  "old_encoding_dependence": {
+    "max": 6.680104550937227e-16,
+    "p99": 4.449037478986689e-16
+  },
+  "common_metric_scale": 0.3346216338709313,
+  "source_binding": {
+    "residual_p99": 0.08465801516390387,
+    "vertices_outside_1e_minus_4": 775
+  },
+  "variants": {
+    "production": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 4759,
+          "over_3": 319,
+          "under_third": 12,
+          "quantiles": [
+            0.21600434184074402,
+            0.4198378020524979,
+            1.4314167499542236,
+            4.951537294387827,
+            20.98173713684082
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 4764,
+          "over_3": 319,
+          "under_third": 12,
+          "quantiles": [
+            0.21600434184074402,
+            0.4199859657883644,
+            1.4322428107261658,
+            4.944916958808885,
+            20.98173713684082
+          ]
+        },
+        "area": {
+          "count": 2819,
+          "under_tenth": 3,
+          "over_nine": 74,
+          "quantiles": [
+            0.07560550421476364,
+            0.22773283541202546,
+            1.8196674585342407,
+            13.635802688598655,
+            50.86271667480469
+          ]
+        },
+        "orientation_disagreements_with_inner_frame": 217
+      },
+      "penetration": {
+        "samples": 4808,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 83,
+        "penetrating_fraction": 0.017262895174708817,
+        "depth_max_over_body_height": 0.03476503184365011,
+        "depth_p95_over_body_height": 0.032868574087854915,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 0,
+          "max_radius": 0.0,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 304,
+          "max_radius": 0.2541260565980574,
+          "over_1e_minus_5": 200,
+          "over_1e_minus_3": 194
+        }
+      },
+      "prism_jacobians": {
+        "samples": 22402,
+        "source_degenerate_samples": 9878,
+        "inverted_samples": 661,
+        "inverted_fraction": 0.029506294080885634
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 23596,
+          "visible_shirt_pixels": 21882,
+          "visible_fraction": 0.9273605695880658
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 11773,
+          "visible_shirt_pixels": 11212,
+          "visible_fraction": 0.95234859424106
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 23596,
+          "visible_shirt_pixels": 23590,
+          "visible_fraction": 0.9997457196134938
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 19930,
+          "visible_shirt_pixels": 18442,
+          "visible_fraction": 0.9253386853988962
+        }
+      },
+      "image": "artifacts\\clothing_audit\\radial_frames\\female_72628400373948_production.png",
+      "used_prism_jacobians": {
+        "samples": 8327,
+        "source_degenerate_samples": 13,
+        "inverted_samples": 107,
+        "inverted_fraction": 0.012849765822024739
+      },
+      "binding_jacobians": {
+        "valid_vertices": 1989,
+        "inverted_vertices": 37
+      },
+      "regions": {
+        "Head": {
+          "vertices": 58,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 16
+        },
+        "LeftHand": {
+          "vertices": 83,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 0
+        },
+        "LeftLowerArm": {
+          "vertices": 169,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "LeftUpperArm": {
+          "vertices": 146,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 2
+        },
+        "LowerTorso": {
+          "vertices": 427,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "RightHand": {
+          "vertices": 66,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "RightLowerArm": {
+          "vertices": 154,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "RightUpperArm": {
+          "vertices": 134,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 8
+        },
+        "UpperTorso": {
+          "vertices": 752,
+          "penetrating_vertices": 17,
+          "inverted_binding_vertices": 11
+        }
+      },
+      "prism_measurement_scope": "counterfactual volume from production shell; production does not bind with prisms"
+    },
+    "radial_previous": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 4759,
+          "over_3": 116,
+          "under_third": 15,
+          "quantiles": [
+            0.09519939202735483,
+            0.44735468400752754,
+            1.3593521299403328,
+            3.4626122595840982,
+            11.6748629253972
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 4764,
+          "over_3": 116,
+          "under_third": 15,
+          "quantiles": [
+            0.09519939202735483,
+            0.44755701760916144,
+            1.3597663186862952,
+            3.461954969603068,
+            11.6748629253972
+          ]
+        },
+        "area": {
+          "count": 2819,
+          "under_tenth": 2,
+          "over_nine": 5,
+          "quantiles": [
+            0.03601397611793666,
+            0.23455553639295523,
+            1.6742492025349558,
+            6.222960368062644,
+            21.076775800142332
+          ]
+        },
+        "orientation_disagreements_with_inner_frame": 153
+      },
+      "penetration": {
+        "samples": 4808,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 93,
+        "penetrating_fraction": 0.019342762063227954,
+        "depth_max_over_body_height": 0.0626883964746823,
+        "depth_p95_over_body_height": 0.03025885195886917,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 0,
+          "max_radius": 0.0,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 304,
+          "max_radius": 2.220446049250313e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "prism_jacobians": {
+        "samples": 22402,
+        "source_degenerate_samples": 9878,
+        "inverted_samples": 1395,
+        "inverted_fraction": 0.062271225783412196
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 21394,
+          "visible_shirt_pixels": 20204,
+          "visible_fraction": 0.9443769281106852
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 11032,
+          "visible_shirt_pixels": 10509,
+          "visible_fraction": 0.9525924583031182
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 21394,
+          "visible_shirt_pixels": 21387,
+          "visible_fraction": 0.9996728054594746
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 18596,
+          "visible_shirt_pixels": 17702,
+          "visible_fraction": 0.9519251451925145
+        }
+      },
+      "image": "artifacts\\clothing_audit\\radial_frames\\female_72628400373948_radial_previous.png",
+      "used_prism_jacobians": {
+        "samples": 8327,
+        "source_degenerate_samples": 13,
+        "inverted_samples": 260,
+        "inverted_fraction": 0.03122373003482647
+      },
+      "binding_jacobians": {
+        "valid_vertices": 1989,
+        "inverted_vertices": 54
+      },
+      "regions": {
+        "Head": {
+          "vertices": 58,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 4
+        },
+        "LeftHand": {
+          "vertices": 83,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 0
+        },
+        "LeftLowerArm": {
+          "vertices": 169,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "LeftUpperArm": {
+          "vertices": 146,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 1
+        },
+        "LowerTorso": {
+          "vertices": 427,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "RightHand": {
+          "vertices": 66,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 0
+        },
+        "RightLowerArm": {
+          "vertices": 154,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 1
+        },
+        "RightUpperArm": {
+          "vertices": 134,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 6
+        },
+        "UpperTorso": {
+          "vertices": 752,
+          "penetrating_vertices": 12,
+          "inverted_binding_vertices": 42
+        }
+      },
+      "prism_measurement_scope": "actual prism cells used by this experimental binding"
+    },
+    "canonical_candidate": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 4759,
+          "over_3": 137,
+          "under_third": 12,
+          "quantiles": [
+            0.13179659278611505,
+            0.42697446416314105,
+            1.3449646688171837,
+            3.5570300482660517,
+            9.749020941614328
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 4764,
+          "over_3": 137,
+          "under_third": 12,
+          "quantiles": [
+            0.13179659278611505,
+            0.42697559861876677,
+            1.3451676230623266,
+            3.556945649904673,
+            9.749020941614328
+          ]
+        },
+        "area": {
+          "count": 2819,
+          "under_tenth": 3,
+          "over_nine": 9,
+          "quantiles": [
+            0.06438585410586056,
+            0.2462598270650855,
+            1.5981072506762442,
+            6.476628023804006,
+            24.005296230037086
+          ]
+        },
+        "orientation_disagreements_with_inner_frame": 168
+      },
+      "penetration": {
+        "samples": 4808,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 111,
+        "penetrating_fraction": 0.023086522462562396,
+        "depth_max_over_body_height": 0.0626883964746823,
+        "depth_p95_over_body_height": 0.0254204388344963,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 0,
+          "max_radius": 0.0,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 304,
+          "max_radius": 1.1123893155135927e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "prism_jacobians": {
+        "samples": 22402,
+        "source_degenerate_samples": 9878,
+        "inverted_samples": 1995,
+        "inverted_fraction": 0.08905454870100883
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 20423,
+          "visible_shirt_pixels": 19090,
+          "visible_fraction": 0.9347304509621506
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 10521,
+          "visible_shirt_pixels": 9952,
+          "visible_fraction": 0.9459176884326584
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 20423,
+          "visible_shirt_pixels": 20411,
+          "visible_fraction": 0.9994124271654508
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 18311,
+          "visible_shirt_pixels": 17223,
+          "visible_fraction": 0.9405821637267217
+        }
+      },
+      "image": "artifacts\\clothing_audit\\radial_frames\\female_72628400373948_canonical_candidate.png",
+      "used_prism_jacobians": {
+        "samples": 8327,
+        "source_degenerate_samples": 13,
+        "inverted_samples": 528,
+        "inverted_fraction": 0.06340819022457067
+      },
+      "binding_jacobians": {
+        "valid_vertices": 1989,
+        "inverted_vertices": 114
+      },
+      "regions": {
+        "Head": {
+          "vertices": 58,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 14
+        },
+        "LeftHand": {
+          "vertices": 83,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 0
+        },
+        "LeftLowerArm": {
+          "vertices": 169,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 0
+        },
+        "LeftUpperArm": {
+          "vertices": 146,
+          "penetrating_vertices": 6,
+          "inverted_binding_vertices": 11
+        },
+        "LowerTorso": {
+          "vertices": 427,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 16
+        },
+        "RightHand": {
+          "vertices": 66,
+          "penetrating_vertices": 1,
+          "inverted_binding_vertices": 0
+        },
+        "RightLowerArm": {
+          "vertices": 154,
+          "penetrating_vertices": 0,
+          "inverted_binding_vertices": 1
+        },
+        "RightUpperArm": {
+          "vertices": 134,
+          "penetrating_vertices": 2,
+          "inverted_binding_vertices": 11
+        },
+        "UpperTorso": {
+          "vertices": 752,
+          "penetrating_vertices": 7,
+          "inverted_binding_vertices": 61
+        }
+      },
+      "prism_measurement_scope": "actual prism cells used by this experimental binding"
+    }
+  },
+  "measurement_version": 2
+}

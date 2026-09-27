@@ -213,10 +213,10 @@ def test_character_model_head_z_offset():
     model_m = CharacterModel(customization=cust_male, create_mesh=False)
     assert model_m.head_z_offset == pytest.approx(0.0)
 
-    # Female defaults to -0.040 (-4cm)
+    # Female defaults to 0.0 (anatomical posture baked into clean A-pose mesh)
     cust_fem = AvatarCustomization(body_type=BodyType.FEMALE)
     model_f = CharacterModel(customization=cust_fem, create_mesh=False)
-    assert model_f.head_z_offset == pytest.approx(-0.040)
+    assert model_f.head_z_offset == pytest.approx(0.0)
 
     # Custom initial offset
     model_custom = CharacterModel(customization=cust_fem, head_z_offset=-0.030, create_mesh=False)
@@ -229,7 +229,7 @@ def test_character_model_head_z_offset():
     assert model_f.head_z_offset == pytest.approx(0.0)
 
     model_f.reset_head_z_offset()
-    assert model_f.head_z_offset == pytest.approx(-0.040)
+    assert model_f.head_z_offset == pytest.approx(0.0)
 
     model_m.set_head_z_offset(-0.020)
     assert model_m.head_z_offset == pytest.approx(-0.020)

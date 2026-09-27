@@ -1,0 +1,258 @@
+{
+  "133331049150205": {
+    "vertices": 2269,
+    "faces": 3726,
+    "raw_components": 30,
+    "largest_raw_components": [
+      581,
+      481,
+      326,
+      292,
+      78,
+      66,
+      62,
+      60,
+      57,
+      52
+    ],
+    "duplicate_position_groups": 367,
+    "duplicate_groups_across_components": 308,
+    "vertices_in_cross_component_duplicates": 643,
+    "cross_component_duplicate_pairs": 358,
+    "normal_aligned_duplicate_pairs": 183,
+    "normal_opposed_duplicate_pairs": 7,
+    "aligned_weld_components": 10,
+    "largest_aligned_weld_components": [
+      1875,
+      139,
+      118,
+      62,
+      60
+    ],
+    "all_position_weld_components": 5,
+    "largest_all_position_weld_components": [
+      1890,
+      139,
+      118,
+      62,
+      60
+    ],
+    "geometric_edge_face_components": 6,
+    "largest_geometric_edge_face_components": [
+      3151,
+      228,
+      184,
+      86,
+      76
+    ],
+    "geometric_edge_links": 3720,
+    "rejected_opposed_edge_pairs": 139,
+    "aligned_seam_gaps_over_0p01_units": 0,
+    "aligned_seam_gap_p90": 0.0,
+    "aligned_seam_gap_max": 0.0,
+    "opposed_panel_gap_p90": 0.0
+  },
+  "72628400373948": {
+    "vertices": 1989,
+    "faces": 2819,
+    "raw_components": 53,
+    "largest_raw_components": [
+      237,
+      207,
+      197,
+      171,
+      163,
+      120,
+      96,
+      74,
+      60,
+      59
+    ],
+    "duplicate_position_groups": 464,
+    "duplicate_groups_across_components": 429,
+    "vertices_in_cross_component_duplicates": 970,
+    "cross_component_duplicate_pairs": 670,
+    "normal_aligned_duplicate_pairs": 293,
+    "normal_opposed_duplicate_pairs": 0,
+    "aligned_weld_components": 4,
+    "largest_aligned_weld_components": [
+      1359,
+      573,
+      32,
+      25
+    ],
+    "all_position_weld_components": 1,
+    "largest_all_position_weld_components": [
+      1989
+    ],
+    "geometric_edge_face_components": 1,
+    "largest_geometric_edge_face_components": [
+      2819
+    ],
+    "geometric_edge_links": 2818,
+    "rejected_opposed_edge_pairs": 177,
+    "aligned_seam_gaps_over_0p01_units": 0,
+    "aligned_seam_gap_p90": 0.0,
+    "aligned_seam_gap_max": 0.0,
+    "opposed_panel_gap_p90": null
+  },
+  "109837605892174": {
+    "vertices": 2701,
+    "faces": 3989,
+    "raw_components": 45,
+    "largest_raw_components": [
+      410,
+      343,
+      329,
+      278,
+      125,
+      64,
+      60,
+      60,
+      59,
+      54
+    ],
+    "duplicate_position_groups": 554,
+    "duplicate_groups_across_components": 554,
+    "vertices_in_cross_component_duplicates": 1145,
+    "cross_component_duplicate_pairs": 638,
+    "normal_aligned_duplicate_pairs": 406,
+    "normal_opposed_duplicate_pairs": 9,
+    "aligned_weld_components": 24,
+    "largest_aligned_weld_components": [
+      1899,
+      150,
+      125,
+      46,
+      44
+    ],
+    "all_position_weld_components": 13,
+    "largest_all_position_weld_components": [
+      1995,
+      244,
+      150,
+      64,
+      64
+    ],
+    "geometric_edge_face_components": 22,
+    "largest_geometric_edge_face_components": [
+      2993,
+      274,
+      228,
+      74,
+      74
+    ],
+    "geometric_edge_links": 3967,
+    "rejected_opposed_edge_pairs": 257,
+    "aligned_seam_gaps_over_0p01_units": 0,
+    "aligned_seam_gap_p90": 0.0,
+    "aligned_seam_gap_max": 0.0,
+    "opposed_panel_gap_p90": 0.0
+  },
+  "114590471167431": {
+    "vertices": 3042,
+    "faces": 3984,
+    "raw_components": 45,
+    "largest_raw_components": [
+      183,
+      177,
+      167,
+      157,
+      156,
+      150,
+      141,
+      140,
+      134,
+      125
+    ],
+    "duplicate_position_groups": 922,
+    "duplicate_groups_across_components": 881,
+    "vertices_in_cross_component_duplicates": 1842,
+    "cross_component_duplicate_pairs": 1045,
+    "normal_aligned_duplicate_pairs": 147,
+    "normal_opposed_duplicate_pairs": 130,
+    "aligned_weld_components": 24,
+    "largest_aligned_weld_components": [
+      1563,
+      172,
+      172,
+      156,
+      122
+    ],
+    "all_position_weld_components": 6,
+    "largest_all_position_weld_components": [
+      2288,
+      344,
+      156,
+      116,
+      108
+    ],
+    "geometric_edge_face_components": 10,
+    "largest_geometric_edge_face_components": [
+      2958,
+      336,
+      228,
+      170,
+      106
+    ],
+    "geometric_edge_links": 3974,
+    "rejected_opposed_edge_pairs": 649,
+    "aligned_seam_gaps_over_0p01_units": 0,
+    "aligned_seam_gap_p90": 0.0,
+    "aligned_seam_gap_max": 0.0,
+    "opposed_panel_gap_p90": 0.0
+  },
+  "16185652164": {
+    "vertices": 2984,
+    "faces": 4424,
+    "raw_components": 75,
+    "largest_raw_components": [
+      265,
+      253,
+      234,
+      234,
+      160,
+      143,
+      130,
+      128,
+      112,
+      105
+    ],
+    "duplicate_position_groups": 788,
+    "duplicate_groups_across_components": 772,
+    "vertices_in_cross_component_duplicates": 2320,
+    "cross_component_duplicate_pairs": 3364,
+    "normal_aligned_duplicate_pairs": 2526,
+    "normal_opposed_duplicate_pairs": 283,
+    "aligned_weld_components": 11,
+    "largest_aligned_weld_components": [
+      1783,
+      320,
+      222,
+      219,
+      74
+    ],
+    "all_position_weld_components": 7,
+    "largest_all_position_weld_components": [
+      1931,
+      320,
+      222,
+      219,
+      110
+    ],
+    "geometric_edge_face_components": 7,
+    "largest_geometric_edge_face_components": [
+      3032,
+      478,
+      271,
+      267,
+      144
+    ],
+    "geometric_edge_links": 4417,
+    "rejected_opposed_edge_pairs": 547,
+    "aligned_seam_gaps_over_0p01_units": 0,
+    "aligned_seam_gap_p90": 0.0,
+    "aligned_seam_gap_max": 0.0,
+    "opposed_panel_gap_p90": 0.0
+  }
+}

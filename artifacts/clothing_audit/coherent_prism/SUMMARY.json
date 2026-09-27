@@ -1,0 +1,1216 @@
+{
+  "method": "graph-coherent prism face reassignment, fixed lambda=1, four ICM rounds, guard against new wrong-way face orientation",
+  "cases": {
+    "female_133331049150205": {
+      "radial_prism": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 5830,
+            "over_3": 149,
+            "under_third": 14,
+            "quantiles": [
+              0.12975890114249405,
+              0.45828762175022497,
+              1.2068265299020102,
+              3.400192621933004,
+              10.432419077899901
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 5980,
+            "over_3": 155,
+            "under_third": 20,
+            "quantiles": [
+              0.12975890114249405,
+              0.440341112867518,
+              1.2005781535737916,
+              3.409177082012273,
+              10.432419077899901
+            ]
+          },
+          "area": {
+            "count": 3726,
+            "under_tenth": 7,
+            "over_nine": 18,
+            "quantiles": [
+              0.04282106814822707,
+              0.16352332750570378,
+              1.3806507659082272,
+              7.337277336607082,
+              40.404460409778345
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 366
+        },
+        "penetration": {
+          "samples": 5995,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 138,
+          "penetrating_fraction": 0.023019182652210174,
+          "depth_max_over_body_height": 0.02467963076797529,
+          "depth_p95_over_body_height": 0.017568377626894345,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 14173,
+            "visible_shirt_pixels": 13371,
+            "visible_fraction": 0.9434135327735835
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 9274,
+            "visible_shirt_pixels": 6964,
+            "visible_fraction": 0.7509165408669398
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 14173,
+            "visible_shirt_pixels": 14162,
+            "visible_fraction": 0.9992238763846751
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 13117,
+            "visible_shirt_pixels": 11539,
+            "visible_fraction": 0.8796981017000839
+          }
+        }
+      },
+      "coherent_candidate": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 5830,
+            "over_3": 138,
+            "under_third": 14,
+            "quantiles": [
+              0.12975890114249405,
+              0.46009138759346707,
+              1.1988203851074863,
+              3.3442412507339214,
+              8.556806140001145
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 5980,
+            "over_3": 144,
+            "under_third": 20,
+            "quantiles": [
+              0.12975890114249405,
+              0.44761424040420816,
+              1.1880976886850423,
+              3.346791144153035,
+              8.556806140001145
+            ]
+          },
+          "area": {
+            "count": 3726,
+            "under_tenth": 7,
+            "over_nine": 11,
+            "quantiles": [
+              0.04282106814822707,
+              0.16352332750570378,
+              1.369823181146224,
+              6.8328841513134915,
+              21.950884455153144
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 349
+        },
+        "penetration": {
+          "samples": 5995,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 140,
+          "penetrating_fraction": 0.02335279399499583,
+          "depth_max_over_body_height": 0.02467963076797529,
+          "depth_p95_over_body_height": 0.017464278061025212,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 14168,
+            "visible_shirt_pixels": 13367,
+            "visible_fraction": 0.9434641445511011
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 9279,
+            "visible_shirt_pixels": 6966,
+            "visible_fraction": 0.7507274490785645
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 14168,
+            "visible_shirt_pixels": 14157,
+            "visible_fraction": 0.9992236024844721
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 13121,
+            "visible_shirt_pixels": 11520,
+            "visible_fraction": 0.8779818611386327
+          }
+        }
+      },
+      "audit": {
+        "groups": 2066,
+        "chart_boundary_groups": 458,
+        "groups_changed": 59,
+        "vertices_changed": 71,
+        "changes_by_round": [
+          59,
+          7,
+          0
+        ],
+        "inversion_rejections": 1380,
+        "max_displacement": 0.06090204247130596
+      },
+      "shell_seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 2.2250491372754983e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 2.2250491372754983e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "garment_seams": {
+        "radial_prism": {
+          "groups": 194,
+          "max_over_body_height": 1.219528779354292e-16,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        },
+        "coherent_candidate": {
+          "groups": 194,
+          "max_over_body_height": 1.219528779354292e-16,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        }
+      },
+      "face_reversals": {
+        "relative_to_baseline": 4,
+        "corrected_existing_orientation": 4,
+        "harmful_new_reversals": 0,
+        "harmful_indices": []
+      }
+    },
+    "female_72628400373948": {
+      "radial_prism": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 4759,
+            "over_3": 116,
+            "under_third": 15,
+            "quantiles": [
+              0.09519939202735483,
+              0.44735468400752754,
+              1.3593521299403328,
+              3.4626122595840982,
+              11.6748629253972
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 4764,
+            "over_3": 116,
+            "under_third": 15,
+            "quantiles": [
+              0.09519939202735483,
+              0.44755701760916144,
+              1.3597663186862952,
+              3.461954969603068,
+              11.6748629253972
+            ]
+          },
+          "area": {
+            "count": 2819,
+            "under_tenth": 2,
+            "over_nine": 5,
+            "quantiles": [
+              0.03601397611793666,
+              0.23455553639295523,
+              1.6742492025349558,
+              6.222960368062644,
+              21.076775800142332
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 153
+        },
+        "penetration": {
+          "samples": 4808,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 93,
+          "penetrating_fraction": 0.019342762063227954,
+          "depth_max_over_body_height": 0.0626883964746823,
+          "depth_p95_over_body_height": 0.03025885195886917,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 21394,
+            "visible_shirt_pixels": 20204,
+            "visible_fraction": 0.9443769281106852
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 11032,
+            "visible_shirt_pixels": 10509,
+            "visible_fraction": 0.9525924583031182
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 21394,
+            "visible_shirt_pixels": 21387,
+            "visible_fraction": 0.9996728054594746
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 18596,
+            "visible_shirt_pixels": 17702,
+            "visible_fraction": 0.9519251451925145
+          }
+        }
+      },
+      "coherent_candidate": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 4759,
+            "over_3": 112,
+            "under_third": 8,
+            "quantiles": [
+              0.1319750472812316,
+              0.46837368364384147,
+              1.349592843956829,
+              3.4789224603688456,
+              11.6748629253972
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 4764,
+            "over_3": 112,
+            "under_third": 8,
+            "quantiles": [
+              0.1319750472812316,
+              0.4685052615037324,
+              1.3501641602455021,
+              3.4789224603688456,
+              11.6748629253972
+            ]
+          },
+          "area": {
+            "count": 2819,
+            "under_tenth": 1,
+            "over_nine": 5,
+            "quantiles": [
+              0.08371393930072778,
+              0.24343101058950867,
+              1.6705225044694512,
+              6.1296623061562405,
+              21.076775800142332
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 134
+        },
+        "penetration": {
+          "samples": 4808,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 94,
+          "penetrating_fraction": 0.019550748752079867,
+          "depth_max_over_body_height": 0.0626883964746823,
+          "depth_p95_over_body_height": 0.029652021484253527,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 21349,
+            "visible_shirt_pixels": 20172,
+            "visible_fraction": 0.9448686121129796
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 11013,
+            "visible_shirt_pixels": 10483,
+            "visible_fraction": 0.9518750567511123
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 21349,
+            "visible_shirt_pixels": 21327,
+            "visible_fraction": 0.9989695067684669
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 18584,
+            "visible_shirt_pixels": 17695,
+            "visible_fraction": 0.9521631510977184
+          }
+        }
+      },
+      "audit": {
+        "groups": 1683,
+        "chart_boundary_groups": 626,
+        "groups_changed": 92,
+        "vertices_changed": 111,
+        "changes_by_round": [
+          92,
+          4,
+          0
+        ],
+        "inversion_rejections": 1356,
+        "max_displacement": 0.06670884061987263
+      },
+      "shell_seams": {
+        "same_uv": {
+          "groups": 0,
+          "max_radius": 0.0,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 304,
+          "max_radius": 2.220446049250313e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "garment_seams": {
+        "radial_prism": {
+          "groups": 283,
+          "max_over_body_height": 1.219528779354292e-16,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        },
+        "coherent_candidate": {
+          "groups": 283,
+          "max_over_body_height": 1.219528779354292e-16,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        }
+      },
+      "face_reversals": {
+        "relative_to_baseline": 18,
+        "corrected_existing_orientation": 18,
+        "harmful_new_reversals": 0,
+        "harmful_indices": []
+      }
+    },
+    "female_109837605892174": {
+      "radial_prism": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 6646,
+            "over_3": 76,
+            "under_third": 122,
+            "quantiles": [
+              0.042475203916202874,
+              0.26394825428075686,
+              1.085245624597058,
+              3.0315215445533186,
+              7.450436893524104
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 6658,
+            "over_3": 76,
+            "under_third": 122,
+            "quantiles": [
+              0.042475203916202874,
+              0.264468039697329,
+              1.0850842205786209,
+              3.0313351452706834,
+              7.450436893524104
+            ]
+          },
+          "area": {
+            "count": 3989,
+            "under_tenth": 50,
+            "over_nine": 0,
+            "quantiles": [
+              0.020080481173096038,
+              0.0778976980817461,
+              1.2494201077129927,
+              3.6031445325215774,
+              8.12728087998208
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 239
+        },
+        "penetration": {
+          "samples": 6690,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 144,
+          "penetrating_fraction": 0.021524663677130046,
+          "depth_max_over_body_height": 0.023294490172907828,
+          "depth_p95_over_body_height": 0.021956382658537495,
+          "open_component_inside_candidates": 389,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 20750,
+            "visible_shirt_pixels": 20489,
+            "visible_fraction": 0.9874216867469879
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 12448,
+            "visible_shirt_pixels": 11599,
+            "visible_fraction": 0.9317962724935732
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 20750,
+            "visible_shirt_pixels": 20438,
+            "visible_fraction": 0.9849638554216867
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 19361,
+            "visible_shirt_pixels": 18892,
+            "visible_fraction": 0.9757760446257941
+          }
+        }
+      },
+      "coherent_candidate": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 6646,
+            "over_3": 71,
+            "under_third": 113,
+            "quantiles": [
+              0.042475203916202874,
+              0.27104393699386,
+              1.0894921655423468,
+              3.025526114543561,
+              3.8599574207648324
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 6658,
+            "over_3": 71,
+            "under_third": 113,
+            "quantiles": [
+              0.042475203916202874,
+              0.2710932520266646,
+              1.0891650308617868,
+              3.025526114543561,
+              3.8599574207648324
+            ]
+          },
+          "area": {
+            "count": 3989,
+            "under_tenth": 46,
+            "over_nine": 0,
+            "quantiles": [
+              0.020080481173096038,
+              0.08061598208047929,
+              1.2500962133713804,
+              3.5361995130882073,
+              8.12728087998208
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 224
+        },
+        "penetration": {
+          "samples": 6690,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 146,
+          "penetrating_fraction": 0.021823617339312408,
+          "depth_max_over_body_height": 0.023294490172907828,
+          "depth_p95_over_body_height": 0.02193585975459533,
+          "open_component_inside_candidates": 383,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 20753,
+            "visible_shirt_pixels": 20513,
+            "visible_fraction": 0.9884354069291187
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 12441,
+            "visible_shirt_pixels": 11568,
+            "visible_fraction": 0.9298287918977575
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 20753,
+            "visible_shirt_pixels": 20471,
+            "visible_fraction": 0.9864116031417145
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 19368,
+            "visible_shirt_pixels": 18888,
+            "visible_fraction": 0.9752168525402726
+          }
+        }
+      },
+      "audit": {
+        "groups": 2332,
+        "chart_boundary_groups": 637,
+        "groups_changed": 83,
+        "vertices_changed": 98,
+        "changes_by_round": [
+          85,
+          6,
+          0
+        ],
+        "inversion_rejections": 1315,
+        "max_displacement": 0.16818477227301304
+      },
+      "shell_seams": {
+        "same_uv": {
+          "groups": 1603,
+          "max_radius": 2.2247786310271853e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1358,
+          "max_radius": 2.2247786310271853e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "witness_edges": {
+        "(2396, 2397)": {
+          "radial_prism": 1.1708421790384629,
+          "coherent_candidate": 1.1708421790384629
+        },
+        "(734, 737)": {
+          "radial_prism": 7.450436893524104,
+          "coherent_candidate": 0.9912751596197301
+        }
+      },
+      "witness_faces": {
+        "2396": {
+          "previous": 1559,
+          "candidate": 1559
+        },
+        "2397": {
+          "previous": 1559,
+          "candidate": 1559
+        },
+        "734": {
+          "previous": 1355,
+          "candidate": 1496
+        },
+        "737": {
+          "previous": 1496,
+          "candidate": 1496
+        }
+      },
+      "garment_seams": {
+        "radial_prism": {
+          "groups": 341,
+          "max_over_body_height": 6.09764389677146e-17,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        },
+        "coherent_candidate": {
+          "groups": 341,
+          "max_over_body_height": 6.09764389677146e-17,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        }
+      },
+      "face_reversals": {
+        "relative_to_baseline": 8,
+        "corrected_existing_orientation": 8,
+        "harmful_new_reversals": 0,
+        "harmful_indices": []
+      }
+    },
+    "female_114590471167431": {
+      "radial_prism": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 6442,
+            "over_3": 190,
+            "under_third": 34,
+            "quantiles": [
+              0.09905348491259178,
+              0.42308358750623326,
+              1.228083655898779,
+              3.996742650664916,
+              13.757229638902436
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 6986,
+            "over_3": 200,
+            "under_third": 34,
+            "quantiles": [
+              0.09905348491259178,
+              0.42989982266116744,
+              1.2213410331575194,
+              3.8415977237881562,
+              13.757229638902436
+            ]
+          },
+          "area": {
+            "count": 3984,
+            "under_tenth": 9,
+            "over_nine": 24,
+            "quantiles": [
+              0.023942077928378568,
+              0.2710325718609555,
+              1.3760853159363235,
+              7.771341878883972,
+              111.55573282849109
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 174
+        },
+        "penetration": {
+          "samples": 7026,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 110,
+          "penetrating_fraction": 0.01565613435809849,
+          "depth_max_over_body_height": 0.040565894770514775,
+          "depth_p95_over_body_height": 0.027850705566306998,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 14791,
+            "visible_shirt_pixels": 14330,
+            "visible_fraction": 0.9688323980799135
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 11297,
+            "visible_shirt_pixels": 7470,
+            "visible_fraction": 0.6612374966805347
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 14791,
+            "visible_shirt_pixels": 13348,
+            "visible_fraction": 0.9024406733824623
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 15784,
+            "visible_shirt_pixels": 13201,
+            "visible_fraction": 0.8363532691332995
+          }
+        }
+      },
+      "coherent_candidate": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 6442,
+            "over_3": 163,
+            "under_third": 32,
+            "quantiles": [
+              0.09905348491259178,
+              0.4273334275570457,
+              1.2288915723607547,
+              3.4767046867430524,
+              19.187351386574868
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 6986,
+            "over_3": 174,
+            "under_third": 32,
+            "quantiles": [
+              0.09905348491259178,
+              0.432759872131268,
+              1.221750270314575,
+              3.5016891462930673,
+              19.187351386574868
+            ]
+          },
+          "area": {
+            "count": 3984,
+            "under_tenth": 10,
+            "over_nine": 21,
+            "quantiles": [
+              0.023942077928378568,
+              0.2687984643785263,
+              1.3805094907029298,
+              6.703627614369451,
+              111.55573282849109
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 172
+        },
+        "penetration": {
+          "samples": 7026,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 113,
+          "penetrating_fraction": 0.016083119840592085,
+          "depth_max_over_body_height": 0.040565894770514775,
+          "depth_p95_over_body_height": 0.02754100632691698,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 14802,
+            "visible_shirt_pixels": 14325,
+            "visible_fraction": 0.9677746250506688
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 11330,
+            "visible_shirt_pixels": 7428,
+            "visible_fraction": 0.6556045895851721
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 14802,
+            "visible_shirt_pixels": 13344,
+            "visible_fraction": 0.9014997973246859
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 15822,
+            "visible_shirt_pixels": 13217,
+            "visible_fraction": 0.835355833649349
+          }
+        }
+      },
+      "audit": {
+        "groups": 2892,
+        "chart_boundary_groups": 625,
+        "groups_changed": 73,
+        "vertices_changed": 77,
+        "changes_by_round": [
+          70,
+          5,
+          0
+        ],
+        "inversion_rejections": 1383,
+        "max_displacement": 0.06953699319214854
+      },
+      "shell_seams": {
+        "same_uv": {
+          "groups": 1603,
+          "max_radius": 2.224782857940255e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1354,
+          "max_radius": 2.224782857940255e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "garment_seams": {
+        "radial_prism": {
+          "groups": 142,
+          "max_over_body_height": 0.0,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        },
+        "coherent_candidate": {
+          "groups": 142,
+          "max_over_body_height": 0.0,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        }
+      },
+      "face_reversals": {
+        "relative_to_baseline": 3,
+        "corrected_existing_orientation": 3,
+        "harmful_new_reversals": 0,
+        "harmful_indices": []
+      }
+    },
+    "female_16185652164": {
+      "radial_prism": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 7351,
+            "over_3": 43,
+            "under_third": 18,
+            "quantiles": [
+              0.06986110444598011,
+              0.5128037293600209,
+              1.041064615722398,
+              2.515987357447413,
+              5.3216955958248064
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 7351,
+            "over_3": 43,
+            "under_third": 18,
+            "quantiles": [
+              0.06986110444598011,
+              0.5128037293600209,
+              1.041064615722398,
+              2.515987357447413,
+              5.3216955958248064
+            ]
+          },
+          "area": {
+            "count": 4424,
+            "under_tenth": 4,
+            "over_nine": 6,
+            "quantiles": [
+              0.05320738051005262,
+              0.280173932536852,
+              1.0507419982531434,
+              3.9943662224483987,
+              18.410654230799416
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 366
+        },
+        "penetration": {
+          "samples": 7408,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 257,
+          "penetrating_fraction": 0.03469222462203024,
+          "depth_max_over_body_height": 0.040781860980333436,
+          "depth_p95_over_body_height": 0.027337275324511544,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 31448,
+            "visible_shirt_pixels": 29598,
+            "visible_fraction": 0.9411727295853473
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 16173,
+            "visible_shirt_pixels": 13970,
+            "visible_fraction": 0.8637853212143697
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 31448,
+            "visible_shirt_pixels": 30688,
+            "visible_fraction": 0.9758331213431697
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 27103,
+            "visible_shirt_pixels": 24279,
+            "visible_fraction": 0.8958048924473305
+          }
+        }
+      },
+      "coherent_candidate": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 7351,
+            "over_3": 37,
+            "under_third": 13,
+            "quantiles": [
+              0.06986110444598011,
+              0.5274132927125686,
+              1.0444570407834204,
+              2.424906634946115,
+              5.179873312938985
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 7351,
+            "over_3": 37,
+            "under_third": 13,
+            "quantiles": [
+              0.06986110444598011,
+              0.5274132927125686,
+              1.0444570407834204,
+              2.424906634946115,
+              5.179873312938985
+            ]
+          },
+          "area": {
+            "count": 4424,
+            "under_tenth": 4,
+            "over_nine": 5,
+            "quantiles": [
+              0.05320738051005262,
+              0.30723034882092104,
+              1.0671803862342217,
+              3.8673464872217043,
+              18.410654230799416
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 355
+        },
+        "penetration": {
+          "samples": 7408,
+          "closed_components": 14,
+          "open_components": 2,
+          "penetrating_samples": 264,
+          "penetrating_fraction": 0.035637149028077755,
+          "depth_max_over_body_height": 0.04389791480580271,
+          "depth_p95_over_body_height": 0.028130696655235717,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 31222,
+            "visible_shirt_pixels": 29442,
+            "visible_fraction": 0.9429889180705913
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 16187,
+            "visible_shirt_pixels": 13818,
+            "visible_fraction": 0.8536479891270773
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 31222,
+            "visible_shirt_pixels": 30388,
+            "visible_fraction": 0.9732880661072321
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 27446,
+            "visible_shirt_pixels": 24431,
+            "visible_fraction": 0.8901479268381549
+          }
+        }
+      },
+      "audit": {
+        "groups": 1562,
+        "chart_boundary_groups": 764,
+        "groups_changed": 163,
+        "vertices_changed": 309,
+        "changes_by_round": [
+          157,
+          20,
+          2,
+          0
+        ],
+        "inversion_rejections": 3076,
+        "max_displacement": 0.10361680221418658
+      },
+      "shell_seams": {
+        "same_uv": {
+          "groups": 1493,
+          "max_radius": 2.220446049250313e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1336,
+          "max_radius": 0.011086429037700957,
+          "over_1e_minus_5": 2,
+          "over_1e_minus_3": 2
+        }
+      },
+      "garment_seams": {
+        "radial_prism": {
+          "groups": 833,
+          "max_over_body_height": 1.2593701475136505e-16,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 3.04882194838573e-17
+        },
+        "coherent_candidate": {
+          "groups": 833,
+          "max_over_body_height": 1.2593701475136505e-16,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 4.3246497977428865e-17
+        }
+      },
+      "face_reversals": {
+        "relative_to_baseline": 0,
+        "corrected_existing_orientation": 0,
+        "harmful_new_reversals": 0,
+        "harmful_indices": []
+      }
+    },
+    "blocky_133331049150205": {
+      "radial_prism": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 5830,
+            "over_3": 957,
+            "under_third": 6,
+            "quantiles": [
+              0.1839122316679943,
+              0.6255640017926923,
+              1.805437909247006,
+              5.7202254799568335,
+              14.497461246177151
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 5980,
+            "over_3": 962,
+            "under_third": 7,
+            "quantiles": [
+              0.1839122316679943,
+              0.621308556391477,
+              1.7933422591975319,
+              5.708163730527528,
+              14.497461246177151
+            ]
+          },
+          "area": {
+            "count": 3726,
+            "under_tenth": 1,
+            "over_nine": 235,
+            "quantiles": [
+              0.023605853505006248,
+              0.47902589893524344,
+              2.7901581761495873,
+              19.07554772488627,
+              75.057549920026
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 460
+        },
+        "penetration": {
+          "samples": 5995,
+          "closed_components": 18,
+          "open_components": 2,
+          "penetrating_samples": 1668,
+          "penetrating_fraction": 0.278231859883236,
+          "depth_max_over_body_height": 0.039269713505872904,
+          "depth_p95_over_body_height": 0.016130549252613747,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 32469,
+            "visible_shirt_pixels": 31014,
+            "visible_fraction": 0.9551880255012474
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 13249,
+            "visible_shirt_pixels": 6931,
+            "visible_fraction": 0.5231338214204846
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 32469,
+            "visible_shirt_pixels": 29889,
+            "visible_fraction": 0.9205395916104592
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 28933,
+            "visible_shirt_pixels": 24310,
+            "visible_fraction": 0.840217053191857
+          }
+        }
+      },
+      "coherent_candidate": {
+        "distortion": {
+          "historical_length_mask": {
+            "count": 5830,
+            "over_3": 938,
+            "under_third": 6,
+            "quantiles": [
+              0.1839122316679943,
+              0.6255640017926923,
+              1.7956037142224301,
+              5.670479447994907,
+              15.159144077672659
+            ]
+          },
+          "all_nondegenerate": {
+            "count": 5980,
+            "over_3": 943,
+            "under_third": 7,
+            "quantiles": [
+              0.1839122316679943,
+              0.621308556391477,
+              1.7824170421651089,
+              5.63275213854228,
+              15.159144077672659
+            ]
+          },
+          "area": {
+            "count": 3726,
+            "under_tenth": 1,
+            "over_nine": 228,
+            "quantiles": [
+              0.023605853505006248,
+              0.48416449913365345,
+              2.756479548404222,
+              18.845189604328947,
+              75.057549920026
+            ]
+          },
+          "orientation_disagreements_with_inner_frame": 443
+        },
+        "penetration": {
+          "samples": 5995,
+          "closed_components": 18,
+          "open_components": 2,
+          "penetrating_samples": 1667,
+          "penetrating_fraction": 0.2780650542118432,
+          "depth_max_over_body_height": 0.039269713505872904,
+          "depth_p95_over_body_height": 0.016113979986703345,
+          "open_component_inside_candidates": 0,
+          "surface_tolerance_over_height": 0.0001
+        },
+        "visibility": {
+          "frente": {
+            "shirt_silhouette_pixels": 32461,
+            "visible_shirt_pixels": 30988,
+            "visible_fraction": 0.9546224700409722
+          },
+          "lado": {
+            "shirt_silhouette_pixels": 13256,
+            "visible_shirt_pixels": 6938,
+            "visible_fraction": 0.5233856366928183
+          },
+          "costas": {
+            "shirt_silhouette_pixels": 32461,
+            "visible_shirt_pixels": 29879,
+            "visible_fraction": 0.9204583962293214
+          },
+          "3/4": {
+            "shirt_silhouette_pixels": 28933,
+            "visible_shirt_pixels": 24290,
+            "visible_fraction": 0.8395258009884906
+          }
+        }
+      },
+      "audit": {
+        "groups": 2066,
+        "chart_boundary_groups": 458,
+        "groups_changed": 45,
+        "vertices_changed": 59,
+        "changes_by_round": [
+          43,
+          4,
+          0
+        ],
+        "inversion_rejections": 1016,
+        "max_displacement": 0.21078407810837227
+      },
+      "shell_seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "garment_seams": {
+        "radial_prism": {
+          "groups": 194,
+          "max_over_body_height": 4.3182521254483665e-17,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        },
+        "coherent_candidate": {
+          "groups": 194,
+          "max_over_body_height": 4.3182521254483665e-17,
+          "over_1e_minus_3": 0,
+          "p95_over_body_height": 0.0
+        }
+      },
+      "face_reversals": {
+        "relative_to_baseline": 13,
+        "corrected_existing_orientation": 13,
+        "harmful_new_reversals": 0,
+        "harmful_indices": []
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "src\\clothing\\experimental_shell_clearance.py": "a486743c140c57750e8aecb8a3e3af76a4b751c9dc9f0a2a9ef0b92aae8b5090",
+  "scripts\\experiment_shell_clearance.py": "a5330a9e430f80977de90a8441b4400e039c2ea8a2275cd8f9199874d99afc72",
+  "scripts\\report_shell_clearance.py": "78e992ca9aa4e6837d091ddbc2835c1429ae4a25a50e9f96866bf9411907918a",
+  "scripts\\radial_validation_metrics.py": "ecb525164107f6d5a29842acf9cca75eab4ea7839fc83de11b9ef2805159d07d",
+  "scripts\\experiment_canonical_radial.py": "f70d08a1f0131b39a6c373c021f3a2681558bf9774d07c40d47494d8a12ce879",
+  "src\\clothing\\wrap_layer_fit.py": "965d646e8ecf981ccafd58bea3fc26a93eeeb50a2afe43074bced93d6faea96a",
+  "tests\\test_experimental_shell_clearance.py": "01c3762dc2e9aaa3368e35e5a6b564cfa8f7b8f3f56c09aec71cdbb10ab14b7c",
+  "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205.npz": "bcc497c5a1f6c3396d4b547e2b9be056e7092e5431960f6835d82a5340ab1ca3",
+  "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205_outputs.npz": "f81918706ba4241b6dcf2d9e71b96a48e0fffc13de3353127069299d259e8dfe",
+  "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205_binding.npz": "531c66780a65f5835443af6c9e08e357832519d40ae695fb9d40c653bc97a6ea"
+}

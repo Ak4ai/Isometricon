@@ -1,0 +1,62 @@
+{
+  "female_133331049150205": {
+    "mesh_edges": {
+      "p99": 2.99690842628479,
+      "over_3x": 59,
+      "edges": 5830
+    },
+    "outer_p99": 1.525500249738555,
+    "outer_over_3x": 0,
+    "runtime_eligible": true
+  },
+  "female_72628400373948": {
+    "mesh_edges": {
+      "p99": 1.837232232093811,
+      "over_3x": 9,
+      "edges": 4759
+    },
+    "outer_p99": 1.9274249296293335,
+    "outer_over_3x": 20,
+    "runtime_eligible": true
+  },
+  "female_109837605892174": {
+    "mesh_edges": {
+      "p99": 4.5787034034729,
+      "over_3x": 142,
+      "edges": 6646
+    },
+    "outer_p99": 1.7696677893963493,
+    "outer_over_3x": 9,
+    "runtime_eligible": true
+  },
+  "female_114590471167431": {
+    "mesh_edges": {
+      "p99": 4.9413743019104,
+      "over_3x": 155,
+      "edges": 6442
+    },
+    "outer_p99": 1.7003740454666245,
+    "outer_over_3x": 9,
+    "runtime_eligible": true
+  },
+  "female_16185652164": {
+    "mesh_edges": {
+      "p99": 8.476363182067871,
+      "over_3x": 554,
+      "edges": 7351
+    },
+    "outer_p99": 9.881685357774796,
+    "outer_over_3x": 553,
+    "runtime_eligible": false
+  },
+  "blocky_133331049150205": {
+    "mesh_edges": {
+      "p99": 6.488236427307129,
+      "over_3x": 1124,
+      "edges": 5830
+    },
+    "outer_p99": 9.966810464129937,
+    "outer_over_3x": 1802,
+    "runtime_eligible": false
+  }
+}

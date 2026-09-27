@@ -1,0 +1,242 @@
+{
+  "case": "blocky_133331049150205",
+  "source_fixture": "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205.npz",
+  "method": "same source-only radial transfer plus proximity centers on destination cage",
+  "patent_scope": "approximation of US20250265799A1 claims 1-6/16-20; private Roblox implementation unknown",
+  "influences": {
+    "source_center_queries": 4895,
+    "target_center_queries": 4895,
+    "source_influence_count_p95": 6.0,
+    "target_influence_count_p95": 1.0,
+    "source_influence_count_max": 16,
+    "target_influence_count_max": 13,
+    "outer_vertices_receiving_target_influence": 4895,
+    "mean_outer_samples_per_source_query": 4.053115423901941,
+    "mean_outer_samples_per_target_query": 1.222267620020429,
+    "source_thickness_p95": 0.1327495661549395,
+    "bulk_scale": 1.23787060105359,
+    "radius_factor": 1.0,
+    "approximation": "source+target centers; source thickness; inverse-distance weights; one-ring SVD rotations"
+  },
+  "variants": {
+    "source_only": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 957,
+          "under_third": 6,
+          "quantiles": [
+            0.1839122316679943,
+            0.6255640017926923,
+            1.805437909247006,
+            5.7202254799568335,
+            14.497461246177151
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 962,
+          "under_third": 7,
+          "quantiles": [
+            0.1839122316679943,
+            0.621308556391477,
+            1.7933422591975319,
+            5.708163730527528,
+            14.497461246177151
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 1,
+          "over_nine": 235,
+          "quantiles": [
+            0.023605853505006248,
+            0.47902589893524344,
+            2.7901581761495873,
+            19.07554772488627,
+            75.057549920026
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1668,
+        "penetrating_fraction": 0.278231859883236,
+        "depth_max_over_body_height": 0.039269713505872904,
+        "depth_p95_over_body_height": 0.016130549252613747,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "shell_center_penetration": {
+        "samples": 595,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 114,
+        "penetrating_fraction": 0.1915966386554622,
+        "depth_max_over_body_height": 0.03365603171455903,
+        "depth_p95_over_body_height": 0.022557892680113645,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "used_prism_jacobians": {
+        "samples": 7140,
+        "source_degenerate_samples": 0,
+        "inverted_samples": 334,
+        "inverted_fraction": 0.04677871148459384
+      },
+      "binding_jacobians": {
+        "valid_vertices": 2269,
+        "inverted_vertices": 263
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 32385,
+          "visible_shirt_pixels": 30919,
+          "visible_fraction": 0.9547321290721013
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 13219,
+          "visible_shirt_pixels": 6902,
+          "visible_fraction": 0.5221272410923671
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 32385,
+          "visible_shirt_pixels": 29796,
+          "visible_fraction": 0.9200555812876332
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 28877,
+          "visible_shirt_pixels": 24242,
+          "visible_fraction": 0.8394916369428957
+        }
+      },
+      "image": "artifacts\\clothing_audit\\bidirectional_radial\\blocky_133331049150205_source_only.png"
+    },
+    "source_and_target": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 1060,
+          "under_third": 3,
+          "quantiles": [
+            0.22178136278203522,
+            0.6349369475928125,
+            1.8463414447373403,
+            5.750777286748858,
+            17.56960772827455
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 1066,
+          "under_third": 3,
+          "quantiles": [
+            0.22178136278203522,
+            0.6241792886509391,
+            1.8343463815263354,
+            5.738243724953401,
+            17.56960772827455
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 1,
+          "over_nine": 294,
+          "quantiles": [
+            0.09300765527725735,
+            0.4857250749020773,
+            2.9090528896110643,
+            24.709697408739665,
+            89.34474958827586
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1749,
+        "penetrating_fraction": 0.29174311926605506,
+        "depth_max_over_body_height": 0.038048342032729485,
+        "depth_p95_over_body_height": 0.017259882403540445,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "shell_center_penetration": {
+        "samples": 595,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 124,
+        "penetrating_fraction": 0.20840336134453782,
+        "depth_max_over_body_height": 0.03502333079615489,
+        "depth_p95_over_body_height": 0.023522129847071454,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 0.11723371988163642,
+          "over_1e_minus_5": 513,
+          "over_1e_minus_3": 442
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 0.13034322363869338,
+          "over_1e_minus_5": 443,
+          "over_1e_minus_3": 388
+        }
+      },
+      "used_prism_jacobians": {
+        "samples": 7140,
+        "source_degenerate_samples": 0,
+        "inverted_samples": 278,
+        "inverted_fraction": 0.03893557422969188
+      },
+      "binding_jacobians": {
+        "valid_vertices": 2269,
+        "inverted_vertices": 179
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 32580,
+          "visible_shirt_pixels": 30612,
+          "visible_fraction": 0.9395948434622468
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 13233,
+          "visible_shirt_pixels": 6979,
+          "visible_fraction": 0.5273936371193229
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 32580,
+          "visible_shirt_pixels": 29955,
+          "visible_fraction": 0.9194290976058932
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 28763,
+          "visible_shirt_pixels": 23987,
+          "visible_fraction": 0.8339533428362828
+        }
+      },
+      "image": "artifacts\\clothing_audit\\bidirectional_radial\\blocky_133331049150205_source_and_target.png"
+    }
+  },
+  "comparison_image": "artifacts\\clothing_audit\\bidirectional_radial\\blocky_133331049150205_comparison.png"
+}

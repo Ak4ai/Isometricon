@@ -1,0 +1,64 @@
+{
+  "loader_calls": [
+    {
+      "path": "C:\\Users\\Henrique\\Documents\\GitHub\\Isometricon\\assets\\models\\female_cages_apose_stage2.obj",
+      "sha256": "0d8d208b091a389c33fb4e4b4f2e2cbdcd565a11e2e6bb8db3232a052b675b46",
+      "is_source_cage": false
+    },
+    {
+      "path": "C:\\Users\\Henrique\\Documents\\GitHub\\Isometricon\\assets\\models\\roblox_reference_cages.obj",
+      "sha256": "4366adf9b5c21fef23a836cbce26a4012cc533f44e918c2d7d890a4176057c89",
+      "is_source_cage": true
+    }
+  ],
+  "expected_target": "female_cages_apose_stage2.obj",
+  "runtime_vs_export_by_part": {
+    "Head": 0.0,
+    "LeftFoot": 0.0,
+    "LeftHand": 0.0,
+    "LeftLowerArm": 0.0,
+    "LeftLowerLeg": 0.0,
+    "LeftUpperArm": 0.0,
+    "LeftUpperLeg": 0.0,
+    "LowerTorso": 0.0,
+    "RightFoot": 0.0,
+    "RightHand": 0.0,
+    "RightLowerArm": 0.0,
+    "RightLowerLeg": 0.0,
+    "RightUpperArm": 0.0,
+    "RightUpperLeg": 0.0,
+    "UpperTorso": 0.0
+  },
+  "frozen_female_cases_vs_current_target": {
+    "female_109837605892174": {
+      "target_entries": 5410,
+      "max_target_position_difference": 0.0,
+      "frozen_input_sha256": "7c7ac63bfe5dbd3b6e6d485e496fe28858dbbfcff994b8e3aa19a3ef8a594a44"
+    },
+    "female_114590471167431": {
+      "target_entries": 5410,
+      "max_target_position_difference": 0.0,
+      "frozen_input_sha256": "3faa60bf0356ed4a86e20c16b7fdc0a0597ac86aa3c243a7572a05ebc0c50dd6"
+    },
+    "female_133331049150205": {
+      "target_entries": 4895,
+      "max_target_position_difference": 0.0,
+      "frozen_input_sha256": "74c3e497fea3c691d2e34f60c8fdd7376345de420415e6fc534f483fe11edf51"
+    },
+    "female_16185652164": {
+      "target_entries": 4890,
+      "max_target_position_difference": 0.0,
+      "frozen_input_sha256": "8257cb243ef2a0768a6dc233989c709db4fcb86109e84de3f076adff19844b19"
+    },
+    "female_72628400373948": {
+      "target_entries": 1709,
+      "max_target_position_difference": 0.0,
+      "frozen_input_sha256": "e7d4f13a68a1d5b76edd2371b239413501ac0c6ef6d9ee3a7a3081c9eeea8d2a"
+    }
+  },
+  "limits": [
+    "Direct female engine initialization; not a running UI session or fitted-clothing cache audit.",
+    "Checks loaded cage and UV target mapping, not garment influence correctness.",
+    "Does not prove the current Blender scene equals the exported OBJ."
+  ]
+}

@@ -845,13 +845,13 @@ def test_skin_command_postura():
     model_fem = CharacterModel(customization=cust_fem, create_mesh=False)
     handler_fem = SkinCommandHandler(character_model=model_fem)
 
-    assert model_fem.head_z_offset == pytest.approx(-0.040)
+    assert model_fem.head_z_offset == pytest.approx(0.0)
 
     # 1. Status / consulta
     success, msg, _ = handler_fem.execute("/postura")
     assert success is True
-    assert "-0.040m" in msg
-    assert "-4.0cm" in msg
+    assert "+0.000m" in msg or "0.000m" in msg
+    assert "0.0cm" in msg
 
     # 2. Ajuste com cm
     success, msg, _ = handler_fem.execute("/postura -3cm")
@@ -865,10 +865,10 @@ def test_skin_command_postura():
     assert model_fem.head_z_offset == pytest.approx(0.0)
     assert "zerado" in msg
 
-    # 4. Restaurar para o padrão feminino (-4cm)
+    # 4. Restaurar para o padrão (0cm)
     success, msg, _ = handler_fem.execute("/postura reset")
     assert success is True
-    assert model_fem.head_z_offset == pytest.approx(-0.040)
+    assert model_fem.head_z_offset == pytest.approx(0.0)
 
     # 5. Roteamento a partir de /cabeca postura
     success, msg, _ = handler_fem.execute("/cabeca postura -5cm")

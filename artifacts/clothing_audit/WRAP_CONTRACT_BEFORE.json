@@ -1,0 +1,130 @@
+{
+  "units": "native asset coordinates, not asserted to be metres",
+  "controls": {
+    "identity": {
+      "outer": {
+        "max": 2.7755575615628914e-17,
+        "p99": 1.3010426069826053e-18,
+        "rms": 1.001760435394208e-18
+      },
+      "garment": {
+        "max": 0.0,
+        "p99": 0.0,
+        "rms": 0.0
+      }
+    },
+    "rotation": {
+      "outer": {
+        "max": 2.7755575615628914e-17,
+        "p99": 3.469446951953614e-18,
+        "rms": 1.1430670123394686e-18
+      },
+      "garment": {
+        "max": 0.0,
+        "p99": 0.0,
+        "rms": 0.0
+      }
+    },
+    "reflection": {
+      "outer": {
+        "max": 2.7755575615628914e-17,
+        "p99": 1.3010426069826053e-18,
+        "rms": 1.001760435394208e-18
+      },
+      "garment": {
+        "max": 0.3217207838811392,
+        "p99": 0.2825927561637917,
+        "rms": 0.09754496006253598
+      }
+    },
+    "scale_2": {
+      "outer": {
+        "max": 0.11113010360305495,
+        "p99": 0.08894498590456222,
+        "rms": 0.026948312027506617
+      },
+      "garment": {
+        "max": 0.1244139482422094,
+        "p99": 0.07921865274012807,
+        "rms": 0.03852567763528885
+      }
+    }
+  },
+  "cyclic_triangle_map_difference": 0.8853976522762885,
+  "blocky_per_part": {
+    "Head": {
+      "edge_p99": 5.444947194278969,
+      "bound_garment_vertices": 90
+    },
+    "LeftFoot": {
+      "edge_p99": 6.350798197065042,
+      "bound_garment_vertices": 0
+    },
+    "LeftHand": {
+      "edge_p99": 19.37997794918777,
+      "bound_garment_vertices": 0
+    },
+    "LeftLowerArm": {
+      "edge_p99": 12.1973658831062,
+      "bound_garment_vertices": 0
+    },
+    "LeftLowerLeg": {
+      "edge_p99": 8.293010940223073,
+      "bound_garment_vertices": 0
+    },
+    "LeftUpperArm": {
+      "edge_p99": 7.8277612824225296,
+      "bound_garment_vertices": 351
+    },
+    "LeftUpperLeg": {
+      "edge_p99": 5.353360274843442,
+      "bound_garment_vertices": 0
+    },
+    "LowerTorso": {
+      "edge_p99": 3.907360557514887,
+      "bound_garment_vertices": 338
+    },
+    "RightFoot": {
+      "edge_p99": 6.350797928501438,
+      "bound_garment_vertices": 0
+    },
+    "RightHand": {
+      "edge_p99": 19.380134604167672,
+      "bound_garment_vertices": 0
+    },
+    "RightLowerArm": {
+      "edge_p99": 12.197365883178833,
+      "bound_garment_vertices": 0
+    },
+    "RightLowerLeg": {
+      "edge_p99": 8.293011003119227,
+      "bound_garment_vertices": 0
+    },
+    "RightUpperArm": {
+      "edge_p99": 7.827760235349132,
+      "bound_garment_vertices": 295
+    },
+    "RightUpperLeg": {
+      "edge_p99": 5.353360274843442,
+      "bound_garment_vertices": 0
+    },
+    "UpperTorso": {
+      "edge_p99": 5.012330360744556,
+      "bound_garment_vertices": 1195
+    }
+  },
+  "blocky_coincident_source_outer_targets": {
+    "max_spread": 0.15526155900671967,
+    "groups_over_0_01": 77
+  },
+  "blocky_fit": {
+    "cage_normal_sign": -1,
+    "reference_id": "80307990380242",
+    "cage_id": "78642992491592",
+    "median_source_distance": 0.027121947753971976,
+    "p99_source_distance": 0.14140051188965438,
+    "invalid_faces": 0,
+    "outer_edge_stretch_p99": 9.966811169562865,
+    "outer_edges_over_3x": 1828
+  }
+}

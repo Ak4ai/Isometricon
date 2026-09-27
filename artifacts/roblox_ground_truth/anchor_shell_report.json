@@ -1,0 +1,382 @@
+{
+  "vestido": {
+    "cage radial": {
+      "acima_5cm_pct": 7.0,
+      "mediana_cm": 1.19,
+      "arestas_3x": 42
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 7.8,
+      "mediana_cm": 1.19,
+      "arestas_3x": 44,
+      "vertices_pendurados": 414,
+      "sem_ancora": 8
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 8.8,
+      "mediana_cm": 1.02,
+      "arestas_3x": 109
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 9.7,
+      "mediana_cm": 1.04,
+      "arestas_3x": 110,
+      "vertices_pendurados": 414,
+      "sem_ancora": 8
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 44.5,
+      "mediana_cm": 4.58,
+      "arestas_3x": 97
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 45.6,
+      "mediana_cm": 4.7,
+      "arestas_3x": 92,
+      "vertices_pendurados": 414,
+      "sem_ancora": 8
+    }
+  },
+  "jeans com bota": {
+    "cage radial": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17,
+      "vertices_pendurados": 3,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 11.2,
+      "mediana_cm": 1.7,
+      "arestas_3x": 122
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 11.3,
+      "mediana_cm": 1.7,
+      "arestas_3x": 122,
+      "vertices_pendurados": 3,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 74.2,
+      "mediana_cm": 7.73,
+      "arestas_3x": 165
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 74.2,
+      "mediana_cm": 7.73,
+      "arestas_3x": 165,
+      "vertices_pendurados": 3,
+      "sem_ancora": 0
+    }
+  },
+  "camisa social": {
+    "cage radial": {
+      "acima_5cm_pct": 0.6,
+      "mediana_cm": 1.38,
+      "arestas_3x": 21
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 1.2,
+      "mediana_cm": 1.38,
+      "arestas_3x": 22,
+      "vertices_pendurados": 38,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 0.9,
+      "mediana_cm": 1.37,
+      "arestas_3x": 35
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 1.5,
+      "mediana_cm": 1.37,
+      "arestas_3x": 36,
+      "vertices_pendurados": 38,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 27.2,
+      "mediana_cm": 3.28,
+      "arestas_3x": 56
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 27.9,
+      "mediana_cm": 3.29,
+      "arestas_3x": 57,
+      "vertices_pendurados": 38,
+      "sem_ancora": 0
+    }
+  },
+  "jaqueta bomber": {
+    "cage radial": {
+      "acima_5cm_pct": 10.2,
+      "mediana_cm": 2.02,
+      "arestas_3x": 43
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 13.5,
+      "mediana_cm": 2.1,
+      "arestas_3x": 62,
+      "vertices_pendurados": 252,
+      "sem_ancora": 17
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 6.4,
+      "mediana_cm": 1.83,
+      "arestas_3x": 43
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 9.9,
+      "mediana_cm": 1.94,
+      "arestas_3x": 70,
+      "vertices_pendurados": 252,
+      "sem_ancora": 17
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 56.1,
+      "mediana_cm": 5.34,
+      "arestas_3x": 51
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 57.7,
+      "mediana_cm": 5.48,
+      "arestas_3x": 79,
+      "vertices_pendurados": 252,
+      "sem_ancora": 17
+    }
+  },
+  "sueter oversized": {
+    "cage radial": {
+      "acima_5cm_pct": 99.9,
+      "mediana_cm": 16.77,
+      "arestas_3x": 83
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 99.9,
+      "mediana_cm": 16.73,
+      "arestas_3x": 104,
+      "vertices_pendurados": 150,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 98.8,
+      "mediana_cm": 19.34,
+      "arestas_3x": 323
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 98.7,
+      "mediana_cm": 19.38,
+      "arestas_3x": 296,
+      "vertices_pendurados": 150,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 100.0,
+      "mediana_cm": 26.03,
+      "arestas_3x": 171
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 100.0,
+      "mediana_cm": 26.05,
+      "arestas_3x": 188,
+      "vertices_pendurados": 150,
+      "sem_ancora": 0
+    }
+  },
+  "saia-short": {
+    "cage radial": {
+      "acima_5cm_pct": 9.1,
+      "mediana_cm": 1.41,
+      "arestas_3x": 145
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 9.2,
+      "mediana_cm": 1.41,
+      "arestas_3x": 113,
+      "vertices_pendurados": 385,
+      "sem_ancora": 186
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 18.0,
+      "mediana_cm": 2.9,
+      "arestas_3x": 146
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 21.0,
+      "mediana_cm": 2.9,
+      "arestas_3x": 125,
+      "vertices_pendurados": 385,
+      "sem_ancora": 186
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 80.3,
+      "mediana_cm": 10.51,
+      "arestas_3x": 175
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 80.7,
+      "mediana_cm": 10.68,
+      "arestas_3x": 125,
+      "vertices_pendurados": 385,
+      "sem_ancora": 186
+    }
+  },
+  "calca skater": {
+    "cage radial": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16,
+      "vertices_pendurados": 1,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 15.8,
+      "mediana_cm": 2.32,
+      "arestas_3x": 62
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 15.8,
+      "mediana_cm": 2.32,
+      "arestas_3x": 62,
+      "vertices_pendurados": 1,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 72.9,
+      "mediana_cm": 9.29,
+      "arestas_3x": 71
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 72.9,
+      "mediana_cm": 9.3,
+      "arestas_3x": 71,
+      "vertices_pendurados": 1,
+      "sem_ancora": 0
+    }
+  },
+  "calca cargo": {
+    "cage radial": {
+      "acima_5cm_pct": 9.6,
+      "mediana_cm": 1.52,
+      "arestas_3x": 20
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 9.6,
+      "mediana_cm": 1.52,
+      "arestas_3x": 21,
+      "vertices_pendurados": 3,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 6.8,
+      "mediana_cm": 1.43,
+      "arestas_3x": 31
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 6.8,
+      "mediana_cm": 1.43,
+      "arestas_3x": 35,
+      "vertices_pendurados": 3,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 51.5,
+      "mediana_cm": 5.13,
+      "arestas_3x": 27
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 51.5,
+      "mediana_cm": 5.13,
+      "arestas_3x": 27,
+      "vertices_pendurados": 3,
+      "sem_ancora": 0
+    }
+  },
+  "regata": {
+    "cage radial": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.41,
+      "arestas_3x": 0
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.41,
+      "arestas_3x": 0,
+      "vertices_pendurados": 0,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.42,
+      "arestas_3x": 0
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.42,
+      "arestas_3x": 0,
+      "vertices_pendurados": 0,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 1.01,
+      "arestas_3x": 0
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 1.01,
+      "arestas_3x": 0,
+      "vertices_pendurados": 0,
+      "sem_ancora": 0
+    }
+  },
+  "biquini": {
+    "cage radial": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.32,
+      "arestas_3x": 0
+    },
+    "cage radial + fitas ancoradas": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.32,
+      "arestas_3x": 0,
+      "vertices_pendurados": 0,
+      "sem_ancora": 0
+    },
+    "cage por face (runtime)": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.29,
+      "arestas_3x": 0
+    },
+    "cage por face (runtime) + fitas ancoradas": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.29,
+      "arestas_3x": 0,
+      "vertices_pendurados": 0,
+      "sem_ancora": 0
+    },
+    "cage espessura sem girar": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.63,
+      "arestas_3x": 0
+    },
+    "cage espessura sem girar + fitas ancoradas": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.63,
+      "arestas_3x": 0,
+      "vertices_pendurados": 0,
+      "sem_ancora": 0
+    }
+  }
+}
