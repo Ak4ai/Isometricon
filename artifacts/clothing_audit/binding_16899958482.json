@@ -1,0 +1,254 @@
+{
+  "asset": "16899958482",
+  "vertices": 4765,
+  "source_cage_distance": {
+    "reference_id": "16886626565",
+    "cage_id": "16886627033",
+    "median_source_distance": 0.04985779364797112,
+    "p99_source_distance": 0.1578351912469858,
+    "invalid_faces": 0
+  },
+  "bound_regions": {
+    "LeftFoot": 258,
+    "RightFoot": 294,
+    "UpperTorso": 336,
+    "LeftLowerLeg": 705,
+    "RightLowerLeg": 791,
+    "LeftUpperLeg": 547,
+    "LowerTorso": 1019,
+    "RightUpperLeg": 815
+  },
+  "cross_region_edges": 961,
+  "total_edges": 10456,
+  "edge_stretch_p99": 1.5210537910461426,
+  "edge_stretch_max": 5.183772563934326,
+  "edges_stretched_over_3x": 2,
+  "cross_region_edges_stretched_over_3x": 1,
+  "worst_edges": [
+    {
+      "vertices": [
+        2212,
+        2214
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "RightUpperLeg"
+      ],
+      "ratio": 5.184,
+      "distance": [
+        0.1396,
+        0.1395
+      ]
+    },
+    {
+      "vertices": [
+        1383,
+        1390
+      ],
+      "regions": [
+        "RightFoot",
+        "RightLowerLeg"
+      ],
+      "ratio": 3.35,
+      "distance": [
+        0.1135,
+        0.1012
+      ]
+    },
+    {
+      "vertices": [
+        1380,
+        1384
+      ],
+      "regions": [
+        "RightFoot",
+        "RightLowerLeg"
+      ],
+      "ratio": 2.97,
+      "distance": [
+        0.087,
+        0.086
+      ]
+    },
+    {
+      "vertices": [
+        1617,
+        1631
+      ],
+      "regions": [
+        "LeftFoot",
+        "LeftLowerLeg"
+      ],
+      "ratio": 2.951,
+      "distance": [
+        0.0739,
+        0.0795
+      ]
+    },
+    {
+      "vertices": [
+        3522,
+        3538
+      ],
+      "regions": [
+        "LeftFoot",
+        "LeftLowerLeg"
+      ],
+      "ratio": 2.951,
+      "distance": [
+        0.0739,
+        0.0795
+      ]
+    },
+    {
+      "vertices": [
+        3627,
+        3636
+      ],
+      "regions": [
+        "RightLowerLeg",
+        "RightFoot"
+      ],
+      "ratio": 2.762,
+      "distance": [
+        0.1164,
+        0.0757
+      ]
+    },
+    {
+      "vertices": [
+        1778,
+        1797
+      ],
+      "regions": [
+        "RightLowerLeg",
+        "RightFoot"
+      ],
+      "ratio": 2.762,
+      "distance": [
+        0.1164,
+        0.0757
+      ]
+    },
+    {
+      "vertices": [
+        2216,
+        2217
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "RightUpperLeg"
+      ],
+      "ratio": 2.723,
+      "distance": [
+        0.0682,
+        0.0698
+      ]
+    },
+    {
+      "vertices": [
+        1465,
+        1468
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "LeftUpperLeg"
+      ],
+      "ratio": 2.581,
+      "distance": [
+        0.0288,
+        0.0494
+      ]
+    },
+    {
+      "vertices": [
+        3425,
+        3813
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "LeftUpperLeg"
+      ],
+      "ratio": 2.466,
+      "distance": [
+        0.0085,
+        0.0289
+      ]
+    },
+    {
+      "vertices": [
+        2079,
+        2082
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "LeftUpperLeg"
+      ],
+      "ratio": 2.466,
+      "distance": [
+        0.0085,
+        0.0289
+      ]
+    },
+    {
+      "vertices": [
+        1469,
+        2085
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "LeftUpperLeg"
+      ],
+      "ratio": 2.422,
+      "distance": [
+        0.0149,
+        0.041
+      ]
+    },
+    {
+      "vertices": [
+        1938,
+        1939
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "LeftUpperLeg"
+      ],
+      "ratio": 2.418,
+      "distance": [
+        0.0489,
+        0.0174
+      ]
+    },
+    {
+      "vertices": [
+        1665,
+        1668
+      ],
+      "regions": [
+        "RightUpperLeg",
+        "LeftUpperLeg"
+      ],
+      "ratio": 2.386,
+      "distance": [
+        0.0288,
+        0.0334
+      ]
+    },
+    {
+      "vertices": [
+        1464,
+        1465
+      ],
+      "regions": [
+        "LeftUpperLeg",
+        "RightUpperLeg"
+      ],
+      "ratio": 2.386,
+      "distance": [
+        0.0334,
+        0.0288
+      ]
+    }
+  ]
+}

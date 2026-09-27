@@ -1,0 +1,527 @@
+{
+  "133331049150205": {
+    "baseline": {
+      "p99": 1.6517881155014038,
+      "over_3x": 9,
+      "edges": 5830
+    },
+    "blended": {
+      "p99": 1.20712842296109,
+      "over_3x": 5,
+      "edges": 5830
+    },
+    "constrained": {
+      "p99": 1.347589597472307,
+      "over_3x": 6,
+      "edges": 5830
+    },
+    "changed_vertices": 578,
+    "accepted_vertices": 569,
+    "face_changes": {
+      "faces": 3726,
+      "area_under_quarter": 92,
+      "area_over_fourfold": 45,
+      "normal_reversed": 152,
+      "normal_rotated_over_90_degrees": 152,
+      "area_ratio_p01": 0.1464227071182889
+    },
+    "constrained_face_changes": {
+      "faces": 3726,
+      "area_under_quarter": 0,
+      "area_over_fourfold": 23,
+      "normal_reversed": 0,
+      "normal_rotated_over_90_degrees": 0,
+      "area_ratio_p01": 0.5253734635429959
+    },
+    "outer_p99": 1.5255002831281685,
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 15842,
+        "visible_shirt_pixels": 15132,
+        "visible_fraction": 0.9551824264613054
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 9286,
+        "visible_shirt_pixels": 7031,
+        "visible_fraction": 0.7571613181132888
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 15842,
+        "visible_shirt_pixels": 15825,
+        "visible_fraction": 0.9989269031687918
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 13768,
+        "visible_shirt_pixels": 12247,
+        "visible_fraction": 0.8895264381173736
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\chart_blend_133331049150205_baseline.png",
+    "chart_blend_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 15838,
+        "visible_shirt_pixels": 15113,
+        "visible_fraction": 0.9542240181841142
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 9320,
+        "visible_shirt_pixels": 6972,
+        "visible_fraction": 0.748068669527897
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 15838,
+        "visible_shirt_pixels": 15800,
+        "visible_fraction": 0.9976007071599949
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 13826,
+        "visible_shirt_pixels": 12218,
+        "visible_fraction": 0.8836973817445393
+      }
+    },
+    "chart_blend_image": "artifacts\\clothing_audit\\chart_blend_133331049150205_chart_blend.png",
+    "constrained_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 15840,
+        "visible_shirt_pixels": 15117,
+        "visible_fraction": 0.9543560606060606
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 9274,
+        "visible_shirt_pixels": 7001,
+        "visible_fraction": 0.7549061893465603
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 15840,
+        "visible_shirt_pixels": 15814,
+        "visible_fraction": 0.9983585858585858
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 13798,
+        "visible_shirt_pixels": 12237,
+        "visible_fraction": 0.8868676619799971
+      }
+    },
+    "constrained_image": "artifacts\\clothing_audit\\chart_blend_133331049150205_constrained.png"
+  },
+  "72628400373948": {
+    "baseline": {
+      "p99": 1.6568914651870728,
+      "over_3x": 11,
+      "edges": 4759
+    },
+    "blended": {
+      "p99": 1.5011574993356611,
+      "over_3x": 3,
+      "edges": 4759
+    },
+    "constrained": {
+      "p99": 1.5754945386692343,
+      "over_3x": 6,
+      "edges": 4759
+    },
+    "changed_vertices": 672,
+    "accepted_vertices": 661,
+    "face_changes": {
+      "faces": 2819,
+      "area_under_quarter": 48,
+      "area_over_fourfold": 16,
+      "normal_reversed": 87,
+      "normal_rotated_over_90_degrees": 87,
+      "area_ratio_p01": 0.18324672204843434
+    },
+    "constrained_face_changes": {
+      "faces": 2819,
+      "area_under_quarter": 0,
+      "area_over_fourfold": 12,
+      "normal_reversed": 0,
+      "normal_rotated_over_90_degrees": 0,
+      "area_ratio_p01": 0.5159421703415875
+    },
+    "outer_p99": 1.7040603239656922,
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23596,
+        "visible_shirt_pixels": 21882,
+        "visible_fraction": 0.9273605695880658
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 11773,
+        "visible_shirt_pixels": 11212,
+        "visible_fraction": 0.95234859424106
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23596,
+        "visible_shirt_pixels": 23590,
+        "visible_fraction": 0.9997457196134938
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 19930,
+        "visible_shirt_pixels": 18442,
+        "visible_fraction": 0.9253386853988962
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\chart_blend_72628400373948_baseline.png",
+    "chart_blend_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23582,
+        "visible_shirt_pixels": 21839,
+        "visible_fraction": 0.9260876940039012
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 11644,
+        "visible_shirt_pixels": 11011,
+        "visible_fraction": 0.9456372380625214
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23582,
+        "visible_shirt_pixels": 23536,
+        "visible_fraction": 0.9980493596811127
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 19957,
+        "visible_shirt_pixels": 18500,
+        "visible_fraction": 0.9269930350253044
+      }
+    },
+    "chart_blend_image": "artifacts\\clothing_audit\\chart_blend_72628400373948_chart_blend.png",
+    "constrained_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23613,
+        "visible_shirt_pixels": 21874,
+        "visible_fraction": 0.9263541269639606
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 11671,
+        "visible_shirt_pixels": 11027,
+        "visible_fraction": 0.9448204952446234
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23613,
+        "visible_shirt_pixels": 23573,
+        "visible_fraction": 0.9983060178715114
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 19978,
+        "visible_shirt_pixels": 18508,
+        "visible_fraction": 0.9264190609670637
+      }
+    },
+    "constrained_image": "artifacts\\clothing_audit\\chart_blend_72628400373948_constrained.png"
+  },
+  "109837605892174": {
+    "baseline": {
+      "p99": 2.3099865913391113,
+      "over_3x": 33,
+      "edges": 6646
+    },
+    "blended": {
+      "p99": 1.5550953464132593,
+      "over_3x": 3,
+      "edges": 6646
+    },
+    "constrained": {
+      "p99": 1.9770615697014726,
+      "over_3x": 10,
+      "edges": 6646
+    },
+    "changed_vertices": 752,
+    "accepted_vertices": 737,
+    "face_changes": {
+      "faces": 3989,
+      "area_under_quarter": 184,
+      "area_over_fourfold": 50,
+      "normal_reversed": 253,
+      "normal_rotated_over_90_degrees": 253,
+      "area_ratio_p01": 0.08922559384384804
+    },
+    "constrained_face_changes": {
+      "faces": 3989,
+      "area_under_quarter": 0,
+      "area_over_fourfold": 34,
+      "normal_reversed": 0,
+      "normal_rotated_over_90_degrees": 0,
+      "area_ratio_p01": 0.5127421361810227
+    },
+    "outer_p99": 1.5255005846333929,
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23114,
+        "visible_shirt_pixels": 22643,
+        "visible_fraction": 0.9796227394652591
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 14250,
+        "visible_shirt_pixels": 13399,
+        "visible_fraction": 0.9402807017543859
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23114,
+        "visible_shirt_pixels": 22777,
+        "visible_fraction": 0.9854200917193043
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 20435,
+        "visible_shirt_pixels": 20129,
+        "visible_fraction": 0.9850256912160509
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\chart_blend_109837605892174_baseline.png",
+    "chart_blend_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 22822,
+        "visible_shirt_pixels": 22378,
+        "visible_fraction": 0.9805450880729121
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 13774,
+        "visible_shirt_pixels": 12846,
+        "visible_fraction": 0.9326266879628285
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 22822,
+        "visible_shirt_pixels": 22282,
+        "visible_fraction": 0.9763386206292174
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 20237,
+        "visible_shirt_pixels": 19749,
+        "visible_fraction": 0.9758857538172654
+      }
+    },
+    "chart_blend_image": "artifacts\\clothing_audit\\chart_blend_109837605892174_chart_blend.png",
+    "constrained_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23092,
+        "visible_shirt_pixels": 22629,
+        "visible_fraction": 0.9799497661527802
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 14124,
+        "visible_shirt_pixels": 13201,
+        "visible_fraction": 0.9346502407250071
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23092,
+        "visible_shirt_pixels": 22678,
+        "visible_fraction": 0.9820717131474104
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 20491,
+        "visible_shirt_pixels": 20075,
+        "visible_fraction": 0.9796984041774438
+      }
+    },
+    "constrained_image": "artifacts\\clothing_audit\\chart_blend_109837605892174_constrained.png"
+  },
+  "114590471167431": {
+    "baseline": {
+      "p99": 3.285386800765991,
+      "over_3x": 86,
+      "edges": 6442
+    },
+    "blended": {
+      "p99": 1.8198444554166702,
+      "over_3x": 24,
+      "edges": 6442
+    },
+    "constrained": {
+      "p99": 2.629681287325119,
+      "over_3x": 47,
+      "edges": 6442
+    },
+    "changed_vertices": 732,
+    "accepted_vertices": 714,
+    "face_changes": {
+      "faces": 3984,
+      "area_under_quarter": 134,
+      "area_over_fourfold": 55,
+      "normal_reversed": 225,
+      "normal_rotated_over_90_degrees": 225,
+      "area_ratio_p01": 0.09423699106939883
+    },
+    "constrained_face_changes": {
+      "faces": 3984,
+      "area_under_quarter": 0,
+      "area_over_fourfold": 33,
+      "normal_reversed": 0,
+      "normal_rotated_over_90_degrees": 0,
+      "area_ratio_p01": 0.517014883942462
+    },
+    "outer_p99": 1.4130405975350704,
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 16870,
+        "visible_shirt_pixels": 16402,
+        "visible_fraction": 0.9722584469472436
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 14855,
+        "visible_shirt_pixels": 10134,
+        "visible_fraction": 0.6821945472904746
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 16870,
+        "visible_shirt_pixels": 15845,
+        "visible_fraction": 0.9392412566686426
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 18406,
+        "visible_shirt_pixels": 15073,
+        "visible_fraction": 0.8189177442138433
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\chart_blend_114590471167431_baseline.png",
+    "chart_blend_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 16418,
+        "visible_shirt_pixels": 15970,
+        "visible_fraction": 0.9727128761115849
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 13452,
+        "visible_shirt_pixels": 9335,
+        "visible_fraction": 0.6939488551888195
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 16418,
+        "visible_shirt_pixels": 15456,
+        "visible_fraction": 0.9414057741503228
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 17751,
+        "visible_shirt_pixels": 14203,
+        "visible_fraction": 0.8001239366796237
+      }
+    },
+    "chart_blend_image": "artifacts\\clothing_audit\\chart_blend_114590471167431_chart_blend.png",
+    "constrained_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 16717,
+        "visible_shirt_pixels": 16241,
+        "visible_fraction": 0.9715259915056529
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 14329,
+        "visible_shirt_pixels": 9664,
+        "visible_fraction": 0.674436457533673
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 16717,
+        "visible_shirt_pixels": 15674,
+        "visible_fraction": 0.9376084225638571
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 18034,
+        "visible_shirt_pixels": 14314,
+        "visible_fraction": 0.7937229677276256
+      }
+    },
+    "constrained_image": "artifacts\\clothing_audit\\chart_blend_114590471167431_constrained.png"
+  },
+  "16185652164": {
+    "baseline": {
+      "p99": 4.327791213989258,
+      "over_3x": 240,
+      "edges": 7351
+    },
+    "blended": {
+      "p99": 3.4598647999732792,
+      "over_3x": 101,
+      "edges": 7351
+    },
+    "constrained": {
+      "p99": 3.9674679963751522,
+      "over_3x": 162,
+      "edges": 7351
+    },
+    "changed_vertices": 1312,
+    "accepted_vertices": 1258,
+    "face_changes": {
+      "faces": 4424,
+      "area_under_quarter": 335,
+      "area_over_fourfold": 132,
+      "normal_reversed": 622,
+      "normal_rotated_over_90_degrees": 622,
+      "area_ratio_p01": 0.0621326506223695
+    },
+    "constrained_face_changes": {
+      "faces": 4424,
+      "area_under_quarter": 0,
+      "area_over_fourfold": 35,
+      "normal_reversed": 0,
+      "normal_rotated_over_90_degrees": 0,
+      "area_ratio_p01": 0.5066560760735836
+    },
+    "outer_p99": 4.598283558276434,
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 52558,
+        "visible_shirt_pixels": 49636,
+        "visible_fraction": 0.9444042771794969
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 37505,
+        "visible_shirt_pixels": 37008,
+        "visible_fraction": 0.9867484335421943
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 52558,
+        "visible_shirt_pixels": 51168,
+        "visible_fraction": 0.9735530271319305
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 51234,
+        "visible_shirt_pixels": 48817,
+        "visible_fraction": 0.9528242963656947
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\chart_blend_16185652164_baseline.png",
+    "chart_blend_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 50409,
+        "visible_shirt_pixels": 46949,
+        "visible_fraction": 0.9313614632307723
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 34496,
+        "visible_shirt_pixels": 33792,
+        "visible_fraction": 0.9795918367346939
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 50409,
+        "visible_shirt_pixels": 48893,
+        "visible_fraction": 0.9699260052768355
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 49130,
+        "visible_shirt_pixels": 46160,
+        "visible_fraction": 0.939548137594138
+      }
+    },
+    "chart_blend_image": "artifacts\\clothing_audit\\chart_blend_16185652164_chart_blend.png",
+    "constrained_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 51704,
+        "visible_shirt_pixels": 48854,
+        "visible_fraction": 0.9448785393779978
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 36253,
+        "visible_shirt_pixels": 35669,
+        "visible_fraction": 0.9838909883320001
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 51704,
+        "visible_shirt_pixels": 50238,
+        "visible_fraction": 0.9716462942905771
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 50631,
+        "visible_shirt_pixels": 47870,
+        "visible_fraction": 0.9454681914242262
+      }
+    },
+    "constrained_image": "artifacts\\clothing_audit\\chart_blend_16185652164_constrained.png"
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "calca skater": {
+    "residuo_cm": {
+      "mediana": 0.0,
+      "p90": 0.02,
+      "max": 7.1
+    },
+    "esticamento_do_mapa_p50_p99": [
+      1.5,
+      1.5
+    ],
+    "atual (gira + estica)": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16,
+      "residuo 0-0.5 cm (2040 v): erro mediano": 2.4,
+      "residuo 0.5-3 cm (2 v): erro mediano": 6.5,
+      "residuo 3-8 cm (1 v): erro mediano": 4.2
+    },
+    "so rotacao": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16,
+      "residuo 0-0.5 cm (2040 v): erro mediano": 2.4,
+      "residuo 0.5-3 cm (2 v): erro mediano": 6.4,
+      "residuo 3-8 cm (1 v): erro mediano": 4.6
+    },
+    "sem transformar": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.42,
+      "arestas_3x": 16,
+      "residuo 0-0.5 cm (2040 v): erro mediano": 2.4,
+      "residuo 0.5-3 cm (2 v): erro mediano": 5.6,
+      "residuo 3-8 cm (1 v): erro mediano": 13.3
+    }
+  },
+  "saia-short": {
+    "residuo_cm": {
+      "mediana": 0.0,
+      "p90": 2.41,
+      "max": 11.0
+    },
+    "esticamento_do_mapa_p50_p99": [
+      1.5,
+      1.5
+    ],
+    "atual (gira + estica)": {
+      "acima_5cm_pct": 9.1,
+      "mediana_cm": 1.41,
+      "arestas_3x": 145,
+      "residuo 0-0.5 cm (2771 v): erro mediano": 1.2,
+      "residuo 0.5-3 cm (116 v): erro mediano": 3.4,
+      "residuo 3-8 cm (99 v): erro mediano": 5.7,
+      "residuo 8-mais cm (195 v): erro mediano": 7.1
+    },
+    "so rotacao": {
+      "acima_5cm_pct": 8.7,
+      "mediana_cm": 1.41,
+      "arestas_3x": 145,
+      "residuo 0-0.5 cm (2771 v): erro mediano": 1.2,
+      "residuo 0.5-3 cm (116 v): erro mediano": 3.4,
+      "residuo 3-8 cm (99 v): erro mediano": 5.0,
+      "residuo 8-mais cm (195 v): erro mediano": 6.5
+    },
+    "sem transformar": {
+      "acima_5cm_pct": 13.3,
+      "mediana_cm": 1.41,
+      "arestas_3x": 51,
+      "residuo 0-0.5 cm (2771 v): erro mediano": 1.2,
+      "residuo 0.5-3 cm (116 v): erro mediano": 6.2,
+      "residuo 3-8 cm (99 v): erro mediano": 12.1,
+      "residuo 8-mais cm (195 v): erro mediano": 19.6
+    }
+  },
+  "jeans com bota": {
+    "residuo_cm": {
+      "mediana": 0.01,
+      "p90": 0.14,
+      "max": 8.2
+    },
+    "esticamento_do_mapa_p50_p99": [
+      1.5,
+      1.5
+    ],
+    "atual (gira + estica)": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17,
+      "residuo 0-0.5 cm (2697 v): erro mediano": 1.9,
+      "residuo 0.5-3 cm (3 v): erro mediano": 9.5,
+      "residuo 8-mais cm (1 v): erro mediano": 3.7
+    },
+    "so rotacao": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17,
+      "residuo 0-0.5 cm (2697 v): erro mediano": 1.9,
+      "residuo 0.5-3 cm (3 v): erro mediano": 14.0,
+      "residuo 8-mais cm (1 v): erro mediano": 5.1
+    },
+    "sem transformar": {
+      "acima_5cm_pct": 6.8,
+      "mediana_cm": 1.9,
+      "arestas_3x": 43,
+      "residuo 0-0.5 cm (2697 v): erro mediano": 1.9,
+      "residuo 0.5-3 cm (3 v): erro mediano": 14.9,
+      "residuo 8-mais cm (1 v): erro mediano": 7.4
+    }
+  },
+  "vestido": {
+    "residuo_cm": {
+      "mediana": 0.01,
+      "p90": 1.35,
+      "max": 7.8
+    },
+    "esticamento_do_mapa_p50_p99": [
+      1.5,
+      1.5
+    ],
+    "atual (gira + estica)": {
+      "acima_5cm_pct": 7.0,
+      "mediana_cm": 1.19,
+      "arestas_3x": 42,
+      "residuo 0-0.5 cm (2371 v): erro mediano": 1.1,
+      "residuo 0.5-3 cm (581 v): erro mediano": 1.3,
+      "residuo 3-8 cm (90 v): erro mediano": 8.5
+    },
+    "so rotacao": {
+      "acima_5cm_pct": 7.2,
+      "mediana_cm": 1.32,
+      "arestas_3x": 49,
+      "residuo 0-0.5 cm (2371 v): erro mediano": 1.1,
+      "residuo 0.5-3 cm (581 v): erro mediano": 1.7,
+      "residuo 3-8 cm (90 v): erro mediano": 9.0
+    },
+    "sem transformar": {
+      "acima_5cm_pct": 9.0,
+      "mediana_cm": 1.59,
+      "arestas_3x": 32,
+      "residuo 0-0.5 cm (2371 v): erro mediano": 1.2,
+      "residuo 0.5-3 cm (581 v): erro mediano": 2.8,
+      "residuo 3-8 cm (90 v): erro mediano": 12.6
+    }
+  },
+  "camisa social": {
+    "residuo_cm": {
+      "mediana": 0.0,
+      "p90": 0.04,
+      "max": 2.4
+    },
+    "esticamento_do_mapa_p50_p99": [
+      1.5,
+      1.5
+    ],
+    "atual (gira + estica)": {
+      "acima_5cm_pct": 0.6,
+      "mediana_cm": 1.38,
+      "arestas_3x": 21,
+      "residuo 0-0.5 cm (2190 v): erro mediano": 1.4,
+      "residuo 0.5-3 cm (79 v): erro mediano": 2.4
+    },
+    "so rotacao": {
+      "acima_5cm_pct": 0.5,
+      "mediana_cm": 1.38,
+      "arestas_3x": 21,
+      "residuo 0-0.5 cm (2190 v): erro mediano": 1.4,
+      "residuo 0.5-3 cm (79 v): erro mediano": 2.3
+    },
+    "sem transformar": {
+      "acima_5cm_pct": 0.7,
+      "mediana_cm": 1.38,
+      "arestas_3x": 19,
+      "residuo 0-0.5 cm (2190 v): erro mediano": 1.4,
+      "residuo 0.5-3 cm (79 v): erro mediano": 2.0
+    }
+  },
+  "jaqueta bomber": {
+    "residuo_cm": {
+      "mediana": 0.0,
+      "p90": 1.22,
+      "max": 6.7
+    },
+    "esticamento_do_mapa_p50_p99": [
+      1.5,
+      1.5
+    ],
+    "atual (gira + estica)": {
+      "acima_5cm_pct": 10.2,
+      "mediana_cm": 2.02,
+      "arestas_3x": 43,
+      "residuo 0-0.5 cm (1605 v): erro mediano": 1.8,
+      "residuo 0.5-3 cm (380 v): erro mediano": 2.8,
+      "residuo 3-8 cm (4 v): erro mediano": 4.5
+    },
+    "so rotacao": {
+      "acima_5cm_pct": 11.3,
+      "mediana_cm": 2.08,
+      "arestas_3x": 33,
+      "residuo 0-0.5 cm (1605 v): erro mediano": 1.8,
+      "residuo 0.5-3 cm (380 v): erro mediano": 3.2,
+      "residuo 3-8 cm (4 v): erro mediano": 6.4
+    },
+    "sem transformar": {
+      "acima_5cm_pct": 11.9,
+      "mediana_cm": 2.16,
+      "arestas_3x": 26,
+      "residuo 0-0.5 cm (1605 v): erro mediano": 1.8,
+      "residuo 0.5-3 cm (380 v): erro mediano": 3.5,
+      "residuo 3-8 cm (4 v): erro mediano": 11.0
+    }
+  }
+}

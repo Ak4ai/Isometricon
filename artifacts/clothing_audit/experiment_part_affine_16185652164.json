@@ -1,0 +1,85 @@
+{
+  "asset": "16185652164",
+  "baseline_visible": {
+    "p99": 4.327791213989258,
+    "max": 12.227947235107422,
+    "over_3x": 240
+  },
+  "part_affine_visible": {
+    "p99": 1.4648948277974974,
+    "max": 3.679860315394089,
+    "over_3x": 4
+  },
+  "baseline_outer": {
+    "p99": 4.6109759926204505,
+    "max": 19.98519910353219,
+    "over_3x": 192
+  },
+  "part_affine_outer": {
+    "p99": 1.1080609281175213,
+    "max": 3.4769069474637497,
+    "over_3x": 4
+  },
+  "part_reference_fit": {
+    "Head": {
+      "n": 343,
+      "ref_error_p99": 0.0740066843073475
+    },
+    "LeftFoot": {
+      "n": 86,
+      "ref_error_p99": 0.10897516156702616
+    },
+    "LeftHand": {
+      "n": 86,
+      "ref_error_p99": 0.08126925511814018
+    },
+    "LeftLowerArm": {
+      "n": 77,
+      "ref_error_p99": 0.049668520016545425
+    },
+    "LeftLowerLeg": {
+      "n": 88,
+      "ref_error_p99": 0.0634595600620253
+    },
+    "LeftUpperArm": {
+      "n": 77,
+      "ref_error_p99": 0.11281455426155326
+    },
+    "LeftUpperLeg": {
+      "n": 88,
+      "ref_error_p99": 0.08070025964822822
+    },
+    "LowerTorso": {
+      "n": 105,
+      "ref_error_p99": 0.093094288702573
+    },
+    "RightFoot": {
+      "n": 86,
+      "ref_error_p99": 0.10950897080092396
+    },
+    "RightHand": {
+      "n": 86,
+      "ref_error_p99": 0.08126921876221993
+    },
+    "RightLowerArm": {
+      "n": 77,
+      "ref_error_p99": 0.04966853517966148
+    },
+    "RightLowerLeg": {
+      "n": 88,
+      "ref_error_p99": 0.06345952225013493
+    },
+    "RightUpperArm": {
+      "n": 77,
+      "ref_error_p99": 0.11281454495313593
+    },
+    "RightUpperLeg": {
+      "n": 88,
+      "ref_error_p99": 0.08070055918246706
+    },
+    "UpperTorso": {
+      "n": 257,
+      "ref_error_p99": 0.11229189405036823
+    }
+  }
+}

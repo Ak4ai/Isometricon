@@ -1,0 +1,458 @@
+{
+  "replay_max_error": 0.0,
+  "bulk_scale_frozen": 1.23787060105359,
+  "variants": {
+    "radial_previous": {
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1668,
+        "penetrating_fraction": 0.278231859883236,
+        "depth_max_over_body_height": 0.039269713505872904,
+        "depth_p95_over_body_height": 0.016130549252613747,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 957,
+          "under_third": 6,
+          "quantiles": [
+            0.1839122316679943,
+            0.6255640017926923,
+            1.805437909247006,
+            5.7202254799568335,
+            14.497461246177151
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 962,
+          "under_third": 7,
+          "quantiles": [
+            0.1839122316679943,
+            0.621308556391477,
+            1.7933422591975319,
+            5.708163730527528,
+            14.497461246177151
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 1,
+          "over_nine": 235,
+          "quantiles": [
+            0.023605853505006248,
+            0.47902589893524344,
+            2.7901581761495873,
+            19.07554772488627,
+            75.057549920026
+          ]
+        }
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "binding_inversions": 263,
+      "regions": {
+        "Head": {
+          "vertices": 60,
+          "penetrating": 29,
+          "inverted_bindings": 2
+        },
+        "LeftUpperArm": {
+          "vertices": 325,
+          "penetrating": 55,
+          "inverted_bindings": 12
+        },
+        "LowerTorso": {
+          "vertices": 338,
+          "penetrating": 86,
+          "inverted_bindings": 0
+        },
+        "RightUpperArm": {
+          "vertices": 303,
+          "penetrating": 42,
+          "inverted_bindings": 5
+        },
+        "UpperTorso": {
+          "vertices": 1243,
+          "penetrating": 453,
+          "inverted_bindings": 244
+        }
+      }
+    },
+    "foreign_removed": {
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1707,
+        "penetrating_fraction": 0.2847372810675563,
+        "depth_max_over_body_height": 0.039269713505872904,
+        "depth_p95_over_body_height": 0.01678303434873566,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 1018,
+          "under_third": 7,
+          "quantiles": [
+            0.06902689220300934,
+            0.613030617146819,
+            1.8134835538766796,
+            5.861411662959986,
+            17.441591833472128
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 1023,
+          "under_third": 8,
+          "quantiles": [
+            0.06902689220300934,
+            0.6024210003683684,
+            1.8011115922083107,
+            5.842370291640127,
+            17.441591833472128
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 4,
+          "over_nine": 264,
+          "quantiles": [
+            0.023605853505006248,
+            0.46216049747475674,
+            2.834403780191921,
+            23.348041478174352,
+            75.057549920026
+          ]
+        }
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 0.11780019709792167,
+          "over_1e_minus_5": 88,
+          "over_1e_minus_3": 69
+        }
+      },
+      "binding_inversions": 183,
+      "regions": {
+        "Head": {
+          "vertices": 60,
+          "penetrating": 20,
+          "inverted_bindings": 0
+        },
+        "LeftUpperArm": {
+          "vertices": 325,
+          "penetrating": 57,
+          "inverted_bindings": 3
+        },
+        "LowerTorso": {
+          "vertices": 338,
+          "penetrating": 86,
+          "inverted_bindings": 0
+        },
+        "RightUpperArm": {
+          "vertices": 303,
+          "penetrating": 42,
+          "inverted_bindings": 1
+        },
+        "UpperTorso": {
+          "vertices": 1243,
+          "penetrating": 479,
+          "inverted_bindings": 179
+        }
+      }
+    }
+  },
+  "witnesses": [
+    {
+      "vertex": 88,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.8534912264028887,
+      "residual": 8.700613912281285e-05,
+      "before": [
+        1.144394325294945,
+        0.17910978217220544,
+        0.6488744336256397
+      ],
+      "after": [
+        1.144394325294945,
+        0.17910978217220544,
+        0.6488744336256397
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 92,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.8571389049798536,
+      "residual": 7.393002801225925e-05,
+      "before": [
+        1.1473437575194116,
+        0.1506715158136245,
+        0.5031374442165145
+      ],
+      "after": [
+        1.1473437575194116,
+        0.1506715158136245,
+        0.5031374442165145
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 93,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.9061019493861853,
+      "residual": 9.692372786426896e-05,
+      "before": [
+        1.15064437748409,
+        0.12672941237909283,
+        0.7336376428492059
+      ],
+      "after": [
+        1.15064437748409,
+        0.12672941237909283,
+        0.7336376428492059
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 369,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.7029388875177208,
+      "residual": 0.00021470332791456514,
+      "before": [
+        1.1501747891991896,
+        0.036609241130569604,
+        0.5987824925413047
+      ],
+      "after": [
+        1.1501747891991896,
+        0.036609241130569604,
+        0.5987824925413047
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 377,
+      "region": "LeftUpperArm",
+      "support_weight_by_source_part": {
+        "LeftUpperArm": 1.0
+      },
+      "level": 0.9601100582508334,
+      "residual": 8.48027277406269e-12,
+      "before": [
+        0.916331605379011,
+        0.275420665796341,
+        1.1754654759652106
+      ],
+      "after": [
+        0.916331605379011,
+        0.275420665796341,
+        1.1754654759652106
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 465,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.9061019493861853,
+      "residual": 9.692372786426896e-05,
+      "before": [
+        1.15064437748409,
+        0.12672941237909283,
+        0.7336376428492059
+      ],
+      "after": [
+        1.15064437748409,
+        0.12672941237909283,
+        0.7336376428492059
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 466,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.7029388875177208,
+      "residual": 0.00021470332791456514,
+      "before": [
+        1.1501747891991896,
+        0.036609241130569604,
+        0.5987824925413047
+      ],
+      "after": [
+        1.1501747891991896,
+        0.036609241130569604,
+        0.5987824925413047
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 480,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.8363879882722375,
+      "residual": 0.00011090480123211347,
+      "before": [
+        1.1293832635685574,
+        -0.19370238689329833,
+        0.5553252625284594
+      ],
+      "after": [
+        1.1293832635685574,
+        -0.19370238689329833,
+        0.5553252625284594
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 1486,
+      "region": "RightUpperArm",
+      "support_weight_by_source_part": {
+        "RightUpperArm": 1.0
+      },
+      "level": 0.0,
+      "residual": 0.027799107433236898,
+      "before": [
+        -1.9583013388501447,
+        0.4252359497862036,
+        1.4280653887639687
+      ],
+      "after": [
+        -1.9583013388501447,
+        0.4252359497862036,
+        1.4280653887639687
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    },
+    {
+      "vertex": 1595,
+      "region": "UpperTorso",
+      "support_weight_by_source_part": {
+        "UpperTorso": 1.0
+      },
+      "level": 0.8487032415629722,
+      "residual": 5.827512385770673e-07,
+      "before": [
+        -1.1215770540634336,
+        -0.015049447329290566,
+        0.641919374786124
+      ],
+      "after": [
+        -1.1215770540634336,
+        -0.015049447329290566,
+        0.641919374786124
+      ],
+      "before_inside": true,
+      "after_inside": true,
+      "displacement_over_body_height": 0.0
+    }
+  ],
+  "scope": "part labels from unambiguous reference UVs; fixed source weights, frames, scale, binding; not runtime",
+  "penetrating_vertex_transitions": {
+    "recovered": 13,
+    "newly_inside": 32,
+    "remained_inside": 652
+  },
+  "foreign_support": {
+    "cage_vertices_with_foreign": 686,
+    "garment_vertices_with_foreign": 925,
+    "penetrating_vertices_without_foreign": 345,
+    "by_binding_region": {
+      "Head": {
+        "max": 0.6321055101881434,
+        "mean": 0.3944689460320803
+      },
+      "LeftUpperArm": {
+        "max": 0.4826612058535328,
+        "mean": 0.07745366168281112
+      },
+      "LowerTorso": {
+        "max": 0.4680598419064844,
+        "mean": 0.050755615338472
+      },
+      "RightUpperArm": {
+        "max": 0.47422471372179276,
+        "mean": 0.07421941580084747
+      },
+      "UpperTorso": {
+        "max": 0.9352663609740616,
+        "mean": 0.09826976086617319
+      }
+    }
+  },
+  "sha256": {
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205.npz": "bcc497c5a1f6c3396d4b547e2b9be056e7092e5431960f6835d82a5340ab1ca3",
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205_binding.npz": "531c66780a65f5835443af6c9e08e357832519d40ae695fb9d40c653bc97a6ea",
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205_outputs.npz": "f81918706ba4241b6dcf2d9e71b96a48e0fffc13de3353127069299d259e8dfe",
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205.json": "ec68591f44e6e7a12d159634b35605867c9fe51066fb21d61c5c906ff19eeb88",
+    "scripts\\audit_blocky_radial_influences.py": "02cd076de9114e017e827bd7c3a0813fc2d1495320968c25322467b105b64a80",
+    "src\\clothing\\multi_influence_shell.py": "826d8c206251677395ef45b5d9cb083b26f3a583e0b66a426157a2b3e146a1bc",
+    "scripts\\experiment_canonical_radial.py": "f70d08a1f0131b39a6c373c021f3a2681558bf9774d07c40d47494d8a12ce879",
+    "src\\clothing\\wrap_layer_fit.py": "965d646e8ecf981ccafd58bea3fc26a93eeeb50a2afe43074bced93d6faea96a",
+    "scripts\\radial_validation_metrics.py": "ecb525164107f6d5a29842acf9cca75eab4ea7839fc83de11b9ef2805159d07d"
+  }
+}

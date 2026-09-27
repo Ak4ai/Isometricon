@@ -1,0 +1,125 @@
+{
+  "method": "angular surface-coordinate QP, fixed axial coordinates and normal offset",
+  "constants": {
+    "carrier_radius": 0.24,
+    "garment_radius": 0.29,
+    "body_radius": 0.2,
+    "neighbor_radius": 0.3,
+    "clearance_margin": 0.002,
+    "edge_strain_limit": 0.1
+  },
+  "cases": {
+    "open_clear": {
+      "solver": {
+        "converged": true,
+        "iterations": 1,
+        "minimum_constraint_slack": 0.0049999999999999906,
+        "energy": 0.0,
+        "active_constraints": 0,
+        "allowed_arc": [
+          0.0,
+          6.283185307179586
+        ],
+        "strain_limit": 0.1,
+        "binding_slide_max": 0.0,
+        "initial_penalized_displacement_energy": 0.0
+      },
+      "before": {
+        "samples": 1209,
+        "penetrating": 0,
+        "minimum_neighbor_clearance": 0.2105681924843495,
+        "minimum_arm_clearance": 0.08990937971995366,
+        "edge_ratio_min": 1.0,
+        "edge_ratio_max": 1.0,
+        "face_area_ratio_min": 1.0,
+        "maximum_vertex_displacement": 0.0,
+        "normal_offset_error_max": 6.938893903907228e-17,
+        "note": "vertex/edge-midpoint/face-center samples; no continuous collision certificate"
+      },
+      "after": {
+        "samples": 1209,
+        "penetrating": 0,
+        "minimum_neighbor_clearance": 0.2105681924843495,
+        "minimum_arm_clearance": 0.08990937971995366,
+        "edge_ratio_min": 1.0,
+        "edge_ratio_max": 1.0,
+        "face_area_ratio_min": 1.0,
+        "maximum_vertex_displacement": 0.0,
+        "normal_offset_error_max": 6.938893903907228e-17,
+        "note": "vertex/edge-midpoint/face-center samples; no continuous collision certificate"
+      }
+    },
+    "open_contact": {
+      "solver": {
+        "converged": true,
+        "iterations": 18,
+        "minimum_constraint_slack": -3.3306690738754696e-16,
+        "energy": 2.029290318827134,
+        "active_constraints": 17,
+        "allowed_arc": [
+          0.5779718312539259,
+          5.70521347592566
+        ],
+        "strain_limit": 0.1,
+        "binding_slide_max": 0.5279718312539259,
+        "initial_penalized_displacement_energy": 2.369411164079804
+      },
+      "before": {
+        "samples": 1209,
+        "penetrating": 777,
+        "minimum_neighbor_clearance": -0.08913885022256995,
+        "minimum_arm_clearance": 0.08990937971995366,
+        "edge_ratio_min": 1.0,
+        "edge_ratio_max": 1.0,
+        "face_area_ratio_min": 1.0,
+        "maximum_vertex_displacement": 0.0,
+        "normal_offset_error_max": 6.938893903907228e-17,
+        "note": "vertex/edge-midpoint/face-center samples; no continuous collision certificate"
+      },
+      "after": {
+        "samples": 1209,
+        "penetrating": 0,
+        "minimum_neighbor_clearance": 0.0020000000000000018,
+        "minimum_arm_clearance": 0.08992659684677384,
+        "edge_ratio_min": 0.9000178133479918,
+        "edge_ratio_max": 1.0,
+        "face_area_ratio_min": 0.9000178133479918,
+        "maximum_vertex_displacement": 0.1513396600860122,
+        "normal_offset_error_max": 6.938893903907228e-17,
+        "note": "vertex/edge-midpoint/face-center samples; no continuous collision certificate"
+      }
+    }
+  },
+  "closed_contact": {
+    "before": {
+      "samples": 2368,
+      "penetrating": 419,
+      "minimum_neighbor_clearance": -0.08999999999999997,
+      "minimum_arm_clearance": 0.08860357073493702,
+      "edge_ratio_min": 1.0,
+      "edge_ratio_max": 1.0,
+      "face_area_ratio_min": 1.0,
+      "maximum_vertex_displacement": 0.0,
+      "normal_offset_error_max": 6.938893903907228e-17,
+      "note": "vertex/edge-midpoint/face-center samples; no continuous collision certificate"
+    },
+    "obstruction": {
+      "obstructed": true,
+      "allowed_arc": [
+        0.5779718312539259,
+        5.70521347592566
+      ],
+      "assumption": "continuous degree-one closed ring on a fixed-radius cylinder"
+    },
+    "optimized": false,
+    "reason": "no admissible continuous degree-one binding exists on this fixed-radius chart"
+  },
+  "integration_gate_passed": false,
+  "sha256": {
+    "scripts\\experiment_surface_slide.py": "70fe177056f89e6add67a81e0e4f607163daefc649ea0a9f51668c9fb062e8be",
+    "src\\clothing\\experimental_surface_slide.py": "ef03d86c312a8c8009b00f431c75548ba30249d517bfbc9a41623d044092d378",
+    "tests\\test_experimental_surface_slide.py": "a02c12708953ce77a992123a22326ac5e1b6cf04a8288ba18b8ac956388ed76c",
+    "scripts\\synthetic_wrap_fixture.py": "c45ffb4d4d8f0bcb1683296e599d82025565e2794fa2d77edd32011f8dd89c49",
+    "scripts\\test_r15_shirt_transfer.py": "e31ee8589db7beb2ca33b9fd1d223db86e12733e8ce37ef6d9516029296c9edf"
+  }
+}

@@ -1,0 +1,249 @@
+{
+  "cases": {
+    "blocky_133331049150205": {
+      "coincident_source_target_spread_max_over_height": 0.0016923293478393598,
+      "input_sha256": "bcc497c5a1f6c3396d4b547e2b9be056e7092e5431960f6835d82a5340ab1ca3",
+      "0": {
+        "max": 0.09300478615079044,
+        "p99": 0.08673822981763078,
+        "median": 0.01416096318545664,
+        "vertices_over_one_percent": 1088,
+        "worst_uv_vertex_indices": [
+          1049,
+          1072,
+          444,
+          466,
+          1163,
+          556,
+          443,
+          1050,
+          1065,
+          1128
+        ]
+      },
+      "2": {
+        "max": 0.09084790902912217,
+        "p99": 0.08554755792916,
+        "median": 0.013369978214722331,
+        "vertices_over_one_percent": 1041,
+        "worst_uv_vertex_indices": [
+          1163,
+          556,
+          1072,
+          1049,
+          466,
+          444,
+          1065,
+          1128,
+          458,
+          521
+        ]
+      }
+    },
+    "female_109837605892174": {
+      "coincident_source_target_spread_max_over_height": 0.04708561968263539,
+      "input_sha256": "7c7ac63bfe5dbd3b6e6d485e496fe28858dbbfcff994b8e3aa19a3ef8a594a44",
+      "0": {
+        "max": 0.049086627026377304,
+        "p99": 0.034711468960907106,
+        "median": 0.008737076168500817,
+        "vertices_over_one_percent": 758,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          344,
+          641,
+          996
+        ]
+      },
+      "2": {
+        "max": 0.04876524134767777,
+        "p99": 0.033240764334613225,
+        "median": 0.008458840098204988,
+        "vertices_over_one_percent": 747,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          641,
+          962,
+          996
+        ]
+      }
+    },
+    "female_114590471167431": {
+      "coincident_source_target_spread_max_over_height": 0.04708561968263539,
+      "input_sha256": "3faa60bf0356ed4a86e20c16b7fdc0a0597ac86aa3c243a7572a05ebc0c50dd6",
+      "0": {
+        "max": 0.058291075146416675,
+        "p99": 0.033660050138465486,
+        "median": 0.008403862789904456,
+        "vertices_over_one_percent": 699,
+        "worst_uv_vertex_indices": [
+          953,
+          955,
+          350,
+          344,
+          406,
+          1248,
+          962,
+          996,
+          1018,
+          1017
+        ]
+      },
+      "2": {
+        "max": 0.05826033142163587,
+        "p99": 0.03353734244415684,
+        "median": 0.008195585394789229,
+        "vertices_over_one_percent": 684,
+        "worst_uv_vertex_indices": [
+          953,
+          955,
+          350,
+          344,
+          1248,
+          406,
+          996,
+          962,
+          1017,
+          1018
+        ]
+      }
+    },
+    "female_133331049150205": {
+      "coincident_source_target_spread_max_over_height": 0.04708561968263539,
+      "input_sha256": "74c3e497fea3c691d2e34f60c8fdd7376345de420415e6fc534f483fe11edf51",
+      "0": {
+        "max": 0.049086627026377186,
+        "p99": 0.03471146896090686,
+        "median": 0.008737076168500679,
+        "vertices_over_one_percent": 758,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          344,
+          641,
+          996
+        ]
+      },
+      "2": {
+        "max": 0.04876524134767772,
+        "p99": 0.03324076433461295,
+        "median": 0.008458840098205186,
+        "vertices_over_one_percent": 747,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          641,
+          962,
+          996
+        ]
+      }
+    },
+    "female_16185652164": {
+      "coincident_source_target_spread_max_over_height": 0.04708561968263539,
+      "input_sha256": "8257cb243ef2a0768a6dc233989c709db4fcb86109e84de3f076adff19844b19",
+      "0": {
+        "max": 0.04924205985618402,
+        "p99": 0.0340873413345612,
+        "median": 0.008803590219841298,
+        "vertices_over_one_percent": 764,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          344,
+          679,
+          641,
+          996
+        ]
+      },
+      "2": {
+        "max": 0.04887242449248735,
+        "p99": 0.033291979135787506,
+        "median": 0.008507550031433091,
+        "vertices_over_one_percent": 747,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          344,
+          641,
+          996
+        ]
+      }
+    },
+    "female_72628400373948": {
+      "coincident_source_target_spread_max_over_height": 0.04708561968263539,
+      "input_sha256": "e7d4f13a68a1d5b76edd2371b239413501ac0c6ef6d9ee3a7a3081c9eeea8d2a",
+      "0": {
+        "max": 0.049306277995966694,
+        "p99": 0.03306459079366476,
+        "median": 0.00846247448773794,
+        "vertices_over_one_percent": 740,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          344,
+          641,
+          996
+        ]
+      },
+      "2": {
+        "max": 0.049105413840375436,
+        "p99": 0.032859727568314505,
+        "median": 0.00817143898797594,
+        "vertices_over_one_percent": 712,
+        "worst_uv_vertex_indices": [
+          955,
+          1248,
+          953,
+          350,
+          1253,
+          1252,
+          679,
+          641,
+          344,
+          962
+        ]
+      }
+    }
+  },
+  "units": "all distances normalized by body height",
+  "sha256": {
+    "scripts\\audit_refined_reference_constraints.py": "defbce54a947d3496fdbf3a2d38d42ab4e57ae8ccb776b241c0cf91d6c3b10d5",
+    "src\\clothing\\experimental_refined_reference.py": "f8cae7471020e62fcbd80aad72738fc1493b154329fc39126f066c08a53d564b"
+  }
+}

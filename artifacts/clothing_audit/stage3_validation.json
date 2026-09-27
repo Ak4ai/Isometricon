@@ -1,0 +1,522 @@
+{
+  "file": "C:\\Users\\Henrique\\Documents\\GitHub\\Isometricon\\assets\\models\\female_cage_stage2_20260925_001439.blend",
+  "parts": {
+    "UpperTorso": {
+      "current": {
+        "vertices": 231,
+        "faces": 206,
+        "triangles": 412,
+        "boundary_edges": 54,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00015453753926778193,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 231,
+        "faces": 206,
+        "triangles": 412,
+        "boundary_edges": 54,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00015453753926778193,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 5.172172594980225e-08
+    },
+    "LowerTorso": {
+      "current": {
+        "vertices": 92,
+        "faces": 74,
+        "triangles": 148,
+        "boundary_edges": 38,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 5.85362909946534e-06,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 92,
+        "faces": 74,
+        "triangles": 148,
+        "boundary_edges": 38,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 5.209867513588022e-06,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 2.5341967137744596e-08
+    },
+    "LeftUpperArm": {
+      "current": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0002807502243571608,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00028665946141667514,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 1.7778896964787162e-07
+    },
+    "RightUpperArm": {
+      "current": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0002807535780860255,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0002866595558868202,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 2.4996253750858874e-07
+    },
+    "LeftLowerArm": {
+      "current": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00048647162140789046,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00048647162140789046,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "RightLowerArm": {
+      "current": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0004864697206475936,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 70,
+        "faces": 60,
+        "triangles": 120,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0004864697206475936,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "LeftLowerLeg": {
+      "current": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00023170754087384194,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00023170754087384194,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "RightLowerLeg": {
+      "current": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00023170754087384194,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.00023170754087384194,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "LeftUpperLeg": {
+      "current": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0004206556130434675,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0004200014013046014,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 1.7799800158392448e-08
+    },
+    "RightUpperLeg": {
+      "current": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0004200013798096874,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 80,
+        "faces": 70,
+        "triangles": 140,
+        "boundary_edges": 20,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 0.0004200013798096874,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "LeftHand": {
+      "current": {
+        "vertices": 63,
+        "faces": 60,
+        "triangles": 114,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 7.196641022746121e-05,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 63,
+        "faces": 60,
+        "triangles": 114,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 7.196641022746121e-05,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "RightHand": {
+      "current": {
+        "vertices": 63,
+        "faces": 60,
+        "triangles": 114,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 7.196650663111517e-05,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 63,
+        "faces": 60,
+        "triangles": 114,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 7.196650663111517e-05,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 0.0
+    },
+    "LeftFoot": {
+      "current": {
+        "vertices": 64,
+        "faces": 58,
+        "triangles": 116,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 8.520892153312941e-06,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 64,
+        "faces": 58,
+        "triangles": 116,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 8.520892153312941e-06,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 5.872919343239367e-09
+    },
+    "RightFoot": {
+      "current": {
+        "vertices": 64,
+        "faces": 58,
+        "triangles": 116,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 8.520892153312941e-06,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 64,
+        "faces": 58,
+        "triangles": 116,
+        "boundary_edges": 10,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 8.520892153312941e-06,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 6.29923147735593e-09
+    },
+    "Head": {
+      "current": {
+        "vertices": 335,
+        "faces": 324,
+        "triangles": 630,
+        "boundary_edges": 44,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 1.178076238138892e-10,
+        "nonadjacent_surface_crossings": []
+      },
+      "before_stage2": {
+        "vertices": 335,
+        "faces": 324,
+        "triangles": 630,
+        "boundary_edges": 44,
+        "inward_faces_against_closed_orientation": [],
+        "nonmanifold_edges": 0,
+        "inconsistent_winding_edges": [],
+        "degenerate_triangles_1e12": [],
+        "minimum_triangle_area": 1.178076238138892e-10,
+        "nonadjacent_surface_crossings": []
+      },
+      "faces_unchanged": true,
+      "uv_unchanged": true,
+      "max_difference_from_applied_plan": 5.874117949984529e-08
+    }
+  },
+  "coverage": {
+    "UpperTorso": {
+      "samples": 8066,
+      "uncovered": 0,
+      "points": []
+    },
+    "LowerTorso": {
+      "samples": 8642,
+      "uncovered": 0,
+      "points": []
+    },
+    "LeftUpperArm": {
+      "samples": 4610,
+      "uncovered": 0,
+      "points": []
+    },
+    "RightUpperArm": {
+      "samples": 4610,
+      "uncovered": 0,
+      "points": []
+    },
+    "LeftLowerArm": {
+      "samples": 3458,
+      "uncovered": 0,
+      "points": []
+    },
+    "RightLowerArm": {
+      "samples": 3458,
+      "uncovered": 0,
+      "points": []
+    },
+    "LeftLowerLeg": {
+      "samples": 9218,
+      "uncovered": 0,
+      "points": []
+    },
+    "RightLowerLeg": {
+      "samples": 9218,
+      "uncovered": 0,
+      "points": []
+    },
+    "LeftUpperLeg": {
+      "samples": 9218,
+      "uncovered": 0,
+      "points": []
+    },
+    "RightUpperLeg": {
+      "samples": 9218,
+      "uncovered": 0,
+      "points": []
+    },
+    "LeftHand": {
+      "samples": 3458,
+      "uncovered": 0,
+      "points": []
+    },
+    "RightHand": {
+      "samples": 3458,
+      "uncovered": 0,
+      "points": []
+    },
+    "LeftFoot": {
+      "samples": 6891,
+      "uncovered": 0,
+      "points": []
+    },
+    "RightFoot": {
+      "samples": 6891,
+      "uncovered": 0,
+      "points": []
+    },
+    "Head": {
+      "samples": 44930,
+      "uncovered": 0,
+      "points": []
+    },
+    "Neck": {
+      "samples": 3458,
+      "uncovered": 0,
+      "points": []
+    }
+  }
+}

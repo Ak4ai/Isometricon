@@ -1,0 +1,254 @@
+{
+  "asset": "114590471167431",
+  "vertices": 3042,
+  "source_cage_distance": {
+    "reference_id": "86576637314921",
+    "cage_id": "132703414351591",
+    "median_source_distance": 0.029194032543679856,
+    "p99_source_distance": 0.167630756349353,
+    "invalid_faces": 0,
+    "outer_edge_stretch_p99": 1.4130405975350704,
+    "outer_edges_over_3x": 0
+  },
+  "bound_regions": {
+    "LowerTorso": 323,
+    "LeftUpperLeg": 57,
+    "UpperTorso": 2337,
+    "LeftUpperArm": 106,
+    "RightUpperLeg": 57,
+    "RightUpperArm": 162
+  },
+  "cross_region_edges": 631,
+  "total_edges": 6986,
+  "edge_stretch_p99": 4.79190731048584,
+  "edge_stretch_max": 22.306283950805664,
+  "edges_stretched_over_3x": 125,
+  "cross_region_edges_stretched_over_3x": 108,
+  "worst_edges": [
+    {
+      "vertices": [
+        2908,
+        2910
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 22.306,
+      "distance": [
+        0.0752,
+        0.0763
+      ]
+    },
+    {
+      "vertices": [
+        2906,
+        2907
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 22.306,
+      "distance": [
+        0.0752,
+        0.0763
+      ]
+    },
+    {
+      "vertices": [
+        2351,
+        2369
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 21.236,
+      "distance": [
+        0.0703,
+        0.0738
+      ]
+    },
+    {
+      "vertices": [
+        2919,
+        2921
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 17.708,
+      "distance": [
+        0.078,
+        0.0738
+      ]
+    },
+    {
+      "vertices": [
+        601,
+        926
+      ],
+      "regions": [
+        "LeftUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 16.781,
+      "distance": [
+        0.0428,
+        0.0446
+      ]
+    },
+    {
+      "vertices": [
+        2357,
+        2366
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 14.005,
+      "distance": [
+        0.0628,
+        0.0644
+      ]
+    },
+    {
+      "vertices": [
+        2365,
+        2907
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 13.062,
+      "distance": [
+        0.0717,
+        0.0763
+      ]
+    },
+    {
+      "vertices": [
+        2913,
+        2919
+      ],
+      "regions": [
+        "RightUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 12.413,
+      "distance": [
+        0.08,
+        0.078
+      ]
+    },
+    {
+      "vertices": [
+        2915,
+        2916
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 12.351,
+      "distance": [
+        0.0874,
+        0.0857
+      ]
+    },
+    {
+      "vertices": [
+        2920,
+        2922
+      ],
+      "regions": [
+        "RightUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 12.351,
+      "distance": [
+        0.0857,
+        0.0874
+      ]
+    },
+    {
+      "vertices": [
+        2953,
+        2954
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 12.061,
+      "distance": [
+        0.1064,
+        0.0981
+      ]
+    },
+    {
+      "vertices": [
+        2958,
+        2960
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 12.061,
+      "distance": [
+        0.0981,
+        0.1064
+      ]
+    },
+    {
+      "vertices": [
+        2324,
+        2617
+      ],
+      "regions": [
+        "RightUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 11.159,
+      "distance": [
+        0.0509,
+        0.0524
+      ]
+    },
+    {
+      "vertices": [
+        2919,
+        2952
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 10.967,
+      "distance": [
+        0.078,
+        0.0817
+      ]
+    },
+    {
+      "vertices": [
+        2957,
+        2959
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 10.13,
+      "distance": [
+        0.094,
+        0.0979
+      ]
+    }
+  ]
+}

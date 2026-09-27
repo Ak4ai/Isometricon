@@ -1,0 +1,35 @@
+{
+  "loaded_module_path": "C:\\Users\\Henrique\\Documents\\GitHub\\Isometricon\\src\\clothing\\wrap_layer_fit.py",
+  "loaded_module_sha256": "965d646e8ecf981ccafd58bea3fc26a93eeeb50a2afe43074bced93d6faea96a",
+  "same_code_as_runtime_trace": true,
+  "cage_mesh_comparisons": {
+    "107317468730455": {
+      "cached_obj_sha256": "d99a654cea86ffd4c79b6c856b1f81d7ed338d272d6ba876551e4b68af28a7ea",
+      "decoded_obj_sha256": "d99a654cea86ffd4c79b6c856b1f81d7ed338d272d6ba876551e4b68af28a7ea",
+      "byte_identical": true,
+      "vertices_identical": true,
+      "faces_identical": true,
+      "uvs_identical": true,
+      "max_vertex_error": 0.0
+    },
+    "88972018776823": {
+      "cached_obj_sha256": "261f90794787736ea6e8be0464a30bbed1030c0943919948d8d4739e0d1d4c6c",
+      "decoded_obj_sha256": "261f90794787736ea6e8be0464a30bbed1030c0943919948d8d4739e0d1d4c6c",
+      "byte_identical": true,
+      "vertices_identical": true,
+      "faces_identical": true,
+      "uvs_identical": true,
+      "max_vertex_error": 0.0
+    }
+  },
+  "baseline_vs_runtime_trace_max_error": 0.0,
+  "target_cage_perturbation_m": [
+    0.01,
+    0.0,
+    0.0
+  ],
+  "fit_change_min_m": 0.009999990463256836,
+  "fit_change_median_m": 0.009999999776482582,
+  "fit_change_max_m": 0.010000020265579224,
+  "expected_translation_max_error_m": 2.0265579223424646e-08
+}

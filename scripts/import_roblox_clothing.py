@@ -119,6 +119,33 @@ def decode_roblox_mesh_to_obj(mesh_bytes, output_obj_path):
         print(f"[OK] FileMesh v1 decodificado: {total_verts} vértices, {num_faces} faces -> {output_obj_path}")
         return output_obj_path
 
+    # FileMesh v2: 12-byte header followed by 40-byte vertices and 12-byte faces.
+    if mesh_bytes.startswith(b"version 2.00\n"):
+        hdr_end = mesh_bytes.find(b"\n") + 1
+        sizeof_hdr, sizeof_vert, sizeof_face, num_verts, num_faces = struct.unpack_from(
+            '<HBBII', mesh_bytes, hdr_end
+        )
+        if (sizeof_hdr != 12 or sizeof_vert < 32 or sizeof_face != 12 or
+                len(mesh_bytes) < hdr_end + sizeof_hdr + num_verts * sizeof_vert + num_faces * sizeof_face):
+            raise ValueError("FileMesh v2 inválido ou truncado")
+        vertex_start = hdr_end + sizeof_hdr
+        face_start = vertex_start + num_verts * sizeof_vert
+        verts = [struct.unpack_from('<8f', mesh_bytes, vertex_start + i * sizeof_vert)
+                 for i in range(num_verts)]
+        faces = [struct.unpack_from('<3I', mesh_bytes, face_start + i * sizeof_face)
+                 for i in range(num_faces)]
+        if any(max(face) >= num_verts for face in faces):
+            raise ValueError("FileMesh v2 contém índices de face inválidos")
+        with open(output_obj_path, "w", encoding="utf-8") as f:
+            f.write("# Roblox Converted FileMesh v2\n")
+            for v in verts:
+                f.write(f"v {v[0]:.9f} {v[1]:.9f} {v[2]:.9f}\n")
+            for v in verts:
+                f.write(f"vt {v[6]:.9f} {1.0 - v[7]:.9f}\n")
+            for a, b, c in faces:
+                f.write(f"f {a+1}/{a+1} {b+1}/{b+1} {c+1}/{c+1}\n")
+        return output_obj_path
+
     # 1. Suporte a FileMesh v4.xx (v4.00, v4.01, v5.00)
     if mesh_bytes.startswith(b"version 4.") or mesh_bytes.startswith(b"version 5."):
         hdr_end = mesh_bytes.find(b"\n") + 1
@@ -145,6 +172,18 @@ def decode_roblox_mesh_to_obj(mesh_bytes, output_obj_path):
         for i in range(num_faces):
             i0, i1, i2 = struct.unpack_from('<3I', payload, face_offset + i * 12)
             faces.append((i0, i1, i2))
+
+        # The face list holds every level of detail back to back; the LOD table
+        # after it gives each level's first face. Keep only LOD0, as Roblox
+        # renders up close (and Studio exports), and drop the vertices that only
+        # lower levels use — LOD0 always references a prefix of the vertex list.
+        if num_lods >= 2:
+            lods = struct.unpack_from(f'<{num_lods}I', payload, face_offset + num_faces * 12)
+            if 0 <= lods[0] < lods[1] <= num_faces:
+                faces = faces[lods[0]:lods[1]]
+                used = max(max(face) for face in faces) + 1
+                if len({i for face in faces for i in face}) == used:
+                    verts = verts[:used]
 
         with open(output_obj_path, "w", encoding="utf-8") as f:
             f.write("# Roblox Converted FileMesh v4\n")

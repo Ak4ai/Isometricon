@@ -1,0 +1,417 @@
+{
+  "133331049150205": {
+    "baseline": {
+      "p99": 1.6517881155014038,
+      "over_3x": 9,
+      "edges": 5830
+    },
+    "global_shell": {
+      "p99": 1.9325770457133353,
+      "over_3x": 15,
+      "edges": 5830
+    },
+    "face_changes": {
+      "faces": 3726,
+      "area_under_quarter": 52,
+      "area_over_fourfold": 55,
+      "normal_reversed": 238,
+      "area_ratio_p01": 0.22717116294418166
+    },
+    "global_map": [
+      [
+        -0.34315771269631545,
+        -9.928481198250357e-05,
+        1.4103102915879497e-05
+      ],
+      [
+        0.00029158212629562194,
+        -0.003871969224165356,
+        0.33337655501704605
+      ],
+      [
+        -0.0009606725616519602,
+        0.4341686997535113,
+        0.028090327846367655
+      ]
+    ],
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 15842,
+        "visible_shirt_pixels": 15132,
+        "visible_fraction": 0.9551824264613054
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 9286,
+        "visible_shirt_pixels": 7031,
+        "visible_fraction": 0.7571613181132888
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 15842,
+        "visible_shirt_pixels": 15825,
+        "visible_fraction": 0.9989269031687918
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 13768,
+        "visible_shirt_pixels": 12247,
+        "visible_fraction": 0.8895264381173736
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\global_shell_133331049150205_baseline.png",
+    "global_shell_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 14033,
+        "visible_shirt_pixels": 13295,
+        "visible_fraction": 0.9474096771894819
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 9615,
+        "visible_shirt_pixels": 7346,
+        "visible_fraction": 0.7640145605824233
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 14033,
+        "visible_shirt_pixels": 14010,
+        "visible_fraction": 0.9983610061996722
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 13427,
+        "visible_shirt_pixels": 11619,
+        "visible_fraction": 0.865345944738214
+      }
+    },
+    "global_shell_image": "artifacts\\clothing_audit\\global_shell_133331049150205_global_shell.png",
+    "global_shell_cage_image": "artifacts\\clothing_audit\\global_shell_cage_133331049150205.png"
+  },
+  "72628400373948": {
+    "baseline": {
+      "p99": 1.6568914651870728,
+      "over_3x": 11,
+      "edges": 4759
+    },
+    "global_shell": {
+      "p99": 1.2659559203499997,
+      "over_3x": 1,
+      "edges": 4759
+    },
+    "face_changes": {
+      "faces": 2819,
+      "area_under_quarter": 46,
+      "area_over_fourfold": 20,
+      "normal_reversed": 86,
+      "area_ratio_p01": 0.19974401512073375
+    },
+    "global_map": [
+      [
+        -0.3384841663062785,
+        -0.0001548612331409715,
+        -1.4630661515789267e-05
+      ],
+      [
+        0.0001727960992462612,
+        -0.004818524901825549,
+        0.3290111198867364
+      ],
+      [
+        -0.0002031759424413191,
+        0.42386480241964175,
+        0.02199381408297718
+      ]
+    ],
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23596,
+        "visible_shirt_pixels": 21882,
+        "visible_fraction": 0.9273605695880658
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 11773,
+        "visible_shirt_pixels": 11212,
+        "visible_fraction": 0.95234859424106
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23596,
+        "visible_shirt_pixels": 23590,
+        "visible_fraction": 0.9997457196134938
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 19930,
+        "visible_shirt_pixels": 18442,
+        "visible_fraction": 0.9253386853988962
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\global_shell_72628400373948_baseline.png",
+    "global_shell_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 20686,
+        "visible_shirt_pixels": 18822,
+        "visible_fraction": 0.9098907473653679
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 11428,
+        "visible_shirt_pixels": 10917,
+        "visible_fraction": 0.9552852642632131
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 20686,
+        "visible_shirt_pixels": 20683,
+        "visible_fraction": 0.9998549743788069
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 18718,
+        "visible_shirt_pixels": 17362,
+        "visible_fraction": 0.9275563628592799
+      }
+    },
+    "global_shell_image": "artifacts\\clothing_audit\\global_shell_72628400373948_global_shell.png",
+    "global_shell_cage_image": "artifacts\\clothing_audit\\global_shell_cage_72628400373948.png"
+  },
+  "109837605892174": {
+    "baseline": {
+      "p99": 2.3099865913391113,
+      "over_3x": 33,
+      "edges": 6646
+    },
+    "global_shell": {
+      "p99": 1.520361265339638,
+      "over_3x": 4,
+      "edges": 6646
+    },
+    "face_changes": {
+      "faces": 3989,
+      "area_under_quarter": 225,
+      "area_over_fourfold": 117,
+      "normal_reversed": 410,
+      "area_ratio_p01": 0.0979318224198251
+    },
+    "global_map": [
+      [
+        -0.3403777550761208,
+        -0.00013222661756248503,
+        9.310269272713636e-06
+      ],
+      [
+        0.000203632161530901,
+        -0.0036265218763112117,
+        0.3307499271781931
+      ],
+      [
+        -0.0005622541889219673,
+        0.43896590855549894,
+        0.01981234906895929
+      ]
+    ],
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 23114,
+        "visible_shirt_pixels": 22643,
+        "visible_fraction": 0.9796227394652591
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 14250,
+        "visible_shirt_pixels": 13399,
+        "visible_fraction": 0.9402807017543859
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 23114,
+        "visible_shirt_pixels": 22777,
+        "visible_fraction": 0.9854200917193043
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 20435,
+        "visible_shirt_pixels": 20129,
+        "visible_fraction": 0.9850256912160509
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\global_shell_109837605892174_baseline.png",
+    "global_shell_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 20578,
+        "visible_shirt_pixels": 20090,
+        "visible_fraction": 0.9762853532899213
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 13420,
+        "visible_shirt_pixels": 12584,
+        "visible_fraction": 0.9377049180327869
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 20578,
+        "visible_shirt_pixels": 20311,
+        "visible_fraction": 0.9870249781319856
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 20007,
+        "visible_shirt_pixels": 19523,
+        "visible_fraction": 0.9758084670365372
+      }
+    },
+    "global_shell_image": "artifacts\\clothing_audit\\global_shell_109837605892174_global_shell.png",
+    "global_shell_cage_image": "artifacts\\clothing_audit\\global_shell_cage_109837605892174.png"
+  },
+  "114590471167431": {
+    "baseline": {
+      "p99": 3.285386800765991,
+      "over_3x": 86,
+      "edges": 6442
+    },
+    "global_shell": {
+      "p99": 4.273383349612494,
+      "over_3x": 107,
+      "edges": 6442
+    },
+    "face_changes": {
+      "faces": 3984,
+      "area_under_quarter": 57,
+      "area_over_fourfold": 43,
+      "normal_reversed": 220,
+      "area_ratio_p01": 0.21704789301303795
+    },
+    "global_map": [
+      [
+        -0.32458899928622037,
+        -7.499724592492932e-05,
+        7.009686664397051e-05
+      ],
+      [
+        0.0001189710479993936,
+        -0.012352649995493407,
+        0.3108438653766987
+      ],
+      [
+        -0.0017219963655123942,
+        0.3848844744416476,
+        -0.015458205302633629
+      ]
+    ],
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 16870,
+        "visible_shirt_pixels": 16402,
+        "visible_fraction": 0.9722584469472436
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 14855,
+        "visible_shirt_pixels": 10134,
+        "visible_fraction": 0.6821945472904746
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 16870,
+        "visible_shirt_pixels": 15845,
+        "visible_fraction": 0.9392412566686426
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 18406,
+        "visible_shirt_pixels": 15073,
+        "visible_fraction": 0.8189177442138433
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\global_shell_114590471167431_baseline.png",
+    "global_shell_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 14670,
+        "visible_shirt_pixels": 14274,
+        "visible_fraction": 0.9730061349693252
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 12559,
+        "visible_shirt_pixels": 8367,
+        "visible_fraction": 0.6662154630145712
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 14670,
+        "visible_shirt_pixels": 13145,
+        "visible_fraction": 0.8960463531015678
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 16754,
+        "visible_shirt_pixels": 12938,
+        "visible_fraction": 0.7722334964784529
+      }
+    },
+    "global_shell_image": "artifacts\\clothing_audit\\global_shell_114590471167431_global_shell.png",
+    "global_shell_cage_image": "artifacts\\clothing_audit\\global_shell_cage_114590471167431.png"
+  },
+  "16185652164": {
+    "baseline": {
+      "p99": 4.327791213989258,
+      "over_3x": 240,
+      "edges": 7351
+    },
+    "global_shell": {
+      "p99": 1.104164168892396,
+      "over_3x": 0,
+      "edges": 7351
+    },
+    "face_changes": {
+      "faces": 4424,
+      "area_under_quarter": 1329,
+      "area_over_fourfold": 116,
+      "normal_reversed": 1371,
+      "area_ratio_p01": 0.029901744309704367
+    },
+    "global_map": [
+      [
+        -0.34315015929568093,
+        -9.348417474030851e-05,
+        8.91434877523332e-06
+      ],
+      [
+        0.00029297096785950774,
+        -0.0038581028860722733,
+        0.33339258004938804
+      ],
+      [
+        -0.0009446647061454713,
+        0.4342178164666559,
+        0.028212524174233602
+      ]
+    ],
+    "baseline_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 52558,
+        "visible_shirt_pixels": 49636,
+        "visible_fraction": 0.9444042771794969
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 37505,
+        "visible_shirt_pixels": 37008,
+        "visible_fraction": 0.9867484335421943
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 52558,
+        "visible_shirt_pixels": 51168,
+        "visible_fraction": 0.9735530271319305
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 51234,
+        "visible_shirt_pixels": 48817,
+        "visible_fraction": 0.9528242963656947
+      }
+    },
+    "baseline_image": "artifacts\\clothing_audit\\global_shell_16185652164_baseline.png",
+    "global_shell_visibility": {
+      "frente": {
+        "shirt_silhouette_pixels": 35411,
+        "visible_shirt_pixels": 34426,
+        "visible_fraction": 0.9721837846996696
+      },
+      "lado": {
+        "shirt_silhouette_pixels": 19231,
+        "visible_shirt_pixels": 19100,
+        "visible_fraction": 0.9931880817430191
+      },
+      "costas": {
+        "shirt_silhouette_pixels": 35411,
+        "visible_shirt_pixels": 34932,
+        "visible_fraction": 0.9864731298184181
+      },
+      "3/4": {
+        "shirt_silhouette_pixels": 31355,
+        "visible_shirt_pixels": 30484,
+        "visible_fraction": 0.9722213363099984
+      }
+    },
+    "global_shell_image": "artifacts\\clothing_audit\\global_shell_16185652164_global_shell.png",
+    "global_shell_cage_image": "artifacts\\clothing_audit\\global_shell_cage_16185652164.png"
+  }
+}

@@ -1,0 +1,286 @@
+{
+  "case": "blocky_133331049150205",
+  "method": "refined reference similarity field; fixed source-space support",
+  "variants": {
+    "radial_prism": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 957,
+          "under_third": 6,
+          "quantiles": [
+            0.1839122316679943,
+            0.6255640017926923,
+            1.805437909247006,
+            5.7202254799568335,
+            14.497461246177151
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 962,
+          "under_third": 7,
+          "quantiles": [
+            0.1839122316679943,
+            0.621308556391477,
+            1.7933422591975319,
+            5.708163730527528,
+            14.497461246177151
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 1,
+          "over_nine": 235,
+          "quantiles": [
+            0.023605853505006248,
+            0.47902589893524344,
+            2.7901581761495873,
+            19.07554772488627,
+            75.057549920026
+          ]
+        },
+        "orientation_disagreements_with_inner_frame": 460
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1668,
+        "penetrating_fraction": 0.278231859883236,
+        "depth_max_over_body_height": 0.039269713505872904,
+        "depth_p95_over_body_height": 0.016130549252613747,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 32469,
+          "visible_shirt_pixels": 31014,
+          "visible_fraction": 0.9551880255012474
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 13249,
+          "visible_shirt_pixels": 6931,
+          "visible_fraction": 0.5231338214204846
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 32469,
+          "visible_shirt_pixels": 29889,
+          "visible_fraction": 0.9205395916104592
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 28933,
+          "visible_shirt_pixels": 24310,
+          "visible_fraction": 0.840217053191857
+        }
+      },
+      "image": "artifacts\\clothing_audit\\refined_reference\\blocky_133331049150205_radial_prism.png"
+    },
+    "reference_level_0": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 422,
+          "under_third": 21,
+          "quantiles": [
+            0.12730138972930513,
+            0.5106212705925133,
+            1.6890997381956239,
+            3.9467623098538125,
+            5.575389328790125
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 422,
+          "under_third": 25,
+          "quantiles": [
+            0.12730138972930513,
+            0.5052247911089728,
+            1.6818921673269378,
+            3.9302231006584067,
+            5.575389328790125
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 2,
+          "over_nine": 84,
+          "quantiles": [
+            0.017065975225397566,
+            0.21893756271708076,
+            2.1925218917820732,
+            12.701933599613481,
+            33.8809440887551
+          ]
+        },
+        "orientation_disagreements_with_inner_frame": 511
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 2149,
+        "penetrating_fraction": 0.358465387823186,
+        "depth_max_over_body_height": 0.03810372564889133,
+        "depth_p95_over_body_height": 0.019024113528334947,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 30384,
+          "visible_shirt_pixels": 23547,
+          "visible_fraction": 0.7749802527646129
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 11901,
+          "visible_shirt_pixels": 2399,
+          "visible_fraction": 0.20157969918494245
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 30384,
+          "visible_shirt_pixels": 23202,
+          "visible_fraction": 0.7636255924170616
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 25946,
+          "visible_shirt_pixels": 16885,
+          "visible_fraction": 0.6507746858860711
+        }
+      },
+      "image": "artifacts\\clothing_audit\\refined_reference\\blocky_133331049150205_reference_level_0.png"
+    },
+    "reference_level_2": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 461,
+          "under_third": 24,
+          "quantiles": [
+            0.1040280593081958,
+            0.4884795785612775,
+            1.684764903635231,
+            3.9768345544052277,
+            5.704224980224394
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 461,
+          "under_third": 28,
+          "quantiles": [
+            0.1040280593081958,
+            0.48128747342937517,
+            1.675840698368202,
+            3.974142812479945,
+            5.704224980224394
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 4,
+          "over_nine": 93,
+          "quantiles": [
+            0.036920811794688556,
+            0.2133910400260155,
+            2.190261417177224,
+            12.926698525362397,
+            34.57974829224659
+          ]
+        },
+        "orientation_disagreements_with_inner_frame": 515
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 2079,
+        "penetrating_fraction": 0.3467889908256881,
+        "depth_max_over_body_height": 0.03783808100856065,
+        "depth_p95_over_body_height": 0.018845836832190613,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 30469,
+          "visible_shirt_pixels": 24035,
+          "visible_fraction": 0.7888345531523844
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 11913,
+          "visible_shirt_pixels": 2426,
+          "visible_fraction": 0.20364307898933937
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 30469,
+          "visible_shirt_pixels": 23903,
+          "visible_fraction": 0.7845022810069251
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 26123,
+          "visible_shirt_pixels": 17244,
+          "visible_fraction": 0.6601079508479119
+        }
+      },
+      "image": "artifacts\\clothing_audit\\refined_reference\\blocky_133331049150205_reference_level_2.png"
+    }
+  },
+  "reference_level_0": {
+    "level": 0,
+    "samples": 2690,
+    "usable_faces": 2690,
+    "excluded_faces": 0,
+    "scale": 1.0041480520783757,
+    "base_width": 0.053945834964644175,
+    "weighting": "source area quadrature times Gaussian; unrefined source bandwidth",
+    "limitations": "spatial support can mix body parts; blended rotations can shrink; no collision guarantee"
+  },
+  "reference_level_2": {
+    "level": 2,
+    "samples": 43040,
+    "usable_faces": 2690,
+    "excluded_faces": 0,
+    "scale": 1.0041480520783757,
+    "base_width": 0.053945834964644175,
+    "weighting": "source area quadrature times Gaussian; unrefined source bandwidth",
+    "limitations": "spatial support can mix body parts; blended rotations can shrink; no collision guarantee"
+  },
+  "refinement_displacement_over_body_height": {
+    "max": 0.00490640605557062,
+    "p99": 0.00313773889586713
+  },
+  "unchanged_radial_outer_seams": {
+    "same_uv": {
+      "groups": 1496,
+      "max_radius": 4.440892098500626e-16,
+      "over_1e_minus_5": 0,
+      "over_1e_minus_3": 0
+    },
+    "coincident_outer": {
+      "groups": 1348,
+      "max_radius": 4.440892098500626e-16,
+      "over_1e_minus_5": 0,
+      "over_1e_minus_3": 0
+    }
+  },
+  "limitations": [
+    "Outer cage unchanged; its known penetration remains a layering blocker.",
+    "Orientation metric is a common transported-frame proxy, not certified self-intersection detection.",
+    "Penetration uses vertices and face centers, not area coverage.",
+    "Linear refinement only adds quadrature points; no new geometric curvature.",
+    "Prism Jacobian is not a validity metric for this field."
+  ],
+  "sha256": {
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205.npz": "bcc497c5a1f6c3396d4b547e2b9be056e7092e5431960f6835d82a5340ab1ca3",
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205_outputs.npz": "f81918706ba4241b6dcf2d9e71b96a48e0fffc13de3353127069299d259e8dfe",
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205_binding.npz": "531c66780a65f5835443af6c9e08e357832519d40ae695fb9d40c653bc97a6ea",
+    "artifacts\\clothing_audit\\radial_frames\\blocky_133331049150205.json": "ec68591f44e6e7a12d159634b35605867c9fe51066fb21d61c5c906ff19eeb88",
+    "scripts\\experiment_refined_reference.py": "9461549db67689e2577f468a37f92316ebea6a8ea7525fb6a46096b3763c2368",
+    "src\\clothing\\experimental_refined_reference.py": "f8cae7471020e62fcbd80aad72738fc1493b154329fc39126f066c08a53d564b",
+    "scripts\\radial_validation_metrics.py": "ecb525164107f6d5a29842acf9cca75eab4ea7839fc83de11b9ef2805159d07d",
+    "src\\clothing\\experimental_canonical_radial.py": "0cda9e6d8662a7427854a7268a87c7ca4ec2ad8d32bcf4124c6ff17cc0110645"
+  }
+}

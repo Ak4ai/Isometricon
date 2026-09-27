@@ -1,0 +1,251 @@
+{
+  "asset": "133331049150205",
+  "vertices": 2269,
+  "source_cage_distance": {
+    "reference_id": "80307990380242",
+    "cage_id": "78642992491592",
+    "median_source_distance": 0.027121947753971976,
+    "p99_source_distance": 0.14140051188965438,
+    "invalid_faces": 0
+  },
+  "bound_regions": {
+    "LowerTorso": 338,
+    "UpperTorso": 1195,
+    "LeftUpperArm": 351,
+    "Head": 90,
+    "RightUpperArm": 295
+  },
+  "cross_region_edges": 511,
+  "total_edges": 5980,
+  "edge_stretch_p99": 1.6537754535675049,
+  "edge_stretch_max": 7.586172103881836,
+  "edges_stretched_over_3x": 11,
+  "cross_region_edges_stretched_over_3x": 5,
+  "worst_edges": [
+    {
+      "vertices": [
+        1067,
+        1081
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 7.586,
+      "distance": [
+        0.1019,
+        0.102
+      ]
+    },
+    {
+      "vertices": [
+        592,
+        593
+      ],
+      "regions": [
+        "LeftUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 6.748,
+      "distance": [
+        0.0014,
+        0.0005
+      ]
+    },
+    {
+      "vertices": [
+        593,
+        594
+      ],
+      "regions": [
+        "UpperTorso",
+        "LeftUpperArm"
+      ],
+      "ratio": 4.651,
+      "distance": [
+        0.0005,
+        0.0042
+      ]
+    },
+    {
+      "vertices": [
+        1083,
+        1084
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 4.285,
+      "distance": [
+        0.102,
+        0.094
+      ]
+    },
+    {
+      "vertices": [
+        1081,
+        1168
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 4.285,
+      "distance": [
+        0.102,
+        0.094
+      ]
+    },
+    {
+      "vertices": [
+        1589,
+        1608
+      ],
+      "regions": [
+        "RightUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 4.159,
+      "distance": [
+        0.0063,
+        0.0019
+      ]
+    },
+    {
+      "vertices": [
+        1443,
+        1445
+      ],
+      "regions": [
+        "RightUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 4.015,
+      "distance": [
+        0.023,
+        0.0149
+      ]
+    },
+    {
+      "vertices": [
+        1078,
+        1079
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 3.753,
+      "distance": [
+        0.146,
+        0.1609
+      ]
+    },
+    {
+      "vertices": [
+        1100,
+        1106
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 3.753,
+      "distance": [
+        0.146,
+        0.1609
+      ]
+    },
+    {
+      "vertices": [
+        1871,
+        1880
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 3.144,
+      "distance": [
+        0.0537,
+        0.049
+      ]
+    },
+    {
+      "vertices": [
+        976,
+        983
+      ],
+      "regions": [
+        "LeftUpperArm",
+        "UpperTorso"
+      ],
+      "ratio": 3.008,
+      "distance": [
+        0.0096,
+        0.0074
+      ]
+    },
+    {
+      "vertices": [
+        983,
+        992
+      ],
+      "regions": [
+        "UpperTorso",
+        "LeftUpperArm"
+      ],
+      "ratio": 2.935,
+      "distance": [
+        0.0074,
+        0.0185
+      ]
+    },
+    {
+      "vertices": [
+        2196,
+        2263
+      ],
+      "regions": [
+        "UpperTorso",
+        "RightUpperArm"
+      ],
+      "ratio": 2.791,
+      "distance": [
+        0.0309,
+        0.0286
+      ]
+    },
+    {
+      "vertices": [
+        1099,
+        1107
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 2.616,
+      "distance": [
+        0.1315,
+        0.1165
+      ]
+    },
+    {
+      "vertices": [
+        2098,
+        2099
+      ],
+      "regions": [
+        "UpperTorso",
+        "UpperTorso"
+      ],
+      "ratio": 2.616,
+      "distance": [
+        0.1315,
+        0.1165
+      ]
+    }
+  ]
+}

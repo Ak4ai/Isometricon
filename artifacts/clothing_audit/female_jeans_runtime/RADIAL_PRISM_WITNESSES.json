@@ -1,0 +1,694 @@
+{
+  "asset": "109837605892174",
+  "source_matches_fresh_runtime": true,
+  "saved_binding_fingerprint_matches": true,
+  "radial_shell_replay_max_error": 0.0,
+  "radial_prism_replay_max_error": 0.0,
+  "scale": 0.33468872098216645,
+  "source_edge_length": 0.02053770236670971,
+  "witnesses": {
+    "edge": [
+      2396,
+      2397
+    ],
+    "boot": 1464
+  },
+  "variants": {
+    "production_outer_binding": {
+      "edge_2396_2397": {
+        "length_m": 0.16267327964305878,
+        "stretch_normalized": 23.665914431555763,
+        "vertex_positions": [
+          [
+            0.024562537670135498,
+            0.044782936573028564,
+            0.739862322807312
+          ],
+          [
+            -0.0037877822760492563,
+            0.17168085277080536,
+            0.642108678817749
+          ]
+        ]
+      },
+      "boot_1464": {
+        "position": [
+          -0.2558414041996002,
+          -0.09936200827360153,
+          -0.15609630942344666
+        ],
+        "below_body_min_z_m": 0.13084730942344666
+      },
+      "lowest_vertex": {
+        "index": 1464,
+        "z_m": -0.15609630942344666
+      },
+      "worst_remaining_edge": {
+        "vertices": [
+          2396,
+          2397
+        ],
+        "stretch_normalized": 23.66591453552246,
+        "length_m": 0.16267327964305878
+      },
+      "distortion": {
+        "historical_length_mask": {
+          "count": 6646,
+          "over_3": 584,
+          "under_third": 157,
+          "quantiles": [
+            0.11292117089033127,
+            0.25195405185222625,
+            1.3581650853157043,
+            6.901894736289984,
+            23.66591453552246
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 6658,
+          "over_3": 584,
+          "under_third": 157,
+          "quantiles": [
+            0.11292117089033127,
+            0.2521080392599106,
+            1.3566378951072693,
+            6.8977922010421855,
+            23.66591453552246
+          ]
+        },
+        "area": {
+          "count": 3989,
+          "under_tenth": 69,
+          "over_nine": 148,
+          "quantiles": [
+            0.004412481095641851,
+            0.07726650536060334,
+            1.6880065202713013,
+            17.942611389160152,
+            107.84734344482422
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 6690,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 512,
+        "penetrating_fraction": 0.07653213751868461,
+        "depth_max_over_body_height": 0.038020201030111965,
+        "depth_p95_over_body_height": 0.0279902697809877,
+        "open_component_inside_candidates": 247,
+        "surface_tolerance_over_height": 0.0001
+      }
+    },
+    "radial_shell_outer_binding": {
+      "edge_2396_2397": {
+        "length_m": 0.010716910177833246,
+        "stretch_normalized": 1.5591096447786703,
+        "vertex_positions": [
+          [
+            -0.02556902624259212,
+            0.09489745849664573,
+            0.6985042039725016
+          ],
+          [
+            -0.03268504191314635,
+            0.10280964132107427,
+            0.6972346183357718
+          ]
+        ]
+      },
+      "boot_1464": {
+        "position": [
+          -0.30276250044265585,
+          -0.010267290897831766,
+          0.11846772212765329
+        ],
+        "below_body_min_z_m": 0.0
+      },
+      "lowest_vertex": {
+        "index": 1580,
+        "z_m": -0.06006414595474199
+      },
+      "worst_remaining_edge": {
+        "vertices": [
+          907,
+          911
+        ],
+        "stretch_normalized": 15.157529168046516,
+        "length_m": 0.08704135708047125
+      },
+      "distortion": {
+        "historical_length_mask": {
+          "count": 6646,
+          "over_3": 104,
+          "under_third": 127,
+          "quantiles": [
+            0.01395277394087543,
+            0.2539963099662649,
+            1.0975872809957523,
+            3.3547709610000163,
+            15.157529168046516
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 6658,
+          "over_3": 104,
+          "under_third": 127,
+          "quantiles": [
+            0.01395277394087543,
+            0.25420963309046507,
+            1.0968131211036216,
+            3.3546638205749417,
+            15.157529168046516
+          ]
+        },
+        "area": {
+          "count": 3989,
+          "under_tenth": 47,
+          "over_nine": 6,
+          "quantiles": [
+            0.004594589868752675,
+            0.0887436561371278,
+            1.2320621167424026,
+            4.912306013222301,
+            75.33380852939945
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 6690,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 308,
+        "penetrating_fraction": 0.046038863976083706,
+        "depth_max_over_body_height": 0.027907270989612983,
+        "depth_p95_over_body_height": 0.019884163895528887,
+        "open_component_inside_candidates": 386,
+        "surface_tolerance_over_height": 0.0001
+      }
+    },
+    "production_shell_prism_binding": {
+      "edge_2396_2397": {
+        "length_m": 0.009584495879400924,
+        "stretch_normalized": 1.3943645806441431,
+        "vertex_positions": [
+          [
+            -0.01936081708047677,
+            0.13900693121865335,
+            0.709573297447339
+          ],
+          [
+            -0.02839111733798494,
+            0.1422123768875517,
+            0.7097766606329011
+          ]
+        ]
+      },
+      "boot_1464": {
+        "position": [
+          -0.10022368584090854,
+          0.01481106165352009,
+          0.020083341642854385
+        ],
+        "below_body_min_z_m": 0.0
+      },
+      "lowest_vertex": {
+        "index": 375,
+        "z_m": -0.053975512520357205
+      },
+      "worst_remaining_edge": {
+        "vertices": [
+          264,
+          519
+        ],
+        "stretch_normalized": 15.973359487505311,
+        "length_m": 0.3092509680632988
+      },
+      "distortion": {
+        "historical_length_mask": {
+          "count": 6646,
+          "over_3": 399,
+          "under_third": 210,
+          "quantiles": [
+            0.07114984197218913,
+            0.23299879358470613,
+            1.3173263189305553,
+            5.225661531220102,
+            15.973359487505311
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 6658,
+          "over_3": 399,
+          "under_third": 210,
+          "quantiles": [
+            0.07114984197218913,
+            0.23307597952537484,
+            1.3162016089390907,
+            5.221743709932341,
+            15.973359487505311
+          ]
+        },
+        "area": {
+          "count": 3989,
+          "under_tenth": 99,
+          "over_nine": 66,
+          "quantiles": [
+            0.007398530485057141,
+            0.062067907411701366,
+            1.6429263707478599,
+            11.014878523581807,
+            46.403641554929976
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 6690,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 441,
+        "penetrating_fraction": 0.06591928251121076,
+        "depth_max_over_body_height": 0.037628066703285785,
+        "depth_p95_over_body_height": 0.024870301664190412,
+        "open_component_inside_candidates": 248,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "prism_witness_terms": {
+        "519": {
+          "face": [
+            4746,
+            4747,
+            4748
+          ],
+          "face_id": 2358,
+          "layer_t": 0.8597867121233864,
+          "source_residual_norm": 0.00023960639001500283,
+          "target_base": [
+            -0.11429867913951357,
+            0.12765278487346976,
+            0.027524803974988632
+          ],
+          "transported_residual": [
+            4.1672297267147404e-05,
+            4.078550887035395e-05,
+            0.00014577610796160178
+          ],
+          "reconstructed": [
+            -0.11425700684224642,
+            0.1276935703823401,
+            0.027670580082950234
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "LeftLowerLeg"
+        },
+        "264": {
+          "face": [
+            4667,
+            4666,
+            4669
+          ],
+          "face_id": 2319,
+          "layer_t": 0.9510503536633128,
+          "source_residual_norm": 0.0006448491998711945,
+          "target_base": [
+            -0.11080925146564215,
+            -0.17104143092598834,
+            0.10755272430254766
+          ],
+          "transported_residual": [
+            0.0003758180076617801,
+            0.00014397381799057646,
+            0.0005227053662758681
+          ],
+          "reconstructed": [
+            -0.11043343345798037,
+            -0.17089745710799775,
+            0.10807542966882352
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "LeftFoot"
+        },
+        "375": {
+          "face": [
+            3853,
+            3852,
+            3855
+          ],
+          "face_id": 1915,
+          "layer_t": 0.7209186467667287,
+          "source_residual_norm": 2.9489675591927315e-12,
+          "target_base": [
+            0.0669398475586541,
+            -0.015503754426916155,
+            -0.05397551252201619
+          ],
+          "transported_residual": [
+            9.13077206048199e-13,
+            7.555781828463038e-13,
+            1.6589863157165555e-12
+          ],
+          "reconstructed": [
+            0.06693984755956718,
+            -0.015503754426160577,
+            -0.053975512520357205
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "LeftFoot"
+        },
+        "1464": {
+          "face": [
+            4750,
+            4751,
+            4752
+          ],
+          "face_id": 2360,
+          "layer_t": 0.053509630897042734,
+          "source_residual_norm": 2.1241335409095937e-09,
+          "target_base": [
+            -0.10022368717439743,
+            0.014811061740768058,
+            0.0200833417563143
+          ],
+          "transported_residual": [
+            1.3334888872649258e-09,
+            -8.724796753511701e-11,
+            -1.134599153857291e-10
+          ],
+          "reconstructed": [
+            -0.10022368584090854,
+            0.01481106165352009,
+            0.020083341642854385
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "RightLowerLeg"
+        },
+        "2396": {
+          "face": [
+            3132,
+            3134,
+            3135
+          ],
+          "face_id": 1559,
+          "layer_t": 0.5205465341351371,
+          "source_residual_norm": 0.0015394930617483656,
+          "target_base": [
+            -0.019362185738599352,
+            0.13862057999677913,
+            0.7093366593135
+          ],
+          "transported_residual": [
+            1.368658122582647e-06,
+            0.0003863512218742158,
+            0.00023663813383904828
+          ],
+          "reconstructed": [
+            -0.01936081708047677,
+            0.13900693121865335,
+            0.709573297447339
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "RightUpperLeg"
+        },
+        "2397": {
+          "face": [
+            3132,
+            3134,
+            3135
+          ],
+          "face_id": 1559,
+          "layer_t": 0.5626934887747816,
+          "source_residual_norm": 0.004434546531312482,
+          "target_base": [
+            -0.028387833836516996,
+            0.1411029174216315,
+            0.7090569892344789
+          ],
+          "transported_residual": [
+            -3.2835014679430296e-06,
+            0.0011094594659202116,
+            0.0007196713984222693
+          ],
+          "reconstructed": [
+            -0.02839111733798494,
+            0.1422123768875517,
+            0.7097766606329011
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "RightUpperLeg"
+        }
+      }
+    },
+    "radial_shell_prism_binding": {
+      "edge_2396_2397": {
+        "length_m": 0.008048061857031445,
+        "stretch_normalized": 1.1708422161666365,
+        "vertex_positions": [
+          [
+            -0.023285557329974768,
+            0.10560985847231442,
+            0.7008772642787366
+          ],
+          [
+            -0.028930224204077815,
+            0.11133929365405275,
+            0.7011646804113167
+          ]
+        ]
+      },
+      "boot_1464": {
+        "position": [
+          -0.10593736242060452,
+          0.015230359989210704,
+          0.02126191902330855
+        ],
+        "below_body_min_z_m": 0.0
+      },
+      "lowest_vertex": {
+        "index": 371,
+        "z_m": -0.061027332928651326
+      },
+      "worst_remaining_edge": {
+        "vertices": [
+          734,
+          737
+        ],
+        "stretch_normalized": 7.450436893524104,
+        "length_m": 0.0402516292053332
+      },
+      "distortion": {
+        "historical_length_mask": {
+          "count": 6646,
+          "over_3": 76,
+          "under_third": 122,
+          "quantiles": [
+            0.042475203916202874,
+            0.26394825428075686,
+            1.085245624597058,
+            3.0315215445533186,
+            7.450436893524104
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 6658,
+          "over_3": 76,
+          "under_third": 122,
+          "quantiles": [
+            0.042475203916202874,
+            0.264468039697329,
+            1.0850842205786209,
+            3.0313351452706834,
+            7.450436893524104
+          ]
+        },
+        "area": {
+          "count": 3989,
+          "under_tenth": 50,
+          "over_nine": 0,
+          "quantiles": [
+            0.020080481173096038,
+            0.0778976980817461,
+            1.2494201077129927,
+            3.6031445325215774,
+            8.12728087998208
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 6690,
+        "closed_components": 14,
+        "open_components": 2,
+        "penetrating_samples": 144,
+        "penetrating_fraction": 0.021524663677130046,
+        "depth_max_over_body_height": 0.023294490172907828,
+        "depth_p95_over_body_height": 0.021956382658537495,
+        "open_component_inside_candidates": 389,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "prism_witness_terms": {
+        "737": {
+          "face": [
+            3006,
+            3007,
+            3008
+          ],
+          "face_id": 1496,
+          "layer_t": 0.16185485874059563,
+          "source_residual_norm": 0.001109587169142962,
+          "target_base": [
+            0.12033800925883789,
+            -0.17692039733143997,
+            0.8125723038834538
+          ],
+          "transported_residual": [
+            -4.4582069513495764e-05,
+            0.00044770726336178365,
+            3.022447440856313e-05
+          ],
+          "reconstructed": [
+            0.1202934271893244,
+            -0.17647269006807817,
+            0.8126025283578624
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "LeftUpperLeg"
+        },
+        "371": {
+          "face": [
+            648,
+            649,
+            650
+          ],
+          "face_id": 324,
+          "layer_t": 0.8116515185897155,
+          "source_residual_norm": 6.0275559840986e-09,
+          "target_base": [
+            0.24373579124367684,
+            0.011606877998224328,
+            -0.06102733495762941
+          ],
+          "transported_residual": [
+            -2.6552389284314857e-09,
+            -3.498088956825337e-10,
+            2.0289780817463006e-09
+          ],
+          "reconstructed": [
+            0.24373578858843792,
+            0.011606877648415432,
+            -0.061027332928651326
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "LeftFoot"
+        },
+        "1464": {
+          "face": [
+            4750,
+            4751,
+            4752
+          ],
+          "face_id": 2360,
+          "layer_t": 0.053509630897042734,
+          "source_residual_norm": 2.1241335409095937e-09,
+          "target_base": [
+            -0.10593736366653644,
+            0.015230360076536824,
+            0.02126191911428149
+          ],
+          "transported_residual": [
+            1.245931930056924e-09,
+            -8.732611953102361e-11,
+            -9.09729406511358e-11
+          ],
+          "reconstructed": [
+            -0.10593736242060452,
+            0.015230359989210704,
+            0.02126191902330855
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "RightLowerLeg"
+        },
+        "2396": {
+          "face": [
+            3132,
+            3134,
+            3135
+          ],
+          "face_id": 1559,
+          "layer_t": 0.5205465341351371,
+          "source_residual_norm": 0.0015394930617483656,
+          "target_base": [
+            -0.023526046197432635,
+            0.10526447037097428,
+            0.7007008877126637
+          ],
+          "transported_residual": [
+            0.00024048886745786543,
+            0.0003453881013401527,
+            0.00017637656607297875
+          ],
+          "reconstructed": [
+            -0.023285557329974768,
+            0.10560985847231442,
+            0.7008772642787366
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "RightUpperLeg"
+        },
+        "2397": {
+          "face": [
+            3132,
+            3134,
+            3135
+          ],
+          "face_id": 1559,
+          "layer_t": 0.5626934887747816,
+          "source_residual_norm": 0.004434546531312482,
+          "target_base": [
+            -0.029652692045366164,
+            0.11035230482530065,
+            0.7006376163550118
+          ],
+          "transported_residual": [
+            0.0007224678412883477,
+            0.000986988828752099,
+            0.0005270640563049828
+          ],
+          "reconstructed": [
+            -0.028930224204077815,
+            0.11133929365405275,
+            0.7011646804113167
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "RightUpperLeg"
+        },
+        "734": {
+          "face": [
+            2721,
+            2720,
+            2723
+          ],
+          "face_id": 1355,
+          "layer_t": 0.22873022796700776,
+          "source_residual_norm": 0.000647563475979035,
+          "target_base": [
+            0.15897787292587867,
+            -0.17370755791126014,
+            0.8234123205169708
+          ],
+          "transported_residual": [
+            -5.8562795170336775e-05,
+            0.0003185009392071527,
+            8.635521559412362e-05
+          ],
+          "reconstructed": [
+            0.15891931013070834,
+            -0.17338905697205298,
+            0.8234986757325649
+          ],
+          "reconstruction_error": 0.0,
+          "body_chart_majority_label": "LowerTorso"
+        }
+      }
+    }
+  }
+}

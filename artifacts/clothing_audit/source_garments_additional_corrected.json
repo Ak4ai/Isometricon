@@ -1,0 +1,116 @@
+{
+  "114590471167431": {
+    "reference_origin_minus_cage_origin": [
+      5.9604644775390625e-06,
+      0.0,
+      -0.024041488766670227
+    ],
+    "reference_rotation": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "cage_rotation": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "views": {
+      "front": {
+        "garment_only_pixels": 11190,
+        "reference_visible_over_garment_projection": 408,
+        "reference_visible_over_garment_fraction": 0.03646112600536193,
+        "old_reference_over_garment_pixels": 310,
+        "corrected_reference_over_garment_pixels": 408
+      },
+      "back": {
+        "garment_only_pixels": 11190,
+        "reference_visible_over_garment_projection": 142,
+        "reference_visible_over_garment_fraction": 0.012689901697944593,
+        "old_reference_over_garment_pixels": 1078,
+        "corrected_reference_over_garment_pixels": 142
+      }
+    }
+  },
+  "109837605892174": {
+    "reference_origin_minus_cage_origin": [
+      0.0,
+      0.06705701351165771,
+      -0.027378201484680176
+    ],
+    "reference_rotation": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "cage_rotation": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "views": {
+      "front": {
+        "garment_only_pixels": 20229,
+        "reference_visible_over_garment_projection": 321,
+        "reference_visible_over_garment_fraction": 0.01586830787483316,
+        "old_reference_over_garment_pixels": 377,
+        "corrected_reference_over_garment_pixels": 321
+      },
+      "back": {
+        "garment_only_pixels": 20229,
+        "reference_visible_over_garment_projection": 0,
+        "reference_visible_over_garment_fraction": 0.0,
+        "old_reference_over_garment_pixels": 796,
+        "corrected_reference_over_garment_pixels": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,195 @@
+[
+  {
+    "asset": "133331049150205",
+    "cage_charts": 21,
+    "charts_used_by_garment": 7,
+    "mesh_edges_over_3x": 9,
+    "over_3x_cross_chart": 5,
+    "over_3x_within_chart": 4,
+    "cross_chart_edges": 594,
+    "worst_crossing_regions": [
+      {
+        "regions": [
+          "LeftUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 3
+      },
+      {
+        "regions": [
+          "RightUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 2
+      }
+    ],
+    "source_outer_p99": 1.5255002831281685
+  },
+  {
+    "asset": "72628400373948",
+    "cage_charts": 21,
+    "charts_used_by_garment": 12,
+    "mesh_edges_over_3x": 11,
+    "over_3x_cross_chart": 8,
+    "over_3x_within_chart": 3,
+    "cross_chart_edges": 651,
+    "worst_crossing_regions": [
+      {
+        "regions": [
+          "RightUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 4
+      },
+      {
+        "regions": [
+          "LeftUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 3
+      },
+      {
+        "regions": [
+          "LeftHand",
+          "LeftHand"
+        ],
+        "edges_over_3x": 1
+      }
+    ],
+    "source_outer_p99": 1.7040603239656922
+  },
+  {
+    "asset": "109837605892174",
+    "cage_charts": 21,
+    "charts_used_by_garment": 10,
+    "mesh_edges_over_3x": 33,
+    "over_3x_cross_chart": 30,
+    "over_3x_within_chart": 3,
+    "cross_chart_edges": 738,
+    "worst_crossing_regions": [
+      {
+        "regions": [
+          "LeftUpperLeg",
+          "LowerTorso"
+        ],
+        "edges_over_3x": 14
+      },
+      {
+        "regions": [
+          "LowerTorso",
+          "RightUpperLeg"
+        ],
+        "edges_over_3x": 12
+      },
+      {
+        "regions": [
+          "RightFoot",
+          "RightLowerLeg"
+        ],
+        "edges_over_3x": 2
+      },
+      {
+        "regions": [
+          "LeftFoot",
+          "LeftLowerLeg"
+        ],
+        "edges_over_3x": 1
+      },
+      {
+        "regions": [
+          "LeftFoot",
+          "LeftFoot"
+        ],
+        "edges_over_3x": 1
+      }
+    ],
+    "source_outer_p99": 1.5255005846333929
+  },
+  {
+    "asset": "114590471167431",
+    "cage_charts": 21,
+    "charts_used_by_garment": 8,
+    "mesh_edges_over_3x": 86,
+    "over_3x_cross_chart": 73,
+    "over_3x_within_chart": 13,
+    "cross_chart_edges": 737,
+    "worst_crossing_regions": [
+      {
+        "regions": [
+          "RightUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 39
+      },
+      {
+        "regions": [
+          "LeftUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 30
+      },
+      {
+        "regions": [
+          "LeftUpperLeg",
+          "LowerTorso"
+        ],
+        "edges_over_3x": 2
+      },
+      {
+        "regions": [
+          "LowerTorso",
+          "RightUpperLeg"
+        ],
+        "edges_over_3x": 2
+      }
+    ],
+    "source_outer_p99": 1.4130405975350704
+  },
+  {
+    "asset": "16185652164",
+    "cage_charts": 24,
+    "charts_used_by_garment": 15,
+    "mesh_edges_over_3x": 240,
+    "over_3x_cross_chart": 106,
+    "over_3x_within_chart": 134,
+    "cross_chart_edges": 1423,
+    "worst_crossing_regions": [
+      {
+        "regions": [
+          "LeftHand",
+          "LeftHand"
+        ],
+        "edges_over_3x": 24
+      },
+      {
+        "regions": [
+          "RightHand",
+          "RightHand"
+        ],
+        "edges_over_3x": 22
+      },
+      {
+        "regions": [
+          "RightUpperArm",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 22
+      },
+      {
+        "regions": [
+          "Head",
+          "UpperTorso"
+        ],
+        "edges_over_3x": 8
+      },
+      {
+        "regions": [
+          "LeftUpperLeg",
+          "LowerTorso"
+        ],
+        "edges_over_3x": 8
+      }
+    ],
+    "source_outer_p99": 4.598283558276434
+  }
+]

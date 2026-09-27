@@ -1,0 +1,2322 @@
+{
+  "limits": {
+    "position_p99_over_gap": 0.1,
+    "position_max_over_gap": 0.25,
+    "edge_relative_error_p99": 0.1,
+    "neighbor_error_increase_over_gap": 0.1
+  },
+  "distances": [
+    0.8,
+    0.76,
+    0.74,
+    0.72,
+    0.7,
+    0.68,
+    0.64,
+    0.6
+  ],
+  "cases": {
+    "d0.80": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.046669734353554176,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.04666973435355418,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051701,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.046669734353554176,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745629,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 0,
+        "outer_vertices_with_only_corresponding_influence": 288,
+        "cross_index_influences": 0,
+        "influence_count_p95": 1.0,
+        "influence_count_max": 1,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 0,
+      "arm_outer_vertices_with_foreign_weight": 0,
+      "maximum_foreign_weight_on_arm": 0.0,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.30000000000000004,
+      "source_sleeve_neighbor_body_gap": 0.21000000000000008,
+      "source_outer_surface_gap": 0.06000000000000005,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 0.10126979225821515,
+      "witnesses": [
+        {
+          "vertex": 29,
+          "source": [
+            0.2411261875677381,
+            -0.16111536757568462,
+            0.15
+          ],
+          "truth": [
+            0.2306292963082961,
+            -0.16111536757568462,
+            0.17799460697421543
+          ],
+          "result": [
+            0.2237531962310019,
+            -0.1604518187146529,
+            0.18115467677970323
+          ],
+          "cage_face": [
+            14,
+            31,
+            30
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 515,
+          "source": [
+            0.2411261875677381,
+            0.16111536757568462,
+            1.85
+          ],
+          "truth": [
+            -1.0952449377609472,
+            0.16111536757568462,
+            1.5038688410434589
+          ],
+          "result": [
+            -1.0920848679554598,
+            0.16045181871465297,
+            1.4969927409661647
+          ],
+          "cage_face": [
+            113,
+            114,
+            130
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 513,
+          "source": [
+            0.2844277313169368,
+            0.05657619338467719,
+            1.85
+          ],
+          "truth": [
+            -1.0901553870027598,
+            0.05657619338467719,
+            1.5468702382782418
+          ],
+          "result": [
+            -1.088152222772471,
+            0.05641498804394692,
+            1.5396041085423937
+          ],
+          "cage_face": [
+            112,
+            113,
+            129
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 31,
+          "source": [
+            0.28442773131693677,
+            -0.05657619338467732,
+            0.15
+          ],
+          "truth": [
+            0.273630693543079,
+            -0.05657619338467732,
+            0.18308415773240294
+          ],
+          "result": [
+            0.266364563807231,
+            -0.05641498804394703,
+            0.18508732196269184
+          ],
+          "cage_face": [
+            15,
+            16,
+            31
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 448,
+          "source": [
+            0.29,
+            0.0,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.83416291918332,
+            0.0,
+            1.5003098317073729
+          ],
+          "result": [
+            -0.8363028027766204,
+            4.991993019814326e-18,
+            1.4931715432781574
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    "d0.76": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.04666973435355418,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.04666973435355418,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051701,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.04666973435355418,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745628,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 0,
+        "outer_vertices_with_only_corresponding_influence": 288,
+        "cross_index_influences": 0,
+        "influence_count_p95": 1.0,
+        "influence_count_max": 1,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 0,
+      "arm_outer_vertices_with_foreign_weight": 0,
+      "maximum_foreign_weight_on_arm": 0.0,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.26,
+      "source_sleeve_neighbor_body_gap": 0.17000000000000004,
+      "source_outer_surface_gap": 0.020000000000000018,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 0.10126979225821515,
+      "witnesses": [
+        {
+          "vertex": 29,
+          "source": [
+            0.2411261875677381,
+            -0.16111536757568462,
+            0.15
+          ],
+          "truth": [
+            0.2306292963082961,
+            -0.16111536757568462,
+            0.17799460697421543
+          ],
+          "result": [
+            0.2237531962310019,
+            -0.1604518187146529,
+            0.18115467677970323
+          ],
+          "cage_face": [
+            14,
+            31,
+            30
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 515,
+          "source": [
+            0.2411261875677381,
+            0.16111536757568462,
+            1.85
+          ],
+          "truth": [
+            -1.0952449377609472,
+            0.16111536757568462,
+            1.5038688410434589
+          ],
+          "result": [
+            -1.0920848679554598,
+            0.16045181871465297,
+            1.4969927409661647
+          ],
+          "cage_face": [
+            113,
+            114,
+            130
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 513,
+          "source": [
+            0.2844277313169368,
+            0.05657619338467719,
+            1.85
+          ],
+          "truth": [
+            -1.0901553870027598,
+            0.05657619338467719,
+            1.5468702382782418
+          ],
+          "result": [
+            -1.088152222772471,
+            0.05641498804394692,
+            1.5396041085423937
+          ],
+          "cage_face": [
+            112,
+            113,
+            129
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 31,
+          "source": [
+            0.28442773131693677,
+            -0.05657619338467732,
+            0.15
+          ],
+          "truth": [
+            0.273630693543079,
+            -0.05657619338467732,
+            0.18308415773240294
+          ],
+          "result": [
+            0.266364563807231,
+            -0.05641498804394703,
+            0.18508732196269184
+          ],
+          "cage_face": [
+            15,
+            16,
+            31
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "vertex": 448,
+          "source": [
+            0.29,
+            0.0,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.83416291918332,
+            0.0,
+            1.5003098317073729
+          ],
+          "result": [
+            -0.8363028027766204,
+            4.991993019814326e-18,
+            1.4931715432781574
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    "d0.74": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 2.3274383416896116,
+          "position_max_over_gap": 4.008177066964291,
+          "position_rms_over_gap": 0.45814178492565477,
+          "edge_relative_error_p99": 1.3644018480089153,
+          "area_ratio_min": 0.9311601628206042,
+          "area_ratio_p99": 1.6509927697916802,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9245477265059344,
+            0.9254997458254375,
+            1.0037914157727486,
+            1.9682496339603202,
+            2.4885991691652634
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.063180684942883,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 2.3274383416896116,
+          "position_max_over_gap": 4.008177066964291,
+          "position_rms_over_gap": 0.45814178492565477,
+          "edge_relative_error_p99": 1.3644018480089153,
+          "area_ratio_min": 0.9311601628206042,
+          "area_ratio_p99": 1.6509927697916804,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9245477265059344,
+            0.9254997458254375,
+            1.0037914157727486,
+            1.9682496339603202,
+            2.4885991691652634
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.063180684942883,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.046669734353554176,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745628,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 18,
+        "outer_vertices_with_only_corresponding_influence": 270,
+        "cross_index_influences": 18,
+        "influence_count_p95": 2.0,
+        "influence_count_max": 2,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 18,
+      "arm_outer_vertices_with_foreign_weight": 9,
+      "maximum_foreign_weight_on_arm": 0.5000000000000002,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.24,
+      "source_sleeve_neighbor_body_gap": 0.15000000000000002,
+      "source_outer_surface_gap": 0.0,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 6.5252840140712,
+      "witnesses": [
+        {
+          "vertex": 512,
+          "source": [
+            0.29,
+            0.0,
+            1.85
+          ],
+          "truth": [
+            -1.0895004370438166,
+            0.0,
+            1.5524038825410695
+          ],
+          "result": [
+            -0.7332341744142714,
+            -9.369755527306543e-06,
+            1.609014531409503
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5000000000000002,
+            0.5000000000000002
+          ]
+        },
+        {
+          "vertex": 480,
+          "source": [
+            0.29,
+            0.0,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9607442536876358,
+            0.0,
+            1.5316868372147487
+          ],
+          "result": [
+            -0.6381987376376858,
+            -1.1692367584171681e-17,
+            1.5719292687922832
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5000000000000002,
+            0.5000000000000002
+          ]
+        },
+        {
+          "vertex": 448,
+          "source": [
+            0.29,
+            0.0,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.83416291918332,
+            0.0,
+            1.5003098317073729
+          ],
+          "result": [
+            -0.54572094235338,
+            -1.5884121973675535e-17,
+            1.5173139362854702
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5000000000000002,
+            0.5000000000000002
+          ]
+        },
+        {
+          "vertex": 416,
+          "source": [
+            0.29,
+            0.0,
+            1.53125
+          ],
+          "truth": [
+            -0.7106373916697629,
+            0.0,
+            1.4584912380916024
+          ],
+          "result": [
+            -0.4532431470690739,
+            -2.0075876363179394e-17,
+            1.4626986037786571
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5000000000000002,
+            0.5000000000000002
+          ]
+        },
+        {
+          "vertex": 384,
+          "source": [
+            0.29,
+            0.0,
+            1.425
+          ],
+          "truth": [
+            -0.5910273620267494,
+            0.0,
+            1.4065220979380386
+          ],
+          "result": [
+            -0.36588283721949805,
+            -2.1763042312108175e-17,
+            1.3957285685300724
+          ],
+          "cage_face": [
+            95,
+            80,
+            96
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5000000000000002,
+            0.5000000000000002
+          ]
+        }
+      ]
+    },
+    "d0.72": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 2.6764923486514305,
+          "position_max_over_gap": 4.605268645638134,
+          "position_rms_over_gap": 0.5263685614031021,
+          "edge_relative_error_p99": 1.6476971835334993,
+          "area_ratio_min": 0.9223389725124896,
+          "area_ratio_p99": 1.8356208027178127,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9245477265059344,
+            0.9254997458254375,
+            1.0037914157727486,
+            2.136112460725033,
+            2.782990373990783
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.3697042216039064,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 2.6764923486514305,
+          "position_max_over_gap": 4.605268645638134,
+          "position_rms_over_gap": 0.5263685614031021,
+          "edge_relative_error_p99": 1.6476971835334993,
+          "area_ratio_min": 0.9223389725124896,
+          "area_ratio_p99": 1.8356208027178127,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9245477265059344,
+            0.9254997458254375,
+            1.0037914157727486,
+            2.136112460725033,
+            2.782990373990783
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.3697042216039064,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.046669734353554176,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745628,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 18,
+        "outer_vertices_with_only_corresponding_influence": 270,
+        "cross_index_influences": 18,
+        "influence_count_p95": 2.0,
+        "influence_count_max": 2,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 18,
+      "arm_outer_vertices_with_foreign_weight": 9,
+      "maximum_foreign_weight_on_arm": 0.5744680851063833,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.21999999999999997,
+      "source_sleeve_neighbor_body_gap": 0.13,
+      "source_outer_surface_gap": -0.020000000000000018,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 7.497134824677549,
+      "witnesses": [
+        {
+          "vertex": 512,
+          "source": [
+            0.29,
+            0.0,
+            1.85
+          ],
+          "truth": [
+            -1.0895004370438166,
+            0.0,
+            1.5524038825410695
+          ],
+          "result": [
+            -0.6803350375318529,
+            -7.974260023238645e-06,
+            1.618528916351703
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5744680851063833,
+            0.5744680851063833
+          ]
+        },
+        {
+          "vertex": 480,
+          "source": [
+            0.29,
+            0.0,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9607442536876358,
+            0.0,
+            1.5316868372147487
+          ],
+          "result": [
+            -0.5901315879139792,
+            -8.386685732607149e-18,
+            1.5780283340093533
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5744680851063833,
+            0.5744680851063833
+          ]
+        },
+        {
+          "vertex": 448,
+          "source": [
+            0.29,
+            0.0,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.83416291918332,
+            0.0,
+            1.5003098317073729
+          ],
+          "result": [
+            -0.5024427929286419,
+            -1.1954136276865746e-17,
+            1.5209096118397505
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5744680851063833,
+            0.5744680851063833
+          ]
+        },
+        {
+          "vertex": 416,
+          "source": [
+            0.29,
+            0.0,
+            1.53125
+          ],
+          "truth": [
+            -0.7106373916697629,
+            0.0,
+            1.4584912380916024
+          ],
+          "result": [
+            -0.41475399794330436,
+            -1.5521586821124348e-17,
+            1.4637908896701475
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5744680851063833,
+            0.5744680851063833
+          ]
+        },
+        {
+          "vertex": 384,
+          "source": [
+            0.29,
+            0.0,
+            1.425
+          ],
+          "truth": [
+            -0.5910273620267494,
+            0.0,
+            1.4065220979380386
+          ],
+          "result": [
+            -0.3319176773248882,
+            -1.6957472735106288e-17,
+            1.3949572580728558
+          ],
+          "cage_face": [
+            95,
+            80,
+            96
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.5744680851063833,
+            0.5744680851063833
+          ]
+        }
+      ]
+    },
+    "d0.70": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 3.108697605327362,
+          "position_max_over_gap": 5.344558283697005,
+          "position_rms_over_gap": 0.610935179408065,
+          "edge_relative_error_p99": 2.0031769430939876,
+          "area_ratio_min": 0.9111658473578358,
+          "area_ratio_p99": 2.0739225879833096,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9245477265059344,
+            0.9254997458254375,
+            1.0037914157727486,
+            2.3489967755447565,
+            3.166631130365612
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.749210544531286,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 3.108697605327362,
+          "position_max_over_gap": 5.344558283697005,
+          "position_rms_over_gap": 0.610935179408065,
+          "edge_relative_error_p99": 2.0031769430939876,
+          "area_ratio_min": 0.9111658473578358,
+          "area_ratio_p99": 2.0739225879833096,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9245477265059344,
+            0.9254997458254375,
+            1.0037914157727486,
+            2.3489967755447565,
+            3.166631130365612
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.749210544531286,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.046669734353554176,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745629,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 18,
+        "outer_vertices_with_only_corresponding_influence": 270,
+        "cross_index_influences": 18,
+        "influence_count_p95": 2.0,
+        "influence_count_max": 2,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 18,
+      "arm_outer_vertices_with_foreign_weight": 9,
+      "maximum_foreign_weight_on_arm": 0.6666666666666671,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.19999999999999996,
+      "source_sleeve_neighbor_body_gap": 0.10999999999999999,
+      "source_outer_surface_gap": -0.040000000000000036,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 8.700378685428266,
+      "witnesses": [
+        {
+          "vertex": 512,
+          "source": [
+            0.29,
+            0.0,
+            1.85
+          ],
+          "truth": [
+            -1.0895004370438166,
+            0.0,
+            1.5524038825410695
+          ],
+          "result": [
+            -0.6148408680583823,
+            -6.2465036848685125e-06,
+            1.630308631042046
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.6666666666666671,
+            0.6666666666666671
+          ]
+        },
+        {
+          "vertex": 480,
+          "source": [
+            0.29,
+            0.0,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9607442536876358,
+            0.0,
+            1.5316868372147487
+          ],
+          "result": [
+            -0.5306198787322475,
+            -3.710440948651608e-18,
+            1.5855795576114409
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.6666666666666671,
+            0.6666666666666671
+          ]
+        },
+        {
+          "vertex": 448,
+          "source": [
+            0.29,
+            0.0,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.83416291918332,
+            0.0,
+            1.5003098317073729
+          ],
+          "result": [
+            -0.4488603222122996,
+            -6.504943874987505e-18,
+            1.5253614006212408
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.6666666666666671,
+            0.6666666666666671
+          ]
+        },
+        {
+          "vertex": 416,
+          "source": [
+            0.29,
+            0.0,
+            1.53125
+          ],
+          "truth": [
+            -0.7106373916697629,
+            0.0,
+            1.4584912380916024
+          ],
+          "result": [
+            -0.36710076569235156,
+            -9.299446801323409e-18,
+            1.4651432436310408
+          ],
+          "cage_face": [
+            111,
+            96,
+            112
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.6666666666666671,
+            0.6666666666666671
+          ]
+        },
+        {
+          "vertex": 384,
+          "source": [
+            0.29,
+            0.0,
+            1.425
+          ],
+          "truth": [
+            -0.5910273620267494,
+            0.0,
+            1.4065220979380386
+          ],
+          "result": [
+            -0.2898655745982284,
+            -1.0424224100609262e-17,
+            1.394002302268683
+          ],
+          "cage_face": [
+            95,
+            80,
+            96
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.6666666666666671,
+            0.6666666666666671
+          ]
+        }
+      ]
+    },
+    "d0.68": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 4.517223133892083,
+          "position_max_over_gap": 6.235505538561719,
+          "position_rms_over_gap": 0.9311620592858716,
+          "edge_relative_error_p99": 1.4550385925889457,
+          "area_ratio_min": 0.755337743217728,
+          "area_ratio_p99": 1.7479637813799944,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 1,
+          "clearance_over_expected_gap_quantiles": [
+            0.9414651943034551,
+            0.9452220133126576,
+            1.016623732789655,
+            2.931187261950795,
+            3.6554815973553114
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.1225925844601563,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 4.517223133892083,
+          "position_max_over_gap": 6.235505538561719,
+          "position_rms_over_gap": 0.9348115207638403,
+          "edge_relative_error_p99": 1.4550385925889466,
+          "area_ratio_min": 0.8935862011360305,
+          "area_ratio_p99": 1.747963781379994,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9414651943034551,
+            0.9452220133126576,
+            1.016623732789655,
+            2.931187261950795,
+            3.6554815973553114
+          ],
+          "neighboring_error_difference_over_edge_p99": 2.1225925844601585,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08280146081161048,
+          "position_max_over_gap": 5.220356909234786,
+          "position_rms_over_gap": 0.22863482769503315,
+          "edge_relative_error_p99": 0.04455846968403187,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.048770770581294,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 2,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.051419861096293,
+            4.249846171355579
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0872539770346975,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08947437983392934,
+          "position_max_over_gap": 5.220356909234786,
+          "position_rms_over_gap": 0.23033190659275468,
+          "edge_relative_error_p99": 0.04438647274880821,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0410373035330982,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 2,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000068156943003,
+            1.0514198610962937,
+            4.249846171355579
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08790322812275074,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 36,
+        "outer_vertices_with_only_corresponding_influence": 252,
+        "cross_index_influences": 36,
+        "influence_count_p95": 2.0,
+        "influence_count_max": 2,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 36,
+      "arm_outer_vertices_with_foreign_weight": 27,
+      "maximum_foreign_weight_on_arm": 0.7777748971300105,
+      "foreign_bound_garment_vertices": 1,
+      "source_body_surface_gap": 0.18000000000000005,
+      "source_sleeve_neighbor_body_gap": 0.09000000000000008,
+      "source_outer_surface_gap": -0.05999999999999994,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 10.150404205576654,
+      "witnesses": [
+        {
+          "vertex": 512,
+          "source": [
+            0.29,
+            0.0,
+            1.85
+          ],
+          "truth": [
+            -1.0895004370438166,
+            0.0,
+            1.5524038825410695
+          ],
+          "result": [
+            -0.5359140434509385,
+            -4.164389771839679e-06,
+            1.6445043294189383
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.34932073847482936,
+            0.7777748971300105,
+            0.7777748971300105
+          ]
+        },
+        {
+          "vertex": 480,
+          "source": [
+            0.29,
+            0.0,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9607442536876358,
+            0.0,
+            1.5316868372147487
+          ],
+          "result": [
+            -0.45890249884275397,
+            2.9723722631809595e-18,
+            1.594679514227502
+          ],
+          "cage_face": [
+            96,
+            113,
+            112
+          ],
+          "face_foreign_weights": [
+            0.7777748971300105,
+            0.3493207384748296,
+            0.7777748971300105
+          ]
+        },
+        {
+          "vertex": 543,
+          "source": [
+            0.28442773131693677,
+            -0.05657619338467732,
+            1.85
+          ],
+          "truth": [
+            -1.0901553870027598,
+            -0.05657619338467732,
+            1.5468702382782418
+          ],
+          "result": [
+            -0.6313036083446572,
+            -0.05627963438192507,
+            1.632932225510472
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.34932073847482936,
+            0.7777748971300105,
+            0.7777748971300105
+          ]
+        },
+        {
+          "vertex": 448,
+          "source": [
+            0.29,
+            0.0,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.83416291918332,
+            0.0,
+            1.5003098317073729
+          ],
+          "result": [
+            -0.38428824957955465,
+            1.1093461623545125e-18,
+            1.530726237753627
+          ],
+          "cage_face": [
+            96,
+            113,
+            112
+          ],
+          "face_foreign_weights": [
+            0.7777748971300105,
+            0.3493207384748296,
+            0.7777748971300105
+          ]
+        },
+        {
+          "vertex": 513,
+          "source": [
+            0.2844277313169368,
+            0.05657619338467719,
+            1.85
+          ],
+          "truth": [
+            -1.0901553870027598,
+            0.05657619338467719,
+            1.5468702382782418
+          ],
+          "result": [
+            -0.6592781853805552,
+            0.056471300412616915,
+            1.6117980593918142
+          ],
+          "cage_face": [
+            112,
+            113,
+            129
+          ],
+          "face_foreign_weights": [
+            0.7777748971300105,
+            0.3493207384748296,
+            0.3493207384748296
+          ]
+        }
+      ]
+    },
+    "d0.64": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 6.730389414871158,
+          "position_max_over_gap": 8.0173951410727,
+          "position_rms_over_gap": 1.4774890932965246,
+          "edge_relative_error_p99": 2.3844258233561204,
+          "area_ratio_min": 0.6756221196006926,
+          "area_ratio_p99": 2.545489133307912,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9445290914088106,
+            0.945222013312658,
+            1.0187476051022628,
+            4.249536324809304,
+            4.712265671080084
+          ],
+          "neighboring_error_difference_over_edge_p99": 3.0509072549407232,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 6.730389414871158,
+          "position_max_over_gap": 8.0173951410727,
+          "position_rms_over_gap": 1.4774890932965246,
+          "edge_relative_error_p99": 2.3844258233561204,
+          "area_ratio_min": 0.6756221196006926,
+          "area_ratio_p99": 2.545489133307912,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9445290914088106,
+            0.945222013312658,
+            1.0187476051022628,
+            4.249536324809304,
+            4.712265671080084
+          ],
+          "neighboring_error_difference_over_edge_p99": 3.0509072549407232,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.046669734353554176,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745629,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 54,
+        "outer_vertices_with_only_corresponding_influence": 234,
+        "cross_index_influences": 72,
+        "influence_count_p95": 2.0,
+        "influence_count_max": 4,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 72,
+      "arm_outer_vertices_with_foreign_weight": 27,
+      "maximum_foreign_weight_on_arm": 0.999983333777766,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.14,
+      "source_sleeve_neighbor_body_gap": 0.050000000000000044,
+      "source_outer_surface_gap": -0.09999999999999998,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 14.075058526544566,
+      "witnesses": [
+        {
+          "vertex": 512,
+          "source": [
+            0.29,
+            0.0,
+            1.85
+          ],
+          "truth": [
+            -1.0895004370438166,
+            0.0,
+            1.5524038825410695
+          ],
+          "result": [
+            -0.37806609436153354,
+            -3.123168407298066e-10,
+            1.6728947009539519
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.7366693006000704,
+            0.999983333777766,
+            0.999983333777766
+          ]
+        },
+        {
+          "vertex": 543,
+          "source": [
+            0.28442773131693677,
+            -0.05657619338467732,
+            1.85
+          ],
+          "truth": [
+            -1.0901553870027598,
+            -0.05657619338467732,
+            1.5468702382782418
+          ],
+          "result": [
+            -0.3981073530554122,
+            -0.05645429910244406,
+            1.6749334026927207
+          ],
+          "cage_face": [
+            127,
+            112,
+            128
+          ],
+          "face_foreign_weights": [
+            0.7366693006000704,
+            0.999983333777766,
+            0.999983333777766
+          ]
+        },
+        {
+          "vertex": 513,
+          "source": [
+            0.2844277313169368,
+            0.05657619338467719,
+            1.85
+          ],
+          "truth": [
+            -1.0901553870027598,
+            0.05657619338467719,
+            1.5468702382782418
+          ],
+          "result": [
+            -0.4151712268762398,
+            0.056533743069555706,
+            1.6619488535814115
+          ],
+          "cage_face": [
+            112,
+            113,
+            129
+          ],
+          "face_foreign_weights": [
+            0.999983333777766,
+            0.7366693006000707,
+            0.7366693006000707
+          ]
+        },
+        {
+          "vertex": 480,
+          "source": [
+            0.29,
+            0.0,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9607442536876358,
+            0.0,
+            1.5316868372147487
+          ],
+          "result": [
+            -0.31547291852039283,
+            2.450663912767666e-17,
+            1.6128787702572744
+          ],
+          "cage_face": [
+            96,
+            113,
+            112
+          ],
+          "face_foreign_weights": [
+            0.999983333777766,
+            0.7366693006000707,
+            0.999983333777766
+          ]
+        },
+        {
+          "vertex": 511,
+          "source": [
+            0.28442773131693677,
+            -0.05657619338467732,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9618581634078534,
+            -0.05657619338467732,
+            1.5262270402028213
+          ],
+          "result": [
+            -0.34157239809221684,
+            -0.05645429875463904,
+            1.610260585188968
+          ],
+          "cage_face": [
+            111,
+            112,
+            127
+          ],
+          "face_foreign_weights": [
+            0.7366693006000704,
+            0.999983333777766,
+            0.7366693006000704
+          ]
+        }
+      ]
+    },
+    "d0.60": {
+      "variants": {
+        "truth": {
+          "position_p99_over_gap": 0.0,
+          "position_max_over_gap": 0.0,
+          "position_rms_over_gap": 0.0,
+          "edge_relative_error_p99": 0.0,
+          "area_ratio_min": 1.0,
+          "area_ratio_p99": 1.0,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9999999999999976,
+            0.9999999999999981,
+            1.0,
+            1.000000000000003,
+            1.000000000000003
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.0,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "radial_full": {
+          "position_p99_over_gap": 4.316466210240758,
+          "position_max_over_gap": 5.654980534945365,
+          "position_rms_over_gap": 0.9098172302601575,
+          "edge_relative_error_p99": 2.8488351277441457,
+          "area_ratio_min": 0.8535740964028271,
+          "area_ratio_p99": 2.5040970242590372,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9248833460852887,
+            1.0121090622485227,
+            2.9631965249519507,
+            3.335149934602437
+          ],
+          "neighboring_error_difference_over_edge_p99": 3.620731020937113,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "radial_arm_binding": {
+          "position_p99_over_gap": 4.316466210240758,
+          "position_max_over_gap": 5.654980534945365,
+          "position_rms_over_gap": 0.9098172302601574,
+          "edge_relative_error_p99": 2.8488351277441417,
+          "area_ratio_min": 0.8535740964028271,
+          "area_ratio_p99": 2.5040970242590372,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9248833460852887,
+            1.0121090622485227,
+            2.9631965249519507,
+            3.335149934602437
+          ],
+          "neighboring_error_difference_over_edge_p99": 3.6207310209371086,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": false
+        },
+        "separated_influences": {
+          "position_p99_over_gap": 0.08235178975617688,
+          "position_max_over_gap": 0.08440575907703256,
+          "position_rms_over_gap": 0.04666973435355418,
+          "edge_relative_error_p99": 0.043351672234607196,
+          "area_ratio_min": 0.9495889284051698,
+          "area_ratio_p99": 1.047200372188092,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9200392591278673,
+            0.9997510586019926,
+            1.0513538991396776,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        },
+        "exact_outer": {
+          "position_p99_over_gap": 0.08936183385654628,
+          "position_max_over_gap": 0.08978976304140454,
+          "position_rms_over_gap": 0.05437799981745629,
+          "edge_relative_error_p99": 0.043532301487886144,
+          "area_ratio_min": 0.9485206548806164,
+          "area_ratio_p99": 1.0393005830466946,
+          "faces_below_tenth_truth_area": 0,
+          "normals_over_90_degrees_from_truth": 0,
+          "clearance_over_expected_gap_quantiles": [
+            0.9172003205805921,
+            0.9191105624111219,
+            1.0000034078471516,
+            1.051356126625764,
+            1.0520789787916642
+          ],
+          "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+          "penetration": {
+            "arm_inside": 0,
+            "neighbor_inside": 0,
+            "samples": 1568
+          },
+          "passes_diagnostic_gate": true
+        }
+      },
+      "radial": {
+        "outer_vertices_with_multiple_influences": 45,
+        "outer_vertices_with_only_corresponding_influence": 243,
+        "cross_index_influences": 81,
+        "influence_count_p95": 3.0,
+        "influence_count_max": 4,
+        "source_thickness_p95": 0.10000000000000005,
+        "bulk_scale": 1.0,
+        "radius_factor": 1
+      },
+      "cross_component_pairs": 81,
+      "arm_outer_vertices_with_foreign_weight": 18,
+      "maximum_foreign_weight_on_arm": 0.7142779786924133,
+      "foreign_bound_garment_vertices": 0,
+      "source_body_surface_gap": 0.09999999999999998,
+      "source_sleeve_neighbor_body_gap": 0.010000000000000009,
+      "source_outer_surface_gap": -0.14,
+      "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+      "arm_outer_position_error_p99_over_gap": 11.844670665376633,
+      "witnesses": [
+        {
+          "vertex": 542,
+          "source": [
+            0.2679250644282731,
+            -0.11097819538587621,
+            1.85
+          ],
+          "truth": [
+            -1.092095067519967,
+            -0.11097819538587621,
+            1.5304819603354753
+          ],
+          "result": [
+            -0.5917685409147639,
+            -0.11082769451675376,
+            1.623764667278456
+          ],
+          "cage_face": [
+            126,
+            127,
+            143
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.7142779786924133,
+            0.7142779786924133
+          ]
+        },
+        {
+          "vertex": 514,
+          "source": [
+            0.26792506442827313,
+            0.11097819538587603,
+            1.85
+          ],
+          "truth": [
+            -1.092095067519967,
+            0.11097819538587603,
+            1.5304819603354753
+          ],
+          "result": [
+            -0.591818340858282,
+            0.11081807075180157,
+            1.6237779467406104
+          ],
+          "cage_face": [
+            113,
+            130,
+            129
+          ],
+          "face_foreign_weights": [
+            0.7142779786924128,
+            0.0,
+            0.7142779786924128
+          ]
+        },
+        {
+          "vertex": 510,
+          "source": [
+            0.2679250644282731,
+            -0.11097819538587621,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9651570856426455,
+            -0.11097819538587621,
+            1.510057466104318
+          ],
+          "result": [
+            -0.5116388184306606,
+            -0.11074066653445284,
+            1.5769983634542641
+          ],
+          "cage_face": [
+            110,
+            111,
+            127
+          ],
+          "face_foreign_weights": [
+            0.0,
+            0.7142779786924133,
+            0.7142779786924133
+          ]
+        },
+        {
+          "vertex": 482,
+          "source": [
+            0.26792506442827313,
+            0.11097819538587603,
+            1.7437500000000001
+          ],
+          "truth": [
+            -0.9651570856426455,
+            0.11097819538587603,
+            1.510057466104318
+          ],
+          "result": [
+            -0.5117122854496908,
+            0.11074066653445265,
+            1.5770133499888883
+          ],
+          "cage_face": [
+            97,
+            114,
+            113
+          ],
+          "face_foreign_weights": [
+            0.7142779786924128,
+            0.0,
+            0.7142779786924128
+          ]
+        },
+        {
+          "vertex": 478,
+          "source": [
+            0.2679250644282731,
+            -0.11097819538587621,
+            1.6375000000000002
+          ],
+          "truth": [
+            -0.8403632409783717,
+            -0.11097819538587621,
+            1.4791235439217862
+          ],
+          "result": [
+            -0.43395742844477436,
+            -0.11074066653445284,
+            1.5154846882661814
+          ],
+          "cage_face": [
+            111,
+            112,
+            127
+          ],
+          "face_foreign_weights": [
+            0.7142779786924133,
+            0.0,
+            0.7142779786924133
+          ]
+        }
+      ]
+    }
+  },
+  "rendered_cases": [
+    "d0.80",
+    "d0.74",
+    "d0.60"
+  ],
+  "sha256": {
+    "scripts\\experiment_synthetic_contact.py": "f5613c7e81cc4ddcc8b576c50682d67e5a6bb35a0cd190d83921549b6ea5221f",
+    "scripts\\synthetic_wrap_fixture.py": "c45ffb4d4d8f0bcb1683296e599d82025565e2794fa2d77edd32011f8dd89c49",
+    "scripts\\experiment_synthetic_wrap.py": "96e59eaa29e8ad40920f75c24149b52fbc2b7c865e73ba3a89dcd5f7c74ff3e2",
+    "scripts\\experiment_canonical_radial.py": "f70d08a1f0131b39a6c373c021f3a2681558bf9774d07c40d47494d8a12ce879",
+    "scripts\\experiment_dual_cage_prism.py": "72d005b19f4b8d915cd58758298c4ac5a3ac508c838a01a8d14b0f64ee7a4ff6",
+    "src\\clothing\\multi_influence_shell.py": "826d8c206251677395ef45b5d9cb083b26f3a583e0b66a426157a2b3e146a1bc",
+    "src\\clothing\\wrap_layer_fit.py": "965d646e8ecf981ccafd58bea3fc26a93eeeb50a2afe43074bced93d6faea96a",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.60_input.npz": "2a880ad3c45a2815c52785b4e5b8e0721c6a206c264ff1a1f84643a406863272",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.64_input.npz": "2e3949b717b02f18aac3c07dd18fad98602b19f24501df34aa99484ebc9ab971",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.68_input.npz": "a7aa5a4452f1c024618a797494b8a0aea85ef88f95d39f8ac6a0d08376ece617",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.70_input.npz": "621a91dc5d021d14d64a4ee1a869da03d5bdf28cff5a6e2af79cfc4a24b0ed86",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.72_input.npz": "a00c26a6f500c265a70a4f70a38105f17fcafbca1de9179979fd4ce13fac139a",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.74_input.npz": "512414348e2e475eadea2af93d7b1adaa07d8a440918c9320d9ded9512dc01cd",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.76_input.npz": "df6f0830b90944ef77abca8014363e411d8b43659d4a27b2b9cfb7ddb1fe2110",
+    "artifacts\\clothing_audit\\synthetic_contact\\d0.80_input.npz": "7ec4e2228cd1f92cd25651fbffcf235280effe694bc0f238e52bfb9648e08c7a"
+  }
+}

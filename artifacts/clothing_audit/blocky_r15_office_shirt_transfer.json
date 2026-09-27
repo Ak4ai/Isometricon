@@ -1,0 +1,89 @@
+{
+  "asset_id": "133331049150205",
+  "source_reference_id": "80307990380242",
+  "target": "artifacts\\clothing_audit\\BlockyCharacter_OuterCages.obj",
+  "rendered_body": "15 Geo meshes from official BlockyCharacter.fbx",
+  "body_parts": [
+    "Head_Geo",
+    "LeftFoot_Geo",
+    "LeftHand_Geo",
+    "LeftLowerArm_Geo",
+    "LeftLowerLeg_Geo",
+    "LeftUpperArm_Geo",
+    "LeftUpperLeg_Geo",
+    "LowerTorso_Geo",
+    "RightFoot_Geo",
+    "RightHand_Geo",
+    "RightLowerArm_Geo",
+    "RightLowerLeg_Geo",
+    "RightUpperArm_Geo",
+    "RightUpperLeg_Geo",
+    "UpperTorso_Geo"
+  ],
+  "source_bounds": [
+    [
+      -1.0338000059127808,
+      -0.4419499933719635,
+      -0.9318000078201294
+    ],
+    [
+      1.0338000059127808,
+      0.4419499933719635,
+      0.9318000078201294
+    ]
+  ],
+  "target_bounds": [
+    [
+      -2.061307907104492,
+      -0.5383231043815613,
+      0.0686224028468132
+    ],
+    [
+      2.055219888687134,
+      0.6092913746833801,
+      2.19891095161438
+    ]
+  ],
+  "fit": {
+    "reference_id": "80307990380242",
+    "cage_id": "78642992491592",
+    "median_source_distance": 0.027121947753971976,
+    "p99_source_distance": 0.14140051188965438,
+    "invalid_faces": 0,
+    "outer_edge_stretch_p99": 9.966811169564307,
+    "outer_edges_over_3x": 1722
+  },
+  "mesh_edges": {
+    "edge_ratio_median": 1.8199862546325778,
+    "edge_ratio_p99": 6.9798836179217325,
+    "edges_over_3x": 985,
+    "edges_under_one_third": 11,
+    "edges_over_3x_with_source_over_3cm": 849,
+    "edge_count": 5830
+  },
+  "depth_visibility": {
+    "frente": {
+      "shirt_silhouette_pixels": 54611,
+      "visible_shirt_pixels": 2907,
+      "visible_fraction": 0.053231034040761016
+    },
+    "lado": {
+      "shirt_silhouette_pixels": 66290,
+      "visible_shirt_pixels": 7944,
+      "visible_fraction": 0.11983707949917032
+    },
+    "costas": {
+      "shirt_silhouette_pixels": 54611,
+      "visible_shirt_pixels": 8377,
+      "visible_fraction": 0.15339400487081356
+    },
+    "3/4": {
+      "shirt_silhouette_pixels": 57556,
+      "visible_shirt_pixels": 3289,
+      "visible_fraction": 0.05714434637570366
+    }
+  },
+  "image": "artifacts\\clothing_audit\\blocky_r15_office_shirt_transfer.png",
+  "depth_image": "artifacts\\clothing_audit\\blocky_r15_office_shirt_depth.png",
+  "stretched_edges_image": "artifacts\\clothing_audit\\blocky_r15_office_shirt_stretched_edges.png"
+}

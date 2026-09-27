@@ -1,0 +1,168 @@
+{
+  "radial_audit": {
+    "outer_vertices_with_multiple_influences": 0,
+    "outer_vertices_with_only_corresponding_influence": 288,
+    "cross_index_influences": 0,
+    "influence_count_p95": 1.0,
+    "influence_count_max": 1,
+    "source_thickness_p95": 0.10000000000000005,
+    "bulk_scale": 1.0,
+    "radius_factor": 1
+  },
+  "fields": {
+    "reference_level_0": {
+      "level": 0,
+      "samples": 512,
+      "usable_faces": 512,
+      "excluded_faces": 0,
+      "scale": 1.1691347258490052,
+      "base_width": 0.125,
+      "weighting": "source area quadrature times Gaussian; unrefined source bandwidth",
+      "limitations": "spatial support can mix body parts; blended rotations can shrink; no collision guarantee",
+      "cage_position_error_p99_over_gap": 2.848871940964692
+    },
+    "reference_level_2": {
+      "level": 2,
+      "samples": 8192,
+      "usable_faces": 512,
+      "excluded_faces": 0,
+      "scale": 1.1691347258490052,
+      "base_width": 0.125,
+      "weighting": "source area quadrature times Gaussian; unrefined source bandwidth",
+      "limitations": "spatial support can mix body parts; blended rotations can shrink; no collision guarantee",
+      "cage_position_error_p99_over_gap": 2.8898680717476823
+    }
+  },
+  "source_binding_residual_p99_over_gap": 9.996661616782732e-16,
+  "outer_error_p99_over_gap": 0.09973017703368109,
+  "variants": {
+    "truth": {
+      "position_p99_over_gap": 0.0,
+      "position_max_over_gap": 0.0,
+      "position_rms_over_gap": 0.0,
+      "edge_relative_error_p99": 0.0,
+      "area_ratio_min": 1.0,
+      "area_ratio_p99": 1.0,
+      "faces_below_tenth_truth_area": 0,
+      "normals_over_90_degrees_from_truth": 0,
+      "clearance_over_expected_gap_quantiles": [
+        0.9999999999999976,
+        0.9999999999999981,
+        1.0,
+        1.000000000000003,
+        1.000000000000003
+      ],
+      "neighboring_error_difference_over_edge_p99": 0.0,
+      "penetration": {
+        "samples": 1568,
+        "inside": 0,
+        "max_interior_margin": 0.0
+      },
+      "passes_diagnostic_gate": true
+    },
+    "radial_prism": {
+      "position_p99_over_gap": 0.08235178975617688,
+      "position_max_over_gap": 0.08440575907703256,
+      "position_rms_over_gap": 0.046669734353554176,
+      "edge_relative_error_p99": 0.043351672234607196,
+      "area_ratio_min": 0.9495889284051698,
+      "area_ratio_p99": 1.047200372188092,
+      "faces_below_tenth_truth_area": 0,
+      "normals_over_90_degrees_from_truth": 0,
+      "clearance_over_expected_gap_quantiles": [
+        0.9172003205805921,
+        0.9200392591278673,
+        0.9997510586019926,
+        1.0513538991396776,
+        1.0520789787916642
+      ],
+      "neighboring_error_difference_over_edge_p99": 0.08428215933878694,
+      "penetration": {
+        "samples": 1568,
+        "inside": 0,
+        "max_interior_margin": 0.0
+      },
+      "passes_diagnostic_gate": true
+    },
+    "prism_exact_outer": {
+      "position_p99_over_gap": 0.08936183385654628,
+      "position_max_over_gap": 0.08978976304140454,
+      "position_rms_over_gap": 0.05437799981745629,
+      "edge_relative_error_p99": 0.043532301487886144,
+      "area_ratio_min": 0.9485206548806164,
+      "area_ratio_p99": 1.0393005830466946,
+      "faces_below_tenth_truth_area": 0,
+      "normals_over_90_degrees_from_truth": 0,
+      "clearance_over_expected_gap_quantiles": [
+        0.9172003205805921,
+        0.9191105624111219,
+        1.0000034078471516,
+        1.051356126625764,
+        1.0520789787916642
+      ],
+      "neighboring_error_difference_over_edge_p99": 0.08466101358738289,
+      "penetration": {
+        "samples": 1568,
+        "inside": 0,
+        "max_interior_margin": 0.0
+      },
+      "passes_diagnostic_gate": true
+    },
+    "reference_level_0": {
+      "position_p99_over_gap": 4.079478805663172,
+      "position_max_over_gap": 4.6913306770711225,
+      "position_rms_over_gap": 0.9483424200621856,
+      "edge_relative_error_p99": 0.8756142760154882,
+      "area_ratio_min": 0.7129369855188757,
+      "area_ratio_p99": 1.6436701350103118,
+      "faces_below_tenth_truth_area": 0,
+      "normals_over_90_degrees_from_truth": 0,
+      "clearance_over_expected_gap_quantiles": [
+        1.0221457226707282,
+        1.0717048946497147,
+        1.1728598078988357,
+        2.938327404367135,
+        3.2951554184164276
+      ],
+      "neighboring_error_difference_over_edge_p99": 1.27359908221637,
+      "penetration": {
+        "samples": 1568,
+        "inside": 0,
+        "max_interior_margin": 0.0
+      },
+      "passes_diagnostic_gate": false
+    },
+    "reference_level_2": {
+      "position_p99_over_gap": 4.116308798445834,
+      "position_max_over_gap": 4.731402990471406,
+      "position_rms_over_gap": 0.9582527242184259,
+      "edge_relative_error_p99": 0.8812920460495075,
+      "area_ratio_min": 0.7100821480083971,
+      "area_ratio_p99": 1.6412085430150614,
+      "faces_below_tenth_truth_area": 0,
+      "normals_over_90_degrees_from_truth": 0,
+      "clearance_over_expected_gap_quantiles": [
+        1.0276380459963352,
+        1.062023874188314,
+        1.1733615413355099,
+        2.962844788536032,
+        3.314153620188522
+      ],
+      "neighboring_error_difference_over_edge_p99": 1.2863873017342375,
+      "penetration": {
+        "samples": 1568,
+        "inside": 0,
+        "max_interior_margin": 0.0
+      },
+      "passes_diagnostic_gate": false
+    }
+  },
+  "geometry": {
+    "arm_length": 2.0,
+    "clearance": 0.08999999999999997,
+    "cage_rings": 9,
+    "cage_sides": 16,
+    "angle_degrees": 90.0,
+    "neighbor": true
+  }
+}

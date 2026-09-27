@@ -1,0 +1,1890 @@
+[
+  {
+    "vertex": 56,
+    "binding_region": "LowerTorso",
+    "source": [
+      -0.5428000092506409,
+      -0.7480000257492065,
+      -0.021649999544024467
+    ],
+    "target_inner": [
+      1.0000002241420152,
+      0.21692926336605528,
+      0.15832197140924442
+    ],
+    "target_outer": [
+      1.0950922425485903,
+      0.2391749071084417,
+      0.15115799677865815
+    ],
+    "prism_without_residual": [
+      1.0950922425485903,
+      0.2391749071084417,
+      0.15115799677865815
+    ],
+    "final": [
+      1.0960090036893901,
+      0.2392761814781044,
+      0.1511342257046455
+    ],
+    "t": 1.0,
+    "source_residual": 0.000714495511718581,
+    "distance_to_body_surface": 0.09554335450972327,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftHand_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 76,
+    "binding_region": "LowerTorso",
+    "source": [
+      -0.5278000235557556,
+      -0.5855000019073486,
+      -0.018149999901652336
+    ],
+    "target_inner": [
+      1.0000001945774382,
+      0.187065737185838,
+      0.2994620082333016
+    ],
+    "target_outer": [
+      1.1283128933113802,
+      0.22392970854461366,
+      0.2942031890778048
+    ],
+    "prism_without_residual": [
+      1.108634118006643,
+      0.21827603734630294,
+      0.2950097119048545
+    ],
+    "final": [
+      1.108636567217867,
+      0.21827644531365312,
+      0.29500935583576526
+    ],
+    "t": 0.8466342341879874,
+    "source_residual": 2.0526683134266607e-06,
+    "distance_to_body_surface": 0.01469418050240554,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 81,
+    "binding_region": "LowerTorso",
+    "source": [
+      -0.5406000018119812,
+      -0.7523999810218811,
+      0.01425000000745058
+    ],
+    "target_inner": [
+      1.0000002324701167,
+      0.12539556474954439,
+      0.15163944856315667
+    ],
+    "target_outer": [
+      1.1064991618754516,
+      0.13482462154748331,
+      0.1465057450906663
+    ],
+    "prism_without_residual": [
+      1.0950472966211802,
+      0.13381071193798955,
+      0.14705777393030456
+    ],
+    "final": [
+      1.0950390684611695,
+      0.13380988984479855,
+      0.1470579561033423
+    ],
+    "t": 0.8924696678340714,
+    "source_residual": 6.411477147902138e-06,
+    "distance_to_body_surface": 0.09503906846116948,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftHand_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 88,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.5228000283241272,
+      -0.24709999561309814,
+      0.0017500000540167093
+    ],
+    "target_inner": [
+      1.000000238,
+      0.19481371617011722,
+      0.6430031850894948
+    ],
+    "target_outer": [
+      1.143080476181927,
+      0.15675290060925964,
+      0.6478062542286391
+    ],
+    "prism_without_residual": [
+      1.1221179659599103,
+      0.16232914401918672,
+      0.647102562459561
+    ],
+    "final": [
+      1.1219973774051912,
+      0.1623001127452783,
+      0.6471139542517452
+    ],
+    "t": 0.8534912264028887,
+    "source_residual": 8.700613912281285e-05,
+    "distance_to_body_surface": 0.12199737740519123,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 92,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.5227000117301941,
+      -0.3716000020503998,
+      0.019850000739097595
+    ],
+    "target_inner": [
+      1.000000238,
+      0.14382976958274668,
+      0.4990094221178493
+    ],
+    "target_outer": [
+      1.1424188484253082,
+      0.14784724338130173,
+      0.503219050923416
+    ],
+    "prism_without_residual": [
+      1.122072769788701,
+      0.14727330267522543,
+      0.5026176587426244
+    ],
+    "final": [
+      1.1219787510756942,
+      0.14725776606998275,
+      0.50260941949308
+    ],
+    "t": 0.8571389049798536,
+    "source_residual": 7.393002801225925e-05,
+    "distance_to_body_surface": 0.12197875107569421,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 93,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.5311999917030334,
+      -0.16760000586509705,
+      0.021250000223517418
+    ],
+    "target_inner": [
+      1.000000238,
+      0.13535428201970015,
+      0.7262644314550801
+    ],
+    "target_outer": [
+      1.1390560738332574,
+      0.1117177508609043,
+      0.7320538513079573
+    ],
+    "prism_without_residual": [
+      1.1259990019220398,
+      0.11393717505998792,
+      0.7315102360695872
+    ],
+    "final": [
+      1.1258829877322438,
+      0.11390561662695803,
+      0.7314691733540948
+    ],
+    "t": 0.9061019493861853,
+    "source_residual": 9.692372786426896e-05,
+    "distance_to_body_surface": 0.12588298773224382,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 140,
+    "binding_region": "LeftUpperArm",
+    "source": [
+      -0.7982000112533569,
+      0.08150000125169754,
+      -0.030150000005960464
+    ],
+    "target_inner": [
+      1.6808456165898855,
+      0.5126554796037665,
+      1.3422914244561932
+    ],
+    "target_outer": [
+      1.6814482629934753,
+      0.5747927119049264,
+      1.3394450208105562
+    ],
+    "prism_without_residual": [
+      1.6808456165898855,
+      0.5126554796037665,
+      1.3422914244561932
+    ],
+    "final": [
+      1.680845626628742,
+      0.49868407631918976,
+      1.3422914244562139
+    ],
+    "t": 0.0,
+    "source_residual": 0.009314268856386861,
+    "distance_to_body_surface": 0.0015657863517086756,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftUpperArm_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 150,
+    "binding_region": "LeftUpperArm",
+    "source": [
+      -0.7982000112533569,
+      0.08150000125169754,
+      -0.030150000005960464
+    ],
+    "target_inner": [
+      1.6808456165898855,
+      0.5126554796037665,
+      1.3422914244561932
+    ],
+    "target_outer": [
+      1.6814482629934753,
+      0.5747927119049264,
+      1.3394450208105562
+    ],
+    "prism_without_residual": [
+      1.6808456165898855,
+      0.5126554796037665,
+      1.3422914244561932
+    ],
+    "final": [
+      1.680845626628742,
+      0.49868407631918976,
+      1.3422914244562139
+    ],
+    "t": 0.0,
+    "source_residual": 0.009314268856386861,
+    "distance_to_body_surface": 0.0015657863517086756,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftUpperArm_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 237,
+    "binding_region": "LowerTorso",
+    "source": [
+      -0.34150001406669617,
+      -0.6718000173568726,
+      -0.16345000267028809
+    ],
+    "target_inner": [
+      0.932624767536719,
+      0.512655489178479,
+      0.25918044008486324
+    ],
+    "target_outer": [
+      0.9016448999888753,
+      0.5794084394092107,
+      0.26304797541091646
+    ],
+    "prism_without_residual": [
+      0.932624767536719,
+      0.512655489178479,
+      0.25918044008486324
+    ],
+    "final": [
+      0.9326247589925559,
+      0.4990054128385127,
+      0.2591804483662131
+    ],
+    "t": 0.0,
+    "source_residual": 0.018896631813042044,
+    "distance_to_body_surface": 0.0007447244905888772,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LowerTorso_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 255,
+    "binding_region": "LowerTorso",
+    "source": [
+      -0.34150001406669617,
+      -0.6718000173568726,
+      -0.16345000267028809
+    ],
+    "target_inner": [
+      0.932624767536719,
+      0.512655489178479,
+      0.25918044008486324
+    ],
+    "target_outer": [
+      0.9016448999888753,
+      0.5794084394092107,
+      0.26304797541091646
+    ],
+    "prism_without_residual": [
+      0.932624767536719,
+      0.512655489178479,
+      0.25918044008486324
+    ],
+    "final": [
+      0.9326247589925559,
+      0.4990054128385127,
+      0.2591804483662131
+    ],
+    "t": 0.0,
+    "source_residual": 0.018896631813042044,
+    "distance_to_body_surface": 0.0007447244905888772,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LowerTorso_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 365,
+    "binding_region": "LowerTorso",
+    "source": [
+      -0.5406000018119812,
+      -0.7523999810218811,
+      0.01425000000745058
+    ],
+    "target_inner": [
+      1.0000002324701167,
+      0.12539556474954439,
+      0.15163944856315667
+    ],
+    "target_outer": [
+      1.1064991618754516,
+      0.13482462154748331,
+      0.1465057450906663
+    ],
+    "prism_without_residual": [
+      1.0950472966211802,
+      0.13381071193798955,
+      0.14705777393030456
+    ],
+    "final": [
+      1.0950390684611695,
+      0.13380988984479855,
+      0.1470579561033423
+    ],
+    "t": 0.8924696678340714,
+    "source_residual": 6.411477147902138e-06,
+    "distance_to_body_surface": 0.09503906846116948,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftHand_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 369,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.5189999938011169,
+      -0.2915000021457672,
+      0.05245000123977661
+    ],
+    "target_inner": [
+      1.000000238,
+      0.038639597583437754,
+      0.591867844642777
+    ],
+    "target_outer": [
+      1.174163702790754,
+      0.03201570859366645,
+      0.5994126180146105
+    ],
+    "prism_without_residual": [
+      1.1224265101862443,
+      0.033983408425927036,
+      0.597171359243347
+    ],
+    "final": [
+      1.122732582410282,
+      0.03404180260436321,
+      0.5971481579253041
+    ],
+    "t": 0.7029388875177208,
+    "source_residual": 0.00021470332791456514,
+    "distance_to_body_surface": 0.12273258241028208,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 377,
+    "binding_region": "LeftUpperArm",
+    "source": [
+      -0.558899998664856,
+      0.061400000005960464,
+      0.02694999985396862
+    ],
+    "target_inner": [
+      0.9999999160209849,
+      0.2405155044216442,
+      1.1813254590133309
+    ],
+    "target_outer": [
+      0.9238181307573998,
+      0.2676872358635999,
+      1.1788020051701664
+    ],
+    "prism_without_residual": [
+      0.9268570177339117,
+      0.2666033570791563,
+      1.178902665596977
+    ],
+    "final": [
+      0.9268570177427081,
+      0.2666033570786912,
+      1.1789026655979422
+    ],
+    "t": 0.9601100582508334,
+    "source_residual": 8.48027277406269e-12,
+    "distance_to_body_surface": 0.07314298225729188,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 378,
+    "binding_region": "LeftUpperArm",
+    "source": [
+      -0.5662000179290771,
+      0.049400001764297485,
+      0.11034999787807465
+    ],
+    "target_inner": [
+      1.0,
+      -0.11372839670138973,
+      1.176585303107173
+    ],
+    "target_outer": [
+      0.907471133257874,
+      -0.13535971683797168,
+      1.1690242378438922
+    ],
+    "prism_without_residual": [
+      0.9223639436812403,
+      -0.13187808822471866,
+      1.1702412149401162
+    ],
+    "final": [
+      0.9223639453380614,
+      -0.13187808817621502,
+      1.1702412147296528
+    ],
+    "t": 0.839046873178811,
+    "source_residual": 1.5722820751079966e-09,
+    "distance_to_body_surface": 0.07763605466193857,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 430,
+    "binding_region": "LeftUpperArm",
+    "source": [
+      -0.5435000061988831,
+      0.09099999815225601,
+      0.1660500019788742
+    ],
+    "target_inner": [
+      0.9999997497897622,
+      -0.31154932456891693,
+      1.200022991605381
+    ],
+    "target_outer": [
+      0.9104245039885398,
+      -0.3644066021849068,
+      1.1946455556977913
+    ],
+    "prism_without_residual": [
+      0.9215411441090051,
+      -0.3578468062530215,
+      1.1953129166323981
+    ],
+    "final": [
+      0.9215415415119309,
+      -0.3578468030759298,
+      1.195312934824255
+    ],
+    "t": 0.8758960690419497,
+    "source_residual": 3.794530346005444e-07,
+    "distance_to_body_surface": 0.0784584584880691,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 438,
+    "binding_region": "LeftUpperArm",
+    "source": [
+      -0.5267000198364258,
+      0.15139999985694885,
+      -0.004650000017136335
+    ],
+    "target_inner": [
+      0.9999997533755749,
+      0.37317999604265184,
+      1.2389796258896422
+    ],
+    "target_outer": [
+      0.9755041309222863,
+      0.4079852537813984,
+      1.191128291191836
+    ],
+    "prism_without_residual": [
+      0.981101202611758,
+      0.40003250536254154,
+      1.2020619733732647
+    ],
+    "final": [
+      0.981101215658133,
+      0.40003250780869337,
+      1.2020619291845642
+    ],
+    "t": 0.7715072682825287,
+    "source_residual": 4.902709109698046e-08,
+    "distance_to_body_surface": 0.01889878434186698,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 465,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.5311999917030334,
+      -0.16760000586509705,
+      0.021250000223517418
+    ],
+    "target_inner": [
+      1.000000238,
+      0.13535428201970015,
+      0.7262644314550801
+    ],
+    "target_outer": [
+      1.1390560738332574,
+      0.1117177508609043,
+      0.7320538513079573
+    ],
+    "prism_without_residual": [
+      1.1259990019220398,
+      0.11393717505998792,
+      0.7315102360695872
+    ],
+    "final": [
+      1.1258829877322438,
+      0.11390561662695803,
+      0.7314691733540948
+    ],
+    "t": 0.9061019493861853,
+    "source_residual": 9.692372786426896e-05,
+    "distance_to_body_surface": 0.12588298773224382,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 466,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.5189999938011169,
+      -0.2915000021457672,
+      0.05245000123977661
+    ],
+    "target_inner": [
+      1.000000238,
+      0.038639597583437754,
+      0.591867844642777
+    ],
+    "target_outer": [
+      1.174163702790754,
+      0.03201570859366645,
+      0.5994126180146105
+    ],
+    "prism_without_residual": [
+      1.1224265101862443,
+      0.033983408425927036,
+      0.597171359243347
+    ],
+    "final": [
+      1.122732582410282,
+      0.03404180260436321,
+      0.5971481579253041
+    ],
+    "t": 0.7029388875177208,
+    "source_residual": 0.00021470332791456514,
+    "distance_to_body_surface": 0.12273258241028208,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 480,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.48260000348091125,
+      -0.3330000042915344,
+      0.1253499984741211
+    ],
+    "target_inner": [
+      1.000000238,
+      -0.21753506594416946,
+      0.5463745427866893
+    ],
+    "target_outer": [
+      1.1266348302893152,
+      -0.17315113478218405,
+      0.5553296707316686
+    ],
+    "prism_without_residual": [
+      1.1059158898905352,
+      -0.18041287904798303,
+      0.553864504233311
+    ],
+    "final": [
+      1.105755762691561,
+      -0.18037400216899552,
+      0.5538751779107557
+    ],
+    "t": 0.8363879882722375,
+    "source_residual": 0.00011090480123211347,
+    "distance_to_body_surface": 0.10575576269156106,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "LeftLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1076,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.18359999358654022,
+      0.7473999857902527,
+      0.10275000333786011
+    ],
+    "target_inner": [
+      0.5063554755462408,
+      0.1400648247630762,
+      2.0039847750282767
+    ],
+    "target_outer": [
+      0.5921695799797886,
+      0.16484575250964476,
+      1.9460182214075492
+    ],
+    "prism_without_residual": [
+      0.5063554755462408,
+      0.1400648247630762,
+      2.0039847750282767
+    ],
+    "final": [
+      0.49461697376343033,
+      0.13593439185443731,
+      2.0727249634305127
+    ],
+    "t": 0.0,
+    "source_residual": 0.07154000506567318,
+    "distance_to_body_surface": 0.026190842885299926,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1079,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.18369999527931213,
+      0.7487000226974487,
+      0.07514999806880951
+    ],
+    "target_inner": [
+      0.4877665617255656,
+      0.19546060539545035,
+      2.0039439994756716
+    ],
+    "target_outer": [
+      0.5867788770380725,
+      0.2179095846730747,
+      1.9477811116455528
+    ],
+    "prism_without_residual": [
+      0.4877665617255656,
+      0.19546060539545035,
+      2.0039439994756716
+    ],
+    "final": [
+      0.4757348730353572,
+      0.19164778981360509,
+      2.0803947205977096
+    ],
+    "t": 0.0,
+    "source_residual": 0.05504071632325479,
+    "distance_to_body_surface": 0.03425435875488443,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1091,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.15399999916553497,
+      0.7515000104904175,
+      0.14045000076293945
+    ],
+    "target_inner": [
+      0.405791220968543,
+      -0.24089516078601425,
+      2.000091281650769
+    ],
+    "target_outer": [
+      0.44616313906236116,
+      -0.19713200571102563,
+      1.9957257337100072
+    ],
+    "prism_without_residual": [
+      0.405791220968543,
+      -0.24089516078601425,
+      2.000091281650769
+    ],
+    "final": [
+      0.39306279264168476,
+      -0.22844189318340294,
+      2.081634959390232
+    ],
+    "t": 0.0,
+    "source_residual": 0.0847422333683719,
+    "distance_to_body_surface": 0.07933552853916752,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1101,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.18359999358654022,
+      0.7473999857902527,
+      0.10275000333786011
+    ],
+    "target_inner": [
+      0.5063554755462408,
+      0.1400648247630762,
+      2.0039847750282767
+    ],
+    "target_outer": [
+      0.5921695799797886,
+      0.16484575250964476,
+      1.9460182214075492
+    ],
+    "prism_without_residual": [
+      0.5063554755462408,
+      0.1400648247630762,
+      2.0039847750282767
+    ],
+    "final": [
+      0.49461697376343033,
+      0.13593439185443731,
+      2.0727249634305127
+    ],
+    "t": 0.0,
+    "source_residual": 0.07154000506567318,
+    "distance_to_body_surface": 0.026190842885299926,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1103,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.15399999916553497,
+      0.7515000104904175,
+      0.14045000076293945
+    ],
+    "target_inner": [
+      0.405791220968543,
+      -0.24089516078601425,
+      2.000091281650769
+    ],
+    "target_outer": [
+      0.44616313906236116,
+      -0.19713200571102563,
+      1.9957257337100072
+    ],
+    "prism_without_residual": [
+      0.405791220968543,
+      -0.24089516078601425,
+      2.000091281650769
+    ],
+    "final": [
+      0.39306279264168476,
+      -0.22844189318340294,
+      2.081634959390232
+    ],
+    "t": 0.0,
+    "source_residual": 0.0847422333683719,
+    "distance_to_body_surface": 0.07933552853916752,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1104,
+    "binding_region": "UpperTorso",
+    "source": [
+      0.20260000228881836,
+      0.7418000102043152,
+      0.06494999676942825
+    ],
+    "target_inner": [
+      -0.47659410818242764,
+      0.21260311508283974,
+      2.003040365929788
+    ],
+    "target_outer": [
+      -0.5623117666981808,
+      0.2471018388796363,
+      1.975000334674685
+    ],
+    "prism_without_residual": [
+      -0.47659410818242764,
+      0.21260311508283974,
+      2.003040365929788
+    ],
+    "final": [
+      -0.46486363543413534,
+      0.2088857541679502,
+      2.077572247850545
+    ],
+    "t": 0.0,
+    "source_residual": 0.05365971735570652,
+    "distance_to_body_surface": 0.033318947370183566,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1106,
+    "binding_region": "UpperTorso",
+    "source": [
+      -0.18369999527931213,
+      0.7487000226974487,
+      0.07514999806880951
+    ],
+    "target_inner": [
+      0.4877665617255656,
+      0.19546060539545035,
+      2.0039439994756716
+    ],
+    "target_outer": [
+      0.5867788770380725,
+      0.2179095846730747,
+      1.9477811116455528
+    ],
+    "prism_without_residual": [
+      0.4877665617255656,
+      0.19546060539545035,
+      2.0039439994756716
+    ],
+    "final": [
+      0.4757348730353572,
+      0.19164778981360509,
+      2.0803947205977096
+    ],
+    "t": 0.0,
+    "source_residual": 0.05504071632325479,
+    "distance_to_body_surface": 0.03425435875488443,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 1159,
+    "binding_region": "Head",
+    "source": [
+      -0.23430000245571136,
+      0.9229000210762024,
+      0.06315000355243683
+    ],
+    "target_inner": [
+      0.5401506157445597,
+      0.09540228061941838,
+      2.022460169105894
+    ],
+    "target_outer": [
+      0.6073185354907424,
+      0.10869936849832826,
+      1.9107504165320583
+    ],
+    "prism_without_residual": [
+      0.5911822351774629,
+      0.10550490000627179,
+      1.937587366705076
+    ],
+    "final": [
+      0.592386571553667,
+      0.10525842371187794,
+      1.9377149895723036
+    ],
+    "t": 0.759761797383988,
+    "source_residual": 0.0008611745739215276,
+    "distance_to_body_surface": 0.05880219182418078,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1165,
+    "binding_region": "Head",
+    "source": [
+      -0.23680000007152557,
+      0.9280999898910522,
+      0.09674999862909317
+    ],
+    "target_inner": [
+      0.5433562876165812,
+      0.0035893493647314104,
+      2.0246232740715198
+    ],
+    "target_outer": [
+      0.5818448449882951,
+      0.031649514411336184,
+      1.9360148151511365
+    ],
+    "prism_without_residual": [
+      0.580896434636963,
+      0.03095807381684293,
+      1.9381982479788225
+    ],
+    "final": [
+      0.5799834265613084,
+      0.031170855044935608,
+      1.937949604225207
+    ],
+    "t": 0.9753586412145171,
+    "source_residual": 0.000707334555344746,
+    "distance_to_body_surface": 0.05856757717127747,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1166,
+    "binding_region": "Head",
+    "source": [
+      -0.23430000245571136,
+      0.9229000210762024,
+      0.06315000355243683
+    ],
+    "target_inner": [
+      0.5401506157445597,
+      0.09540228061941838,
+      2.022460169105894
+    ],
+    "target_outer": [
+      0.6073185354907424,
+      0.10869936849832826,
+      1.9107504165320583
+    ],
+    "prism_without_residual": [
+      0.5911822351774629,
+      0.10550490000627179,
+      1.937587366705076
+    ],
+    "final": [
+      0.592386571553667,
+      0.10525842371187794,
+      1.9377149895723036
+    ],
+    "t": 0.759761797383988,
+    "source_residual": 0.0008611745739215276,
+    "distance_to_body_surface": 0.05880219182418078,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1176,
+    "binding_region": "Head",
+    "source": [
+      -0.1915999948978424,
+      0.9232000112533569,
+      0.14685000479221344
+    ],
+    "target_inner": [
+      0.514549562953863,
+      -0.25209328611903076,
+      2.0304865833489156
+    ],
+    "target_outer": [
+      0.5277405493303639,
+      -0.19408245637511531,
+      1.9791449823623242
+    ],
+    "prism_without_residual": [
+      0.524107542571626,
+      -0.21005955850563446,
+      1.9932852731688553
+    ],
+    "final": [
+      0.5241081243699265,
+      -0.2100598962323833,
+      1.9932847812536427
+    ],
+    "t": 0.7245841474592094,
+    "source_residual": 5.555894549854266e-07,
+    "distance_to_body_surface": 0.0032324001428416516,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1198,
+    "binding_region": "Head",
+    "source": [
+      0.029600000008940697,
+      0.8776999711990356,
+      0.20264999568462372
+    ],
+    "target_inner": [
+      -0.05081721392912743,
+      -0.50676212901919,
+      2.0233102043545905
+    ],
+    "target_outer": [
+      -0.05177452797729389,
+      -0.5378552003533725,
+      1.941247643003858
+    ],
+    "prism_without_residual": [
+      -0.05081721392912743,
+      -0.50676212901919,
+      2.0233102043545905
+    ],
+    "final": [
+      -0.05075113354584972,
+      -0.5051981299018858,
+      2.0276479651893755
+    ],
+    "t": 0.0,
+    "source_residual": 0.004788918833836732,
+    "distance_to_body_surface": 0.002212067375014956,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1476,
+    "binding_region": "RightUpperArm",
+    "source": [
+      0.5663999915122986,
+      0.06920000165700912,
+      0.02655000053346157
+    ],
+    "target_inner": [
+      -1.0000000789144954,
+      0.2163082830916146,
+      1.1857499155644113
+    ],
+    "target_outer": [
+      -0.941188846028687,
+      0.23566165795471194,
+      1.1844633669099722
+    ],
+    "prism_without_residual": [
+      -0.941188846028687,
+      0.23566165795471194,
+      1.1844633669099722
+    ],
+    "final": [
+      -0.9219999924996236,
+      0.23689867714943144,
+      1.1860383644078794
+    ],
+    "t": 1.0,
+    "source_residual": 0.017883038463593452,
+    "distance_to_body_surface": 0.07800000750037639,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1482,
+    "binding_region": "RightUpperArm",
+    "source": [
+      0.8108999729156494,
+      0.0729999989271164,
+      -0.016249999403953552
+    ],
+    "target_inner": [
+      -1.658376727979629,
+      0.5126554634591887,
+      1.3200923422107738
+    ],
+    "target_outer": [
+      -1.6558818171362604,
+      0.5493416356851506,
+      1.3153723850362964
+    ],
+    "prism_without_residual": [
+      -1.658376727979629,
+      0.5126554634591887,
+      1.3200923422107738
+    ],
+    "final": [
+      -1.658376752701887,
+      0.4782486927314012,
+      1.3200923422108246
+    ],
+    "t": 0.0,
+    "source_residual": 0.02293784715186423,
+    "distance_to_body_surface": 0.022001169939497245,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "RightUpperArm_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1486,
+    "binding_region": "RightUpperArm",
+    "source": [
+      0.8507999777793884,
+      0.10740000009536743,
+      0.025949999690055847
+    ],
+    "target_inner": [
+      -2.0,
+      0.4252359497862036,
+      1.4280653887639687
+    ],
+    "target_outer": [
+      -2.0589361112372693,
+      0.44873279460946014,
+      1.4053254360040266
+    ],
+    "prism_without_residual": [
+      -2.0,
+      0.4252359497862036,
+      1.4280653887639687
+    ],
+    "final": [
+      -1.9583013388501447,
+      0.4252359497862036,
+      1.4280653887639687
+    ],
+    "t": 0.0,
+    "source_residual": 0.027799107433236898,
+    "distance_to_body_surface": 0.03529293115502903,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "RightUpperArm_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1595,
+    "binding_region": "UpperTorso",
+    "source": [
+      0.5077000260353088,
+      -0.25369998812675476,
+      0.05635000020265579
+    ],
+    "target_inner": [
+      -1.000000238,
+      -0.0260443390964584,
+      0.6432797158700074
+    ],
+    "target_outer": [
+      -1.116643989300495,
+      -0.01599953859667992,
+      0.6415889369826365
+    ],
+    "prism_without_residual": [
+      -1.0989961678367952,
+      -0.01751928435144304,
+      0.6418447463475295
+    ],
+    "final": [
+      -1.0989952946749846,
+      -0.017519257431554504,
+      0.641844777356171
+    ],
+    "t": 0.8487032415629722,
+    "source_residual": 5.827512385770673e-07,
+    "distance_to_body_surface": 0.09899529467498457,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "RightLowerArm_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1633,
+    "binding_region": "RightUpperArm",
+    "source": [
+      0.6564000248908997,
+      -0.03519999980926514,
+      0.07154999673366547
+    ],
+    "target_inner": [
+      -1.0,
+      -0.01021774680774087,
+      1.115892233914536
+    ],
+    "target_outer": [
+      -0.9260355566972692,
+      -0.005920554967705698,
+      1.1037421367145643
+    ],
+    "prism_without_residual": [
+      -0.9379696463161263,
+      -0.006613902612039388,
+      1.1057025428555098
+    ],
+    "final": [
+      -0.9379694538970641,
+      -0.006613890789829748,
+      1.105702411304231
+    ],
+    "t": 0.8386509911254008,
+    "source_residual": 2.3593865107425005e-07,
+    "distance_to_body_surface": 0.062030546102935895,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1640,
+    "binding_region": "RightUpperArm",
+    "source": [
+      0.6571000218391418,
+      -0.02329999953508377,
+      0.1091499999165535
+    ],
+    "target_inner": [
+      -1.0,
+      -0.16717831423472213,
+      1.1219006025380989
+    ],
+    "target_outer": [
+      -0.9140893964655636,
+      -0.18453952462233167,
+      1.1065356480476431
+    ],
+    "prism_without_residual": [
+      -0.9375570553155403,
+      -0.1797970720514359,
+      1.1107327959594593
+    ],
+    "final": [
+      -0.9375570545903822,
+      -0.17979707204627232,
+      1.1107327957621893
+    ],
+    "t": 0.7268362939556119,
+    "source_residual": 6.965557130136413e-10,
+    "distance_to_body_surface": 0.06244294540961781,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 1714,
+    "binding_region": "RightUpperArm",
+    "source": [
+      0.8507999777793884,
+      0.10740000009536743,
+      0.025949999690055847
+    ],
+    "target_inner": [
+      -2.0,
+      0.4252359497862036,
+      1.4280653887639687
+    ],
+    "target_outer": [
+      -2.0589361112372693,
+      0.44873279460946014,
+      1.4053254360040266
+    ],
+    "prism_without_residual": [
+      -2.0,
+      0.4252359497862036,
+      1.4280653887639687
+    ],
+    "final": [
+      -1.9583013388501447,
+      0.4252359497862036,
+      1.4280653887639687
+    ],
+    "t": 0.0,
+    "source_residual": 0.027799107433236898,
+    "distance_to_body_surface": 0.03529293115502903,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "RightUpperArm_Geo": [
+        false,
+        false,
+        false,
+        true
+      ]
+    }
+  },
+  {
+    "vertex": 2044,
+    "binding_region": "UpperTorso",
+    "source": [
+      0.20260000228881836,
+      0.7418000102043152,
+      0.06494999676942825
+    ],
+    "target_inner": [
+      -0.47659410818242764,
+      0.21260311508283974,
+      2.003040365929788
+    ],
+    "target_outer": [
+      -0.5623117666981808,
+      0.2471018388796363,
+      1.975000334674685
+    ],
+    "prism_without_residual": [
+      -0.47659410818242764,
+      0.21260311508283974,
+      2.003040365929788
+    ],
+    "final": [
+      -0.46486363543413534,
+      0.2088857541679502,
+      2.077572247850545
+    ],
+    "t": 0.0,
+    "source_residual": 0.05365971735570652,
+    "distance_to_body_surface": 0.033318947370183566,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "Head_Geo": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "UpperTorso_Geo": [
+        false,
+        true,
+        false,
+        false
+      ]
+    }
+  },
+  {
+    "vertex": 2125,
+    "binding_region": "Head",
+    "source": [
+      0.20730000734329224,
+      0.9078999757766724,
+      0.15584999322891235
+    ],
+    "target_inner": [
+      -0.4928086155096417,
+      -0.25371022421156864,
+      2.0256598617295527
+    ],
+    "target_outer": [
+      -0.5176679522423362,
+      -0.2738012523598816,
+      1.9515952874595786
+    ],
+    "prism_without_residual": [
+      -0.5061089062385867,
+      -0.26445936519989366,
+      1.9860336890324093
+    ],
+    "final": [
+      -0.506108906948427,
+      -0.2644593657050407,
+      1.986033688155209
+    ],
+    "t": 0.5350219465611383,
+    "source_residual": 8.864924279123473e-10,
+    "distance_to_body_surface": 0.010483493241275399,
+    "hit_order": [
+      "target_inner",
+      "target_outer",
+      "prism_without_residual",
+      "final"
+    ],
+    "body_part_hits": {
+      "UpperTorso_Geo": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  }
+]

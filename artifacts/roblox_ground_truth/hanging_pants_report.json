@@ -1,0 +1,448 @@
+{
+  "vestido": {
+    "atual": {
+      "acima_5cm_pct": 7.0,
+      "mediana_cm": 1.19,
+      "arestas_3x": 42
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 7.8,
+      "mediana_cm": 1.19,
+      "arestas_3x": 44
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 5.8,
+      "mediana_cm": 1.18,
+      "arestas_3x": 35
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 188,
+        "erro_mediano_cm": 0.45,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.04,
+          "lateral_x": -0.01,
+          "frente_tras_y": 0.13,
+          "cima_baixo_z": -0.06
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1385,
+        "erro_mediano_cm": 1.52,
+        "acima_5cm_pct": 2.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.46,
+          "lateral_x": -0.09,
+          "frente_tras_y": -0.03,
+          "cima_baixo_z": -0.28
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 1055,
+        "erro_mediano_cm": 1.0,
+        "acima_5cm_pct": 4.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.86,
+          "lateral_x": -0.1,
+          "frente_tras_y": 0.48,
+          "cima_baixo_z": -0.19
+        }
+      }
+    }
+  },
+  "jeans com bota": {
+    "atual": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.87,
+      "arestas_3x": 17
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 188,
+        "erro_mediano_cm": 0.42,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.05,
+          "lateral_x": -0.03,
+          "frente_tras_y": 0.1,
+          "cima_baixo_z": -0.05
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1913,
+        "erro_mediano_cm": 1.76,
+        "acima_5cm_pct": 2.2,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.42,
+          "lateral_x": -0.07,
+          "frente_tras_y": -0.39,
+          "cima_baixo_z": -0.17
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 597,
+        "erro_mediano_cm": 3.22,
+        "acima_5cm_pct": 22.8,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -0.92,
+          "lateral_x": 0.78,
+          "frente_tras_y": -0.91,
+          "cima_baixo_z": -0.4
+        }
+      }
+    }
+  },
+  "camisa social": {
+    "atual": {
+      "acima_5cm_pct": 0.6,
+      "mediana_cm": 1.38,
+      "arestas_3x": 21
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 1.2,
+      "mediana_cm": 1.38,
+      "arestas_3x": 22
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 1.1,
+      "mediana_cm": 1.37,
+      "arestas_3x": 21
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 266,
+        "erro_mediano_cm": 0.62,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -0.01,
+          "lateral_x": 0.01,
+          "frente_tras_y": 0.12,
+          "cima_baixo_z": -0.12
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1340,
+        "erro_mediano_cm": 1.28,
+        "acima_5cm_pct": 0.2,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.49,
+          "lateral_x": 0.05,
+          "frente_tras_y": 0.3,
+          "cima_baixo_z": 0.05
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 625,
+        "erro_mediano_cm": 1.94,
+        "acima_5cm_pct": 1.3,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.93,
+          "lateral_x": 0.16,
+          "frente_tras_y": 0.03,
+          "cima_baixo_z": -0.01
+        }
+      }
+    }
+  },
+  "jaqueta bomber": {
+    "atual": {
+      "acima_5cm_pct": 10.2,
+      "mediana_cm": 2.02,
+      "arestas_3x": 43
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 13.5,
+      "mediana_cm": 2.1,
+      "arestas_3x": 62
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 14.5,
+      "mediana_cm": 2.09,
+      "arestas_3x": 61
+    },
+    "erro por profundidade no prisma": {
+      "t 0.2-0.8 (meio)": {
+        "vertices": 710,
+        "erro_mediano_cm": 1.6,
+        "acima_5cm_pct": 4.9,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.83,
+          "lateral_x": 0.0,
+          "frente_tras_y": 0.32,
+          "cima_baixo_z": 0.41
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 1025,
+        "erro_mediano_cm": 2.1,
+        "acima_5cm_pct": 13.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.6,
+          "lateral_x": -0.04,
+          "frente_tras_y": 0.16,
+          "cima_baixo_z": 0.53
+        }
+      }
+    }
+  },
+  "saia-short": {
+    "atual": {
+      "acima_5cm_pct": 9.1,
+      "mediana_cm": 1.41,
+      "arestas_3x": 145
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 9.2,
+      "mediana_cm": 1.41,
+      "arestas_3x": 113
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 6.7,
+      "mediana_cm": 1.41,
+      "arestas_3x": 108
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 34,
+        "erro_mediano_cm": 0.19,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.04,
+          "lateral_x": -0.05,
+          "frente_tras_y": 0.08,
+          "cima_baixo_z": -0.12
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1989,
+        "erro_mediano_cm": 0.97,
+        "acima_5cm_pct": 1.2,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.46,
+          "lateral_x": 0.02,
+          "frente_tras_y": 0.25,
+          "cima_baixo_z": -0.4
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 773,
+        "erro_mediano_cm": 1.96,
+        "acima_5cm_pct": 2.7,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.84,
+          "lateral_x": -0.07,
+          "frente_tras_y": 0.24,
+          "cima_baixo_z": -0.29
+        }
+      }
+    }
+  },
+  "calca skater": {
+    "atual": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 14.2,
+      "mediana_cm": 2.44,
+      "arestas_3x": 16
+    },
+    "erro por profundidade no prisma": {
+      "t 0.2-0.8 (meio)": {
+        "vertices": 906,
+        "erro_mediano_cm": 1.12,
+        "acima_5cm_pct": 2.2,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -0.16,
+          "lateral_x": -0.02,
+          "frente_tras_y": -0.29,
+          "cima_baixo_z": 0.01
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 1134,
+        "erro_mediano_cm": 3.54,
+        "acima_5cm_pct": 23.8,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -1.07,
+          "lateral_x": -0.05,
+          "frente_tras_y": -0.4,
+          "cima_baixo_z": -0.03
+        }
+      }
+    }
+  },
+  "calca cargo": {
+    "atual": {
+      "acima_5cm_pct": 9.6,
+      "mediana_cm": 1.52,
+      "arestas_3x": 20
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 9.6,
+      "mediana_cm": 1.52,
+      "arestas_3x": 21
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 9.6,
+      "mediana_cm": 1.52,
+      "arestas_3x": 20
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 79,
+        "erro_mediano_cm": 0.67,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.4,
+          "lateral_x": -0.2,
+          "frente_tras_y": -0.29,
+          "cima_baixo_z": -0.03
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1922,
+        "erro_mediano_cm": 1.33,
+        "acima_5cm_pct": 4.1,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.38,
+          "lateral_x": -0.15,
+          "frente_tras_y": -0.06,
+          "cima_baixo_z": 0.0
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 560,
+        "erro_mediano_cm": 2.9,
+        "acima_5cm_pct": 29.6,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -1.51,
+          "lateral_x": -0.41,
+          "frente_tras_y": -0.01,
+          "cima_baixo_z": 0.36
+        }
+      }
+    }
+  },
+  "regata": {
+    "atual": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.41,
+      "arestas_3x": 0
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.41,
+      "arestas_3x": 0
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.41,
+      "arestas_3x": 0
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 193,
+        "erro_mediano_cm": 0.3,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.06,
+          "lateral_x": 0.06,
+          "frente_tras_y": 0.05,
+          "cima_baixo_z": -0.03
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1304,
+        "erro_mediano_cm": 0.4,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -0.07,
+          "lateral_x": 0.0,
+          "frente_tras_y": 0.01,
+          "cima_baixo_z": -0.05
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 219,
+        "erro_mediano_cm": 0.51,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": -0.22,
+          "lateral_x": -0.1,
+          "frente_tras_y": 0.06,
+          "cima_baixo_z": -0.04
+        }
+      }
+    }
+  },
+  "biquini": {
+    "atual": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.32,
+      "arestas_3x": 0
+    },
+    "pendurados: ancora + rotacao local": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.32,
+      "arestas_3x": 0
+    },
+    "pendurados: ancora + direcao original": {
+      "acima_5cm_pct": 0.0,
+      "mediana_cm": 0.32,
+      "arestas_3x": 0
+    },
+    "erro por profundidade no prisma": {
+      "t 0-0.2 (lado do corpo)": {
+        "vertices": 279,
+        "erro_mediano_cm": 0.33,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.12,
+          "lateral_x": 0.0,
+          "frente_tras_y": 0.11,
+          "cima_baixo_z": 0.02
+        }
+      },
+      "t 0.2-0.8 (meio)": {
+        "vertices": 1373,
+        "erro_mediano_cm": 0.31,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.18,
+          "lateral_x": -0.0,
+          "frente_tras_y": -0.05,
+          "cima_baixo_z": -0.0
+        }
+      },
+      "t 0.8-1 (cage externa)": {
+        "vertices": 303,
+        "erro_mediano_cm": 0.33,
+        "acima_5cm_pct": 0.0,
+        "Roblox_menos_nosso_medio_cm": {
+          "para_fora_do_corpo": 0.32,
+          "lateral_x": 0.02,
+          "frente_tras_y": -0.32,
+          "cima_baixo_z": 0.06
+        }
+      }
+    }
+  }
+}

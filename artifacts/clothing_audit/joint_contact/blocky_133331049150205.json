@@ -1,0 +1,468 @@
+{
+  "case": "blocky_133331049150205",
+  "method": "shell solve includes bound garment vertices and triangle centers; fixed local-frame linearization",
+  "solver": {
+    "reason": "iteration_limit",
+    "remaining_penetrating_samples": 972,
+    "remaining_penetrating_shell_samples": 339,
+    "remaining_penetrating_linked_samples": 633,
+    "samples": 4344,
+    "history": [
+      {
+        "iteration": 0,
+        "penetrating_samples": 1042,
+        "penetrating_shell_samples": 365,
+        "penetrating_linked_samples": 677,
+        "maximum_correction": 0.46625372870386794,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.1296165783093596,
+        "blocked_vertices": 61,
+        "limiting_original_face_ids": [
+          827,
+          886,
+          887,
+          951,
+          2135,
+          2173
+        ]
+      },
+      {
+        "iteration": 1,
+        "penetrating_samples": 1011,
+        "penetrating_shell_samples": 357,
+        "penetrating_linked_samples": 654,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.13353301396866085,
+        "blocked_vertices": 53,
+        "limiting_original_face_ids": [
+          827,
+          886,
+          887,
+          895,
+          930,
+          951,
+          961,
+          1896,
+          2135,
+          2179,
+          2394,
+          2422,
+          2451,
+          2481
+        ]
+      },
+      {
+        "iteration": 2,
+        "penetrating_samples": 1000,
+        "penetrating_shell_samples": 353,
+        "penetrating_linked_samples": 647,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.07080519913597816,
+        "blocked_vertices": 53,
+        "limiting_original_face_ids": [
+          827,
+          851,
+          886,
+          887,
+          895,
+          909,
+          928,
+          930,
+          951,
+          961,
+          1896,
+          2135,
+          2179,
+          2394,
+          2422,
+          2426,
+          2451,
+          2481
+        ]
+      },
+      {
+        "iteration": 3,
+        "penetrating_samples": 988,
+        "penetrating_shell_samples": 345,
+        "penetrating_linked_samples": 643,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.06079684684806221,
+        "blocked_vertices": 53,
+        "limiting_original_face_ids": [
+          827,
+          851,
+          886,
+          887,
+          895,
+          909,
+          928,
+          930,
+          950,
+          951,
+          961,
+          978,
+          1058,
+          2135,
+          2179,
+          2394,
+          2422,
+          2426,
+          2481
+        ]
+      },
+      {
+        "iteration": 4,
+        "penetrating_samples": 982,
+        "penetrating_shell_samples": 343,
+        "penetrating_linked_samples": 639,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.0435576643909058,
+        "blocked_vertices": 54,
+        "limiting_original_face_ids": [
+          827,
+          851,
+          886,
+          887,
+          895,
+          909,
+          928,
+          930,
+          950,
+          951,
+          961,
+          963,
+          978,
+          1058,
+          2135,
+          2179,
+          2394,
+          2422,
+          2426,
+          2481
+        ]
+      },
+      {
+        "iteration": 5,
+        "penetrating_samples": 978,
+        "penetrating_shell_samples": 343,
+        "penetrating_linked_samples": 635,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.024426750799826428,
+        "blocked_vertices": 59,
+        "limiting_original_face_ids": [
+          827,
+          851,
+          886,
+          887,
+          895,
+          909,
+          928,
+          930,
+          950,
+          951,
+          961,
+          963,
+          978,
+          1058,
+          2135,
+          2179,
+          2394,
+          2422,
+          2426,
+          2481
+        ]
+      },
+      {
+        "iteration": 6,
+        "penetrating_samples": 975,
+        "penetrating_shell_samples": 341,
+        "penetrating_linked_samples": 634,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.024479779334342554,
+        "blocked_vertices": 67,
+        "limiting_original_face_ids": [
+          827,
+          851,
+          886,
+          887,
+          895,
+          909,
+          930,
+          950,
+          951,
+          961,
+          963,
+          978,
+          1058,
+          2135,
+          2179,
+          2394,
+          2422,
+          2426,
+          2481
+        ]
+      },
+      {
+        "iteration": 7,
+        "penetrating_samples": 973,
+        "penetrating_shell_samples": 340,
+        "penetrating_linked_samples": 633,
+        "maximum_correction": 0.45377554239685486,
+        "unmovable_linked_samples": 120,
+        "maximum_move": 0.018928999002319157,
+        "blocked_vertices": 74,
+        "limiting_original_face_ids": [
+          827,
+          851,
+          886,
+          887,
+          895,
+          909,
+          930,
+          950,
+          951,
+          961,
+          963,
+          978,
+          1058,
+          1481,
+          2179,
+          2394,
+          2422,
+          2426,
+          2481
+        ]
+      }
+    ],
+    "margin": 0.0005142001867294312,
+    "max_vertex_displacement": 0.25407633853968353,
+    "local_steps": true,
+    "linked_sample_count": 2269,
+    "additional_constraints": {
+      "volume_samples": 9409,
+      "initial_inverted_samples": 597,
+      "rejected_trial_moves": {
+        "volume": 10658,
+        "edge_length": 521,
+        "thickness": 2064
+      },
+      "minimum_positive_volume_ratio": 0.1,
+      "edge_and_thickness_bounds": [
+        0.5,
+        2.0
+      ]
+    },
+    "input_valid_faces": 2687,
+    "input_degenerate_faces": 3,
+    "note": "Sampled surface constraints only; no volume/extrapolation guarantee"
+  },
+  "closed_body_components": 18,
+  "variants": {
+    "radial_prism": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 957,
+          "under_third": 6,
+          "quantiles": [
+            0.1839122316679943,
+            0.6255640017926923,
+            1.805437909247006,
+            5.7202254799568335,
+            14.497461246177151
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 962,
+          "under_third": 7,
+          "quantiles": [
+            0.1839122316679943,
+            0.621308556391477,
+            1.7933422591975319,
+            5.708163730527528,
+            14.497461246177151
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 1,
+          "over_nine": 235,
+          "quantiles": [
+            0.023605853505006248,
+            0.47902589893524344,
+            2.7901581761495873,
+            19.07554772488627,
+            75.057549920026
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1668,
+        "penetrating_fraction": 0.278231859883236,
+        "depth_max_over_body_height": 0.039269713505872904,
+        "depth_p95_over_body_height": 0.016130549252613747,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "used_prism_jacobians": {
+        "samples": 7140,
+        "source_degenerate_samples": 0,
+        "inverted_samples": 334,
+        "inverted_fraction": 0.04677871148459384
+      },
+      "binding_jacobians": {
+        "valid_vertices": 2269,
+        "inverted_vertices": 263
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 32413,
+          "visible_shirt_pixels": 30959,
+          "visible_fraction": 0.9551414555888069
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 13235,
+          "visible_shirt_pixels": 6918,
+          "visible_fraction": 0.5227049489988667
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 32413,
+          "visible_shirt_pixels": 29837,
+          "visible_fraction": 0.9205257149908987
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 28904,
+          "visible_shirt_pixels": 24277,
+          "visible_fraction": 0.8399183504013286
+        }
+      }
+    },
+    "joint_contact": {
+      "distortion": {
+        "historical_length_mask": {
+          "count": 5830,
+          "over_3": 1025,
+          "under_third": 10,
+          "quantiles": [
+            0.1705516611900536,
+            0.6089257835180586,
+            1.8348375426687467,
+            6.241670321918078,
+            13.62869751998742
+          ]
+        },
+        "all_nondegenerate": {
+          "count": 5980,
+          "over_3": 1034,
+          "under_third": 11,
+          "quantiles": [
+            0.1705516611900536,
+            0.6006746704860648,
+            1.8239910858143218,
+            6.146893134497687,
+            13.62869751998742
+          ]
+        },
+        "area": {
+          "count": 3726,
+          "under_tenth": 0,
+          "over_nine": 259,
+          "quantiles": [
+            0.11981679552202767,
+            0.49293657759937215,
+            2.864294974638897,
+            22.230259755854952,
+            105.50997053646319
+          ]
+        }
+      },
+      "penetration": {
+        "samples": 5995,
+        "closed_components": 18,
+        "open_components": 2,
+        "penetrating_samples": 1541,
+        "penetrating_fraction": 0.25704753961634697,
+        "depth_max_over_body_height": 0.03913132586338397,
+        "depth_p95_over_body_height": 0.011972014459055774,
+        "open_component_inside_candidates": 0,
+        "surface_tolerance_over_height": 0.0001
+      },
+      "seams": {
+        "same_uv": {
+          "groups": 1496,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        },
+        "coincident_outer": {
+          "groups": 1348,
+          "max_radius": 4.440892098500626e-16,
+          "over_1e_minus_5": 0,
+          "over_1e_minus_3": 0
+        }
+      },
+      "used_prism_jacobians": {
+        "samples": 7140,
+        "source_degenerate_samples": 0,
+        "inverted_samples": 317,
+        "inverted_fraction": 0.04439775910364146
+      },
+      "binding_jacobians": {
+        "valid_vertices": 2269,
+        "inverted_vertices": 261
+      },
+      "visibility": {
+        "frente": {
+          "shirt_silhouette_pixels": 31723,
+          "visible_shirt_pixels": 30638,
+          "visible_fraction": 0.9657976862213536
+        },
+        "lado": {
+          "shirt_silhouette_pixels": 14186,
+          "visible_shirt_pixels": 7744,
+          "visible_fraction": 0.5458903143944734
+        },
+        "costas": {
+          "shirt_silhouette_pixels": 31723,
+          "visible_shirt_pixels": 29652,
+          "visible_fraction": 0.9347161365570722
+        },
+        "3/4": {
+          "shirt_silhouette_pixels": 29122,
+          "visible_shirt_pixels": 24426,
+          "visible_fraction": 0.8387473387816771
+        }
+      }
+    }
+  },
+  "comparison_image": "artifacts\\clothing_audit\\joint_contact\\blocky_133331049150205_comparison.png",
+  "limitations": [
+    "The clothing residual transform is linearized at the source-only radial fit during contact iterations.",
+    "Final garment positions are reevaluated with the exact prism binding before measuring.",
+    "Sampled collision and prism guards do not prove continuous non-penetration or universal fit."
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "office": {
+    "vertices": 4895,
+    "faces": 2690,
+    "distinct_uv": 1709,
+    "uv_error_max": 0.0,
+    "position_delta_median": 0.0,
+    "position_delta_p90": 0.0,
+    "position_delta_max": 0.0
+  },
+  "bomber": {
+    "vertices": 1709,
+    "faces": 2690,
+    "distinct_uv": 1709,
+    "uv_error_max": 0.0,
+    "position_delta_median": 0.0340852215886116,
+    "position_delta_p90": 0.04605824127793312,
+    "position_delta_max": 0.11948353052139282
+  },
+  "sweater": {
+    "vertices": 4890,
+    "faces": 2690,
+    "distinct_uv": 1709,
+    "uv_error_max": 1.719260808386025e-06,
+    "position_delta_median": 4.623601626008167e-07,
+    "position_delta_p90": 6.54464713534253e-07,
+    "position_delta_max": 8.190218068193644e-07
+  },
+  "pants": {
+    "vertices": 4890,
+    "faces": 2690,
+    "distinct_uv": 1709,
+    "uv_error_max": 1.719260808386025e-06,
+    "position_delta_median": 4.676686273796804e-07,
+    "position_delta_p90": 6.726681363034004e-07,
+    "position_delta_max": 0.017711091786623
+  }
+}

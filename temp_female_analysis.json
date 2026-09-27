@@ -1,0 +1,815 @@
+{
+  "armature": {
+    "location": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "rotation_euler": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "bones": [
+      "Pelvis",
+      "Torso",
+      "Neck",
+      "Head",
+      "UpperArm_L",
+      "LowerArm_L",
+      "UpperArm_R",
+      "LowerArm_R",
+      "UpperLeg_L",
+      "LowerLeg_L",
+      "Foot_L",
+      "UpperLeg_R",
+      "LowerLeg_R",
+      "Foot_R"
+    ]
+  },
+  "bones_info": {
+    "Pelvis": {
+      "parent": null,
+      "head": [
+        -1.7879720815017208e-08,
+        0.10275158286094666,
+        0.800000011920929
+      ],
+      "tail": [
+        -1.7879720815017208e-08,
+        0.10275158286094666,
+        0.9279423356056213
+      ],
+      "vector": [
+        0.0,
+        0.0,
+        0.12794232368469238
+      ]
+    },
+    "Torso": {
+      "parent": "Pelvis",
+      "head": [
+        -1.7879720815017208e-08,
+        0.10275158286094666,
+        0.9279423356056213
+      ],
+      "tail": [
+        0.0,
+        -0.02151322364807129,
+        1.443483591079712
+      ],
+      "vector": [
+        1.7879720815017208e-08,
+        0.5155412554740906,
+        0.12426480650901794
+      ]
+    },
+    "Neck": {
+      "parent": "Torso",
+      "head": [
+        0.0,
+        -0.02151322364807129,
+        1.443483591079712
+      ],
+      "tail": [
+        0.0018054854590445757,
+        -0.18408270180225372,
+        1.4787260293960571
+      ],
+      "vector": [
+        0.0018054894171655178,
+        0.07235556840896606,
+        0.14978496730327606
+      ]
+    },
+    "Head": {
+      "parent": "Neck",
+      "head": [
+        0.0018054854590445757,
+        -0.18408270180225372,
+        1.4787260293960571
+      ],
+      "tail": [
+        0.0018055178225040436,
+        -0.06493900716304779,
+        1.79549241065979
+      ],
+      "vector": [
+        -0.03329590708017349,
+        -0.049325183033943176,
+        -0.3331584632396698
+      ]
+    },
+    "UpperArm_L": {
+      "parent": "Torso",
+      "head": [
+        0.20408745110034943,
+        0.003966861870139837,
+        1.4762742519378662
+      ],
+      "tail": [
+        0.30692848563194275,
+        0.018707631155848503,
+        1.1676347255706787
+      ],
+      "vector": [
+        0.10284103453159332,
+        -0.3035005033016205,
+        0.05799208581447601
+      ]
+    },
+    "LowerArm_L": {
+      "parent": "UpperArm_L",
+      "head": [
+        0.30692848563194275,
+        0.018707631155848503,
+        1.1676347255706787
+      ],
+      "tail": [
+        0.333061546087265,
+        0.02135523408651352,
+        0.6821309924125671
+      ],
+      "vector": [
+        -0.11621266603469849,
+        0.46850717067718506,
+        -0.05830547213554382
+      ]
+    },
+    "UpperArm_R": {
+      "parent": "Torso",
+      "head": [
+        -0.20408745110034943,
+        0.003966861870139837,
+        1.4762742519378662
+      ],
+      "tail": [
+        -0.30692848563194275,
+        0.018707631155848503,
+        1.1676347255706787
+      ],
+      "vector": [
+        -0.10284103453159332,
+        -0.30350053310394287,
+        0.05799209699034691
+      ]
+    },
+    "LowerArm_R": {
+      "parent": "UpperArm_R",
+      "head": [
+        -0.30692848563194275,
+        0.018707631155848503,
+        1.1676347255706787
+      ],
+      "tail": [
+        -0.333061546087265,
+        0.02135523408651352,
+        0.6821309924125671
+      ],
+      "vector": [
+        0.11621250957250595,
+        0.46850699186325073,
+        -0.05830533057451248
+      ]
+    },
+    "UpperLeg_L": {
+      "parent": "Pelvis",
+      "head": [
+        0.18577197194099426,
+        -0.0279508288949728,
+        0.8558928966522217
+      ],
+      "tail": [
+        0.1427631974220276,
+        -0.023840686306357384,
+        0.4300011694431305
+      ],
+      "vector": [
+        -0.043008774518966675,
+        -0.4258917272090912,
+        -0.0041101425886154175
+      ]
+    },
+    "LowerLeg_L": {
+      "parent": "UpperLeg_L",
+      "head": [
+        0.1427631974220276,
+        -0.023840686306357384,
+        0.4300011694431305
+      ],
+      "tail": [
+        0.15229931473731995,
+        0.06155785545706749,
+        0.006000608205795288
+      ],
+      "vector": [
+        0.05999778211116791,
+        0.42169713973999023,
+        0.07570780813694
+      ]
+    },
+    "Foot_L": {
+      "parent": "LowerLeg_L",
+      "head": [
+        0.15229931473731995,
+        0.06155785545706749,
+        0.006000608205795288
+      ],
+      "tail": [
+        0.15229931473731995,
+        0.011557855643332005,
+        -0.09399939328432083
+      ],
+      "vector": [
+        -0.0007018701871857047,
+        0.0881376639008522,
+        -0.06878412514925003
+      ]
+    },
+    "UpperLeg_R": {
+      "parent": "Pelvis",
+      "head": [
+        -0.18577197194099426,
+        -0.0279508288949728,
+        0.8558928966522217
+      ],
+      "tail": [
+        -0.1427631974220276,
+        -0.023840686306357384,
+        0.4300011694431305
+      ],
+      "vector": [
+        0.043008774518966675,
+        -0.4258917272090912,
+        -0.0041101425886154175
+      ]
+    },
+    "LowerLeg_R": {
+      "parent": "UpperLeg_R",
+      "head": [
+        -0.1427631974220276,
+        -0.023840686306357384,
+        0.4300011694431305
+      ],
+      "tail": [
+        -0.15229931473731995,
+        0.06155785545706749,
+        0.006000608205795288
+      ],
+      "vector": [
+        -0.05999778211116791,
+        0.42169713973999023,
+        0.07570780813694
+      ]
+    },
+    "Foot_R": {
+      "parent": "LowerLeg_R",
+      "head": [
+        -0.15229931473731995,
+        0.06155785545706749,
+        0.006000608205795288
+      ],
+      "tail": [
+        -0.15229931473731995,
+        0.011557855643332005,
+        -0.09399939328432083
+      ],
+      "vector": [
+        0.0007018701871857047,
+        0.0881376639008522,
+        -0.06878412514925003
+      ]
+    }
+  },
+  "body_info": {
+    "cabeca.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Head",
+      "modifiers": [],
+      "location": [
+        -0.001805399777367711,
+        -1.6907153129577637,
+        -0.6441580057144165
+      ],
+      "rotation_euler": [
+        -69.387468306431,
+        4.084118410031612e-06,
+        5.539289044782794e-06
+      ],
+      "vertex_count": 80,
+      "vertex_groups": []
+    },
+    "Export_antebraco_direito.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerArm_R",
+      "modifiers": [],
+      "location": [
+        0.3673679232597351,
+        0.6631166338920593,
+        -0.044776566326618195
+      ],
+      "rotation_euler": [
+        179.52268406899915,
+        3.059812690374642,
+        -3.0854568490568663
+      ],
+      "vertex_count": 8,
+      "vertex_groups": []
+    },
+    "Export_antebraco_esquerdo.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerArm_L",
+      "modifiers": [],
+      "location": [
+        -0.367368221282959,
+        0.6631171703338623,
+        -0.04477689042687416
+      ],
+      "rotation_euler": [
+        179.52268406899915,
+        -3.0598421455654377,
+        3.08542589976219
+      ],
+      "vertex_count": 8,
+      "vertex_groups": []
+    },
+    "Export_braco_superior_direito.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperArm_R",
+      "modifiers": [],
+      "location": [
+        0.6060700416564941,
+        1.0088475942611694,
+        -0.26986873149871826
+      ],
+      "rotation_euler": [
+        171.55726281741693,
+        16.63858670496118,
+        -19.2443141186048
+      ],
+      "vertex_count": 10,
+      "vertex_groups": []
+    },
+    "Export_braco_superior_esquerdo.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperArm_L",
+      "modifiers": [],
+      "location": [
+        -0.6060706973075867,
+        1.0088483095169067,
+        -0.2698693871498108
+      ],
+      "rotation_euler": [
+        171.55726281741693,
+        -16.63861402571786,
+        19.244303873321048
+      ],
+      "vertex_count": 10,
+      "vertex_groups": []
+    },
+    "Export_canela_direita.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerLeg_R",
+      "modifiers": [],
+      "location": [
+        0.15098504722118378,
+        -0.009625880979001522,
+        -0.06426506489515305
+      ],
+      "rotation_euler": [
+        168.58960026455975,
+        1.0337123118929352,
+        -1.262945733434728
+      ],
+      "vertex_count": 18,
+      "vertex_groups": []
+    },
+    "Export_canela_esquerda.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerLeg_L",
+      "modifiers": [],
+      "location": [
+        -0.15098504722118378,
+        -0.009625880979001522,
+        -0.06426506489515305
+      ],
+      "rotation_euler": [
+        168.58960026455975,
+        -1.0337123118929352,
+        1.262945733434728
+      ],
+      "vertex_count": 18,
+      "vertex_groups": []
+    },
+    "Export_coxa_direita.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperLeg_R",
+      "modifiers": [],
+      "location": [
+        0.09636537730693817,
+        0.44237783551216125,
+        0.02942599356174469
+      ],
+      "rotation_euler": [
+        178.87142553163844,
+        -5.682068948366281,
+        5.794856289017525
+      ],
+      "vertex_count": 18,
+      "vertex_groups": []
+    },
+    "Export_coxa_esquerda.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperLeg_L",
+      "modifiers": [],
+      "location": [
+        -0.09636537730693817,
+        0.44237783551216125,
+        0.02942599356174469
+      ],
+      "rotation_euler": [
+        178.87142553163844,
+        5.682068948366281,
+        -5.794856289017525
+      ],
+      "vertex_count": 18,
+      "vertex_groups": []
+    },
+    "Export_pelve.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Pelvis",
+      "modifiers": [],
+      "location": [
+        1.7879720815017208e-08,
+        -0.9279423356056213,
+        0.13446545600891113
+      ],
+      "rotation_euler": [
+        -4.3257111045250854e-06,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 17,
+      "vertex_groups": []
+    },
+    "Export_torso.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Torso",
+      "modifiers": [],
+      "location": [
+        6.106765937374803e-08,
+        -1.4083352088928223,
+        0.31733232736587524
+      ],
+      "rotation_euler": [
+        -13.551935426573209,
+        2.452732221930876e-06,
+        1.931776295768616e-06
+      ],
+      "vertex_count": 16,
+      "vertex_groups": []
+    },
+    "pe_direito.003": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Foot_R",
+      "modifiers": [],
+      "location": [
+        0.15229563415050507,
+        -0.07890647649765015,
+        -0.0523734949529171
+      ],
+      "rotation_euler": [
+        -153.4349267982972,
+        -0.00026814625863770005,
+        5.658566705158013e-05
+      ],
+      "vertex_count": 14,
+      "vertex_groups": []
+    },
+    "pe_esquerdo.003": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Foot_L",
+      "modifiers": [],
+      "location": [
+        -0.15229563415050507,
+        -0.07890647649765015,
+        -0.0523734949529171
+      ],
+      "rotation_euler": [
+        -153.4349267982972,
+        0.00026814625863770005,
+        -5.658566705158013e-05
+      ],
+      "vertex_count": 14,
+      "vertex_groups": []
+    },
+    "pecoco.001": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Neck",
+      "modifiers": [],
+      "location": [
+        -0.0068595618940889835,
+        -0.1462564766407013,
+        -0.06538591533899307
+      ],
+      "rotation_euler": [
+        -162.689532595341,
+        5.798476289277631,
+        0.6250517418456115
+      ],
+      "vertex_count": 8,
+      "vertex_groups": []
+    }
+  },
+  "cage_info": {
+    "Head_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Head",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 336,
+      "vertex_groups": []
+    },
+    "LeftFoot_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Foot_L",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 64,
+      "vertex_groups": []
+    },
+    "LeftHand_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerArm_L",
+      "modifiers": [],
+      "location": [
+        0.30981191992759705,
+        0.03296823799610138,
+        0.9884924292564392
+      ],
+      "rotation_euler": [
+        -7.436295888091451,
+        -7.768031345889801,
+        8.209164236076951
+      ],
+      "vertex_count": 63,
+      "vertex_groups": []
+    },
+    "LeftLowerArm_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerArm_L",
+      "modifiers": [],
+      "location": [
+        0.30981189012527466,
+        0.032968226820230484,
+        0.9884923696517944
+      ],
+      "rotation_euler": [
+        -7.436295888091451,
+        -7.768031345889801,
+        8.209164236076951
+      ],
+      "vertex_count": 70,
+      "vertex_groups": []
+    },
+    "LeftLowerLeg_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerLeg_L",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 80,
+      "vertex_groups": []
+    },
+    "LeftUpperArm_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperArm_L",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 70,
+      "vertex_groups": []
+    },
+    "LeftUpperLeg_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperLeg_L",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 80,
+      "vertex_groups": []
+    },
+    "LowerTorso_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Pelvis",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 92,
+      "vertex_groups": []
+    },
+    "RightFoot_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Foot_R",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 64,
+      "vertex_groups": []
+    },
+    "RightHand_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerArm_R",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 63,
+      "vertex_groups": []
+    },
+    "RightLowerArm_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerArm_R",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 70,
+      "vertex_groups": []
+    },
+    "RightLowerLeg_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "LowerLeg_R",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 80,
+      "vertex_groups": []
+    },
+    "RightUpperArm_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperArm_R",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 70,
+      "vertex_groups": []
+    },
+    "RightUpperLeg_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "UpperLeg_R",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 80,
+      "vertex_groups": []
+    },
+    "UpperTorso_OuterCage": {
+      "parent": "Armature_Character.001",
+      "parent_type": "BONE",
+      "parent_bone": "Torso",
+      "modifiers": [],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_euler": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "vertex_count": 231,
+      "vertex_groups": []
+    }
+  }
+}
