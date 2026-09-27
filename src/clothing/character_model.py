@@ -1009,10 +1009,10 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v9" in line:
+                if "Universal Fitted Clothing v10" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8)):
-                    return False  # Regenerate fits made before the radial + prism WrapLayer fit.
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9)):
+                    return False  # Regenerate fits made before the HSR mask sidecar.
         return False
     except Exception:
         return False
@@ -1589,6 +1589,65 @@ class CharacterModel:
         mesh = TexturedMesh(sliced_v.flatten().astype(np.float32), sliced_f.flatten().astype(np.uint32))
         return CharacterPart("trunk_skin", mesh, self.white_tex_id)
 
+    SKIN_PART_NAMES = ("arm_left", "arm_right", "forearm_left", "forearm_right",
+                       "hand_left", "hand_right", "trunk_skin", "legs_skin")
+
+    def _apply_hsr_skin(self, clean_obj, skin_color, top_obj_path, bottom_obj_path,
+                        is_none_top, is_none_bottom) -> bool:
+        """Replace the rule-based skin cuts with Roblox HSR culling when every worn garment has a mask."""
+        from src.clothing.hsr import cull_hidden_triangles, sidecar_path
+        from src.rendering.mesh import TexturedMesh
+
+        worn = [path for path, none in ((top_obj_path, is_none_top), (bottom_obj_path, is_none_bottom)) if not none]
+        if not self.customization.is_female or not worn:
+            return False
+        masks = []
+        for path in worn:
+            sidecar = sidecar_path(path) if path else None
+            if not sidecar or not os.path.exists(sidecar):
+                return False  # a garment without HSR data keeps the rule-based cuts
+            with np.load(sidecar) as data:
+                masks.append((data["cage_points"], data["hidden"]))
+        cage_points = masks[0][0]
+        if any(len(hidden) != len(cage_points) for _, hidden in masks):
+            return False
+        hidden = np.logical_or.reduce([mask for _, mask in masks])
+
+        def hip_tf(raw_v):
+            return transform_hip_vertices(raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset)
+
+        def arm_tf(raw_v):
+            return transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
+
+        groups = [("trunk_skin", ["Export_torso", "Export_pelve"], hip_tf),
+                  ("legs_skin", ["Export_coxa_esquerda", "Export_coxa_direita", "Export_canela_esquerda",
+                                 "Export_canela_direita", "Export_pe_esquerdo", "Export_pe_direito"], hip_tf)]
+        for side, pt_side, hand in (("left", "esquerdo", "esquerda"), ("right", "direito", "direita")):
+            groups += [(f"arm_{side}", [f"Export_braco_superior_{pt_side}"], arm_tf),
+                       (f"forearm_{side}", [f"Export_antebraco_{pt_side}"], arm_tf),
+                       (f"hand_{side}", [f"Export_mao_{hand}", f"Export_mao_{pt_side}"], arm_tf)]
+
+        new_parts = []
+        for name, prefixes, transform in groups:
+            data = parse_clean_obj_groups(clean_obj, prefixes, default_color=skin_color, vertex_transform=transform)
+            if not data:
+                continue
+            vertices, indices = data
+            faces = indices.reshape(-1, 3)
+            # Hands stay whole: long sleeves mark the wrist cage points, and the few
+            # vertices of our block hands all map to them, which would cut the hands.
+            if not name.startswith("hand_"):
+                faces = cull_hidden_triangles(vertices.reshape(-1, 11)[:, :3], faces, cage_points, hidden)
+            if len(faces):
+                new_parts.append(CharacterPart(name, TexturedMesh(vertices, faces.astype(np.uint32).ravel()),
+                                               self.white_tex_id))
+        for part in [p for p in self.parts if p.name in self.SKIN_PART_NAMES]:
+            part.mesh.delete()
+            self.parts.remove(part)
+        self.parts.extend(new_parts)
+        print(f"[HSR] Pele recortada pelas máscaras de {len(worn)} peça(s): {int(hidden.sum())} pontos da cage cobertos")
+        return True
+
     def _build(self) -> None:
         """Carrega e monta todas as malhas e texturas do personagem."""
         from src.rendering.mesh import TexturedMesh
@@ -1906,6 +1965,11 @@ class CharacterModel:
             if legs_data:
                 mesh = TexturedMesh(legs_data[0], legs_data[1])
                 self.parts.append(CharacterPart("legs_skin", mesh, self.white_tex_id))
+
+        # 9.1 HSR do Roblox: com a máscara de todas as peças vestidas, a pele inteira
+        # é desenhada e só os triângulos cobertos pelas roupas são removidos.
+        self._apply_hsr_skin(clean_obj, skin_color, top_obj_path, bottom_obj_path,
+                             is_none_top, is_none_bottom)
 
         # 9. Tool / Katana / Acessório opcional
         if self.tool_id is not None:
