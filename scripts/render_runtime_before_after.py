@@ -39,13 +39,13 @@ OUT = ROOT / "artifacts/runtime_female"
 
 
 def clear_fit_cache(ids):
+    """Delete the female fitted caches only; the male ones are read by tests."""
     for asset in ids:
         if asset is None:
             continue
-        for name in (f"character_native_{asset}_female.obj", f"character_native_{asset}.obj"):
-            path = Path(MODELS_DIR) / name
-            if path.exists():
-                path.unlink()
+        path = Path(MODELS_DIR) / f"character_native_{asset}_female.obj"
+        if path.exists():
+            path.unlink()
 
 
 def render_outfit(shader, top_id, bottom_id):

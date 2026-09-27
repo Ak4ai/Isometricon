@@ -766,6 +766,17 @@ class RobloxWearEngine:
         except Exception as exc:  # Asset decoding must never stop the outfit pipeline.
             print(f"[WrapLayer] Usando encaixe anterior: {exc}")
             return None
+        try:
+            from .hsr import engine_to_body_mesh, hidden_body_cage_mask
+            from .wrap_layer_fit import _unique_uv_positions
+            _, cage_positions = _unique_uv_positions(self.r15_female_cages)
+            hidden = hidden_body_cage_mask(meta["rbxm_path"], trace, len(cage_positions),
+                                           os.path.join(os.path.dirname(meta["obj_path"]), "hsr"))
+            if hidden is not None:
+                result[1]["hsr"] = {"cage_points": engine_to_body_mesh(cage_positions), "hidden": hidden}
+                print(f"[HSR] {int(hidden.sum())} de {len(hidden)} pontos da cage cobertos pela roupa")
+        except Exception as exc:  # HSR is optional: without it the skin keeps the rule-based cuts.
+            print(f"[HSR] Sem dados de HSR: {exc}")
         if faces is not None:
             try:
                 from .radial_prism_fit import fit_radial_prism
@@ -2473,7 +2484,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v9: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v10: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:
@@ -2485,6 +2496,14 @@ class RobloxWearEngine:
                     f.write("f " + " ".join(f"{face[j]+1}/{face_uvs[i][j]+1}/{face[j]+1}" for j in range(len(face))) + "\n")
                 else:
                     f.write("f " + " ".join(f"{idx+1}//{idx+1}" for idx in face) + "\n")
+
+        from .hsr import sidecar_path
+        hsr_path = sidecar_path(output_obj)
+        hsr_info = wrap_result[1].get("hsr") if used_asset_wrap and wrap_result is not None else None
+        if hsr_info is not None:
+            np.savez_compressed(hsr_path, cage_points=hsr_info["cage_points"], hidden=hsr_info["hidden"])
+        elif os.path.exists(hsr_path):
+            os.remove(hsr_path)  # a stale mask must not cull skin under a garment fitted without it
 
         t1 = time.perf_counter()
         elapsed = (t1 - t0) * 1000
