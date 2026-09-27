@@ -1009,10 +1009,10 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v8" in line:
+                if "Universal Fitted Clothing v9" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7)):
-                    return False  # Regenerate fits made before the LOD0-only mesh import.
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8)):
+                    return False  # Regenerate fits made before the radial + prism WrapLayer fit.
         return False
     except Exception:
         return False
