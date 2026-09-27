@@ -141,6 +141,66 @@ def _nearest_uv_indices(queries: np.ndarray, keys: np.ndarray, tolerance=2e-4) -
     return indices
 
 
+def _uv_keys_and_adjacency(uvs: np.ndarray, faces: np.ndarray):
+    keys, key_of_vertex = np.unique(np.round(uvs, 5), axis=0, return_inverse=True)
+    key_of_vertex = key_of_vertex.ravel()
+    adjacency = [set() for _ in keys]
+    for face in np.asarray(faces):
+        a, b, c = key_of_vertex[face]
+        adjacency[a].update((b, c))
+        adjacency[b].update((a, c))
+        adjacency[c].update((a, b))
+    return keys, key_of_vertex, adjacency
+
+
+def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndarray,
+                              outer_uv: np.ndarray, outer_faces: np.ndarray) -> np.ndarray:
+    """Outer-cage vertex for each reference-cage vertex.
+
+    Cages are paired by UV. Some catalog outer cages carry a few edited UVs
+    (e.g. 16 of 1709), which makes nearest-UV pairing ambiguous. Those points
+    are paired by connectivity instead: a reference point goes to the outer
+    point whose neighbours are the images of its own already-paired neighbours.
+    """
+    try:
+        return _nearest_uv_indices(reference_uv, outer_uv)
+    except ValueError:
+        pass
+    ref_keys, ref_key_of, ref_adj = _uv_keys_and_adjacency(reference_uv, reference_faces)
+    out_keys, out_key_of, out_adj = _uv_keys_and_adjacency(outer_uv, outer_faces)
+    distance = np.sqrt(((ref_keys[:, None] - out_keys[None]) ** 2).sum(-1))
+    nearest = distance.argmin(1)
+    exact = distance[np.arange(len(ref_keys)), nearest] <= 2e-4
+    key_map = np.full(len(ref_keys), -1)
+    key_map[exact] = nearest[exact]
+    if len(np.unique(key_map[exact])) != int(exact.sum()):
+        raise ValueError("UV de cage ambígua entre referência e cage externa")
+    free_ref = set(np.flatnonzero(~exact).tolist())
+    free_out = set(range(len(out_keys))) - set(key_map[exact].tolist())
+    if len(free_ref) != len(free_out) or len(free_ref) > 0.02 * len(ref_keys):
+        raise ValueError(f"UV de cage sem correspondência ({len(free_ref)} pontos divergentes)")
+    while free_ref:
+        best = None
+        for r in free_ref:
+            images = {key_map[n] for n in ref_adj[r] if key_map[n] >= 0}
+            for o in free_out:
+                score = len(images & out_adj[o])
+                candidate = (score, -distance[r, o], r, o)
+                if score and (best is None or candidate > best):
+                    best = candidate
+        if best is None:
+            raise ValueError("UV de cage sem correspondência topológica")
+        _, _, r, o = best
+        key_map[r] = o
+        free_ref.discard(r)
+        free_out.discard(o)
+    first_vertex_of_key = np.full(len(out_keys), -1)
+    for vertex, key in enumerate(out_key_of):
+        if first_vertex_of_key[key] < 0:
+            first_vertex_of_key[key] = vertex
+    return first_vertex_of_key[key_map[ref_key_of]]
+
+
 def _match_reference_to_body_uv(reference_uv: np.ndarray, body_uv: np.ndarray) -> np.ndarray:
     """Allow a few independently identifiable UV edits in a catalog cage.
 
@@ -271,7 +331,7 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
     # catalog references (e.g. 2684 faces) drop a few triangles of the R15 layout.
     target_uv, target_positions = _unique_uv_positions(engine.r15_female_cages)
     uv_index = _match_reference_to_body_uv(reference_uv, target_uv)
-    outer_index = _nearest_uv_indices(reference_uv, outer_uv)
+    outer_index = _match_outer_to_reference(reference_uv, faces, outer_uv, outer_faces)
     if len(np.unique(uv_index)) != len(np.unique(np.round(reference_uv, 5), axis=0)):
         raise ValueError("Cage de referência possui UVs corporais ambíguos")
     outer_original = outer
