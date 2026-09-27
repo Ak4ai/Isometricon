@@ -38,3 +38,15 @@ def test_translated_body_moves_bound_and_hanging_parts_together():
     points, faces = _garment()
     fitted, _ = fit_radial_prism(points, faces, _trace(offset))
     np.testing.assert_allclose(fitted, points + offset, atol=1e-9)
+
+
+def test_loose_hanging_piece_follows_the_nearest_bound_point_rigidly():
+    offset = np.array([0.2, -0.1, 0.5])
+    points, faces = _garment()
+    # A separate two-triangle bow, not connected to the garment, hanging outside the cages.
+    bow = np.array([(0.9, 0.9, 0.6), (1.0, 0.9, 0.6), (0.9, 1.0, 0.6), (1.0, 1.0, 0.7)])
+    all_points = np.vstack((points, bow))
+    all_faces = np.vstack((faces, np.array([(4, 5, 6), (5, 7, 6)])))
+    fitted, audit = fit_radial_prism(all_points, all_faces, _trace(offset))
+    assert audit["hanging_vertices"] == 5
+    np.testing.assert_allclose(fitted, all_points + offset, atol=1e-9)

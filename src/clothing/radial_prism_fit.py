@@ -68,8 +68,13 @@ def _global_map(reference, target):
     return matrix
 
 
-def _anchors(bound, faces):
-    """For every vertex, the nearest (along garment edges) vertex that is bound; -1 if none."""
+def _anchors(bound, faces, points):
+    """For every vertex, the bound vertex it hangs from.
+
+    Along garment edges, the nearest bound vertex. A separate mesh piece with no
+    bound vertex at all (a loose bow or string) hangs as a whole from the bound
+    vertex closest to it in space.
+    """
     neighbors = [[] for _ in bound]
     for a, b, c in faces:
         for i, j in ((a, b), (b, c), (c, a)):
@@ -83,6 +88,22 @@ def _anchors(bound, faces):
             if anchor[j] < 0:
                 anchor[j] = anchor[i]
                 queue.append(j)
+    bound_ids = np.flatnonzero(bound)
+    if not len(bound_ids):
+        return anchor
+    for start in np.flatnonzero(anchor < 0):
+        if anchor[start] >= 0:
+            continue
+        piece, stack = [start], [start]
+        anchor[start] = -2  # visited marker while collecting the piece
+        while stack:
+            for j in neighbors[stack.pop()]:
+                if anchor[j] == -1:
+                    anchor[j] = -2
+                    piece.append(j)
+                    stack.append(j)
+        distance = ((points[piece][:, None] - points[bound_ids][None]) ** 2).sum(-1)
+        anchor[piece] = bound_ids[np.unravel_index(distance.argmin(), distance.shape)[1]]
     return anchor
 
 
@@ -126,7 +147,7 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
 
     hanging = residual_length > HANGING_RESIDUAL
     if hanging.any():
-        anchor = _anchors(~hanging, np.asarray(faces))
+        anchor = _anchors(~hanging, np.asarray(faces), points)
         global_map = _global_map(inner, target_inner)
         for i in np.flatnonzero(hanging & (anchor >= 0)):
             a = anchor[i]
