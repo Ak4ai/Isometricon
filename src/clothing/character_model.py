@@ -1666,11 +1666,16 @@ class CharacterModel:
             return None
         from src.clothing.layer_clearance import body_cage_from_sidecars, covered_vertices, pull_inner_layer
         from src.rendering.mesh import TexturedMesh
-        path = os.path.join(MODELS_DIR, f"character_native_{self.outer_top_id}_female.obj")
+        # Fitted over the top's outer cage, as Roblox layers clothing: one cache per pair.
+        under = self.top_id if self.top_id is not None and str(self.top_id).lower() not in ("none", "0") else None
+        suffix = f"_over_{under}" if under is not None else ""
+        path = os.path.join(MODELS_DIR, f"character_native_{self.outer_top_id}{suffix}_female.obj")
         if not is_valid_v2_obj(path):
             try:
                 from src.clothing.wear_engine import RobloxWearEngine
-                RobloxWearEngine(body_type="female").wear(self.outer_top_id, output_obj=path)
+                engine = RobloxWearEngine(body_type="female")
+                engine.layer_under_asset = under
+                engine.wear(self.outer_top_id, output_obj=path)
             except Exception as e:
                 print(f"[CharacterModel] Aviso: gerando peça de cima {self.outer_top_id}: {e}")
                 return None

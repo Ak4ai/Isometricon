@@ -750,6 +750,37 @@ class RobloxWearEngine:
                     elif sv[twin, 0] * fv[twin, 0] < 0:
                         fv[twin] = np.array([-fv[i, 0], fv[i, 1], fv[i, 2]])
 
+    def _layered_body_cage(self):
+        """Body cage positions with ``layer_under_asset``'s fitted outer cage on top.
+
+        Roblox fits each layered garment over the outer cage of the one under it,
+        so a jacket wraps the shirt instead of meeting it on the bare body. Returns
+        None (plain body) when the garment under it has no usable cages.
+        """
+        try:
+            from .radial_prism_fit import fit_radial_prism
+            from .wrap_layer_fit import _unique_uv_positions, retarget_garment_with_wrap_layer
+            under = self.fetch_asset(self.layer_under_asset)
+            verts, faces, _, _ = self.load_obj(under["obj_path"])
+            trace = {}
+            retarget_garment_with_wrap_layer(self, verts, under["rbxm_path"],
+                                             os.path.join(os.path.dirname(under["obj_path"]), "wrap_cages"),
+                                             binding_audit=trace)
+            fit_radial_prism(verts, faces, trace)
+        except Exception as exc:
+            print(f"[WrapLayer] Camada de baixo {self.layer_under_asset} indisponível, encaixando no corpo: {exc}")
+            return None
+        _, positions = _unique_uv_positions(self.r15_female_cages)
+        total = np.zeros_like(positions)
+        count = np.zeros(len(positions))
+        np.add.at(total, trace["uv_index"], trace["target_outer"])
+        np.add.at(count, trace["uv_index"], 1)
+        known = count > 0
+        positions = positions.copy()
+        positions[known] = total[known] / count[known, None]
+        print(f"[WrapLayer] Encaixando sobre a cage externa de {self.layer_under_asset}")
+        return positions
+
     def _fit_asset_wrap_layer(self, verts, meta, faces=None):
         """Use an asset's own cages when UVs and garment-to-cage distance validate."""
         if not self.is_female or not self.r15_female_cages or not meta.get("rbxm_path"):
@@ -758,7 +789,9 @@ class RobloxWearEngine:
             from .wrap_layer_fit import retarget_garment_with_wrap_layer
             cache = os.path.join(os.path.dirname(meta["obj_path"]), "wrap_cages")
             trace = {}
-            result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace)
+            layered = self._layered_body_cage() if getattr(self, "layer_under_asset", None) else None
+            result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace,
+                                                      target_positions=layered)
             info = result[1]
             # The per-triangle fit extrapolates badly far from the outer cage, so it is
             # only trusted with the garment close to a sane cage. The radial + prism fit

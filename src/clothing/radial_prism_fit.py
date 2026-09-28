@@ -140,6 +140,7 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
     parity = int(trace["cage_normal_sign"])
     target_outer = transfer_outer_cage_radial(inner, outer, target_inner, cage_faces,
                                               parity=parity, radius_factor=1.0)
+    trace["target_outer"] = target_outer  # the next layer is fitted over it
 
     area = lambda v: np.linalg.norm(np.cross(v[cage_faces[:, 1]] - v[cage_faces[:, 0]],
                                              v[cage_faces[:, 2]] - v[cage_faces[:, 0]]), axis=1)
