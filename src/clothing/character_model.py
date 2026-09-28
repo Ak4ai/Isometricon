@@ -1009,9 +1009,9 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v24" in line:
+                if "Universal Fitted Clothing v29" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)):
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28)):
                     return False  # Regenerate fits made before the geometric HSR fallback.
         return False
     except Exception:
@@ -1059,6 +1059,7 @@ class CharacterModel:
         hair_scale_y: Optional[float] = None,
         hair_scale_z: Optional[float] = None,
         outer_top_id: Optional[Union[int, str]] = None,
+        shoes_id: Optional[Union[int, str, tuple]] = None,
     ) -> None:
         self.customization = customization if customization is not None else AvatarCustomization(
             head_type=HeadType.ROUNDED,
@@ -1069,6 +1070,8 @@ class CharacterModel:
         # A second top worn over the first (a jacket over a shirt); female body only for now.
         self.outer_top_id = outer_top_id
         self.outer_top_gap_mm = LAYER_GAP_MM  # extra room between the layers: refits the outer top
+        # Layered shoes: a bundle id, "left,right" asset ids or one asset id (female body only for now).
+        self.shoes_id = shoes_id
         self.outer_top_pull_mm = LAYER_PULL_MM  # pull of what still pokes through it: runtime only
         self.tool_id = tool_id
         self.hair_id = hair_id
@@ -1637,7 +1640,8 @@ class CharacterModel:
 
         groups = [("trunk_skin", ["Export_torso", "Export_pelve"], hip_tf),
                   ("legs_skin", ["Export_coxa_esquerda", "Export_coxa_direita", "Export_canela_esquerda",
-                                 "Export_canela_direita", "Export_pe_esquerdo", "Export_pe_direito"], hip_tf)]
+                                 "Export_canela_direita"]
+                   + ([] if getattr(self, "_hide_feet", False) else ["Export_pe_esquerdo", "Export_pe_direito"]), hip_tf)]
         for side, pt_side, hand in (("left", "esquerdo", "esquerda"), ("right", "direito", "direita")):
             groups += [(f"arm_{side}", [f"Export_braco_superior_{pt_side}"], arm_tf),
                        (f"forearm_{side}", [f"Export_antebraco_{pt_side}"], arm_tf),
@@ -1685,6 +1689,41 @@ class CharacterModel:
                 print(f"[CharacterModel] Aviso: top sobre a calça {self.top_id}/{self.bottom_id}: {e}")
                 return top_obj_path
         return path if is_valid_v2_obj(path) else top_obj_path
+
+    def _add_shoes(self, is_fem, vertex_transform):
+        """Wear the layered shoes (each foot fitted with its own cages); returns their fitted OBJ paths."""
+        self._hide_feet = False
+        if self.shoes_id is None or not is_fem:
+            return []
+        from src.clothing.wear_engine import RobloxWearEngine
+        from src.rendering.mesh import TexturedMesh
+        engine = RobloxWearEngine(body_type="female")
+        paths = []
+        for asset_id in engine.resolve_shoe_pair(self.shoes_id):
+            path = os.path.join(MODELS_DIR, f"character_native_{asset_id}_female.obj")
+            if not is_valid_v2_obj(path):
+                try:
+                    engine.wear(asset_id, output_obj=path)
+                except Exception as e:
+                    print(f"[CharacterModel] Aviso: calçado {asset_id}: {e}")
+                    continue
+            data = parse_obj_as_mesh(path, vertex_transform=vertex_transform)
+            if not data:
+                continue
+            texture_path = find_clothing_texture(asset_id)
+            texture_id = upload_texture_rgba(Image.open(texture_path)) if texture_path else self.white_tex_id
+            if texture_id != self.white_tex_id:
+                self.textures.append(texture_id)
+            self.parts.append(CharacterPart(f"shoe_{asset_id}", TexturedMesh(data[0], data[1]), texture_id))
+            paths.append(path)
+        if paths:
+            # The shoes replace the feet: our block feet are wider than a heel or a slim
+            # sneaker and would poke through them (without HSR they are a separate part).
+            for part in [p for p in self.parts if p.name == "feet_skin"]:
+                part.mesh.delete()
+                self.parts.remove(part)
+        self._hide_feet = bool(paths)
+        return paths
 
     def _add_outer_top(self, is_fem, vertex_transform):
         """Wear ``outer_top_id`` over the other garments; returns its fitted OBJ path or None."""
@@ -2087,11 +2126,13 @@ class CharacterModel:
         # 9.0 Peça por cima do top (jaqueta sobre camisa): fica por fora de tudo, e o
         # que as peças de baixo tiverem furando é puxado para baixo dela.
         outer_obj_path = self._add_outer_top(is_fem, top_tf if "top_tf" in locals() else None)
+        shoe_paths = self._add_shoes(is_fem, lambda raw_v: transform_hip_vertices(
+            raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset))
 
         # 9.1 HSR do Roblox: com a máscara de todas as peças vestidas, a pele inteira
         # é desenhada e só os triângulos cobertos pelas roupas são removidos.
         self._apply_hsr_skin(clean_obj, skin_color, top_obj_path, bottom_obj_path,
-                             is_none_top, is_none_bottom, extra_obj_paths=(outer_obj_path,))
+                             is_none_top, is_none_bottom, extra_obj_paths=(outer_obj_path, *shoe_paths))
 
         # 9. Tool / Katana / Acessório opcional
         if self.tool_id is not None:
@@ -2225,6 +2266,7 @@ class CharacterModel:
         tool_id: Optional[Union[int, str]] = None,
         hair_id: Optional[Union[int, str]] = None,
         outer_top_id: Optional[Union[int, str]] = None,
+        shoes_id: Optional[Union[int, str, tuple]] = None,
     ) -> None:
         """Atualiza a configuração do personagem e recarrega seus recursos na GPU em tempo real."""
         if customization is not None:
@@ -2242,6 +2284,8 @@ class CharacterModel:
             self.bottom_id = bottom_id
         if outer_top_id is not None:
             self.outer_top_id = None if str(outer_top_id).lower() in ("none", "0", "false", "sem") else outer_top_id
+        if shoes_id is not None:
+            self.shoes_id = None if str(shoes_id).lower() in ("none", "0", "false", "sem") else shoes_id
         if tool_id is not None:
             self.tool_id = tool_id if tool_id not in ("none", 0, "0", False) else None
         if hair_id is not None:

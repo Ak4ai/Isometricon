@@ -1197,6 +1197,27 @@ class SkinCommandHandler:
             return True, f"[Jaqueta] Vestida por cima do top: {outer_id} (primeira vez leva alguns segundos)", GREEN
 
         # ------------------------------------------------------------------
+        # 6.2 Calçados em camadas (tênis, botas, salto)
+        # ------------------------------------------------------------------
+        if sub_cmd in ("sapato", "sapatos", "tenis", "shoes", "shoe", "calcado"):
+            usage = "Uso: /sapato <ID do bundle | ID_esquerdo,ID_direito | none>"
+            if not args:
+                current = getattr(self.character_model, "shoes_id", None) if self.character_model else None
+                return True, f"[Sapato] atual: {current}\n{usage}", GOLD
+            val = args[0].lower()
+            if val in ("none", "sem", "tirar", "nenhum", "0", "descalca", "descalço"):
+                if self.character_model:
+                    self.character_model.shoes_id = None
+                    self.character_model.reload()
+                return True, "[Sapato] Removido — pés descalços", GREEN
+            ids = [i for i in val.split(",") if i]
+            if not ids or not all(i.isdigit() for i in ids):
+                return False, f"[Erro] ID de calçado inválido: '{val}'. {usage}", RED
+            if self.character_model:
+                self.character_model.update_customization(shoes_id=",".join(ids))
+            return True, f"[Sapato] Calçado: {','.join(ids)} (primeira vez leva alguns segundos)", GREEN
+
+        # ------------------------------------------------------------------
         # 7. Calça / Botas (Bottom / Pants)
         # ------------------------------------------------------------------
         if sub_cmd in ("bottom", "pants", "calca", "jeans"):
