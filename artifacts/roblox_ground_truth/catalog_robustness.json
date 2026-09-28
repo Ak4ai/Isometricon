@@ -1,0 +1,907 @@
+{
+  "9240752338": {
+    "categoria": "ShirtAccessories",
+    "nome": "Tie-Front_Top_-_White",
+    "type_id": 65,
+    "malha": {
+      "vertices": 704,
+      "faces": 961,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.01,
+      "p99_source_distance": 0.088,
+      "outer_edge_stretch_p99": 1.542
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 2.5,
+    "hsr_pontos_cobertos": 706
+  },
+  "9342134700": {
+    "categoria": "ShirtAccessories",
+    "nome": "White_Bow_Off_shoulder",
+    "type_id": 65,
+    "malha": {
+      "vertices": 1727,
+      "faces": 2123,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.061,
+      "p99_source_distance": 0.347,
+      "outer_edge_stretch_p99": 1.556
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 77,
+      "finito": true
+    },
+    "tempo_s": 4.1,
+    "hsr_pontos_cobertos": 845
+  },
+  "18888694939": {
+    "categoria": "ShirtAccessories",
+    "nome": "Baby_Shark_SUit",
+    "type_id": 65,
+    "malha": {
+      "vertices": 1283,
+      "faces": 2138,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "erro": "ValueError: Cage com UVs sem faces válidas",
+    "onde": "retarget_garment_with_wrap_layer"
+  },
+  "77506186615650": {
+    "categoria": "ShirtAccessories",
+    "nome": "Goofy_cat",
+    "type_id": 65,
+    "malha": {
+      "vertices": 2890,
+      "faces": 3943,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.088,
+      "p99_source_distance": 0.512,
+      "outer_edge_stretch_p99": 2.575
+    },
+    "aceita_pelo_runtime": false,
+    "tempo_s": 1.9,
+    "hsr_pontos_cobertos": 1671
+  },
+  "16374528041": {
+    "categoria": "ShirtAccessories",
+    "nome": "White_Shirt___Formal_Black_Vest_w__Gloves",
+    "type_id": 65,
+    "malha": {
+      "vertices": 2720,
+      "faces": 3000,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.015,
+      "p99_source_distance": 0.366,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 38,
+      "finito": true
+    },
+    "tempo_s": 5.8,
+    "hsr_pontos_cobertos": 604
+  },
+  "7178736794": {
+    "categoria": "TShirtAccessories",
+    "nome": "Roblox_T-Shirt_-_Black",
+    "type_id": 64,
+    "malha": {
+      "vertices": 640,
+      "faces": 998,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.015,
+      "p99_source_distance": 0.063,
+      "outer_edge_stretch_p99": 1.521
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 2.4,
+    "hsr_pontos_cobertos": 800
+  },
+  "9120031517": {
+    "categoria": "TShirtAccessories",
+    "nome": "Baseball_Long_Sleeve_-_B_W",
+    "type_id": 64,
+    "malha": {
+      "vertices": 866,
+      "faces": 1412,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.01,
+      "p99_source_distance": 0.031,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 2.6,
+    "hsr_pontos_cobertos": 1090
+  },
+  "7178740556": {
+    "categoria": "TShirtAccessories",
+    "nome": "Baseball_Long_Sleeve_-_Red",
+    "type_id": 64,
+    "malha": {
+      "vertices": 866,
+      "faces": 1412,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.01,
+      "p99_source_distance": 0.031,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 2.7,
+    "hsr_pontos_cobertos": 1090
+  },
+  "15107432120": {
+    "categoria": "TShirtAccessories",
+    "nome": "tshirt__Chibi_Doll_Platform_Leg_Warmers",
+    "type_id": 64,
+    "malha": {
+      "vertices": 2627,
+      "faces": 3896,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.033,
+      "p99_source_distance": 0.126,
+      "outer_edge_stretch_p99": 1.104
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 150,
+      "finito": true
+    },
+    "tempo_s": 5.1,
+    "hsr_pontos_cobertos": 401
+  },
+  "9242603922": {
+    "categoria": "TShirtAccessories",
+    "nome": "Ruffle_Corset_Top_Black_Leather",
+    "type_id": 64,
+    "malha": {
+      "vertices": 1659,
+      "faces": 1484,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.019,
+      "p99_source_distance": 0.338,
+      "outer_edge_stretch_p99": 1.542
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 74,
+      "finito": true
+    },
+    "tempo_s": 3.5,
+    "hsr_pontos_cobertos": 183
+  },
+  "6984763785": {
+    "categoria": "PantsAccessories",
+    "nome": "Casual_Sweats_-_Black",
+    "type_id": 66,
+    "malha": {
+      "vertices": 766,
+      "faces": 1196,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v4",
+      "externa": "FileMesh v4"
+    },
+    "validacao": {
+      "median_source_distance": 0.014,
+      "p99_source_distance": 0.054,
+      "outer_edge_stretch_p99": 1.525
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 2.5,
+    "hsr_pontos_cobertos": 801
+  },
+  "12954546076": {
+    "categoria": "PantsAccessories",
+    "nome": "Squirrel_Suit",
+    "type_id": 66,
+    "malha": {
+      "vertices": 2673,
+      "faces": 3988,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.709,
+      "p99_source_distance": 3.584,
+      "outer_edge_stretch_p99": 1.485
+    },
+    "aceita_pelo_runtime": false,
+    "tempo_s": 1.7,
+    "hsr_pontos_cobertos": 1709
+  },
+  "10997283529": {
+    "categoria": "PantsAccessories",
+    "nome": "Alien_Carrying_You_Costume",
+    "type_id": 66,
+    "malha": {
+      "vertices": 2048,
+      "faces": 3024,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.201,
+      "p99_source_distance": 1.27,
+      "outer_edge_stretch_p99": 1.45
+    },
+    "aceita_pelo_runtime": false,
+    "tempo_s": 1.5,
+    "hsr_pontos_cobertos": 1162
+  },
+  "9120251003": {
+    "categoria": "PantsAccessories",
+    "nome": "Wetsuit_Pants_-__Black",
+    "type_id": 66,
+    "malha": {
+      "vertices": 927,
+      "faces": 1390,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.018,
+      "p99_source_distance": 0.12,
+      "outer_edge_stretch_p99": 1.529
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 2.6,
+    "hsr_pontos_cobertos": 750
+  },
+  "12550912577": {
+    "categoria": "PantsAccessories",
+    "nome": "Fitted_White_Leg_Warmers",
+    "type_id": 66,
+    "malha": {
+      "vertices": 2282,
+      "faces": 3984,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v4",
+      "externa": "FileMesh v4"
+    },
+    "validacao": {
+      "median_source_distance": 0.028,
+      "p99_source_distance": 0.106,
+      "outer_edge_stretch_p99": 1.104
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 4,
+      "finito": true
+    },
+    "tempo_s": 4.6,
+    "hsr_pontos_cobertos": 305
+  },
+  "11360863184": {
+    "categoria": "JacketAccessories",
+    "nome": "Knitted_Arm_Warmers_Very_White",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1400,
+      "faces": 2448,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.015,
+      "p99_source_distance": 0.118,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 14,
+      "finito": true
+    },
+    "tempo_s": 3.7,
+    "hsr_pontos_cobertos": 292
+  },
+  "7192553841": {
+    "categoria": "JacketAccessories",
+    "nome": "Zip_Hoodie_-_Black",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1121,
+      "faces": 1492,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.018,
+      "p99_source_distance": 0.111,
+      "outer_edge_stretch_p99": 1.528
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 2.9,
+    "hsr_pontos_cobertos": 1065
+  },
+  "10789914680": {
+    "categoria": "JacketAccessories",
+    "nome": "Black_Oversized_Warmers",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1088,
+      "faces": 1728,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.014,
+      "p99_source_distance": 0.241,
+      "outer_edge_stretch_p99": 1.54
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 164,
+      "finito": true
+    },
+    "tempo_s": 3.2,
+    "hsr_pontos_cobertos": 418
+  },
+  "10713761236": {
+    "categoria": "JacketAccessories",
+    "nome": "Knitted_Arm_Warmers_White",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1400,
+      "faces": 2448,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.015,
+      "p99_source_distance": 0.118,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 14,
+      "finito": true
+    },
+    "tempo_s": 3.5,
+    "hsr_pontos_cobertos": 292
+  },
+  "9059176760": {
+    "categoria": "JacketAccessories",
+    "nome": "Off-Shoulder_Jacket_Pink",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1526,
+      "faces": 2186,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.032,
+      "p99_source_distance": 0.227,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 3.5,
+    "hsr_pontos_cobertos": 979
+  },
+  "9448504499": {
+    "categoria": "SweaterAccessories",
+    "nome": "Oversized_Knitted_Rock_Band_Sweater_Black",
+    "type_id": 68,
+    "malha": {
+      "vertices": 1611,
+      "faces": 2614,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.031,
+      "p99_source_distance": 0.309,
+      "outer_edge_stretch_p99": 1.465
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 34,
+      "finito": true
+    },
+    "tempo_s": 4.0,
+    "hsr_pontos_cobertos": 1322
+  },
+  "6984769289": {
+    "categoria": "SweaterAccessories",
+    "nome": "Knit_Sweater_-_Beige",
+    "type_id": 68,
+    "malha": {
+      "vertices": 1100,
+      "faces": 1722,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.015,
+      "p99_source_distance": 0.095,
+      "outer_edge_stretch_p99": 1.478
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 2.8,
+    "hsr_pontos_cobertos": 1107
+  },
+  "9665787520": {
+    "categoria": "SweaterAccessories",
+    "nome": "White_Oversized_Crop_Off_Shoulder_Sweater",
+    "type_id": 68,
+    "malha": {
+      "vertices": 1343,
+      "faces": 2080,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.023,
+      "p99_source_distance": 0.343,
+      "outer_edge_stretch_p99": 1.899
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 42,
+      "finito": true
+    },
+    "tempo_s": 4.1,
+    "hsr_pontos_cobertos": 1109
+  },
+  "9857509979": {
+    "categoria": "SweaterAccessories",
+    "nome": "Beige_Oversized_Cableknit_Crop-Top",
+    "type_id": 68,
+    "malha": {
+      "vertices": 1755,
+      "faces": 2556,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.024,
+      "p99_source_distance": 0.332,
+      "outer_edge_stretch_p99": 1.501
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 149,
+      "finito": true
+    },
+    "tempo_s": 4.4,
+    "hsr_pontos_cobertos": 1004
+  },
+  "9665801665": {
+    "categoria": "SweaterAccessories",
+    "nome": "Black_Oversized_Crop_Off_Shoulder_Sweater",
+    "type_id": 68,
+    "malha": {
+      "vertices": 1343,
+      "faces": 2080,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.023,
+      "p99_source_distance": 0.343,
+      "outer_edge_stretch_p99": 1.899
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 42,
+      "finito": true
+    },
+    "tempo_s": 4.2,
+    "hsr_pontos_cobertos": 1109
+  },
+  "9174391966": {
+    "categoria": "ShortsAccessories",
+    "nome": "Bermuda_Shorts_-_Black",
+    "type_id": 69,
+    "malha": {
+      "vertices": 617,
+      "faces": 996,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.017,
+      "p99_source_distance": 0.116,
+      "outer_edge_stretch_p99": 1.527
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 3,
+      "finito": true
+    },
+    "tempo_s": 2.4,
+    "hsr_pontos_cobertos": 475
+  },
+  "10404898293": {
+    "categoria": "ShortsAccessories",
+    "nome": "Punk_Spike_Belts",
+    "type_id": 69,
+    "malha": {
+      "vertices": 3968,
+      "faces": 2884,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.036,
+      "p99_source_distance": 0.08,
+      "outer_edge_stretch_p99": 1.529
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 5.8,
+    "hsr_pontos_cobertos": 0
+  },
+  "12922239190": {
+    "categoria": "ShortsAccessories",
+    "nome": "Black_Fingerless_Gloves",
+    "type_id": 69,
+    "malha": {
+      "vertices": 1101,
+      "faces": 1304,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.012,
+      "p99_source_distance": 0.075,
+      "outer_edge_stretch_p99": 1.467
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 2.9,
+    "hsr_pontos_cobertos": 103
+  },
+  "7192685245": {
+    "categoria": "ShortsAccessories",
+    "nome": "Floral_Swim_Trunks_-_Blue",
+    "type_id": 69,
+    "malha": {
+      "vertices": 794,
+      "faces": 1238,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.022,
+      "p99_source_distance": 0.124,
+      "outer_edge_stretch_p99": 1.529
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 3,
+      "finito": true
+    },
+    "tempo_s": 2.6,
+    "hsr_pontos_cobertos": 485
+  },
+  "12353600105": {
+    "categoria": "ShortsAccessories",
+    "nome": "Colorful_Pastel_Body_Stickers",
+    "type_id": 69,
+    "malha": {
+      "vertices": 4291,
+      "faces": 3032,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v4",
+      "externa": "FileMesh v4"
+    },
+    "validacao": {
+      "median_source_distance": 0.03,
+      "p99_source_distance": 0.058,
+      "outer_edge_stretch_p99": 1.531
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 5.8,
+    "hsr_pontos_cobertos": 0
+  },
+  "9240776381": {
+    "categoria": "DressSkirtAccessories",
+    "nome": "Long_Ruffle_Skirt_-_White",
+    "type_id": 72,
+    "malha": {
+      "vertices": 832,
+      "faces": 1339,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.037,
+      "p99_source_distance": 0.254,
+      "outer_edge_stretch_p99": 1.556
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 18,
+      "finito": true
+    },
+    "tempo_s": 3.0,
+    "hsr_pontos_cobertos": 576
+  },
+  "9438759973": {
+    "categoria": "DressSkirtAccessories",
+    "nome": "Adorable_Pink_Princess_Gown",
+    "type_id": 72,
+    "malha": {
+      "vertices": 3554,
+      "faces": 3019,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.234,
+      "p99_source_distance": 0.852,
+      "outer_edge_stretch_p99": 4.426
+    },
+    "aceita_pelo_runtime": false,
+    "tempo_s": 1.9,
+    "hsr_pontos_cobertos": 1449
+  },
+  "9432413137": {
+    "categoria": "DressSkirtAccessories",
+    "nome": "Pink_Anime_School_Dress_I",
+    "type_id": 72,
+    "malha": {
+      "vertices": 2140,
+      "faces": 2882,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.011,
+      "p99_source_distance": 0.063,
+      "outer_edge_stretch_p99": 1.488
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 4,
+      "finito": true
+    },
+    "tempo_s": 4.2,
+    "hsr_pontos_cobertos": 1143
+  },
+  "9432337286": {
+    "categoria": "DressSkirtAccessories",
+    "nome": "Black_Anime_School_Dress_I",
+    "type_id": 72,
+    "malha": {
+      "vertices": 2140,
+      "faces": 2882,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.011,
+      "p99_source_distance": 0.063,
+      "outer_edge_stretch_p99": 1.488
+    },
+    "aceita_pelo_runtime": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 4,
+      "finito": true
+    },
+    "tempo_s": 4.2,
+    "hsr_pontos_cobertos": 1143
+  },
+  "12406241223": {
+    "categoria": "DressSkirtAccessories",
+    "nome": "Goose_Duck_Costume",
+    "type_id": 72,
+    "malha": {
+      "vertices": 1262,
+      "faces": 1886,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.116,
+      "p99_source_distance": 1.764,
+      "outer_edge_stretch_p99": 2.116
+    },
+    "aceita_pelo_runtime": false,
+    "tempo_s": 1.3,
+    "hsr_pontos_cobertos": 1709
+  }
+}

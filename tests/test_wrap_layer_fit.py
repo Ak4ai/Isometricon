@@ -144,3 +144,17 @@ def test_outer_cage_pairing_resolves_edited_uvs_by_connectivity():
     paired = _match_outer_to_reference(reference_uv, reference_faces, outer_uv, outer_faces)
 
     np.testing.assert_array_equal(paired, inverse)
+
+
+def test_outer_cage_pairing_leaves_points_the_author_deleted_unpaired():
+    reference_uv, reference_faces = _uv_grid()
+    keep = np.ones(len(reference_uv), bool)
+    keep[5 * 13 + 5] = False  # the outer cage lost one interior point
+    remap = np.cumsum(keep) - 1
+    outer_uv = reference_uv[keep]
+    outer_faces = remap[reference_faces[keep[reference_faces].all(1)]]
+
+    paired = _match_outer_to_reference(reference_uv, reference_faces, outer_uv, outer_faces)
+
+    assert paired[5 * 13 + 5] == -1
+    np.testing.assert_array_equal(paired[keep], np.arange(keep.sum()))
