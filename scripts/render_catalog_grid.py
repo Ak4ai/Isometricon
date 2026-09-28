@@ -1,4 +1,4 @@
-"""Render the accepted catalog sample on the female body (front and back), six garments per sheet.
+"""Render every catalog garment that dressed without error on the female body (front and back), six garments per sheet.
 
 Tops are worn with the default jeans; bottoms with the tank top; dresses alone.
 Output: artifacts/runtime_female/catalogo_<n>.png
@@ -22,8 +22,11 @@ JEANS, TANK_TOP = 109837605892174, 137915688957785
 
 
 def main():
-    results = json.loads((ROOT / "artifacts/roblox_ground_truth/catalog_robustness.json").read_text(encoding="utf-8"))
-    garments = [(asset, row) for asset, row in results.items() if row.get("aceita_pelo_runtime")]
+    name = sys.argv[1] if len(sys.argv) > 1 else "catalog"
+    prefix = "catalogo" if name == "catalog" else name
+    results = json.loads((ROOT / f"artifacts/roblox_ground_truth/{name}_robustness.json").read_text(encoding="utf-8"))
+    garments = [(asset, row) for asset, row in results.items()
+                if "erro" not in row]
     R.VIEWS = [("frente", [0.0, 1.0, 2.6]), ("costas", [0.0, 1.0, -2.6])]
     size = 300
     R.SIZE = size
@@ -45,8 +48,8 @@ def main():
         sheet = Image.new("RGB", (size * 2 * 3, (size + 24) * 2), "white")
         draw = ImageDraw.Draw(sheet)
         for slot, (asset, row) in enumerate(chunk):
-            name = row["nome"].lower()
-            if "dress" in name or "gown" in name:
+            label = row["nome"].lower()
+            if row["type_id"] == 72 or "dress" in label or "gown" in label:
                 top, bottom = int(asset), None
             elif row["type_id"] in BOTTOM_TYPES:
                 top, bottom = TANK_TOP, int(asset)
@@ -54,10 +57,11 @@ def main():
                 top, bottom = int(asset), JEANS
             tiles = R.render_outfit(shader, top, bottom)
             x, y = (slot % 3) * size * 2, (slot // 3) * (size + 24)
-            draw.text((x + 4, y + 5), f"{row['nome'][:34]} ({asset})", fill="black")
+            status = ""
+            draw.text((x + 4, y + 5), f"{row['nome'][:34]} ({asset}){status}", fill="black")
             for k, tile in enumerate(tiles):
                 sheet.paste(tile, (x + k * size, y + 24))
-        path = R.OUT / f"catalogo_{sheet_index // 6 + 1}.png"
+        path = R.OUT / f"{prefix}_{sheet_index // 6 + 1}.png"
         sheet.save(path)
         print("[OK]", path, flush=True)
     glfw.destroy_window(window)

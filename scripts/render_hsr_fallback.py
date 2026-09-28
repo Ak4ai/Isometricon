@@ -22,7 +22,7 @@ OUTFITS = [
     ("bermuda", TANK_TOP, 9174391966),
     ("sunga floral", TANK_TOP, 7192685245),
     ("suéter padrão", 9240757332, JEANS),
-    ("suéter oversized (encaixe antigo)", 16185652164, JEANS),
+    ("suéter oversized", 16185652164, JEANS),
     ("controle: regata + jeans (HSR oficial)", TANK_TOP, JEANS),
     ("moletom com zíper", 7192553841, JEANS),
 ]

@@ -2,8 +2,9 @@
 
 No Roblox ground truth here: this measures robustness (download, cage formats,
 WrapLayer acceptance, radial + prism fit, HSR) on garments never tested before.
-Input: artifacts/roblox_ground_truth/catalog_sample.json ({subcategory: [asset ids]}).
-Output: artifacts/roblox_ground_truth/catalog_robustness.json
+Usage: python scripts/robustness_catalog.py [name]   (default name: catalog)
+Input: artifacts/roblox_ground_truth/<name>_sample.json ({subcategory: [asset ids]}).
+Output: artifacts/roblox_ground_truth/<name>_robustness.json
 """
 import json
 import os
@@ -32,7 +33,8 @@ def cage_format(mesh_id):
 
 
 def main():
-    sample = json.loads((GT / "catalog_sample.json").read_text())
+    name = sys.argv[1] if len(sys.argv) > 1 else "catalog"
+    sample = json.loads((GT / f"{name}_sample.json").read_text())
     engine = RobloxWearEngine(body_type="female")
     _, cage_positions = _unique_uv_positions(engine.r15_female_cages)
     results = {}
@@ -54,20 +56,22 @@ def main():
                 row["validacao"] = {k: round(float(info[k]), 3) for k in
                                     ("median_source_distance", "p99_source_distance", "outer_edge_stretch_p99")}
                 accepted = info["outer_edge_stretch_p99"] <= 2.5 and info["median_source_distance"] <= 0.1
-                row["aceita_pelo_runtime"] = bool(accepted)
-                if accepted:
-                    fitted, audit = fit_radial_prism(verts, faces, trace)
-                    row["radial_prisma"] = {"ok": True, "pendurados": audit["hanging_vertices"],
-                                            "finito": bool(np.isfinite(fitted).all())}
+                row["aceita_pelo_validador_antigo"] = bool(accepted)
+                fitted, audit = fit_radial_prism(verts, faces, trace)
+                row["radial_prisma"] = {"ok": True, "pendurados": audit["hanging_vertices"],
+                                        "finito": bool(np.isfinite(fitted).all())}
                 row["tempo_s"] = round(time.perf_counter() - t0, 1)
-                hidden = hidden_body_cage_mask(meta["rbxm_path"], trace, len(cage_positions), CLOTHING / "hsr")
-                row["hsr_pontos_cobertos"] = None if hidden is None else int(hidden.sum())
+                try:
+                    hidden = hidden_body_cage_mask(meta["rbxm_path"], trace, len(cage_positions), CLOTHING / "hsr")
+                    row["hsr"] = "sem HSR" if hidden is None else f"oficial ({int(hidden.sum())} pontos)"
+                except ValueError as exc:
+                    row["hsr"] = f"geometrico ({exc})"
             except Exception as exc:
                 row["erro"] = f"{type(exc).__name__}: {exc}"
                 row["onde"] = traceback.extract_tb(exc.__traceback__)[-1].name
             results[asset] = row
             print(asset, json.dumps(row, ensure_ascii=False), flush=True)
-    (GT / "catalog_robustness.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    (GT / f"{name}_robustness.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 if __name__ == "__main__":

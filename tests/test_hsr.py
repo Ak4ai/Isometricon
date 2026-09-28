@@ -57,3 +57,33 @@ def test_geometric_mask_covers_cage_points_with_garment_just_outside():
     garment = np.array([(1.05, 0.0, 0.0), (1.05, 0.02, 0.0)])
     hidden = geometric_hidden_mask(cage, faces, garment)
     np.testing.assert_array_equal(np.flatnonzero(hidden), [0])
+
+
+def test_ray_mask_sees_skin_through_a_slit_between_garment_pieces():
+    from src.clothing.hsr import ray_hidden_mask
+    cage = np.array([(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)], float)
+    faces = np.array([(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (2, 0, 5), (1, 2, 5), (3, 1, 5), (0, 3, 5)])
+    # Two garment panels in front of the +y tip with a slit where its outward ray passes,
+    # and one panel covering the +x tip.
+    left = [(-0.4, 1.05, -0.3), (-0.05, 1.05, -0.3), (-0.05, 1.05, 0.3), (-0.4, 1.05, 0.3)]
+    right = [(0.05, 1.05, -0.3), (0.4, 1.05, -0.3), (0.4, 1.05, 0.3), (0.05, 1.05, 0.3)]
+    front = [(1.05, -0.3, -0.3), (1.05, 0.3, -0.3), (1.05, 0.3, 0.3), (1.05, -0.3, 0.3)]
+    garment = np.array(left + right + front, float)
+    quads = [(0, 1, 2), (0, 2, 3)]
+    garment_faces = np.array([(a + o, b + o, c + o) for o in (0, 4, 8) for a, b, c in quads])
+    hidden = ray_hidden_mask(cage, faces, garment, garment_faces)
+    assert hidden[0] and not hidden[2]
+
+
+def test_ray_mask_hides_a_lone_point_seen_through_a_tiny_gap():
+    from src.clothing.hsr import _hide_isolated_visible
+    # A 5x5 grid of cage points: one lone visible point, and a visible column (a zip slit).
+    xs, ys = np.meshgrid(np.arange(5.0), np.arange(5.0))
+    points = np.column_stack((xs.ravel(), ys.ravel(), np.zeros(25)))
+    faces = [(r * 5 + c, r * 5 + c + 1, r * 5 + c + 5) for r in range(4) for c in range(4)]
+    faces += [(r * 5 + c + 1, r * 5 + c + 6, r * 5 + c + 5) for r in range(4) for c in range(4)]
+    hidden = np.ones(25, dtype=bool)
+    hidden[[2, 7, 12, 17, 22]] = False  # the slit column x=2
+    hidden[5 + 0] = False  # a lone point at the left edge
+    hidden = _hide_isolated_visible(hidden, points, np.array(faces))
+    np.testing.assert_array_equal(np.flatnonzero(~hidden), [2, 7, 12, 17, 22])
