@@ -1,6 +1,6 @@
 """Close-up of one outfit around the waist, with and without HSR skin culling.
 
-Usage: python scripts/closeup_hsr_outfit.py <top_id> <bottom_id or none> <output name>
+Usage: python scripts/closeup_hsr_outfit.py <top_id or none> <bottom_id or none> <output name> [zoom]
 Output: artifacts/runtime_female/<output name>.png (top row with HSR, bottom row without).
 """
 from pathlib import Path
@@ -19,12 +19,19 @@ from src.rendering.shader import Shader
 
 VIEWS = [("frente", [0.0, 0.9, 1.3]), ("3/4", [-0.9, 0.9, 0.9]), ("lado", [1.3, 0.9, 0.0]),
          ("costas", [0.0, 0.9, -1.3]), ("de baixo", [0.0, 0.3, 1.1])]
+ZOOM_VIEWS = [("frente", [0.0, 0.85, 0.55]), ("3/4 esq", [-0.4, 0.85, 0.4]), ("3/4 dir", [0.4, 0.85, 0.4]),
+              ("costas", [0.0, 0.85, -0.55]), ("de baixo", [0.0, 0.55, 0.45])]
 
 
 def main():
-    top_id, bottom_id, name = int(sys.argv[1]), (None if sys.argv[2] == "none" else int(sys.argv[2])), sys.argv[3]
+    top_id, bottom_id = (None if arg == "none" else int(arg) for arg in sys.argv[1:3])
+    name = sys.argv[3]
     R.SIZE = 420
-    R.VIEWS = VIEWS
+    zoom = len(sys.argv) > 4 and sys.argv[4] == "zoom"
+    views = ZOOM_VIEWS if zoom else VIEWS
+    R.VIEWS = views
+    if zoom:
+        R.TARGET = [0.0, 0.85, 0.0]
     glfw.init()
     glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -43,12 +50,12 @@ def main():
     CharacterModel._apply_hsr_skin = lambda *a, **k: False
     without = R.render_outfit(shader, top_id, bottom_id)
     CharacterModel._apply_hsr_skin = original
-    sheet = Image.new("RGB", (R.SIZE * len(VIEWS), (R.SIZE + 22) * 2), "white")
+    sheet = Image.new("RGB", (R.SIZE * len(views), (R.SIZE + 22) * 2), "white")
     draw = ImageDraw.Draw(sheet)
     for row, (label, tiles) in enumerate((("com HSR", with_hsr), ("sem HSR", without))):
         for column, tile in enumerate(tiles):
             sheet.paste(tile, (column * R.SIZE, row * (R.SIZE + 22) + 22))
-            draw.text((column * R.SIZE + 6, row * (R.SIZE + 22) + 5), f"{label} - {VIEWS[column][0]}", fill="black")
+            draw.text((column * R.SIZE + 6, row * (R.SIZE + 22) + 5), f"{label} - {views[column][0]}", fill="black")
     out = R.OUT / f"{name}.png"
     sheet.save(out)
     print("[OK]", out)

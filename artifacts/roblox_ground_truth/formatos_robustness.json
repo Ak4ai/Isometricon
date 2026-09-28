@@ -1,0 +1,830 @@
+{
+  "101914651386350": {
+    "categoria": "Sapatos",
+    "nome": "Sneakers_-_Left_Shoe_Accessory",
+    "type_id": 70,
+    "malha": {
+      "vertices": 1786,
+      "faces": 2657,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.019,
+      "p99_source_distance": 0.067,
+      "outer_edge_stretch_p99": 1.515
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 4.1,
+    "hsr": "oficial (64 pontos)"
+  },
+  "131149613284268": {
+    "categoria": "Sapatos",
+    "nome": "Sneakers_-_Right_Shoe_Accessory",
+    "type_id": 71,
+    "malha": {
+      "vertices": 1788,
+      "faces": 2657,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.019,
+      "p99_source_distance": 0.066,
+      "outer_edge_stretch_p99": 1.515
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 3.9,
+    "hsr": "oficial (64 pontos)"
+  },
+  "80102743203860": {
+    "categoria": "Sapatos",
+    "nome": "boots_-_Left_Shoe_Accessory",
+    "type_id": 70,
+    "malha": {
+      "vertices": 3312,
+      "faces": 3970,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.032,
+      "p99_source_distance": 0.076,
+      "outer_edge_stretch_p99": 1.076
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 6.7,
+    "hsr": "oficial (121 pontos)"
+  },
+  "87917823878878": {
+    "categoria": "Sapatos",
+    "nome": "boots_-_Right_Shoe_Accessory",
+    "type_id": 71,
+    "malha": {
+      "vertices": 3349,
+      "faces": 3970,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.032,
+      "p99_source_distance": 0.076,
+      "outer_edge_stretch_p99": 1.067
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 6.7,
+    "hsr": "oficial (121 pontos)"
+  },
+  "120212561676547": {
+    "categoria": "Sapatos",
+    "nome": "ItGirl__Black_Cl__-_Acess_rio_de_cal_ado_esquerdo",
+    "type_id": 70,
+    "malha": {
+      "vertices": 957,
+      "faces": 1323,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.012,
+      "p99_source_distance": 0.079,
+      "outer_edge_stretch_p99": 0.954
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 2.4,
+    "hsr": "oficial (0 pontos)"
+  },
+  "133993828177296": {
+    "categoria": "Sapatos",
+    "nome": "ItGirl__Black_Cla__-_Acess_rio_de_cal_ado_direito",
+    "type_id": 71,
+    "malha": {
+      "vertices": 960,
+      "faces": 1323,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.011,
+      "p99_source_distance": 0.078,
+      "outer_edge_stretch_p99": 0.944
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 2.5,
+    "hsr": "oficial (0 pontos)"
+  },
+  "71890162253609": {
+    "categoria": "Sapatos",
+    "nome": "Fur_Boots_-_Left_Shoe_Accessory",
+    "type_id": 70,
+    "malha": {
+      "vertices": 4277,
+      "faces": 1836,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "erro": "ValueError: Triângulo degenerado na cage externa",
+    "onde": "retarget_garment_with_wrap_layer"
+  },
+  "112948299427250": {
+    "categoria": "Sapatos",
+    "nome": "Fur_Boots_-_Right_Shoe_Accessory",
+    "type_id": 71,
+    "malha": {
+      "vertices": 4277,
+      "faces": 1836,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.07,
+      "p99_source_distance": 0.19,
+      "outer_edge_stretch_p99": 1.099
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 555,
+      "finito": true
+    },
+    "tempo_s": 7.9,
+    "hsr": "oficial (161 pontos)"
+  },
+  "79289164241757": {
+    "categoria": "Sapatos",
+    "nome": "Goth_High_Platform_Boots_-_Right_Shoe_Accessory",
+    "type_id": 71,
+    "malha": {
+      "vertices": 3504,
+      "faces": 3997,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.053,
+      "p99_source_distance": 0.131,
+      "outer_edge_stretch_p99": 1.525
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 7.3,
+    "hsr": "oficial (130 pontos)"
+  },
+  "98033180899784": {
+    "categoria": "Sapatos",
+    "nome": "Goth_High_Platform_Boots_-_Left_Shoe_Accessory",
+    "type_id": 70,
+    "malha": {
+      "vertices": 3504,
+      "faces": 3997,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.037,
+      "p99_source_distance": 0.1,
+      "outer_edge_stretch_p99": 1.525
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 7.6,
+    "hsr": "oficial (135 pontos)"
+  },
+  "15106170874": {
+    "categoria": "Saias e vestidos longos",
+    "nome": "Red___Black_Ball_Gown",
+    "type_id": 72,
+    "malha": {
+      "vertices": 2567,
+      "faces": 3966,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.049,
+      "p99_source_distance": 0.23,
+      "outer_edge_stretch_p99": 1.696
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 5.4,
+    "hsr": "oficial (641 pontos)"
+  },
+  "14692845100": {
+    "categoria": "Saias e vestidos longos",
+    "nome": "Long_Dress",
+    "type_id": 72,
+    "malha": {
+      "vertices": 3077,
+      "faces": 3922,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.265,
+      "p99_source_distance": 1.624,
+      "outer_edge_stretch_p99": 1.515
+    },
+    "aceita_pelo_validador_antigo": false,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2160,
+      "finito": true
+    },
+    "tempo_s": 9.6,
+    "hsr": "oficial (815 pontos)"
+  },
+  "18135693306": {
+    "categoria": "Saias e vestidos longos",
+    "nome": "White_Side_Slit_Long_Skirt",
+    "type_id": 72,
+    "malha": {
+      "vertices": 2316,
+      "faces": 3952,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "erro": "ValueError: UV de cage sem correspondência (erro máximo 0.077742)",
+    "onde": "_nearest_uv_indices"
+  },
+  "139052064476794": {
+    "categoria": "Saias e vestidos longos",
+    "nome": "Y2K_VINTAGE_MAXI_SKIRT_BROWN",
+    "type_id": 72,
+    "malha": {
+      "vertices": 2525,
+      "faces": 3952,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.071,
+      "p99_source_distance": 0.267,
+      "outer_edge_stretch_p99": 1.608
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 122,
+      "finito": true
+    },
+    "tempo_s": 5.4,
+    "hsr": "oficial (456 pontos)"
+  },
+  "125125180427177": {
+    "categoria": "Saias e vestidos longos",
+    "nome": "Glinda_s_White_Wicked_Wedding_Dress",
+    "type_id": 72,
+    "malha": {
+      "vertices": 3940,
+      "faces": 3998,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.172,
+      "p99_source_distance": 0.36,
+      "outer_edge_stretch_p99": 2.842
+    },
+    "aceita_pelo_validador_antigo": false,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 355,
+      "finito": true
+    },
+    "tempo_s": 14.2,
+    "hsr": "oficial (119 pontos)"
+  },
+  "133273151439383": {
+    "categoria": "Casacos compridos e capas",
+    "nome": "Dark_Trench_Coat_with_Gloves",
+    "type_id": 67,
+    "malha": {
+      "vertices": 2233,
+      "faces": 3992,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.059,
+      "p99_source_distance": 0.241,
+      "outer_edge_stretch_p99": 1.912
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 93,
+      "finito": true
+    },
+    "tempo_s": 5.1,
+    "hsr": "oficial (464 pontos)"
+  },
+  "98671942473617": {
+    "categoria": "Casacos compridos e capas",
+    "nome": "Long_Black_trench_coat_torn_and_rugged",
+    "type_id": 67,
+    "malha": {
+      "vertices": 2930,
+      "faces": 4000,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.087,
+      "p99_source_distance": 0.4,
+      "outer_edge_stretch_p99": 1.554
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 121,
+      "finito": true
+    },
+    "tempo_s": 6.4,
+    "hsr": "oficial (468 pontos)"
+  },
+  "17810834889": {
+    "categoria": "Casacos compridos e capas",
+    "nome": "Black_Cape",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1480,
+      "faces": 2628,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.056,
+      "p99_source_distance": 0.341,
+      "outer_edge_stretch_p99": 1.844
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 5.1,
+    "hsr": "oficial (31 pontos)"
+  },
+  "111428495474261": {
+    "categoria": "Casacos compridos e capas",
+    "nome": "Doctor_Lab_Coat",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1967,
+      "faces": 3386,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.036,
+      "p99_source_distance": 0.106,
+      "outer_edge_stretch_p99": 1.455
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 4.5,
+    "hsr": "oficial (610 pontos)"
+  },
+  "15394008963": {
+    "categoria": "Casacos compridos e capas",
+    "nome": "Cloak",
+    "type_id": 67,
+    "malha": {
+      "vertices": 1517,
+      "faces": 2370,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.195,
+      "p99_source_distance": 0.465,
+      "outer_edge_stretch_p99": 1.529
+    },
+    "aceita_pelo_validador_antigo": false,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1016,
+      "finito": true
+    },
+    "tempo_s": 5.7,
+    "hsr": "oficial (745 pontos)"
+  },
+  "138103576309875": {
+    "categoria": "Largas e fofas",
+    "nome": "Puffer_Jacket",
+    "type_id": 67,
+    "malha": {
+      "vertices": 2268,
+      "faces": 3524,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "erro": "ValueError: UV de cage sem correspondência (331 pontos divergentes)",
+    "onde": "_match_outer_to_reference"
+  },
+  "88473821300242": {
+    "categoria": "Largas e fofas",
+    "nome": "Black_Oversized_Hoodie",
+    "type_id": 68,
+    "malha": {
+      "vertices": 2490,
+      "faces": 3970,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "erro": "ValueError: UV de cage sem correspondência (52 pontos divergentes)",
+    "onde": "_match_outer_to_reference"
+  },
+  "18522156233": {
+    "categoria": "Largas e fofas",
+    "nome": "Cargo_Pants",
+    "type_id": 66,
+    "malha": {
+      "vertices": 1858,
+      "faces": 3104,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "erro": "ValueError: UV de cage incompatível com a referência corporal",
+    "onde": "_match_reference_to_body_uv"
+  },
+  "106912997514153": {
+    "categoria": "Largas e fofas",
+    "nome": "baggy_Jeans",
+    "type_id": 66,
+    "malha": {
+      "vertices": 3601,
+      "faces": 3646,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.045,
+      "p99_source_distance": 0.172,
+      "outer_edge_stretch_p99": 1.664
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 239,
+      "finito": true
+    },
+    "tempo_s": 10.0,
+    "hsr": "oficial (615 pontos)"
+  },
+  "10790774306": {
+    "categoria": "PedaÃ§os soltos",
+    "nome": "Dark_Black_Chain_Wraps",
+    "type_id": 66,
+    "malha": {
+      "vertices": 7680,
+      "faces": 3840,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.089,
+      "p99_source_distance": 0.234,
+      "outer_edge_stretch_p99": 1.529
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 12.8,
+    "hsr": "oficial (0 pontos)"
+  },
+  "84451330899972": {
+    "categoria": "PedaÃ§os soltos",
+    "nome": "Stylish_Black_Coat___Red_Shirt_w__Suspenders",
+    "type_id": 65,
+    "malha": {
+      "vertices": 944,
+      "faces": 1494,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.046,
+      "p99_source_distance": 0.144,
+      "outer_edge_stretch_p99": 1.402
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 5,
+      "finito": true
+    },
+    "tempo_s": 3.6,
+    "hsr": "oficial (587 pontos)"
+  },
+  "87374563373893": {
+    "categoria": "PedaÃ§os soltos",
+    "nome": "3_0__Black_Leg_Belt_Strap",
+    "type_id": 66,
+    "malha": {
+      "vertices": 1436,
+      "faces": 1942,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.032,
+      "p99_source_distance": 0.069,
+      "outer_edge_stretch_p99": 1.08
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 0,
+      "finito": true
+    },
+    "tempo_s": 4.0,
+    "hsr": "oficial (16 pontos)"
+  },
+  "122184570658271": {
+    "categoria": "PedaÃ§os soltos",
+    "nome": "Cute_Skirt_w_Bows_Pink",
+    "type_id": 72,
+    "malha": {
+      "vertices": 3523,
+      "faces": 3930,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.064,
+      "p99_source_distance": 0.127,
+      "outer_edge_stretch_p99": 1.468
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 7.1,
+    "hsr": "oficial (97 pontos)"
+  },
+  "127812633623297": {
+    "categoria": "PedaÃ§os soltos",
+    "nome": "Black_Goth_harness_corset_top",
+    "type_id": 65,
+    "malha": {
+      "vertices": 4407,
+      "faces": 3965,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.017,
+      "p99_source_distance": 0.051,
+      "outer_edge_stretch_p99": 1.541
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 6,
+      "finito": true
+    },
+    "tempo_s": 6.5,
+    "hsr": "oficial (108 pontos)"
+  },
+  "110977031470293": {
+    "categoria": "MÃ­nimas e recortes",
+    "nome": "CropTop",
+    "type_id": 64,
+    "malha": {
+      "vertices": 458,
+      "faces": 636,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.033,
+      "p99_source_distance": 0.309,
+      "outer_edge_stretch_p99": 1.521
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 22,
+      "finito": true
+    },
+    "tempo_s": 3.0,
+    "hsr": "oficial (243 pontos)"
+  },
+  "72014673044643": {
+    "categoria": "MÃ­nimas e recortes",
+    "nome": "white_knit_tube_top",
+    "type_id": 64,
+    "malha": {
+      "vertices": 1446,
+      "faces": 2400,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "erro": "ValueError: UV de cage ambígua: múltiplos pontos mapeiam ao mesmo UV corporal",
+    "onde": "_match_reference_to_body_uv"
+  },
+  "82684345207962": {
+    "categoria": "MÃ­nimas e recortes",
+    "nome": "tights",
+    "type_id": 66,
+    "malha": {
+      "vertices": 1356,
+      "faces": 2288,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.016,
+      "p99_source_distance": 0.048,
+      "outer_edge_stretch_p99": 1.377
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 3.9,
+    "hsr": "oficial (629 pontos)"
+  },
+  "13863832652": {
+    "categoria": "MÃ­nimas e recortes",
+    "nome": "Leg_Warmers",
+    "type_id": 66,
+    "malha": {
+      "vertices": 2326,
+      "faces": 3938,
+      "formato": "# Roblox Converted FileMesh v4"
+    },
+    "cages": {
+      "referencia": "FileMesh v4",
+      "externa": "FileMesh v4"
+    },
+    "validacao": {
+      "median_source_distance": 0.017,
+      "p99_source_distance": 0.132,
+      "outer_edge_stretch_p99": 1.515
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 2,
+      "finito": true
+    },
+    "tempo_s": 4.9,
+    "hsr": "oficial (262 pontos)"
+  },
+  "79466381733752": {
+    "categoria": "MÃ­nimas e recortes",
+    "nome": "Heart_cutout_Top_in_Black",
+    "type_id": 65,
+    "malha": {
+      "vertices": 778,
+      "faces": 1408,
+      "formato": "# Roblox Converted Mesh Draco"
+    },
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.064,
+      "p99_source_distance": 0.144,
+      "outer_edge_stretch_p99": 0.896
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 6,
+      "finito": true
+    },
+    "tempo_s": 3.1,
+    "hsr": "oficial (170 pontos)"
+  }
+}

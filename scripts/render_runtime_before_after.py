@@ -34,6 +34,7 @@ OUTFITS = [
     ("boxy_shirt_jeans", 89475537632859, 109837605892174),
 ]
 VIEWS = [("frente", [0.0, 1.0, 2.6]), ("3/4", [-1.8, 1.45, 2.0]), ("lado", [2.6, 1.0, 0.0]), ("costas", [0.0, 1.0, -2.6])]
+TARGET = [0.0, 0.95, 0.0]
 SIZE = 420
 OUT = ROOT / "artifacts/runtime_female"
 
@@ -57,7 +58,7 @@ def render_outfit(shader, top_id, bottom_id):
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
         shader.use()
         shader.set_mat4("u_Projection", perspective(38.0, 1.0, 0.1, 50.0))
-        shader.set_mat4("u_View", look_at(eye, [0.0, 0.95, 0.0], [0.0, 1.0, 0.0]))
+        shader.set_mat4("u_View", look_at(eye, TARGET, [0.0, 1.0, 0.0]))
         shader.set_vec3("u_LightDir", 0.4, 1.2, 0.8)
         shader.set_vec3("u_LightColor", 0.85, 0.85, 0.85)
         shader.set_vec3("u_AmbientColor", 0.45, 0.45, 0.45)
