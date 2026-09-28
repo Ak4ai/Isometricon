@@ -1009,10 +1009,10 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v13" in line:
+                if "Universal Fitted Clothing v15" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)):
-                    return False  # Regenerate fits made while WrapLayer garments were X-mirrored.
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)):
+                    return False  # Regenerate fits whose HSR sidecar may hold an unsupported older mask.
         return False
     except Exception:
         return False
@@ -1595,7 +1595,7 @@ class CharacterModel:
     def _apply_hsr_skin(self, clean_obj, skin_color, top_obj_path, bottom_obj_path,
                         is_none_top, is_none_bottom) -> bool:
         """Replace the rule-based skin cuts with Roblox HSR culling when every worn garment has a mask."""
-        from src.clothing.hsr import cull_hidden_triangles, sidecar_path
+        from src.clothing.hsr import cull_hidden_triangles, sidecar_path, subdivide
         from src.rendering.mesh import TexturedMesh
 
         worn = [path for path, none in ((top_obj_path, is_none_top), (bottom_obj_path, is_none_bottom)) if not none]
@@ -1608,6 +1608,7 @@ class CharacterModel:
                 return False  # a garment without HSR data keeps the rule-based cuts
             with np.load(sidecar) as data:
                 masks.append((data["cage_points"], data["hidden"]))
+                cage_faces = data["cage_faces"] if "cage_faces" in data else None
         cage_points = masks[0][0]
         if any(len(hidden) != len(cage_points) for _, hidden in masks):
             return False
@@ -1637,9 +1638,11 @@ class CharacterModel:
             # Hands stay whole: long sleeves mark the wrist cage points, and the few
             # vertices of our block hands all map to them, which would cut the hands.
             if not name.startswith("hand_"):
-                faces = cull_hidden_triangles(vertices.reshape(-1, 11)[:, :3], faces, cage_points, hidden)
+                rows, faces = subdivide(vertices.reshape(-1, 11), faces, levels=2)
+                vertices = rows.ravel()
+                faces = cull_hidden_triangles(rows[:, :3], faces, cage_points, hidden, cage_faces)
             if len(faces):
-                new_parts.append(CharacterPart(name, TexturedMesh(vertices, faces.astype(np.uint32).ravel()),
+                new_parts.append(CharacterPart(name, TexturedMesh(vertices.astype(np.float32), faces.astype(np.uint32).ravel()),
                                                self.white_tex_id))
         for part in [p for p in self.parts if p.name in self.SKIN_PART_NAMES]:
             part.mesh.delete()

@@ -72,8 +72,20 @@ def load_hsr_data(asset_id: str, cache_dir) -> bytes:
     raise ValueError("HSRData ausente")
 
 
+SUPPORTED_VERSION = 0x12
+
+
 def hidden_reference_vertices(hsr_data: bytes, reference_vertex_count: int) -> np.ndarray:
-    """Boolean per reference-cage vertex: True where the body is hidden."""
+    """Boolean per reference-cage vertex: True where the body is hidden.
+
+    Only the 0x12 layout is decoded. Older assets carry 0x10/0x11 data whose mask,
+    read the same way, scatters over the body (spatial coherence 0.5-0.8 against
+    0.84-1.0 for 0x12 across 56 cached garments) and would punch holes in visible
+    skin, so they are treated as having no HSR data.
+    """
+    if not hsr_data or hsr_data[0] != SUPPORTED_VERSION:
+        version = f"0x{hsr_data[0]:02x}" if hsr_data else "vazia"
+        raise ValueError(f"versão de HSR {version} não suportada (só 0x{SUPPORTED_VERSION:02x})")
     needed = HEADER_BYTES + (reference_vertex_count + 7) // 8
     if len(hsr_data) < needed:
         raise ValueError("HSRData menor que a máscara da cage de referência")
@@ -103,13 +115,108 @@ def sidecar_path(fitted_obj_path) -> str:
     return os.path.splitext(str(fitted_obj_path))[0] + "_hsr.npz"
 
 
+def body_cage_faces(cages: dict) -> np.ndarray:
+    """Body-cage triangles indexed like ``_unique_uv_positions`` (one point per UV)."""
+    from .wrap_layer_fit import _unique_uv_positions
+    keys, _ = _unique_uv_positions(cages)
+    index = {tuple(key): i for i, key in enumerate(keys)}
+    faces = []
+    for name, part in cages.items():
+        if name.endswith("Forearm"):
+            continue  # runtime helper that duplicates arm/hand cages
+        for uv_face in part["face_uvs"]:
+            faces.append([index[tuple(np.round(uv, 5))] for uv in uv_face])
+    return np.asarray(faces, dtype=np.int32)
+
+
+def _closest_on_triangles(points, a, b, c):
+    """Barycentric coordinates (n, m, 3) of each point's closest point on each triangle."""
+    ab, ac = b - a, c - a
+    ap = points[:, None] - a[None]
+    d1, d2 = (ap * ab).sum(-1), (ap * ac).sum(-1)
+    bp = points[:, None] - b[None]
+    d3, d4 = (bp * ab).sum(-1), (bp * ac).sum(-1)
+    cp = points[:, None] - c[None]
+    d5, d6 = (cp * ab).sum(-1), (cp * ac).sum(-1)
+    va, vb, vc = d3 * d6 - d5 * d4, d5 * d2 - d1 * d6, d1 * d4 - d3 * d2
+    denom = np.where(np.abs(va + vb + vc) < 1e-20, 1e-20, va + vb + vc)
+    v, w = vb / denom, vc / denom
+    bary = np.stack((1 - v - w, v, w), -1)
+    regions = [  # Ericson's Voronoi regions, most specific last so they win
+        (d1 <= 0) & (d2 <= 0), (d3 >= 0) & (d4 <= d3), (d6 >= 0) & (d5 <= d6),
+        (vc <= 0) & (d1 >= 0) & (d3 <= 0), (vb <= 0) & (d2 >= 0) & (d6 <= 0),
+        (va <= 0) & ((d4 - d3) >= 0) & ((d5 - d6) >= 0)]
+    t_ab = np.clip(d1 / np.where(np.abs(d1 - d3) < 1e-20, 1e-20, d1 - d3), 0, 1)
+    t_ac = np.clip(d2 / np.where(np.abs(d2 - d6) < 1e-20, 1e-20, d2 - d6), 0, 1)
+    t_bc = np.clip((d4 - d3) / np.where(np.abs((d4 - d3) + (d5 - d6)) < 1e-20, 1e-20, (d4 - d3) + (d5 - d6)), 0, 1)
+    choices = [np.stack((np.ones_like(v), 0 * v, 0 * v), -1), np.stack((0 * v, np.ones_like(v), 0 * v), -1),
+               np.stack((0 * v, 0 * v, np.ones_like(v)), -1), np.stack((1 - t_ab, t_ab, 0 * v), -1),
+               np.stack((1 - t_ac, 0 * v, t_ac), -1), np.stack((0 * v, 1 - t_bc, t_bc), -1)]
+    edge_or_vertex = np.zeros(v.shape, bool)
+    for region, choice in zip(reversed(regions), reversed(choices)):
+        take = region & ~edge_or_vertex
+        bary[take] = choice[take]
+        edge_or_vertex |= region
+    return bary
+
+
+def vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cage, chunk=64):
+    """Hidden fraction at each point's closest point on the body-cage surface (0..1)."""
+    a, b, c = (cage_points[cage_faces[:, k]] for k in range(3))
+    flags = hidden_cage[cage_faces].astype(np.float64)
+    out = np.empty(len(positions))
+    for start in range(0, len(positions), chunk):
+        p = positions[start:start + chunk]
+        bary = _closest_on_triangles(p, a, b, c)
+        closest = bary[..., 0, None] * a[None] + bary[..., 1, None] * b[None] + bary[..., 2, None] * c[None]
+        best = ((closest - p[:, None]) ** 2).sum(-1).argmin(1)
+        rows = np.arange(len(p))
+        out[start:start + chunk] = (bary[rows, best] * flags[best]).sum(-1)
+    return out
+
+
 def cull_hidden_triangles(positions: np.ndarray, faces: np.ndarray, cage_points: np.ndarray,
-                          hidden_cage: np.ndarray) -> np.ndarray:
-    """Faces kept after HSR. A triangle is hidden when at least two of its vertices'
-    nearest body-cage points are hidden (the rule closest to Studio's culling)."""
+                          hidden_cage: np.ndarray, cage_faces: np.ndarray | None = None,
+                          min_hidden: int = 3) -> np.ndarray:
+    """Faces kept after HSR: a triangle is hidden when ``min_hidden`` of its vertices are.
+
+    With ``cage_faces`` a skin vertex is hidden when the mask, interpolated at its
+    closest point on the body-cage surface, is past one half; otherwise its
+    nearest cage point decides. On a subdivided skin all three is the safe rule: a
+    garment edge may leave some skin under the cloth but never a hole.
+    """
     if len(faces) == 0 or not hidden_cage.any():
         return faces
-    nearest = np.concatenate([((positions[i:i + 512, None] - cage_points[None]) ** 2).sum(-1).argmin(1)
-                              for i in range(0, len(positions), 512)])
-    vertex_hidden = hidden_cage[nearest]
-    return faces[vertex_hidden[faces].sum(1) < 2]
+    positions = np.asarray(positions, dtype=np.float64)
+    if cage_faces is not None and len(cage_faces):
+        vertex_hidden = vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cage) > 0.5
+    else:
+        nearest = np.concatenate([((positions[i:i + 512, None] - cage_points[None]) ** 2).sum(-1).argmin(1)
+                                  for i in range(0, len(positions), 512)])
+        vertex_hidden = hidden_cage[nearest]
+    return faces[vertex_hidden[faces].sum(1) < min_hidden]
+
+
+def subdivide(vertices: np.ndarray, faces: np.ndarray, levels: int = 2):
+    """Midpoint subdivision (1 triangle -> 4 per level), interpolating every vertex attribute.
+
+    Our body parts are coarse boxes whose triangles can span a whole thigh, so
+    HSR decided per original triangle would cut holes past a garment's hem.
+    """
+    vertices = np.asarray(vertices, dtype=np.float32)
+    faces = np.asarray(faces, dtype=np.int64)
+    for _ in range(levels):
+        edges = np.sort(np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]])), axis=1)
+        unique, inverse = np.unique(edges, axis=0, return_inverse=True)
+        inverse = inverse.ravel()
+        midpoints = (vertices[unique[:, 0]] + vertices[unique[:, 1]]) / 2
+        if vertices.shape[1] >= 6:  # keep interpolated normals unit length
+            normals = midpoints[:, 3:6]
+            midpoints[:, 3:6] = normals / np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-8)
+        m = len(vertices) + inverse.reshape(3, -1).T  # midpoint ids of edges ab, bc, ca per face
+        a, b, c = faces.T
+        ab, bc, ca = m.T
+        faces = np.concatenate((np.column_stack((a, ab, ca)), np.column_stack((ab, b, bc)),
+                                np.column_stack((ca, bc, c)), np.column_stack((ab, bc, ca))))
+        vertices = np.vstack((vertices, midpoints.astype(np.float32)))
+    return vertices, faces

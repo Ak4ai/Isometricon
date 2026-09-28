@@ -177,9 +177,10 @@ def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndar
         raise ValueError("UV de cage ambígua entre referência e cage externa")
     free_ref = set(np.flatnonzero(~exact).tolist())
     free_out = set(range(len(out_keys))) - set(key_map[exact].tolist())
-    if len(free_ref) != len(free_out) or len(free_ref) > 0.02 * len(ref_keys):
+    if len(free_ref) > 0.02 * len(ref_keys):
         raise ValueError(f"UV de cage sem correspondência ({len(free_ref)} pontos divergentes)")
-    while free_ref:
+    # Some outer cages also drop a few points; those reference points stay unpaired (-1).
+    while free_ref and free_out:
         best = None
         for r in free_ref:
             images = {key_map[n] for n in ref_adj[r] if key_map[n] >= 0}
@@ -198,7 +199,8 @@ def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndar
     for vertex, key in enumerate(out_key_of):
         if first_vertex_of_key[key] < 0:
             first_vertex_of_key[key] = vertex
-    return first_vertex_of_key[key_map[ref_key_of]]
+    paired = key_map[ref_key_of]
+    return np.where(paired >= 0, first_vertex_of_key[np.maximum(paired, 0)], -1)
 
 
 def _match_reference_to_body_uv(reference_uv: np.ndarray, body_uv: np.ndarray) -> np.ndarray:
@@ -335,13 +337,35 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
     if len(np.unique(uv_index)) != len(np.unique(np.round(reference_uv, 5), axis=0)):
         raise ValueError("Cage de referência possui UVs corporais ambíguos")
     outer_original = outer
-    outer = outer_original[outer_index]
+    missing_outer = outer_index < 0
+    outer = outer_original[np.maximum(outer_index, 0)]
     target = target_positions[uv_index]
 
     r_ref, p_ref = wrap["reference_origin"]
     r_cage, p_cage = wrap["cage_origin"]
     reference_parent = reference @ r_ref.T + p_ref
     outer_parent = outer @ r_cage.T + p_cage
+    if missing_outer.any():
+        # Reference points whose outer twin the author deleted take the garment
+        # thickness of their cage neighbours.
+        thickness = outer_parent - reference_parent
+        neighbours = [set() for _ in reference_parent]
+        for face in faces:
+            for i in face:
+                neighbours[i].update(int(j) for j in face if j != i)
+        known = ~missing_outer
+        pending = set(np.flatnonzero(missing_outer).tolist())
+        while pending:
+            ready = {i for i in pending if any(known[j] for j in neighbours[i])}
+            if not ready:
+                raise ValueError("UV de cage sem correspondência")
+            for i in ready:
+                thickness[i] = thickness[[j for j in neighbours[i] if known[j]]].mean(axis=0)
+            for i in ready:
+                known[i] = True
+            pending -= ready
+        outer_parent = reference_parent + thickness
+        outer = (outer_parent - p_cage) @ r_cage
     delta = outer_parent - reference_parent
     if _shell_bulk_scale:
         source_box = np.ptp(reference_parent, axis=0)
@@ -371,9 +395,30 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
         weight = float(np.linalg.norm(np.cross(sb - sa, sc - sa))) if _shell_area_weighted else 1.0
         np.add.at(uv_delta, ids, (delta[face] @ transform.T) * weight * shell_bulk_scale)
         np.add.at(uv_counts, ids, weight)
-    if np.any(uv_counts[np.unique(uv_index)] == 0):
+    used = np.unique(uv_index)
+    orphans = used[uv_counts[used] == 0]
+    if len(orphans) > 0.02 * len(used):
         raise ValueError("Cage com UVs sem faces válidas")
-    uv_delta[np.unique(uv_index)] /= uv_counts[np.unique(uv_index), None]
+    uv_delta[used[uv_counts[used] > 0]] /= uv_counts[used[uv_counts[used] > 0], None]
+    if len(orphans):
+        # A few cage points touch only collapsed (zero-area) triangles, so no local
+        # frame exists there: take the displacement of their cage neighbours.
+        neighbours = {int(i): set() for i in orphans}
+        for face in uv_index[faces]:
+            for i in face:
+                if int(i) in neighbours:
+                    neighbours[int(i)].update(int(j) for j in face if j != i)
+        filled = set(used[uv_counts[used] > 0].tolist())
+        pending = set(neighbours)
+        while pending:
+            ready = {i for i in pending if neighbours[i] & filled}
+            if not ready:
+                raise ValueError("Cage com UVs sem faces válidas")
+            for i in ready:
+                known = list(neighbours[i] & filled)
+                uv_delta[i] = uv_delta[known].mean(axis=0)
+            filled |= ready
+            pending -= ready
     target_outer = target_positions[uv_index] + uv_delta[uv_index]
     outer_edge_p99, outer_edges_over_3x = _cage_edge_stretch(outer, target_outer, faces)
 
