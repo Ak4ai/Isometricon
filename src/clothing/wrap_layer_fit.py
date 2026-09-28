@@ -392,8 +392,15 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
                                     *, _shell_transform=None, _mesh_transform=None,
                                     _shell_area_weighted=False,
                                     _use_authored_outer_faces=False,
-                                    _shell_bulk_scale=False) -> tuple[np.ndarray, dict]:
-    """Return static-pose garment vertices in engine XYZ using asset cages."""
+                                    _shell_bulk_scale=False,
+                                    target_positions=None) -> tuple[np.ndarray, dict]:
+    """Return static-pose garment vertices in engine XYZ using asset cages.
+
+    ``target_positions`` replaces the body cage (one position per body UV point,
+    ordered like ``_unique_uv_positions``): a layered garment is fitted over the
+    outer cage of the garment under it.
+    """
+    target_override = target_positions
     from .wear_engine import closest_point_on_triangle
 
     shell_transform = _shell_transform or _local_map
@@ -414,6 +421,8 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
     # Cages are paired with the body by UV below, not by triangle count: some
     # catalog references (e.g. 2684 faces) drop a few triangles of the R15 layout.
     target_uv, target_positions = _unique_uv_positions(engine.r15_female_cages)
+    if target_override is not None:
+        target_positions = np.asarray(target_override, dtype=np.float64)
     uv_index = _match_reference_to_body_uv(reference_uv, target_uv, faces,
                                            _body_uv_adjacency(engine.r15_female_cages, target_uv))
     outer_index = _match_outer_to_reference(reference_uv, faces, outer_uv, outer_faces)
