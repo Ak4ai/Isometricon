@@ -1590,7 +1590,7 @@ class CharacterModel:
         return CharacterPart("trunk_skin", mesh, self.white_tex_id)
 
     SKIN_PART_NAMES = ("arm_left", "arm_right", "forearm_left", "forearm_right",
-                       "hand_left", "hand_right", "trunk_skin", "legs_skin")
+                       "hand_left", "hand_right", "trunk_skin", "legs_skin", "feet_skin")
 
     def _apply_hsr_skin(self, clean_obj, skin_color, top_obj_path, bottom_obj_path,
                         is_none_top, is_none_bottom) -> bool:
@@ -1957,6 +1957,13 @@ class CharacterModel:
             if bottom_data:
                 mesh = TexturedMesh(bottom_data[0], bottom_data[1])
                 self.parts.append(CharacterPart("bottom", mesh, bottom_tex_id))
+            # Pants that end at the ankle leave the feet bare. Pants reaching the floor
+            # cover them (boots, tights, long hems), where the blocky feet would poke out.
+            reaches_floor = bool(bottom_data) and float(bottom_data[0].reshape(-1, 11)[:, 1].min()) < 0.05
+            feet_data = None if reaches_floor else parse_clean_obj_groups(
+                clean_obj, ["Export_pe_esquerdo", "Export_pe_direito"], default_color=skin_color, vertex_transform=hip_tf)
+            if feet_data:
+                self.parts.append(CharacterPart("feet_skin", TexturedMesh(feet_data[0], feet_data[1]), self.white_tex_id))
 
         else:
             def hip_tf(raw_v):
