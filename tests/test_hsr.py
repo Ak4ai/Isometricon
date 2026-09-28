@@ -47,3 +47,13 @@ def test_older_hsr_layouts_are_rejected_instead_of_misread():
     import pytest
     with pytest.raises(ValueError):
         hidden_reference_vertices(bytes([0x11]) + bytes(HEADER_BYTES - 1) + bytes(2), 10)
+
+
+def test_geometric_mask_covers_cage_points_with_garment_just_outside():
+    from src.clothing.hsr import geometric_hidden_mask
+    # A unit octahedron "body cage"; the garment is a patch just outside the +x tip.
+    cage = np.array([(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)], float)
+    faces = np.array([(0, 2, 4), (2, 1, 4), (1, 3, 4), (3, 0, 4), (2, 0, 5), (1, 2, 5), (3, 1, 5), (0, 3, 5)])
+    garment = np.array([(1.05, 0.0, 0.0), (1.05, 0.02, 0.0)])
+    hidden = geometric_hidden_mask(cage, faces, garment)
+    np.testing.assert_array_equal(np.flatnonzero(hidden), [0])

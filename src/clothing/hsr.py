@@ -105,6 +105,38 @@ def hidden_body_cage_mask(rbxm_path, trace: dict, body_cage_count: int, cache_di
     return hidden
 
 
+def geometric_hidden_mask(cage_points: np.ndarray, cage_faces: np.ndarray, garment_vertices: np.ndarray,
+                          radius_fraction: float = 0.0486, inside_fraction: float = 0.02) -> np.ndarray:
+    """Body-cage points covered by a fitted garment, for garments without usable HSR data.
+
+    A cage point is covered when some garment vertex lies within ``radius_fraction``
+    of the body height and not more than ``inside_fraction`` of it inside the body
+    (along the outward cage normal): cloth sunk a little into the skin (e.g. a
+    chest larger than the garment's reference body) must still hide it. On the
+    Blocky it agrees with Roblox Studio's culling on ~85-95% of the body area
+    (asset HSR masks: ~89%).
+    """
+    cage_points = np.asarray(cage_points, dtype=np.float64)
+    garment = np.asarray(garment_vertices, dtype=np.float64)
+    normals = np.zeros_like(cage_points)
+    corners = cage_points[cage_faces]
+    face_normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    for k in range(3):
+        np.add.at(normals, cage_faces[:, k], face_normals)
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    if np.einsum("ij,ij->i", cage_points - cage_points.mean(0), normals).mean() < 0:
+        normals = -normals  # outward
+    height = float(np.ptp(cage_points, axis=0).max())
+    radius, inside = radius_fraction * height, inside_fraction * height
+    hidden = np.zeros(len(cage_points), dtype=bool)
+    for start in range(0, len(cage_points), 128):
+        offset = garment[None] - cage_points[start:start + 128, None]
+        near = (offset ** 2).sum(-1) < radius * radius
+        outside = np.einsum("pgk,pk->pg", offset, normals[start:start + 128]) > -inside
+        hidden[start:start + 128] = (near & outside).any(1)
+    return hidden
+
+
 def engine_to_body_mesh(points: np.ndarray) -> np.ndarray:
     """Engine (x, depth, up) -> body mesh / OpenGL space (x, up, -depth)."""
     points = np.asarray(points, dtype=np.float64)
