@@ -778,7 +778,12 @@ class RobloxWearEngine:
         known = count > 0
         positions = positions.copy()
         positions[known] = total[known] / count[known, None]
-        print(f"[WrapLayer] Encaixando sobre a cage externa de {self.layer_under_asset}")
+        gap = float(getattr(self, "layer_gap", 0.0) or 0.0)
+        if gap:
+            # Manual extra room between the layers, along the layered shell's normals.
+            from .hsr import _cage_vertex_normals, body_cage_faces
+            positions += _cage_vertex_normals(positions, body_cage_faces(self.r15_female_cages)) * gap
+        print(f"[WrapLayer] Encaixando sobre a cage externa de {self.layer_under_asset} (folga {gap * 1000:.0f} mm)")
         return positions
 
     def _fit_asset_wrap_layer(self, verts, meta, faces=None):
