@@ -1018,8 +1018,12 @@ def is_valid_v2_obj(path: str) -> bool:
         return False
 
 
-# Outer top over the other garments: pull clearance and hiding of fully covered triangles.
-LAYER_CLEARANCE = 0.015
+# Outer top over the other garments: default pull of what still pokes through it (mm)
+# and hiding of fully covered triangles. Both the pull and the gap between the layers
+# can be changed per character (/jaqueta puxar, /jaqueta folga).
+LAYER_PULL_MM = 15.0
+# 5 mm between the layers clears most lapel collisions (trench coat, lab coat) with no visible change.
+LAYER_GAP_MM = 5.0
 CULL_COVERED = True
 
 
@@ -1064,6 +1068,8 @@ class CharacterModel:
         self.bottom_id = bottom_id
         # A second top worn over the first (a jacket over a shirt); female body only for now.
         self.outer_top_id = outer_top_id
+        self.outer_top_gap_mm = LAYER_GAP_MM  # extra room between the layers: refits the outer top
+        self.outer_top_pull_mm = LAYER_PULL_MM  # pull of what still pokes through it: runtime only
         self.tool_id = tool_id
         self.hair_id = hair_id
         if self.hair_id is not None:
@@ -1668,13 +1674,15 @@ class CharacterModel:
         from src.rendering.mesh import TexturedMesh
         # Fitted over the top's outer cage, as Roblox layers clothing: one cache per pair.
         under = self.top_id if self.top_id is not None and str(self.top_id).lower() not in ("none", "0") else None
-        suffix = f"_over_{under}" if under is not None else ""
+        gap_mm = int(round(self.outer_top_gap_mm))
+        suffix = (f"_over_{under}" if under is not None else "") + (f"_g{gap_mm}" if gap_mm else "")
         path = os.path.join(MODELS_DIR, f"character_native_{self.outer_top_id}{suffix}_female.obj")
         if not is_valid_v2_obj(path):
             try:
                 from src.clothing.wear_engine import RobloxWearEngine
                 engine = RobloxWearEngine(body_type="female")
                 engine.layer_under_asset = under
+                engine.layer_gap = gap_mm / 1000.0
                 engine.wear(self.outer_top_id, output_obj=path)
             except Exception as e:
                 print(f"[CharacterModel] Aviso: gerando peça de cima {self.outer_top_id}: {e}")
@@ -1687,7 +1695,8 @@ class CharacterModel:
         for part in [p for p in self.parts if p.name in self._garment_buffers]:
             vertices, indices = self._garment_buffers[part.name]
             rows = np.asarray(vertices, dtype=np.float32).reshape(-1, 11).copy()
-            pulled = pull_inner_layer(rows[:, :3], outer, data[1], clearance=LAYER_CLEARANCE, body=body)
+            pulled = pull_inner_layer(rows[:, :3], outer, data[1], clearance=self.outer_top_pull_mm / 1000.0,
+                                      body=body)
             faces = np.asarray(indices).reshape(-1, 3)
             # Triangles covered by the outer top at all three corners are hidden, like HSR
             # does for skin: where a ray misses the outer cloth a pull alone can leave a leak.

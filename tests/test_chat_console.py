@@ -1290,3 +1290,21 @@ def test_hair_autocomplete_suggestions():
     chat.open("/cabelo scale ")
     assert "1.0" in chat.suggestions
     assert "1.1" in chat.suggestions
+
+
+def test_jacket_command_sets_the_outer_top_and_its_layer_settings():
+    from types import SimpleNamespace
+    calls = []
+    model = SimpleNamespace(outer_top_id=None, outer_top_gap_mm=0.0, outer_top_pull_mm=15.0,
+                            reload=lambda: calls.append("reload"),
+                            update_customization=lambda **kw: calls.append(kw))
+    chat = SkinCommandHandler(character_model=model)
+    assert chat.execute("/jaqueta 72628400373948", run_async=False)[0]
+    assert calls[-1] == {"outer_top_id": 72628400373948}
+    assert chat.execute("/jaqueta folga 6", run_async=False)[0]
+    assert model.outer_top_gap_mm == 6.0 and calls[-1] == "reload"
+    assert chat.execute("/jaqueta puxar 20mm", run_async=False)[0]
+    assert model.outer_top_pull_mm == 20.0
+    assert not chat.execute("/jaqueta folga 80", run_async=False)[0]  # out of range
+    assert chat.execute("/jaqueta none", run_async=False)[0]
+    assert model.outer_top_id is None

@@ -1154,6 +1154,49 @@ class SkinCommandHandler:
                 return True, f"[Skin] Roupa superior atualizada para: {val.upper()} ({top_id})", GREEN
 
         # ------------------------------------------------------------------
+        # 6.1 Peça por cima do top (jaqueta sobre camisa)
+        # ------------------------------------------------------------------
+        if sub_cmd in ("jaqueta", "jacket", "casaco", "sobre"):
+            usage = ("Uso: /jaqueta <ID|none>  |  /jaqueta folga <mm> (afasta da camisa, reencaixa)"
+                     "  |  /jaqueta puxar <mm> (quanto a camisa entra por baixo)")
+            if not args:
+                if self.character_model:
+                    m = self.character_model
+                    return True, (f"[Jaqueta] atual: {m.outer_top_id} | folga {m.outer_top_gap_mm:.0f} mm | "
+                                  f"puxar {m.outer_top_pull_mm:.0f} mm\n{usage}"), GOLD
+                return False, usage, GOLD
+            val = args[0].lower()
+            if val in ("folga", "gap", "puxar", "pull"):
+                if len(args) < 2:
+                    return False, usage, GOLD
+                try:
+                    mm = float(args[1].lower().removesuffix("mm"))
+                except ValueError:
+                    return False, f"[Erro] Valor em mm inválido: {args[1]}", RED
+                if not 0 <= mm <= 50:
+                    return False, "[Erro] Use um valor entre 0 e 50 mm.", RED
+                if self.character_model:
+                    if val in ("folga", "gap"):
+                        self.character_model.outer_top_gap_mm = mm
+                    else:
+                        self.character_model.outer_top_pull_mm = mm
+                    self.character_model.reload()
+                label = "Folga entre jaqueta e camisa" if val in ("folga", "gap") else "Puxar a camisa por baixo"
+                return True, f"[Jaqueta] {label}: {mm:.0f} mm", GREEN
+            if val in ("none", "sem", "tirar", "nenhum", "0"):
+                if self.character_model:
+                    self.character_model.outer_top_id = None
+                    self.character_model.reload()
+                return True, "[Jaqueta] Removida", GREEN
+            try:
+                outer_id = int(val)
+            except ValueError:
+                return False, f"[Erro] ID de jaqueta inválido: '{val}'. {usage}", RED
+            if self.character_model:
+                self.character_model.update_customization(outer_top_id=outer_id)
+            return True, f"[Jaqueta] Vestida por cima do top: {outer_id} (primeira vez leva alguns segundos)", GREEN
+
+        # ------------------------------------------------------------------
         # 7. Calça / Botas (Bottom / Pants)
         # ------------------------------------------------------------------
         if sub_cmd in ("bottom", "pants", "calca", "jeans"):
