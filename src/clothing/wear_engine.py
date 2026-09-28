@@ -25,6 +25,9 @@ from scripts.import_roblox_clothing import fetch_roblox_asset, decode_roblox_mes
 
 TOP_ASSET_TYPES = {64, 65, 67, 68}        # T-Shirt, Shirt, Jacket, Sweater
 BOTTOM_ASSET_TYPES = {66, 69, 70, 71, 72} # Pants, Shorts, LeftShoe, RightShoe, Dress/Skirt
+# Shoes: rigid up to the ankle (engine height), cage-fitted above it over this blend height.
+SHOE_RIGID_TOP = 0.10
+SHOE_BLEND_HEIGHT = 0.08
 
 # Tabela canônica de 24 rotações ortogonais do formato binário da Roblox (CFrame special cases)
 # Os ângulos estão em graus e são aplicados na ordem Y -> X -> Z
@@ -805,6 +808,38 @@ class RobloxWearEngine:
         print(f"[WrapLayer] Encaixando sobre a cage externa de {used} (folga {gap * 1000:.0f} mm)")
         return positions
 
+    @staticmethod
+    def _fit_shoe_affine(verts, trace, margin=0.15, ankle_height=0.08):
+        """Shoe vertices moved by the similarity (rotation, one scale, offset) of the foot cage around them.
+
+        A shoe is rigid, so it keeps its own proportions: only the foot (target
+        height below ``ankle_height``) sets the map. A free affine map squashed
+        boots flat on our flat box foot, and fitting the shin too widened them on
+        our thick calves.
+        """
+        reference = np.asarray(trace["reference_parent"], dtype=np.float64)
+        target = np.asarray(trace["target_body"], dtype=np.float64)
+        points = np.asarray(verts, dtype=np.float64)
+        low, high = points.min(0), points.max(0)
+        pad = margin * np.ptp(points, axis=0).max()
+        near = np.all((reference >= low - pad) & (reference <= high + pad), axis=1) & (target[:, 2] < ankle_height)
+        if near.sum() < 8:
+            return None
+        # The rotation (the reference cage is Y-up, ours Z-up) comes from the whole body
+        # cage, where it is well defined; the flat foot alone flipped some shoes over.
+        # The foot sets only the uniform scale and the position.
+        whole_a = reference - reference.mean(0)
+        whole_b = target - target.mean(0)
+        u, _, vt = np.linalg.svd(whole_b.T @ whole_a)
+        d = np.eye(3)
+        if np.linalg.det(u) * np.linalg.det(vt) < 0:
+            d[2, 2] = -1
+        rotation = u @ d @ vt
+        source, dest = reference[near] @ rotation.T, target[near]
+        source_mean, dest_mean = source.mean(0), dest.mean(0)
+        scale = float(np.sqrt(((dest - dest_mean) ** 2).sum(1).mean() / ((source - source_mean) ** 2).sum(1).mean()))
+        return ((points @ rotation.T - source_mean) * scale + dest_mean).astype(np.float32)
+
     def _fit_asset_wrap_layer(self, verts, meta, faces=None):
         """Use an asset's own cages when UVs and garment-to-cage distance validate."""
         if not self.is_female or not self.r15_female_cages or not meta.get("rbxm_path"):
@@ -843,6 +878,25 @@ class RobloxWearEngine:
                 print(f"[HSR] {int(hidden.sum())} de {len(hidden)} pontos da cage cobertos pela roupa")
         except Exception as exc:  # HSR is optional: without it the skin keeps the rule-based cuts.
             print(f"[HSR] Sem dados de HSR: {exc}")
+        if meta.get("type_id") in (70, 71):
+            # Shoes are rigid: one affine map of the nearby cage (foot and shin) keeps
+            # their shape. The per-triangle fit crushed a sneaker built for a tall,
+            # arched reference foot onto our flat box foot, and broke heels.
+            fitted = self._fit_shoe_affine(verts, trace)
+            if fitted is not None:
+                if faces is not None:
+                    # A boot shaft is cloth around the calf: above the ankle blend into the
+                    # cage fit, so the shaft wraps our thicker calves instead of cutting in.
+                    try:
+                        from .radial_prism_fit import fit_radial_prism
+                        wrapped, _ = fit_radial_prism(verts, faces, trace)
+                        t = np.clip((fitted[:, 2] - SHOE_RIGID_TOP) / SHOE_BLEND_HEIGHT, 0.0, 1.0)
+                        weight = (t * t * (3 - 2 * t))[:, None]
+                        fitted = ((1 - weight) * fitted + weight * wrapped).astype(np.float32)
+                    except Exception as exc:
+                        print(f"[WrapLayer] Cano do calçado sem encaixe por cage: {exc}")
+                print(f"[WrapLayer] Calçado encaixado (pé rígido, cano pela cage): {result[1]}")
+                return fitted, {**result[1], "method": "shoe_rigid_foot"}
         if faces is not None:
             try:
                 from .radial_prism_fit import fit_radial_prism
@@ -2554,7 +2608,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v24: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v29: {asset_id}\n")
             f.write(f"# asset_type {int(meta.get('type_id', 0))}\n")  # layering order at runtime
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
@@ -2709,6 +2763,38 @@ class RobloxWearEngine:
             "output_obj": output_obj,
             "tex_path": meta["tex_path"]
         }
+
+    def resolve_shoe_pair(self, shoes_id):
+        """Asset ids worn for ``shoes_id``: a bundle's shoe assets, or the ids given ("left,right" / one id)."""
+        if isinstance(shoes_id, (list, tuple)):
+            return [str(i) for i in shoes_id if i is not None]
+        text = str(shoes_id).strip()
+        if "," in text:
+            return [i.strip() for i in text.split(",") if i.strip()]
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        cache_path = os.path.join(base_dir, "assets", "models", "clothing", "shoe_bundles.json")
+        try:
+            with open(cache_path, encoding="utf-8") as handle:
+                cache = json.load(handle)
+        except (OSError, ValueError):
+            cache = {}
+        if text not in cache:
+            assets = []
+            try:
+                url = f"https://catalog.roblox.com/v1/bundles/{text}/details"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    details = json.loads(resp.read().decode("utf-8"))
+                assets = [str(item["id"]) for item in details.get("items", []) if item.get("type") == "Asset"]
+            except Exception:
+                pass  # not a bundle: a single shoe asset
+            cache[text] = assets or [text]
+            try:
+                with open(cache_path, "w", encoding="utf-8") as handle:
+                    json.dump(cache, handle, indent=2)
+            except OSError:
+                pass
+        return cache[text]
 
     def equip_shoes(self, bundle_or_asset_id):
         """Equipa calçados 3D (tênis/sneakers/shoes) do Roblox nos pés esquerdo e direito."""

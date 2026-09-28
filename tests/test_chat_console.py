@@ -1308,3 +1308,16 @@ def test_jacket_command_sets_the_outer_top_and_its_layer_settings():
     assert not chat.execute("/jaqueta folga 80", run_async=False)[0]  # out of range
     assert chat.execute("/jaqueta none", run_async=False)[0]
     assert model.outer_top_id is None
+
+
+def test_shoes_command_sets_and_clears_the_shoes():
+    from types import SimpleNamespace
+    calls = []
+    model = SimpleNamespace(shoes_id=None, reload=lambda: calls.append("reload"),
+                            update_customization=lambda **kw: calls.append(kw))
+    chat = SkinCommandHandler(character_model=model)
+    assert chat.execute("/sapato 101914651386350,131149613284268", run_async=False)[0]
+    assert calls[-1] == {"shoes_id": "101914651386350,131149613284268"}
+    assert not chat.execute("/sapato tenis", run_async=False)[0]
+    assert chat.execute("/sapato none", run_async=False)[0]
+    assert model.shoes_id is None and calls[-1] == "reload"
