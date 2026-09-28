@@ -2496,7 +2496,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v17: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v18: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:

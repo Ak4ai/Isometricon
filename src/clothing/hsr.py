@@ -106,15 +106,16 @@ def hidden_body_cage_mask(rbxm_path, trace: dict, body_cage_count: int, cache_di
 
 
 def geometric_hidden_mask(cage_points: np.ndarray, cage_faces: np.ndarray, garment_vertices: np.ndarray,
-                          radius_fraction: float = 0.0486, inside_fraction: float = 0.02) -> np.ndarray:
+                          radius_fraction: float = 0.03, inside_fraction: float = 0.02) -> np.ndarray:
     """Body-cage points covered by a fitted garment, for garments without usable HSR data.
 
     A cage point is covered when some garment vertex lies within ``radius_fraction``
     of the body height and not more than ``inside_fraction`` of it inside the body
     (along the outward cage normal): cloth sunk a little into the skin (e.g. a
     chest larger than the garment's reference body) must still hide it. On the
-    Blocky it agrees with Roblox Studio's culling on ~85-95% of the body area
-    (asset HSR masks: ~89%).
+    Blocky it agrees with Roblox Studio's culling on ~80% of the body area and
+    hides ~2% where Studio shows skin; a 4.9% radius agreed on 86% but opened
+    5.6% gaps at the hems, which make garments look detached.
     """
     cage_points = np.asarray(cage_points, dtype=np.float64)
     garment = np.asarray(garment_vertices, dtype=np.float64)
@@ -209,11 +210,13 @@ def vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cag
 
 def cull_hidden_triangles(positions: np.ndarray, faces: np.ndarray, cage_points: np.ndarray,
                           hidden_cage: np.ndarray, cage_faces: np.ndarray | None = None,
-                          min_hidden: int = 3) -> np.ndarray:
+                          min_hidden: int = 3, threshold: float = 0.9) -> np.ndarray:
     """Faces kept after HSR: a triangle is hidden when ``min_hidden`` of its vertices are.
 
     With ``cage_faces`` a skin vertex is hidden when the mask, interpolated at its
-    closest point on the body-cage surface, is past one half; otherwise its
+    closest point on the body-cage surface, is past ``threshold``: 0.9 keeps the skin
+    running about one cage triangle under each garment edge, so hems never leave a
+    gap (Studio agreement unchanged, uncovered-skin area 1.3% -> 1.0%); otherwise its
     nearest cage point decides. On a subdivided skin all three is the safe rule: a
     garment edge may leave some skin under the cloth but never a hole.
     """
@@ -221,7 +224,7 @@ def cull_hidden_triangles(positions: np.ndarray, faces: np.ndarray, cage_points:
         return faces
     positions = np.asarray(positions, dtype=np.float64)
     if cage_faces is not None and len(cage_faces):
-        vertex_hidden = vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cage) > 0.5
+        vertex_hidden = vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cage) > threshold
     else:
         nearest = np.concatenate([((positions[i:i + 512, None] - cage_points[None]) ** 2).sum(-1).argmin(1)
                                   for i in range(0, len(positions), 512)])
