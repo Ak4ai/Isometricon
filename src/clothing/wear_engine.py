@@ -760,14 +760,15 @@ class RobloxWearEngine:
             trace = {}
             result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace)
             info = result[1]
-            if info["outer_edge_stretch_p99"] > 2.5:
-                raise ValueError("cage externa distorcida demais na transferência")
-            # The per-triangle fit extrapolates badly far from the outer cage, so it
-            # needs the garment close to it. The radial + prism fit handles far points
-            # (prism residual, hanging bows) and only needs the garment around the cage.
-            per_triangle_ok = info["median_source_distance"] <= 0.05 and info["p99_source_distance"] <= 0.2
-            prism_ok = faces is not None and info["median_source_distance"] <= 0.1
-            if not (per_triangle_ok or prism_ok):
+            # The per-triangle fit extrapolates badly far from the outer cage, so it is
+            # only trusted with the garment close to a sane cage. The radial + prism fit
+            # handles far points (prism residual, hanging parts) and is used whenever the
+            # cages pair: on costumes and oversized pieces these limits rejected (outer
+            # cage stretched up to 26x, garment 0.1-0.2 from its cage) it still produced
+            # the whole costume, where the older fallback showed a torso fragment.
+            per_triangle_ok = (info["outer_edge_stretch_p99"] <= 2.5 and info["median_source_distance"] <= 0.05
+                               and info["p99_source_distance"] <= 0.2)
+            if faces is None and not per_triangle_ok:
                 raise ValueError("roupa distante demais da cage externa para encaixe estável")
         except Exception as exc:  # Asset decoding must never stop the outfit pipeline.
             print(f"[WrapLayer] Usando encaixe anterior: {exc}")
@@ -2496,7 +2497,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v18: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v21: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:
@@ -2509,7 +2510,7 @@ class RobloxWearEngine:
                 else:
                     f.write("f " + " ".join(f"{idx+1}//{idx+1}" for idx in face) + "\n")
 
-        from .hsr import body_cage_faces, engine_to_body_mesh, geometric_hidden_mask, sidecar_path
+        from .hsr import body_cage_faces, engine_to_body_mesh, ray_hidden_mask, sidecar_path
         hsr_path = sidecar_path(output_obj)
         hsr_info = wrap_result[1].get("hsr") if used_asset_wrap and wrap_result is not None else None
         if hsr_info is None and self.is_female and self.r15_female_cages:
@@ -2519,7 +2520,9 @@ class RobloxWearEngine:
                 from .wrap_layer_fit import _unique_uv_positions
                 _, cage_positions = _unique_uv_positions(self.r15_female_cages)
                 cage_faces = body_cage_faces(self.r15_female_cages)
-                hidden = geometric_hidden_mask(cage_positions, cage_faces, deformed_verts)
+                garment_faces = np.asarray([f[:3] for f in faces], dtype=np.int64)
+                hidden = ray_hidden_mask(cage_positions, cage_faces, deformed_verts, garment_faces,
+                                         reach_fraction=0.12)
                 hsr_info = {"cage_points": engine_to_body_mesh(cage_positions), "hidden": hidden,
                             "cage_faces": cage_faces}
                 print(f"[HSR] Máscara geométrica: {int(hidden.sum())} de {len(hidden)} pontos da cage cobertos")

@@ -190,7 +190,7 @@ def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndar
                 if score and (best is None or candidate > best):
                     best = candidate
         if best is None:
-            raise ValueError("UV de cage sem correspondência topológica")
+            break  # the rest stay unpaired and take their neighbours' thickness
         _, _, r, o = best
         key_map[r] = o
         free_ref.discard(r)
@@ -397,7 +397,7 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
         np.add.at(uv_counts, ids, weight)
     used = np.unique(uv_index)
     orphans = used[uv_counts[used] == 0]
-    if len(orphans) > 0.02 * len(used):
+    if len(orphans) > 0.05 * len(used):
         raise ValueError("Cage com UVs sem faces válidas")
     uv_delta[used[uv_counts[used] > 0]] /= uv_counts[used[uv_counts[used] > 0], None]
     if len(orphans):
@@ -413,7 +413,12 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
         while pending:
             ready = {i for i in pending if neighbours[i] & filled}
             if not ready:
-                raise ValueError("Cage com UVs sem faces válidas")
+                # Points in no triangle at all: use the closest filled cage point.
+                known = np.fromiter(filled, dtype=np.int64)
+                for i in pending:
+                    nearest = known[np.argmin(np.linalg.norm(target_positions[known] - target_positions[i], axis=1))]
+                    uv_delta[i] = uv_delta[nearest]
+                break
             for i in ready:
                 known = list(neighbours[i] & filled)
                 uv_delta[i] = uv_delta[known].mean(axis=0)
