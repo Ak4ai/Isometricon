@@ -50,3 +50,18 @@ def test_loose_hanging_piece_follows_the_nearest_bound_point_rigidly():
     fitted, audit = fit_radial_prism(all_points, all_faces, _trace(offset))
     assert audit["hanging_vertices"] == 5
     np.testing.assert_allclose(fitted, all_points + offset, atol=1e-9)
+
+
+def test_harmonic_fill_bridges_two_anchors_without_a_jump():
+    from src.clothing.radial_prism_fit import _harmonic_fill
+    # A strip of 6 vertices: the ends are bound with different offsets, the middle hangs.
+    faces = np.array([(0, 1, 6), (1, 2, 7), (2, 3, 8), (3, 4, 9), (4, 5, 10)])
+    values = np.zeros((11, 3))
+    values[0] = (0, 0, 0)
+    values[5] = (1, 0, 0)
+    free = np.zeros(11, bool)
+    free[1:5] = True
+    bound = ~free
+    bound[6:] = False  # side vertices take no part
+    filled = _harmonic_fill(values, faces, free, bound, iterations=2000)
+    np.testing.assert_allclose(filled[:6, 0], np.linspace(0, 1, 6), atol=1e-3)
