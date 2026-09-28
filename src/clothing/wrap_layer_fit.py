@@ -141,9 +141,60 @@ def _nearest_uv_indices(queries: np.ndarray, keys: np.ndarray, tolerance=2e-4) -
     return indices
 
 
+# Distinct body-cage UVs are at least 0.003 apart; catalog cages store the same UV
+# with up to ~4e-4 of precision noise, so UVs closer than this are one point.
+UV_TOLERANCE = 1e-3
+
+
+def _root(parent, i):
+    while parent[i] != i:
+        i = parent[i]
+    return i
+
+
+def _cluster_uv(uvs: np.ndarray, tolerance: float = UV_TOLERANCE):
+    """Merge UVs closer than `tolerance`: (key UVs, key index of each input UV)."""
+    unique, inverse = np.unique(np.round(np.asarray(uvs, dtype=np.float64), 5), axis=0, return_inverse=True)
+    parent = np.arange(len(unique))
+    for start in range(0, len(unique), 256):
+        chunk = unique[start:start + 256]
+        close = np.sqrt(((chunk[:, None] - unique[None]) ** 2).sum(-1)) < tolerance
+        for i, j in zip(*np.nonzero(close)):
+            a, b = _root(parent, int(start + i)), _root(parent, int(j))
+            if a != b:
+                parent[max(a, b)] = min(a, b)
+    roots = np.array([_root(parent, i) for i in range(len(unique))])
+    _, cluster = np.unique(roots, return_inverse=True)
+    cluster = cluster.ravel()
+    keys = np.zeros((cluster.max() + 1, unique.shape[1]))
+    np.add.at(keys, cluster, unique)
+    keys /= np.bincount(cluster)[:, None]
+    return keys, cluster[inverse.ravel()]
+
+
+def _pair_by_connectivity(key_map, source_adjacency, target_adjacency, distance, free_target):
+    """Pair each unpaired source key to the free target key adjacent to the images of its neighbours."""
+    free_source = set(np.flatnonzero(key_map < 0).tolist())
+    while free_source and free_target:
+        best = None
+        for r in free_source:
+            images = {key_map[n] for n in source_adjacency[r] if key_map[n] >= 0}
+            for o in free_target:
+                score = len(images & target_adjacency[o])
+                candidate = (score, -distance[r, o], r, o)
+                if score and (best is None or candidate > best):
+                    best = candidate
+        if best is None:
+            break
+        _, _, r, o = best
+        key_map[r] = o
+        free_source.discard(r)
+        free_target.discard(o)
+    return key_map
+
+
 def _uv_keys_and_adjacency(uvs: np.ndarray, faces: np.ndarray):
-    keys, key_of_vertex = np.unique(np.round(uvs, 5), axis=0, return_inverse=True)
-    key_of_vertex = key_of_vertex.ravel()
+    keys, key_of_vertex = _cluster_uv(uvs)
     adjacency = [set() for _ in keys]
     for face in np.asarray(faces):
         a, b, c = key_of_vertex[face]
@@ -151,6 +202,12 @@ def _uv_keys_and_adjacency(uvs: np.ndarray, faces: np.ndarray):
         adjacency[b].update((a, c))
         adjacency[c].update((a, b))
     return keys, key_of_vertex, adjacency
+
+
+MAX_UNPAIRED_OUTER = 0.35
+# Cage points that touch only collapsed triangles (a costume reference cage can
+# flatten whole parts) take their neighbours' displacement.
+MAX_ORPHAN_UVS = 0.35
 
 
 def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndarray,
@@ -170,31 +227,17 @@ def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndar
     out_keys, out_key_of, out_adj = _uv_keys_and_adjacency(outer_uv, outer_faces)
     distance = np.sqrt(((ref_keys[:, None] - out_keys[None]) ** 2).sum(-1))
     nearest = distance.argmin(1)
-    exact = distance[np.arange(len(ref_keys)), nearest] <= 2e-4
+    exact = distance[np.arange(len(ref_keys)), nearest] <= UV_TOLERANCE
     key_map = np.full(len(ref_keys), -1)
     key_map[exact] = nearest[exact]
     if len(np.unique(key_map[exact])) != int(exact.sum()):
         raise ValueError("UV de cage ambígua entre referência e cage externa")
-    free_ref = set(np.flatnonzero(~exact).tolist())
+    if (~exact).sum() > MAX_UNPAIRED_OUTER * len(ref_keys):
+        raise ValueError(f"UV de cage sem correspondência ({int((~exact).sum())} pontos divergentes)")
+    # Some outer cages drop points (a puffer without hands, a hood edge); those
+    # reference points stay unpaired (-1) and take their neighbours' thickness.
     free_out = set(range(len(out_keys))) - set(key_map[exact].tolist())
-    if len(free_ref) > 0.02 * len(ref_keys):
-        raise ValueError(f"UV de cage sem correspondência ({len(free_ref)} pontos divergentes)")
-    # Some outer cages also drop a few points; those reference points stay unpaired (-1).
-    while free_ref and free_out:
-        best = None
-        for r in free_ref:
-            images = {key_map[n] for n in ref_adj[r] if key_map[n] >= 0}
-            for o in free_out:
-                score = len(images & out_adj[o])
-                candidate = (score, -distance[r, o], r, o)
-                if score and (best is None or candidate > best):
-                    best = candidate
-        if best is None:
-            break  # the rest stay unpaired and take their neighbours' thickness
-        _, _, r, o = best
-        key_map[r] = o
-        free_ref.discard(r)
-        free_out.discard(o)
+    key_map = _pair_by_connectivity(key_map, ref_adj, out_adj, distance, free_out)
     first_vertex_of_key = np.full(len(out_keys), -1)
     for vertex, key in enumerate(out_key_of):
         if first_vertex_of_key[key] < 0:
@@ -203,21 +246,60 @@ def _match_outer_to_reference(reference_uv: np.ndarray, reference_faces: np.ndar
     return np.where(paired >= 0, first_vertex_of_key[np.maximum(paired, 0)], -1)
 
 
-def _match_reference_to_body_uv(reference_uv: np.ndarray, body_uv: np.ndarray) -> np.ndarray:
-    """Allow a few independently identifiable UV edits in a catalog cage.
+def _match_reference_to_body_uv(reference_uv: np.ndarray, body_uv: np.ndarray,
+                                reference_faces: np.ndarray | None = None,
+                                body_adjacency: list | None = None) -> np.ndarray:
+    """Body-cage UV index of each reference-cage vertex.
 
-    Most assets match within 2e-4. A small number of shifted UVs is safe to
-    match by nearest UV only when every unique source UV retains a distinct
-    target and the total deviation remains bounded.
+    UVs within UV_TOLERANCE are the same point; a UV edited by less than 0.01
+    takes the nearest body UV unless another point claims it. UVs moved further
+    by the asset author are paired by connectivity: the free body point adjacent
+    to the images of the reference point's already-paired neighbours.
     """
-    unique, inverse = np.unique(np.round(reference_uv, 5), axis=0, return_inverse=True)
-    mapped = _nearest_uv_indices(unique, body_uv, tolerance=.01)
-    if len(np.unique(mapped)) != len(unique):
+    keys, key_of_vertex = _cluster_uv(reference_uv)
+    distance = np.sqrt(((keys[:, None] - body_uv[None]) ** 2).sum(-1))
+    nearest = distance.argmin(1)
+    close = distance[np.arange(len(keys)), nearest] <= UV_TOLERANCE
+    key_map = np.where(close, nearest, -1)
+    # Small edits (under 0.01) take the nearest body UV when no other point claims it.
+    edited = ~close & (distance[np.arange(len(keys)), nearest] <= 0.01)
+    key_map[edited] = nearest[edited]
+    close |= edited
+    if len(np.unique(key_map[close])) != int(close.sum()):
         raise ValueError("UV de cage ambígua: múltiplos pontos mapeiam ao mesmo UV corporal")
-    error = np.linalg.norm(unique - body_uv[mapped], axis=1)
-    if np.count_nonzero(error > 2e-4) > 8:
-        raise ValueError("UV de cage incompatível com a referência corporal")
-    return mapped[inverse]
+    if not close.all():
+        if reference_faces is None or body_adjacency is None or (~close).sum() > 0.02 * len(keys):
+            raise ValueError(f"UV de cage incompatível com a referência corporal ({int((~close).sum())} pontos)")
+        adjacency = [set() for _ in keys]
+        for face in np.asarray(reference_faces):
+            a, b, c = key_of_vertex[face]
+            adjacency[a].update((b, c))
+            adjacency[b].update((a, c))
+            adjacency[c].update((a, b))
+        free_body = set(range(len(body_uv))) - set(key_map[close].tolist())
+        key_map = _pair_by_connectivity(key_map, adjacency, body_adjacency, distance, free_body)
+        if (key_map < 0).any():
+            raise ValueError(f"UV de cage sem correspondência no corpo ({int((key_map < 0).sum())} pontos)")
+    return key_map[key_of_vertex]
+
+
+def _body_uv_adjacency(cages: dict, body_uv: np.ndarray) -> list:
+    """Neighbouring body-cage UV points, indexed like the `_unique_uv_positions` keys."""
+    index = {}  # same keys and order as _unique_uv_positions
+    for name, part in cages.items():
+        if not name.endswith("Forearm"):
+            for uv_face in part["face_uvs"]:
+                for uv in uv_face:
+                    index.setdefault(tuple(np.round(uv, 5)), len(index))
+    adjacency = [set() for _ in body_uv]
+    for name, part in cages.items():
+        if name.endswith("Forearm"):
+            continue
+        for uv_face in part["face_uvs"]:
+            ids = [index[tuple(np.round(uv, 5))] for uv in uv_face]
+            for i in ids:
+                adjacency[i].update(j for j in ids if j != i)
+    return adjacency
 
 
 def _unique_uv_positions(cages: dict) -> tuple[np.ndarray, np.ndarray]:
@@ -332,10 +414,9 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
     # Cages are paired with the body by UV below, not by triangle count: some
     # catalog references (e.g. 2684 faces) drop a few triangles of the R15 layout.
     target_uv, target_positions = _unique_uv_positions(engine.r15_female_cages)
-    uv_index = _match_reference_to_body_uv(reference_uv, target_uv)
+    uv_index = _match_reference_to_body_uv(reference_uv, target_uv, faces,
+                                           _body_uv_adjacency(engine.r15_female_cages, target_uv))
     outer_index = _match_outer_to_reference(reference_uv, faces, outer_uv, outer_faces)
-    if len(np.unique(uv_index)) != len(np.unique(np.round(reference_uv, 5), axis=0)):
-        raise ValueError("Cage de referência possui UVs corporais ambíguos")
     outer_original = outer
     missing_outer = outer_index < 0
     outer = outer_original[np.maximum(outer_index, 0)]
@@ -358,7 +439,13 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
         while pending:
             ready = {i for i in pending if any(known[j] for j in neighbours[i])}
             if not ready:
-                raise ValueError("UV de cage sem correspondência")
+                # A whole cage part is missing from the outer cage (e.g. a puffer's
+                # hands): take the thickness of the closest known point.
+                source = np.flatnonzero(known)
+                for i in pending:
+                    nearest = source[np.argmin(np.linalg.norm(reference_parent[source] - reference_parent[i], axis=1))]
+                    thickness[i] = thickness[nearest]
+                break
             for i in ready:
                 thickness[i] = thickness[[j for j in neighbours[i] if known[j]]].mean(axis=0)
             for i in ready:
@@ -397,7 +484,7 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
         np.add.at(uv_counts, ids, weight)
     used = np.unique(uv_index)
     orphans = used[uv_counts[used] == 0]
-    if len(orphans) > 0.05 * len(used):
+    if len(orphans) > MAX_ORPHAN_UVS * len(used):
         raise ValueError("Cage com UVs sem faces válidas")
     uv_delta[used[uv_counts[used] > 0]] /= uv_counts[used[uv_counts[used] > 0], None]
     if len(orphans):
@@ -448,6 +535,10 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
     target_area2 = np.linalg.norm(np.cross(target_triangles[:, 1] - target_triangles[:, 0],
                                             target_triangles[:, 2] - target_triangles[:, 0]), axis=1)
     usable = (source_area2 > 1e-8) & (target_area2 > 1e-10)
+    for f in np.flatnonzero(usable):
+        # A sliver can pass the area test and still have no local frame.
+        if mesh_transform(*source_triangles[f], *target_triangles[f], normal_sign=cage_normal_sign) is None:
+            usable[f] = False
     projection_faces = binding_faces[usable]
     if not len(projection_faces):
         raise ValueError("Cage externa sem triângulos válidos")

@@ -23,7 +23,7 @@
       "pendurados": 24,
       "finito": true
     },
-    "tempo_s": 5.9,
+    "tempo_s": 6.2,
     "hsr": "oficial (1191 pontos)"
   },
   "113206661011722": {
@@ -50,7 +50,7 @@
       "pendurados": 9,
       "finito": true
     },
-    "tempo_s": 4.9,
+    "tempo_s": 5.2,
     "hsr": "oficial (1326 pontos)"
   },
   "12315342429": {
@@ -77,7 +77,7 @@
       "pendurados": 688,
       "finito": true
     },
-    "tempo_s": 6.2,
+    "tempo_s": 6.7,
     "hsr": "oficial (1709 pontos)"
   },
   "84389646421024": {
@@ -104,7 +104,7 @@
       "pendurados": 264,
       "finito": true
     },
-    "tempo_s": 67.2,
+    "tempo_s": 67.5,
     "hsr": "oficial (1709 pontos)"
   },
   "107758405066471": {
@@ -131,7 +131,7 @@
       "pendurados": 439,
       "finito": true
     },
-    "tempo_s": 17.4,
+    "tempo_s": 17.8,
     "hsr": "oficial (1709 pontos)"
   },
   "12799076593": {
@@ -158,7 +158,7 @@
       "pendurados": 121,
       "finito": true
     },
-    "tempo_s": 6.1,
+    "tempo_s": 6.6,
     "hsr": "oficial (1709 pontos)"
   },
   "93959514091582": {
@@ -185,7 +185,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 10.8,
+    "tempo_s": 11.3,
     "hsr": "oficial (1709 pontos)"
   },
   "17105673395": {
@@ -212,7 +212,7 @@
       "pendurados": 3,
       "finito": true
     },
-    "tempo_s": 6.8,
+    "tempo_s": 7.0,
     "hsr": "oficial (1694 pontos)"
   },
   "93303265717630": {
@@ -239,7 +239,7 @@
       "pendurados": 399,
       "finito": true
     },
-    "tempo_s": 5.9,
+    "tempo_s": 6.4,
     "hsr": "oficial (1483 pontos)"
   },
   "89377530473110": {
@@ -266,7 +266,7 @@
       "pendurados": 1023,
       "finito": true
     },
-    "tempo_s": 6.4,
+    "tempo_s": 6.8,
     "hsr": "oficial (1499 pontos)"
   },
   "12294031222": {
@@ -293,7 +293,7 @@
       "pendurados": 514,
       "finito": true
     },
-    "tempo_s": 5.9,
+    "tempo_s": 6.2,
     "hsr": "oficial (560 pontos)"
   },
   "133983195187013": {
@@ -320,7 +320,7 @@
       "pendurados": 32,
       "finito": true
     },
-    "tempo_s": 4.4,
+    "tempo_s": 4.7,
     "hsr": "oficial (1135 pontos)"
   },
   "104294938310972": {
@@ -347,7 +347,7 @@
       "pendurados": 1104,
       "finito": true
     },
-    "tempo_s": 7.7,
+    "tempo_s": 8.1,
     "hsr": "oficial (1709 pontos)"
   }
 }
