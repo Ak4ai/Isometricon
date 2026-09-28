@@ -2,10 +2,12 @@
 
 Roblox wraps the outer layer over the inner one. Here the outer garment is left
 untouched and the parts of the inner garment that poke through it (a thick
-waistband under a hoodie hem, jeans under a lab coat) are pulled back under it,
-where they are hidden anyway. Positions are in the render buffer layout
-(x, up, depth); distances are measured along horizontal rays from the body axis,
-not along normals, because a waistband's lining faces inwards.
+waistband under a hoodie hem, jeans under a lab coat, a shirt under a jacket's
+sleeves) are pulled back under it, where they are hidden anyway. Positions are
+in the render buffer layout (x, up, depth). Distances are measured along rays
+leaving the body, not along garment normals, because a waistband's lining faces
+inwards: from the closest point of the body cage when it is known (arms,
+shoulders, chest), otherwise horizontally from the body axis.
 """
 import numpy as np
 
@@ -48,17 +50,37 @@ def _farthest_hits(origins, directions, lengths, triangles, reach):
     return result
 
 
-def _outer_surface(inner, outer, outer_faces, reach):
-    """For the inner vertices at the outer garment's height: ids, ray directions, radii and outer-surface radii."""
+def _closest_body_points(points, body_points, body_faces, chunk=64):
+    from .hsr import _closest_on_triangles
+    a, b, c = (body_points[body_faces[:, k]] for k in range(3))
+    closest = np.empty_like(points)
+    for start in range(0, len(points), chunk):
+        p = points[start:start + chunk]
+        bary = _closest_on_triangles(p, a, b, c)
+        candidates = bary[..., 0, None] * a[None] + bary[..., 1, None] * b[None] + bary[..., 2, None] * c[None]
+        best = ((candidates - p[:, None]) ** 2).sum(-1).argmin(1)
+        closest[start:start + chunk] = candidates[np.arange(len(p)), best]
+    return closest
+
+
+def _outer_surface(inner, outer, outer_faces, reach, body=None):
+    """For the inner vertices the outer garment may cover: ids, ray directions, radii and outer-surface radii."""
     triangles = outer[np.asarray(outer_faces).reshape(-1, 3)]
-    band = np.flatnonzero((inner[:, UP] >= outer[:, UP].min()) & (inner[:, UP] <= outer[:, UP].max()))
+    if body is not None:
+        low, high = outer.min(0) - reach, outer.max(0) + reach
+        band = np.flatnonzero(((inner >= low) & (inner <= high)).all(1))
+    else:
+        band = np.flatnonzero((inner[:, UP] >= outer[:, UP].min()) & (inner[:, UP] <= outer[:, UP].max()))
     if not len(band):
         return band, np.zeros((0, 3)), np.zeros(0), np.zeros(0)
-    tri_low, tri_high = triangles[:, :, UP].min(1), triangles[:, :, UP].max(1)
-    triangles = triangles[(tri_high >= inner[band, UP].min()) & (tri_low <= inner[band, UP].max())]
-    centre = inner[band].mean(0)
-    origins = inner[band].copy()
-    origins[:, [0, 2]] = centre[[0, 2]]
+    if body is not None:
+        origins = _closest_body_points(inner[band], np.asarray(body[0], dtype=np.float64), np.asarray(body[1]))
+    else:
+        tri_low, tri_high = triangles[:, :, UP].min(1), triangles[:, :, UP].max(1)
+        triangles = triangles[(tri_high >= inner[band, UP].min()) & (tri_low <= inner[band, UP].max())]
+        centre = inner[band].mean(0)
+        origins = inner[band].copy()
+        origins[:, [0, 2]] = centre[[0, 2]]
     directions = inner[band] - origins
     radii = np.linalg.norm(directions, axis=1)
     directions /= np.maximum(radii, 1e-9)[:, None]
@@ -66,29 +88,42 @@ def _outer_surface(inner, outer, outer_faces, reach):
 
 
 def pull_inner_layer(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray,
-                     clearance: float = 0.005, reach: float = 0.08) -> np.ndarray:
+                     clearance: float = 0.005, reach: float = 0.08, body=None) -> np.ndarray:
     """Pull the inner-garment vertices that poke through the outer garment back under it.
 
-    Along the ray from the body axis, each such vertex ends ``clearance`` inside the
-    outermost outer surface within ``reach``.
+    Along the ray leaving the body (``body`` = (cage points, cage faces), or the body
+    axis without it), each such vertex ends ``clearance`` inside the outermost outer
+    surface within ``reach``.
     """
     inner = np.array(inner, dtype=np.float64)
-    band, directions, radii, surface = _outer_surface(inner, np.asarray(outer, dtype=np.float64), outer_faces, reach)
+    band, directions, radii, surface = _outer_surface(inner, np.asarray(outer, dtype=np.float64), outer_faces,
+                                                      reach, body)
     poking = np.isfinite(surface) & (radii > surface - clearance)
     inner[band[poking]] -= directions[poking] * (radii[poking] - surface[poking] + clearance)[:, None]
     return inner
 
 
-def outside_fraction(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray, reach: float = 0.08) -> float:
+def covered_vertices(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray, reach: float = 0.08,
+                     body=None) -> np.ndarray:
+    """Inner vertices with outer-garment cloth along their ray within ``reach`` (hidden under it)."""
+    inner = np.asarray(inner, dtype=np.float64)
+    band, _, _, surface = _outer_surface(inner, np.asarray(outer, dtype=np.float64), outer_faces, reach, body)
+    covered = np.zeros(len(inner), dtype=bool)
+    covered[band[np.isfinite(surface)]] = True
+    return covered
+
+
+def outside_fraction(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray, reach: float = 0.08,
+                     body=None) -> float:
     """Share of the covered inner vertices that sit outside the outer garment."""
     _, _, radii, surface = _outer_surface(np.asarray(inner, dtype=np.float64), np.asarray(outer, dtype=np.float64),
-                                          outer_faces, reach)
+                                          outer_faces, reach, body)
     covered = np.isfinite(surface)
     return float((radii[covered] > surface[covered]).sum() / max(covered.sum(), 1))
 
 
 def layer_top_and_bottom(top: np.ndarray, top_faces: np.ndarray, bottom: np.ndarray, bottom_faces: np.ndarray,
-                         top_type: int | None):
+                         top_type: int | None, body=None):
     """New (top, bottom) positions with the inner garment pulled under the outer one.
 
     Jackets, sweaters and dresses are outside; any other top is outside unless most
@@ -96,6 +131,19 @@ def layer_top_and_bottom(top: np.ndarray, top_faces: np.ndarray, bottom: np.ndar
     """
     top = np.asarray(top, dtype=np.float64)
     bottom = np.asarray(bottom, dtype=np.float64)
-    if top_type in OUTER_TOP_TYPES or outside_fraction(bottom, top, top_faces) <= 0.5:
-        return top, pull_inner_layer(bottom, top, top_faces)
-    return pull_inner_layer(top, bottom, bottom_faces), bottom
+    if top_type in OUTER_TOP_TYPES or outside_fraction(bottom, top, top_faces, body=body) <= 0.5:
+        return top, pull_inner_layer(bottom, top, top_faces, body=body)
+    return pull_inner_layer(top, bottom, bottom_faces, body=body), bottom
+
+
+def body_cage_from_sidecars(*fitted_obj_paths):
+    """(cage points, cage faces) of the body in render space, from any garment's HSR sidecar."""
+    import os
+    from .hsr import sidecar_path
+    for path in fitted_obj_paths:
+        sidecar = sidecar_path(path) if path else None
+        if sidecar and os.path.exists(sidecar):
+            with np.load(sidecar) as data:
+                if "cage_faces" in data:
+                    return np.asarray(data["cage_points"], dtype=np.float64), np.asarray(data["cage_faces"])
+    return None

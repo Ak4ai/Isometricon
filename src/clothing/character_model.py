@@ -1018,6 +1018,11 @@ def is_valid_v2_obj(path: str) -> bool:
         return False
 
 
+# Outer top over the other garments: pull clearance and hiding of fully covered triangles.
+LAYER_CLEARANCE = 0.015
+CULL_COVERED = True
+
+
 @dataclass
 class CharacterPart:
     """Representa uma parte montada do personagem pronta para renderização."""
@@ -1049,6 +1054,7 @@ class CharacterModel:
         hair_scale_x: Optional[float] = None,
         hair_scale_y: Optional[float] = None,
         hair_scale_z: Optional[float] = None,
+        outer_top_id: Optional[Union[int, str]] = None,
     ) -> None:
         self.customization = customization if customization is not None else AvatarCustomization(
             head_type=HeadType.ROUNDED,
@@ -1056,6 +1062,8 @@ class CharacterModel:
         )
         self.top_id = top_id
         self.bottom_id = bottom_id
+        # A second top worn over the first (a jacket over a shirt); female body only for now.
+        self.outer_top_id = outer_top_id
         self.tool_id = tool_id
         self.hair_id = hair_id
         if self.hair_id is not None:
@@ -1593,12 +1601,13 @@ class CharacterModel:
                        "hand_left", "hand_right", "trunk_skin", "legs_skin", "feet_skin")
 
     def _apply_hsr_skin(self, clean_obj, skin_color, top_obj_path, bottom_obj_path,
-                        is_none_top, is_none_bottom) -> bool:
+                        is_none_top, is_none_bottom, extra_obj_paths=()) -> bool:
         """Replace the rule-based skin cuts with Roblox HSR culling when every worn garment has a mask."""
         from src.clothing.hsr import cull_hidden_triangles, sidecar_path, subdivide
         from src.rendering.mesh import TexturedMesh
 
         worn = [path for path, none in ((top_obj_path, is_none_top), (bottom_obj_path, is_none_bottom)) if not none]
+        worn += [path for path in extra_obj_paths if path]
         if not self.customization.is_female or not worn:
             return False
         masks = []
@@ -1651,9 +1660,50 @@ class CharacterModel:
         print(f"[HSR] Pele recortada pelas máscaras de {len(worn)} peça(s): {int(hidden.sum())} pontos da cage cobertos")
         return True
 
+    def _add_outer_top(self, is_fem, vertex_transform):
+        """Wear ``outer_top_id`` over the other garments; returns its fitted OBJ path or None."""
+        if self.outer_top_id is None or not is_fem:
+            return None
+        from src.clothing.layer_clearance import body_cage_from_sidecars, covered_vertices, pull_inner_layer
+        from src.rendering.mesh import TexturedMesh
+        path = os.path.join(MODELS_DIR, f"character_native_{self.outer_top_id}_female.obj")
+        if not is_valid_v2_obj(path):
+            try:
+                from src.clothing.wear_engine import RobloxWearEngine
+                RobloxWearEngine(body_type="female").wear(self.outer_top_id, output_obj=path)
+            except Exception as e:
+                print(f"[CharacterModel] Aviso: gerando peça de cima {self.outer_top_id}: {e}")
+                return None
+        data = parse_obj_as_mesh(path, vertex_transform=vertex_transform)
+        if not data:
+            return None
+        outer = data[0].reshape(-1, 11)[:, :3]
+        body = body_cage_from_sidecars(path)
+        for part in [p for p in self.parts if p.name in self._garment_buffers]:
+            vertices, indices = self._garment_buffers[part.name]
+            rows = np.asarray(vertices, dtype=np.float32).reshape(-1, 11).copy()
+            pulled = pull_inner_layer(rows[:, :3], outer, data[1], clearance=LAYER_CLEARANCE, body=body)
+            faces = np.asarray(indices).reshape(-1, 3)
+            # Triangles covered by the outer top at all three corners are hidden, like HSR
+            # does for skin: where a ray misses the outer cloth a pull alone can leave a leak.
+            hidden = covered_vertices(pulled, outer, data[1], body=body)[faces].all(1) if CULL_COVERED else None
+            if not np.allclose(pulled, rows[:, :3]) or (hidden is not None and hidden.any()):
+                rows[:, :3] = pulled
+                kept = faces if hidden is None else faces[~hidden]
+                part.mesh.delete()
+                part.mesh = TexturedMesh(rows.ravel(), kept.ravel().astype(np.uint32))
+        texture_path = find_clothing_texture(self.outer_top_id)
+        texture_id = upload_texture_rgba(Image.open(texture_path)) if texture_path else self.white_tex_id
+        if texture_id != self.white_tex_id:
+            self.textures.append(texture_id)
+        self.parts.append(CharacterPart("outer_top", TexturedMesh(data[0], data[1]), texture_id))
+        return path
+
     def _build(self) -> None:
         """Carrega e monta todas as malhas e texturas do personagem."""
         from src.rendering.mesh import TexturedMesh
+
+        self._garment_buffers = {}  # CPU copies of the top/pants buffers, for the outer top's layering
 
         # 1. Textura neutra branca (1x1) para membros com vertex color
         white_img = Image.new("RGBA", (4, 4), (255, 255, 255, 255))
@@ -1924,6 +1974,7 @@ class CharacterModel:
                 if top_data:
                     mesh = TexturedMesh(top_data[0], top_data[1])
                     self.parts.append(CharacterPart("top", mesh, top_tex_id))
+                    self._garment_buffers["top"] = top_data
 
         # 8. Pele exposta do tronco (Torso e Pelve) com tampas herméticas e auto-detecção
         trunk_part = self._load_trunk_skin(
@@ -1946,11 +1997,13 @@ class CharacterModel:
             bottom_data = parse_obj_as_mesh(bottom_obj_path, vertex_transform=hip_tf)
             if bottom_data and top_layer:
                 # Top and pants are fitted to the body separately; wrap the outer one over the other.
-                from src.clothing.layer_clearance import fitted_asset_type, layer_top_and_bottom
+                from src.clothing.layer_clearance import (body_cage_from_sidecars, fitted_asset_type,
+                                                          layer_top_and_bottom)
                 top_rows = top_layer[0].reshape(-1, 11).copy()
                 rows = bottom_data[0].reshape(-1, 11).copy()
                 new_top, new_bottom = layer_top_and_bottom(top_rows[:, :3], top_layer[1], rows[:, :3], bottom_data[1],
-                                                           fitted_asset_type(top_obj_path))
+                                                           fitted_asset_type(top_obj_path),
+                                                           body=body_cage_from_sidecars(top_obj_path, bottom_obj_path))
                 rows[:, :3] = new_bottom
                 bottom_data = (rows.ravel().astype(np.float32), bottom_data[1])
                 if not np.array_equal(new_top, top_rows[:, :3]):
@@ -1959,6 +2012,7 @@ class CharacterModel:
                         if part.name == "top":
                             part.mesh.delete()
                             part.mesh = TexturedMesh(top_rows.ravel().astype(np.float32), top_layer[1])
+                            self._garment_buffers["top"] = (top_rows.ravel().astype(np.float32), top_layer[1])
             bottom_tex_path = find_clothing_texture(self.bottom_id)
             bottom_tex_id = upload_texture_rgba(Image.open(bottom_tex_path)) if bottom_tex_path else self.white_tex_id
             if bottom_tex_id != self.white_tex_id:
@@ -1966,6 +2020,7 @@ class CharacterModel:
             if bottom_data:
                 mesh = TexturedMesh(bottom_data[0], bottom_data[1])
                 self.parts.append(CharacterPart("bottom", mesh, bottom_tex_id))
+                self._garment_buffers["bottom"] = bottom_data
             # Pants that end at the ankle leave the feet bare. Pants reaching the floor
             # cover them (boots, tights, long hems), where the blocky feet would poke out.
             reaches_floor = bool(bottom_data) and float(bottom_data[0].reshape(-1, 11)[:, 1].min()) < 0.05
@@ -1993,10 +2048,14 @@ class CharacterModel:
                 mesh = TexturedMesh(legs_data[0], legs_data[1])
                 self.parts.append(CharacterPart("legs_skin", mesh, self.white_tex_id))
 
+        # 9.0 Peça por cima do top (jaqueta sobre camisa): fica por fora de tudo, e o
+        # que as peças de baixo tiverem furando é puxado para baixo dela.
+        outer_obj_path = self._add_outer_top(is_fem, top_tf if "top_tf" in locals() else None)
+
         # 9.1 HSR do Roblox: com a máscara de todas as peças vestidas, a pele inteira
         # é desenhada e só os triângulos cobertos pelas roupas são removidos.
         self._apply_hsr_skin(clean_obj, skin_color, top_obj_path, bottom_obj_path,
-                             is_none_top, is_none_bottom)
+                             is_none_top, is_none_bottom, extra_obj_paths=(outer_obj_path,))
 
         # 9. Tool / Katana / Acessório opcional
         if self.tool_id is not None:
@@ -2129,6 +2188,7 @@ class CharacterModel:
         bottom_id: Optional[Union[int, str]] = None,
         tool_id: Optional[Union[int, str]] = None,
         hair_id: Optional[Union[int, str]] = None,
+        outer_top_id: Optional[Union[int, str]] = None,
     ) -> None:
         """Atualiza a configuração do personagem e recarrega seus recursos na GPU em tempo real."""
         if customization is not None:
@@ -2144,6 +2204,8 @@ class CharacterModel:
             self.top_id = top_id
         if bottom_id is not None:
             self.bottom_id = bottom_id
+        if outer_top_id is not None:
+            self.outer_top_id = None if str(outer_top_id).lower() in ("none", "0", "false", "sem") else outer_top_id
         if tool_id is not None:
             self.tool_id = tool_id if tool_id not in ("none", 0, "0", False) else None
         if hair_id is not None:
