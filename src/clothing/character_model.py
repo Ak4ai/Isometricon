@@ -1009,9 +1009,9 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v23" in line:
+                if "Universal Fitted Clothing v24" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22)):
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)):
                     return False  # Regenerate fits made before the geometric HSR fallback.
         return False
     except Exception:
@@ -1945,11 +1945,20 @@ class CharacterModel:
 
             bottom_data = parse_obj_as_mesh(bottom_obj_path, vertex_transform=hip_tf)
             if bottom_data and top_layer:
-                # Fitted separately, the waistband can pierce the top's hem by a hair.
-                from src.clothing.layer_clearance import tuck_inner_layer
-                rows = bottom_data[0].reshape(-1, 11)
-                rows[:, :3] = tuck_inner_layer(rows[:, :3], top_layer[0].reshape(-1, 11)[:, :3], top_layer[1])
-                bottom_data = (rows.ravel(), bottom_data[1])
+                # Top and pants are fitted to the body separately; wrap the outer one over the other.
+                from src.clothing.layer_clearance import fitted_asset_type, layer_top_and_bottom
+                top_rows = top_layer[0].reshape(-1, 11).copy()
+                rows = bottom_data[0].reshape(-1, 11).copy()
+                new_top, new_bottom = layer_top_and_bottom(top_rows[:, :3], top_layer[1], rows[:, :3], bottom_data[1],
+                                                           fitted_asset_type(top_obj_path))
+                rows[:, :3] = new_bottom
+                bottom_data = (rows.ravel().astype(np.float32), bottom_data[1])
+                if not np.array_equal(new_top, top_rows[:, :3]):
+                    top_rows[:, :3] = new_top
+                    for part in self.parts:
+                        if part.name == "top":
+                            part.mesh.delete()
+                            part.mesh = TexturedMesh(top_rows.ravel().astype(np.float32), top_layer[1])
             bottom_tex_path = find_clothing_texture(self.bottom_id)
             bottom_tex_id = upload_texture_rgba(Image.open(bottom_tex_path)) if bottom_tex_path else self.white_tex_id
             if bottom_tex_id != self.white_tex_id:

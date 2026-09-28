@@ -1,78 +1,101 @@
-"""Keep an inner garment (pants) from piercing the outer one (a top) where they overlap.
+"""Layer a top and pants that were each fitted to the body on their own.
 
-Each garment is fitted to the body on its own, so a thick waistband can end up a
-millimetre outside the hem of a hoodie and show through it. Roblox wraps the outer
-layer over the inner one; here the few inner vertices that pierce the outer
-surface, or sit closer than the clearance, are pulled inward instead.
-Positions are in the render buffer layout (x, up, depth).
+Roblox wraps the outer layer over the inner one. Here the outer garment is left
+untouched and the parts of the inner garment that poke through it (a thick
+waistband under a hoodie hem, jeans under a lab coat) are pulled back under it,
+where they are hidden anyway. Positions are in the render buffer layout
+(x, up, depth); distances are measured along horizontal rays from the body axis,
+not along normals, because a waistband's lining faces inwards.
 """
 import numpy as np
 
 UP = 1
+# Roblox always draws these over pants: jacket, sweater, dress/skirt.
+OUTER_TOP_TYPES = {67, 68, 72}
 
 
-def tuck_inner_layer(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray,
-                     clearance: float = 0.004, max_pierce: float = 0.01,
-                     max_piercing_fraction: float = 0.25) -> np.ndarray:
-    """Return a copy of `inner` with the vertices under `outer` moved at least `clearance` inside it.
+def fitted_asset_type(obj_path) -> int | None:
+    """Asset type written in a fitted OBJ header (``# asset_type N``), if any."""
+    try:
+        with open(obj_path, encoding="utf-8", errors="ignore") as handle:
+            for _ in range(3):
+                line = handle.readline()
+                if line.startswith("# asset_type "):
+                    return int(line.split()[2])
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
 
-    Only the band where the outer garment covers the inner one is touched, and only
-    vertices within `max_pierce` of the outer surface. When more than
-    `max_piercing_fraction` of that band is outside, the inner garment is the outer
-    layer on purpose (a top tucked into pants) and nothing changes.
-    """
-    inner = np.array(inner, dtype=np.float64)
-    outer = np.asarray(outer, dtype=np.float64)
-    faces = np.asarray(outer_faces).reshape(-1, 3)
-    top, bottom = outer[:, UP].max(), outer[:, UP].min()
-    band = np.flatnonzero((inner[:, UP] >= bottom) & (inner[:, UP] <= top))
-    if not len(band):
-        return inner
-    tri = outer[faces]
-    tri_low, tri_high = tri[:, :, UP].min(1), tri[:, :, UP].max(1)
-    lo, hi = inner[band, UP].min(), inner[band, UP].max()
-    tri = tri[(tri_high >= lo) & (tri_low <= hi)]
-    if not len(tri):
-        return inner
-    v0, e1, e2 = tri[:, 0], tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]
-    centre = inner[band].mean(0)
 
-    radius = np.full(len(band), np.nan)  # distance from the axis to the vertex
-    surface = np.full(len(band), np.nan)  # distance from the axis to the nearest outer surface
-    directions = np.zeros((len(band), 3))
-    for start in range(0, len(band), 64):
-        points = inner[band[start:start + 64]]
-        origin = points.copy()
-        origin[:, [0, 2]] = centre[[0, 2]]
-        direction = points - origin
-        length = np.linalg.norm(direction, axis=1)
-        valid = length > 1e-6
-        direction[valid] /= length[valid, None]
-        p = np.cross(direction[:, None], e2[None])
+def _farthest_hits(origins, directions, lengths, triangles, reach):
+    """Distance along each ray to the farthest triangle hit within ``reach`` of ``lengths`` (nan if none)."""
+    v0, e1, e2 = triangles[:, 0], triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+    result = np.full(len(origins), np.nan)
+    for start in range(0, len(origins), 128):
+        o, d, length = origins[start:start + 128], directions[start:start + 128], lengths[start:start + 128]
+        p = np.cross(d[:, None], e2[None])
         det = np.einsum("tk,rtk->rt", e1, p)
         ok = np.abs(det) > 1e-12
         inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
-        s = origin[:, None] - v0[None]
+        s = o[:, None] - v0[None]
         u = np.einsum("rtk,rtk->rt", s, p) * inv
         q = np.cross(s, e1[None])
-        v = np.einsum("rk,rtk->rt", direction, q) * inv
+        v = np.einsum("rk,rtk->rt", d, q) * inv
         t = np.einsum("tk,rtk->rt", e2, q) * inv
-        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0) & valid[:, None]
-        gap = np.where(hit, np.abs(t - length[:, None]), np.inf)
-        nearest = gap.argmin(1)
-        found = np.isfinite(gap.min(1))
-        rows = np.arange(len(points))
-        radius[start:start + 64] = np.where(found, length, np.nan)
-        surface[start:start + 64] = np.where(found, t[rows, nearest], np.nan)
-        directions[start:start + 64] = direction
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0) & (np.abs(t - length[:, None]) < reach)
+        farthest = np.where(hit, t, -np.inf).max(1)
+        result[start:start + 128] = np.where(np.isfinite(farthest), farthest, np.nan)
+    return result
 
-    covered = np.isfinite(surface)
-    if not covered.any():
-        return inner
-    piercing = covered & (radius > surface)
-    if piercing.sum() > max_piercing_fraction * covered.sum():
-        return inner
-    move = covered & (radius > surface - clearance) & (radius - surface <= max_pierce)
-    target = surface[move] - clearance
-    inner[band[move]] -= directions[move] * (radius[move] - target)[:, None]
+
+def _outer_surface(inner, outer, outer_faces, reach):
+    """For the inner vertices at the outer garment's height: ids, ray directions, radii and outer-surface radii."""
+    triangles = outer[np.asarray(outer_faces).reshape(-1, 3)]
+    band = np.flatnonzero((inner[:, UP] >= outer[:, UP].min()) & (inner[:, UP] <= outer[:, UP].max()))
+    if not len(band):
+        return band, np.zeros((0, 3)), np.zeros(0), np.zeros(0)
+    tri_low, tri_high = triangles[:, :, UP].min(1), triangles[:, :, UP].max(1)
+    triangles = triangles[(tri_high >= inner[band, UP].min()) & (tri_low <= inner[band, UP].max())]
+    centre = inner[band].mean(0)
+    origins = inner[band].copy()
+    origins[:, [0, 2]] = centre[[0, 2]]
+    directions = inner[band] - origins
+    radii = np.linalg.norm(directions, axis=1)
+    directions /= np.maximum(radii, 1e-9)[:, None]
+    return band, directions, radii, _farthest_hits(origins, directions, radii, triangles, reach)
+
+
+def pull_inner_layer(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray,
+                     clearance: float = 0.005, reach: float = 0.08) -> np.ndarray:
+    """Pull the inner-garment vertices that poke through the outer garment back under it.
+
+    Along the ray from the body axis, each such vertex ends ``clearance`` inside the
+    outermost outer surface within ``reach``.
+    """
+    inner = np.array(inner, dtype=np.float64)
+    band, directions, radii, surface = _outer_surface(inner, np.asarray(outer, dtype=np.float64), outer_faces, reach)
+    poking = np.isfinite(surface) & (radii > surface - clearance)
+    inner[band[poking]] -= directions[poking] * (radii[poking] - surface[poking] + clearance)[:, None]
     return inner
+
+
+def outside_fraction(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray, reach: float = 0.08) -> float:
+    """Share of the covered inner vertices that sit outside the outer garment."""
+    _, _, radii, surface = _outer_surface(np.asarray(inner, dtype=np.float64), np.asarray(outer, dtype=np.float64),
+                                          outer_faces, reach)
+    covered = np.isfinite(surface)
+    return float((radii[covered] > surface[covered]).sum() / max(covered.sum(), 1))
+
+
+def layer_top_and_bottom(top: np.ndarray, top_faces: np.ndarray, bottom: np.ndarray, bottom_faces: np.ndarray,
+                         top_type: int | None):
+    """New (top, bottom) positions with the inner garment pulled under the outer one.
+
+    Jackets, sweaters and dresses are outside; any other top is outside unless most
+    of the pants already sit outside it (a shirt tucked into the pants).
+    """
+    top = np.asarray(top, dtype=np.float64)
+    bottom = np.asarray(bottom, dtype=np.float64)
+    if top_type in OUTER_TOP_TYPES or outside_fraction(bottom, top, top_faces) <= 0.5:
+        return top, pull_inner_layer(bottom, top, top_faces)
+    return pull_inner_layer(top, bottom, bottom_faces), bottom
