@@ -1862,6 +1862,7 @@ class CharacterModel:
 
         eff_hem = (0.985 if is_fem else 0.890) + self.top_hem_offset
         is_open_top = False
+        top_layer = None
 
         if not is_none_top and top_obj_path and os.path.exists(top_obj_path):
             top_str = str(self.top_id).lower()
@@ -1915,6 +1916,7 @@ class CharacterModel:
                     )
 
                 top_data = parse_obj_as_mesh(top_obj_path, vertex_transform=top_tf)
+                top_layer = top_data
                 top_tex_path = find_clothing_texture(self.top_id)
                 top_tex_id = upload_texture_rgba(Image.open(top_tex_path)) if top_tex_path else self.white_tex_id
                 if top_tex_id != self.white_tex_id:
@@ -1942,6 +1944,12 @@ class CharacterModel:
                 )
 
             bottom_data = parse_obj_as_mesh(bottom_obj_path, vertex_transform=hip_tf)
+            if bottom_data and top_layer:
+                # Fitted separately, the waistband can pierce the top's hem by a hair.
+                from src.clothing.layer_clearance import tuck_inner_layer
+                rows = bottom_data[0].reshape(-1, 11)
+                rows[:, :3] = tuck_inner_layer(rows[:, :3], top_layer[0].reshape(-1, 11)[:, :3], top_layer[1])
+                bottom_data = (rows.ravel(), bottom_data[1])
             bottom_tex_path = find_clothing_texture(self.bottom_id)
             bottom_tex_id = upload_texture_rgba(Image.open(bottom_tex_path)) if bottom_tex_path else self.white_tex_id
             if bottom_tex_id != self.white_tex_id:
