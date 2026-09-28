@@ -1009,9 +1009,9 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v22" in line:
+                if "Universal Fitted Clothing v23" in line:
                     return True
-                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)):
+                if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22)):
                     return False  # Regenerate fits made before the geometric HSR fallback.
         return False
     except Exception:

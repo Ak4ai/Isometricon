@@ -107,6 +107,30 @@ def _anchors(bound, faces, points):
     return anchor
 
 
+def _harmonic_fill(values, faces, free, bound, iterations=400):
+    """Relax ``values`` of the free vertices towards the mean of their garment neighbours.
+
+    Vertices neither free nor bound keep their value. A free piece that touches
+    no bound vertex (a loose bow) only averages within itself, so it moves rigidly.
+    """
+    edges = np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
+    edges = np.unique(np.sort(edges, axis=1), axis=0)
+    edges = edges[edges[:, 0] != edges[:, 1]]
+    touches = free[edges[:, 0]] | free[edges[:, 1]]
+    edges = edges[touches & ((free | bound)[edges[:, 0]]) & ((free | bound)[edges[:, 1]])]
+    degree = np.zeros(len(values))
+    np.add.at(degree, edges[:, 0], 1)
+    np.add.at(degree, edges[:, 1], 1)
+    update = free & (degree > 0)
+    values = values.copy()
+    for _ in range(iterations):
+        total = np.zeros_like(values)
+        np.add.at(total, edges[:, 0], values[edges[:, 1]])
+        np.add.at(total, edges[:, 1], values[edges[:, 0]])
+        values[update] = total[update] / degree[update, None]
+    return values
+
+
 def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tuple[np.ndarray, dict]:
     """Garment vertices on the target body. ``trace`` is a WrapLayer binding audit."""
     inner = np.asarray(trace["reference_parent"], dtype=np.float64)
@@ -147,10 +171,16 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
 
     hanging = residual_length > HANGING_RESIDUAL
     if hanging.any():
-        anchor = _anchors(~hanging, np.asarray(faces), points)
+        faces = np.asarray(faces)
+        anchor = _anchors(~hanging, faces, points)
         global_map = _global_map(inner, target_inner)
-        for i in np.flatnonzero(hanging & (anchor >= 0)):
-            a = anchor[i]
-            result[i] = result[a] + (points[i] - points[a]) @ global_map
+        # A hanging vertex keeps its authored shape (global map) plus an offset.
+        # The offset is interpolated harmonically from the bound vertices along the
+        # garment, so neighbours hanging from different anchors do not tear apart.
+        offset = result - points @ global_map
+        movable = np.flatnonzero(hanging & (anchor >= 0))
+        offset[movable] = offset[anchor[movable]]
+        offset = _harmonic_fill(offset, faces, hanging & (anchor >= 0), ~hanging)
+        result[movable] = points[movable] @ global_map + offset[movable]
     return result, {"hanging_vertices": int(hanging.sum()),
                     "residual_p99": float(np.quantile(residual_length, .99))}
