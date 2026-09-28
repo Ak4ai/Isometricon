@@ -23,7 +23,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 4.1,
+    "tempo_s": 3.1,
     "hsr": "oficial (64 pontos)"
   },
   "131149613284268": {
@@ -50,7 +50,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 3.9,
+    "tempo_s": 3.1,
     "hsr": "oficial (64 pontos)"
   },
   "80102743203860": {
@@ -77,7 +77,7 @@
       "pendurados": 1,
       "finito": true
     },
-    "tempo_s": 6.7,
+    "tempo_s": 5.8,
     "hsr": "oficial (121 pontos)"
   },
   "87917823878878": {
@@ -104,7 +104,7 @@
       "pendurados": 1,
       "finito": true
     },
-    "tempo_s": 6.7,
+    "tempo_s": 5.6,
     "hsr": "oficial (121 pontos)"
   },
   "120212561676547": {
@@ -131,7 +131,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 2.4,
+    "tempo_s": 1.2,
     "hsr": "oficial (0 pontos)"
   },
   "133993828177296": {
@@ -158,7 +158,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 2.5,
+    "tempo_s": 1.2,
     "hsr": "oficial (0 pontos)"
   },
   "71890162253609": {
@@ -170,8 +170,23 @@
       "faces": 1836,
       "formato": "# Roblox Converted Mesh Draco"
     },
-    "erro": "ValueError: Triângulo degenerado na cage externa",
-    "onde": "retarget_garment_with_wrap_layer"
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.067,
+      "p99_source_distance": 0.191,
+      "outer_edge_stretch_p99": 1.099
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 585,
+      "finito": true
+    },
+    "tempo_s": 7.2,
+    "hsr": "oficial (159 pontos)"
   },
   "112948299427250": {
     "categoria": "Sapatos",
@@ -197,7 +212,7 @@
       "pendurados": 555,
       "finito": true
     },
-    "tempo_s": 7.9,
+    "tempo_s": 7.3,
     "hsr": "oficial (161 pontos)"
   },
   "79289164241757": {
@@ -224,7 +239,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 7.3,
+    "tempo_s": 7.1,
     "hsr": "oficial (130 pontos)"
   },
   "98033180899784": {
@@ -251,7 +266,7 @@
       "pendurados": 1,
       "finito": true
     },
-    "tempo_s": 7.6,
+    "tempo_s": 7.1,
     "hsr": "oficial (135 pontos)"
   },
   "15106170874": {
@@ -278,7 +293,7 @@
       "pendurados": 1,
       "finito": true
     },
-    "tempo_s": 5.4,
+    "tempo_s": 5.2,
     "hsr": "oficial (641 pontos)"
   },
   "14692845100": {
@@ -305,7 +320,7 @@
       "pendurados": 2160,
       "finito": true
     },
-    "tempo_s": 9.6,
+    "tempo_s": 9.3,
     "hsr": "oficial (815 pontos)"
   },
   "18135693306": {
@@ -317,8 +332,23 @@
       "faces": 3952,
       "formato": "# Roblox Converted FileMesh v4"
     },
-    "erro": "ValueError: UV de cage sem correspondência (erro máximo 0.077742)",
-    "onde": "_nearest_uv_indices"
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.049,
+      "p99_source_distance": 0.199,
+      "outer_edge_stretch_p99": 1.348
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 429,
+      "finito": true
+    },
+    "tempo_s": 4.8,
+    "hsr": "oficial (157 pontos)"
   },
   "139052064476794": {
     "categoria": "Saias e vestidos longos",
@@ -344,7 +374,7 @@
       "pendurados": 122,
       "finito": true
     },
-    "tempo_s": 5.4,
+    "tempo_s": 5.2,
     "hsr": "oficial (456 pontos)"
   },
   "125125180427177": {
@@ -371,7 +401,7 @@
       "pendurados": 355,
       "finito": true
     },
-    "tempo_s": 14.2,
+    "tempo_s": 13.0,
     "hsr": "oficial (119 pontos)"
   },
   "133273151439383": {
@@ -398,7 +428,7 @@
       "pendurados": 93,
       "finito": true
     },
-    "tempo_s": 5.1,
+    "tempo_s": 4.7,
     "hsr": "oficial (464 pontos)"
   },
   "98671942473617": {
@@ -425,7 +455,7 @@
       "pendurados": 121,
       "finito": true
     },
-    "tempo_s": 6.4,
+    "tempo_s": 6.1,
     "hsr": "oficial (468 pontos)"
   },
   "17810834889": {
@@ -452,7 +482,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 5.1,
+    "tempo_s": 3.9,
     "hsr": "oficial (31 pontos)"
   },
   "111428495474261": {
@@ -479,7 +509,7 @@
       "pendurados": 2,
       "finito": true
     },
-    "tempo_s": 4.5,
+    "tempo_s": 4.2,
     "hsr": "oficial (610 pontos)"
   },
   "15394008963": {
@@ -506,7 +536,7 @@
       "pendurados": 1016,
       "finito": true
     },
-    "tempo_s": 5.7,
+    "tempo_s": 4.9,
     "hsr": "oficial (745 pontos)"
   },
   "138103576309875": {
@@ -518,8 +548,8 @@
       "faces": 3524,
       "formato": "# Roblox Converted Mesh Draco"
     },
-    "erro": "ValueError: UV de cage sem correspondência (331 pontos divergentes)",
-    "onde": "_match_outer_to_reference"
+    "erro": "ValueError: UV de cage sem correspondência",
+    "onde": "retarget_garment_with_wrap_layer"
   },
   "88473821300242": {
     "categoria": "Largas e fofas",
@@ -530,8 +560,23 @@
       "faces": 3970,
       "formato": "# Roblox Converted Mesh Draco"
     },
-    "erro": "ValueError: UV de cage sem correspondência (52 pontos divergentes)",
-    "onde": "_match_outer_to_reference"
+    "cages": {
+      "referencia": "Mesh Draco",
+      "externa": "Mesh Draco"
+    },
+    "validacao": {
+      "median_source_distance": 0.076,
+      "p99_source_distance": 0.385,
+      "outer_edge_stretch_p99": 1.491
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 112,
+      "finito": true
+    },
+    "tempo_s": 7.0,
+    "hsr": "oficial (621 pontos)"
   },
   "18522156233": {
     "categoria": "Largas e fofas",
@@ -542,8 +587,23 @@
       "faces": 3104,
       "formato": "# Roblox Converted FileMesh v4"
     },
-    "erro": "ValueError: UV de cage incompatível com a referência corporal",
-    "onde": "_match_reference_to_body_uv"
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.043,
+      "p99_source_distance": 0.157,
+      "outer_edge_stretch_p99": 1.48
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 1,
+      "finito": true
+    },
+    "tempo_s": 3.5,
+    "hsr": "oficial (505 pontos)"
   },
   "106912997514153": {
     "categoria": "Largas e fofas",
@@ -569,7 +629,7 @@
       "pendurados": 239,
       "finito": true
     },
-    "tempo_s": 10.0,
+    "tempo_s": 9.3,
     "hsr": "oficial (615 pontos)"
   },
   "10790774306": {
@@ -596,7 +656,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 12.8,
+    "tempo_s": 12.0,
     "hsr": "oficial (0 pontos)"
   },
   "84451330899972": {
@@ -623,7 +683,7 @@
       "pendurados": 5,
       "finito": true
     },
-    "tempo_s": 3.6,
+    "tempo_s": 3.1,
     "hsr": "oficial (587 pontos)"
   },
   "87374563373893": {
@@ -650,7 +710,7 @@
       "pendurados": 0,
       "finito": true
     },
-    "tempo_s": 4.0,
+    "tempo_s": 3.2,
     "hsr": "oficial (16 pontos)"
   },
   "122184570658271": {
@@ -677,7 +737,7 @@
       "pendurados": 1,
       "finito": true
     },
-    "tempo_s": 7.1,
+    "tempo_s": 6.3,
     "hsr": "oficial (97 pontos)"
   },
   "127812633623297": {
@@ -704,7 +764,7 @@
       "pendurados": 6,
       "finito": true
     },
-    "tempo_s": 6.5,
+    "tempo_s": 6.4,
     "hsr": "oficial (108 pontos)"
   },
   "110977031470293": {
@@ -731,7 +791,7 @@
       "pendurados": 22,
       "finito": true
     },
-    "tempo_s": 3.0,
+    "tempo_s": 2.7,
     "hsr": "oficial (243 pontos)"
   },
   "72014673044643": {
@@ -743,8 +803,23 @@
       "faces": 2400,
       "formato": "# Roblox Converted FileMesh v4"
     },
-    "erro": "ValueError: UV de cage ambígua: múltiplos pontos mapeiam ao mesmo UV corporal",
-    "onde": "_match_reference_to_body_uv"
+    "cages": {
+      "referencia": "FileMesh v2",
+      "externa": "FileMesh v2"
+    },
+    "validacao": {
+      "median_source_distance": 0.011,
+      "p99_source_distance": 0.308,
+      "outer_edge_stretch_p99": 1.443
+    },
+    "aceita_pelo_validador_antigo": true,
+    "radial_prisma": {
+      "ok": true,
+      "pendurados": 96,
+      "finito": true
+    },
+    "tempo_s": 3.6,
+    "hsr": "oficial (98 pontos)"
   },
   "82684345207962": {
     "categoria": "MÃ­nimas e recortes",
@@ -770,7 +845,7 @@
       "pendurados": 2,
       "finito": true
     },
-    "tempo_s": 3.9,
+    "tempo_s": 3.5,
     "hsr": "oficial (629 pontos)"
   },
   "13863832652": {
@@ -797,7 +872,7 @@
       "pendurados": 2,
       "finito": true
     },
-    "tempo_s": 4.9,
+    "tempo_s": 4.6,
     "hsr": "oficial (262 pontos)"
   },
   "79466381733752": {
@@ -824,7 +899,7 @@
       "pendurados": 6,
       "finito": true
     },
-    "tempo_s": 3.1,
+    "tempo_s": 2.8,
     "hsr": "oficial (170 pontos)"
   }
 }

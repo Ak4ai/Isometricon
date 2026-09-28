@@ -158,3 +158,38 @@ def test_outer_cage_pairing_leaves_points_the_author_deleted_unpaired():
 
     assert paired[5 * 13 + 5] == -1
     np.testing.assert_array_equal(paired[keep], np.arange(keep.sum()))
+
+
+def test_reference_uv_precision_noise_counts_as_the_same_body_point():
+    body_uv, _ = _uv_grid()
+    noise = np.random.default_rng(1).uniform(-4e-4, 4e-4, body_uv.shape)
+    # The same corner stored twice with different noise, as catalog cages do.
+    reference = np.vstack((body_uv + noise, body_uv[:1] - noise[:1]))
+    np.testing.assert_array_equal(_match_reference_to_body_uv(reference, body_uv),
+                                  list(range(len(body_uv))) + [0])
+
+
+def test_reference_uv_moved_far_by_the_author_is_paired_by_connectivity():
+    from src.clothing.wrap_layer_fit import _match_reference_to_body_uv
+    body_uv, faces = _uv_grid()
+    adjacency = [set() for _ in body_uv]
+    for a, b, c in faces:
+        adjacency[a].update((b, c))
+        adjacency[b].update((a, c))
+        adjacency[c].update((a, b))
+    moved = 6 * 13 + 6
+    reference = body_uv.copy()
+    reference[moved] += (0.05, 0.03)  # far beyond any tolerance, closer to another point
+    np.testing.assert_array_equal(_match_reference_to_body_uv(reference, body_uv, faces, adjacency),
+                                  np.arange(len(body_uv)))
+
+
+def test_outer_cage_missing_a_large_region_is_still_paired():
+    reference_uv, reference_faces = _uv_grid()
+    keep = reference_uv[:, 0] < 0.75  # the outer cage lost a quarter of the points
+    remap = np.cumsum(keep) - 1
+    outer_uv = reference_uv[keep]
+    outer_faces = remap[reference_faces[keep[reference_faces].all(1)]]
+    paired = _match_outer_to_reference(reference_uv, reference_faces, outer_uv, outer_faces)
+    np.testing.assert_array_equal(paired[keep], np.arange(keep.sum()))
+    assert (paired[~keep] == -1).all()
