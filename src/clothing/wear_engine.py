@@ -750,40 +750,59 @@ class RobloxWearEngine:
                     elif sv[twin, 0] * fv[twin, 0] < 0:
                         fv[twin] = np.array([-fv[i, 0], fv[i, 1], fv[i, 2]])
 
-    def _layered_body_cage(self):
-        """Body cage positions with ``layer_under_asset``'s fitted outer cage on top.
-
-        Roblox fits each layered garment over the outer cage of the one under it,
-        so a jacket wraps the shirt instead of meeting it on the bare body. Returns
-        None (plain body) when the garment under it has no usable cages.
-        """
-        try:
-            from .radial_prism_fit import fit_radial_prism
-            from .wrap_layer_fit import _unique_uv_positions, retarget_garment_with_wrap_layer
-            under = self.fetch_asset(self.layer_under_asset)
-            verts, faces, _, _ = self.load_obj(under["obj_path"])
-            trace = {}
-            retarget_garment_with_wrap_layer(self, verts, under["rbxm_path"],
-                                             os.path.join(os.path.dirname(under["obj_path"]), "wrap_cages"),
-                                             binding_audit=trace)
-            fit_radial_prism(verts, faces, trace)
-        except Exception as exc:
-            print(f"[WrapLayer] Camada de baixo {self.layer_under_asset} indisponível, encaixando no corpo: {exc}")
-            return None
-        _, positions = _unique_uv_positions(self.r15_female_cages)
-        total = np.zeros_like(positions)
-        count = np.zeros(len(positions))
+    def _under_outer_cage(self, asset_id, body_positions):
+        """Fitted outer cage of ``asset_id`` per body-cage UV point (the body where it has none)."""
+        from .radial_prism_fit import fit_radial_prism
+        from .wrap_layer_fit import retarget_garment_with_wrap_layer
+        under = self.fetch_asset(asset_id)
+        verts, faces, _, _ = self.load_obj(under["obj_path"])
+        trace = {}
+        retarget_garment_with_wrap_layer(self, verts, under["rbxm_path"],
+                                         os.path.join(os.path.dirname(under["obj_path"]), "wrap_cages"),
+                                         binding_audit=trace)
+        fit_radial_prism(verts, faces, trace)
+        total = np.zeros_like(body_positions)
+        count = np.zeros(len(body_positions))
         np.add.at(total, trace["uv_index"], trace["target_outer"])
         np.add.at(count, trace["uv_index"], 1)
+        shell = body_positions.copy()
         known = count > 0
-        positions = positions.copy()
-        positions[known] = total[known] / count[known, None]
+        shell[known] = total[known] / count[known, None]
+        return shell
+
+    def _layered_body_cage(self):
+        """Body cage positions with the fitted outer cages of ``layer_under_asset`` on top.
+
+        Roblox fits each layered garment over the outer cages of the ones under it,
+        so a jacket wraps the shirt and a coat the pants instead of meeting them on
+        the bare body. ``layer_under_asset`` is one asset id or a list of them; at
+        each cage point the outermost shell wins. Returns None (plain body) when no
+        garment under it has usable cages.
+        """
+        from .wrap_layer_fit import _unique_uv_positions
+        under = self.layer_under_asset
+        under = [under] if isinstance(under, (int, str)) else [a for a in under if a is not None]
+        _, body = _unique_uv_positions(self.r15_female_cages)
+        positions, lift = body.copy(), np.zeros(len(body))
+        used = []
+        for asset_id in under:
+            try:
+                shell = self._under_outer_cage(asset_id, body)
+            except Exception as exc:
+                print(f"[WrapLayer] Camada de baixo {asset_id} indisponível: {exc}")
+                continue
+            shell_lift = np.linalg.norm(shell - body, axis=1)
+            outer = shell_lift > lift
+            positions[outer], lift[outer] = shell[outer], shell_lift[outer]
+            used.append(asset_id)
+        if not used:
+            return None
         gap = float(getattr(self, "layer_gap", 0.0) or 0.0)
         if gap:
             # Manual extra room between the layers, along the layered shell's normals.
             from .hsr import _cage_vertex_normals, body_cage_faces
             positions += _cage_vertex_normals(positions, body_cage_faces(self.r15_female_cages)) * gap
-        print(f"[WrapLayer] Encaixando sobre a cage externa de {self.layer_under_asset} (folga {gap * 1000:.0f} mm)")
+        print(f"[WrapLayer] Encaixando sobre a cage externa de {used} (folga {gap * 1000:.0f} mm)")
         return positions
 
     def _fit_asset_wrap_layer(self, verts, meta, faces=None):

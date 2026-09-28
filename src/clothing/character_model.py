@@ -1666,16 +1666,37 @@ class CharacterModel:
         print(f"[HSR] Pele recortada pelas máscaras de {len(worn)} peça(s): {int(hidden.sum())} pontos da cage cobertos")
         return True
 
+    def _top_over_pants(self, top_obj_path, is_none_bottom):
+        """A coat, sweater or dress worn as the top is fitted over the pants' outer cage."""
+        from src.clothing.layer_clearance import OUTER_TOP_TYPES, fitted_asset_type
+        if is_none_bottom or fitted_asset_type(top_obj_path) not in OUTER_TOP_TYPES:
+            return top_obj_path
+        gap_mm = int(round(self.outer_top_gap_mm))
+        path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}_over_{self.bottom_id}"
+                                        f"{f'_g{gap_mm}' if gap_mm else ''}_female.obj")
+        if not is_valid_v2_obj(path):
+            try:
+                from src.clothing.wear_engine import RobloxWearEngine
+                engine = RobloxWearEngine(body_type="female")
+                engine.layer_under_asset = [self.bottom_id]
+                engine.layer_gap = gap_mm / 1000.0
+                engine.wear(self.top_id, output_obj=path)
+            except Exception as e:
+                print(f"[CharacterModel] Aviso: top sobre a calça {self.top_id}/{self.bottom_id}: {e}")
+                return top_obj_path
+        return path if is_valid_v2_obj(path) else top_obj_path
+
     def _add_outer_top(self, is_fem, vertex_transform):
         """Wear ``outer_top_id`` over the other garments; returns its fitted OBJ path or None."""
         if self.outer_top_id is None or not is_fem:
             return None
         from src.clothing.layer_clearance import body_cage_from_sidecars, covered_vertices, pull_inner_layer
         from src.rendering.mesh import TexturedMesh
-        # Fitted over the top's outer cage, as Roblox layers clothing: one cache per pair.
-        under = self.top_id if self.top_id is not None and str(self.top_id).lower() not in ("none", "0") else None
+        # Fitted over the outer cages of the top and the pants, as Roblox layers clothing:
+        # one cache per combination.
+        under = [i for i in (self.top_id, self.bottom_id) if i is not None and str(i).lower() not in ("none", "0")]
         gap_mm = int(round(self.outer_top_gap_mm))
-        suffix = (f"_over_{under}" if under is not None else "") + (f"_g{gap_mm}" if gap_mm else "")
+        suffix = "".join(f"_over_{i}" for i in under) + (f"_g{gap_mm}" if gap_mm else "")
         path = os.path.join(MODELS_DIR, f"character_native_{self.outer_top_id}{suffix}_female.obj")
         if not is_valid_v2_obj(path):
             try:
@@ -1914,6 +1935,7 @@ class CharacterModel:
                     except Exception as e:
                         print(f"[CharacterModel] Aviso: gerando top feminino com cage: {e}")
                         top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
+                top_obj_path = self._top_over_pants(top_obj_path, is_none_bottom)
             else:
                 top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
                 if not is_valid_v2_obj(top_obj_path):
