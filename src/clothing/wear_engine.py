@@ -2496,7 +2496,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v15: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v17: {asset_id}\n")
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
             for vn in vert_normals:
@@ -2509,9 +2509,22 @@ class RobloxWearEngine:
                 else:
                     f.write("f " + " ".join(f"{idx+1}//{idx+1}" for idx in face) + "\n")
 
-        from .hsr import sidecar_path
+        from .hsr import body_cage_faces, engine_to_body_mesh, geometric_hidden_mask, sidecar_path
         hsr_path = sidecar_path(output_obj)
         hsr_info = wrap_result[1].get("hsr") if used_asset_wrap and wrap_result is not None else None
+        if hsr_info is None and self.is_female and self.r15_female_cages:
+            # No usable Roblox HSR data: derive the covered skin from the fitted garment
+            # itself (the final vertices, in the same space the renderer receives).
+            try:
+                from .wrap_layer_fit import _unique_uv_positions
+                _, cage_positions = _unique_uv_positions(self.r15_female_cages)
+                cage_faces = body_cage_faces(self.r15_female_cages)
+                hidden = geometric_hidden_mask(cage_positions, cage_faces, deformed_verts)
+                hsr_info = {"cage_points": engine_to_body_mesh(cage_positions), "hidden": hidden,
+                            "cage_faces": cage_faces}
+                print(f"[HSR] Máscara geométrica: {int(hidden.sum())} de {len(hidden)} pontos da cage cobertos")
+            except Exception as exc:
+                print(f"[HSR] Máscara geométrica indisponível: {exc}")
         if hsr_info is not None:
             np.savez_compressed(hsr_path, cage_points=hsr_info["cage_points"], hidden=hsr_info["hidden"],
                                 cage_faces=hsr_info["cage_faces"])
