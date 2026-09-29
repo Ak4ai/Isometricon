@@ -84,10 +84,15 @@ def render(shader, model, cage, white, eye, markers=(), target=(0.0, 1.2, 0.0)):
 def main():
     neck = "--pescoco" in sys.argv
     chest = "--peito" in sys.argv
+    pelvis = "--pelve" in sys.argv
     parts = [a for a in sys.argv[1:] if not a.startswith("--")] or sorted(
         p.stem.removesuffix("_male") for p in OUT.glob("*_male.npy"))
     target = (0.0, 1.48, 0.0) if neck else (0.0, 1.3, 0.0) if chest else (0.0, 1.2, 0.0)
     views = [(name, [e[0] * 0.4, target[1] + (e[1] - 1.2) * 0.4 + 0.05, e[2] * 0.4]) for name, e in VIEWS] if neck else VIEWS
+    if pelvis:
+        target = (0.0, 0.86, 0.0)
+        views = [("pelve frente", [0.0, 0.95, 0.8]), ("pelve 3/4", [-0.6, 1.0, 0.6]),
+                 ("pelve lado", [0.8, 0.9, 0.0]), ("pelve costas", [0.0, 0.95, -0.8]), ("de baixo", [0.0, 0.2, 0.05])]
     if chest:
         # Close to the chest, plus straight from above (the shoulders' top face).
         views = [("peito frente", [0.0, 1.35, 0.75]), ("peito 3/4", [-0.55, 1.45, 0.55]),
@@ -134,8 +139,9 @@ def main():
         tiles = []
         for name, eye in views:
             hidden = []
-            if name == "de cima":  # the head hides the shoulders from above
-                hidden = [part for part in model.parts if part.name.startswith("head")]
+            if name in ("de cima", "de baixo"):  # the head (legs) hide the shoulders (pelvis)
+                prefix = "head" if name == "de cima" else "legs"
+                hidden = [part for part in model.parts if part.name.startswith(prefix)]
                 model.parts = [part for part in model.parts if part not in hidden]
             tiles.append(render(shader, model, cage, white, eye, markers,
                                 (0.0, 1.45, 0.0) if name == "de cima" else target))
@@ -153,7 +159,8 @@ def main():
             sheet.paste(tile, (column * SIZE, row * (SIZE + 22) + 22))
             draw.text((column * SIZE + 6, row * (SIZE + 22) + 5),
                       f"{label} - cage {', '.join(parts)} - {views[column][0]}", fill="black")
-    out = OUT / ("cage_pescoco.png" if neck else "cage_peito.png" if chest else "cage_sobre_o_corpo.png")
+    out = OUT / ("cage_pescoco.png" if neck else "cage_peito.png" if chest else "cage_pelve.png" if pelvis
+                 else "cage_sobre_o_corpo.png")
     sheet.save(out)
     print("[OK]", out)
     glfw.destroy_window(window)

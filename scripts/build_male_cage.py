@@ -38,12 +38,19 @@ FEMALE_BODY = ROOT / "assets/models/character_female_clean_apose_stage2.obj"
 MALE_BODY = ROOT / "assets/models/character_clean.obj"
 OUT = ROOT / "artifacts/male_cage"
 # Cage part -> body mesh groups it covers (render space: x, up, depth).
-PARTS = {"UpperTorso": ["Export_torso", "Export_pecoco"]}
+PARTS = {"UpperTorso": ["Export_torso", "Export_pecoco"],
+         "LowerTorso": ["Export_pelve", "Export_coxa_esquerda", "Export_coxa_direita"]}
 # Cage part -> (collar group, the group it stands on): points closer to the collar group
 # move rigidly with it, standing on the other group's top.
 COLLARS = {"UpperTorso": ("Export_pecoco", "Export_torso")}
 # Cage part -> (body group, number of edge loops): the cage's rings follow those loops.
 EDGE_LOOPS = {"UpperTorso": ("Export_torso", 4)}
+# Cage part -> body group transferred by its corners (landmarks), for parts whose corners
+# are not rings of four (the pelvis: a ring of 6, the hips, the crotch).
+LANDMARKS = {"LowerTorso": "Export_pelve"}
+# Cage part -> parts built before it whose cage points it shares (same position on the
+# female cage, different UVs): those points are copied so the seam stays closed.
+SEAMS = {"LowerTorso": ["UpperTorso"]}
 UP = 1
 
 
@@ -239,7 +246,7 @@ def collisions(cage_points, cage_faces, skin_vertices, skin_faces, visible, reac
 
 
 def resolve_collisions(cage_points, cage_faces, skin_vertices, skin_faces, visible, clearance=0.005,
-                       iterations=150, reach=0.06, total_limit=0.06, spread=0.5):
+                       iterations=150, reach=0.06, total_limit=0.06, spread=0.5, fixed=None):
     """Inflate the cage smoothly until no skin pokes through it and no cage point is inside.
 
     Each iteration, every poking skin sample asks the corners of the cage triangle
@@ -260,6 +267,9 @@ def resolve_collisions(cage_points, cage_faces, skin_vertices, skin_faces, visib
     base = np.zeros((count, 3))
     base[weld] = cage_points
     displacement = np.zeros_like(base)
+    still = np.zeros(count, dtype=bool)
+    if fixed is not None:
+        still[weld[fixed]] = True  # seam points shared with a finished part stay put
     samples, sample_normals = visible
     skin_face_normals = face_normals(skin_vertices, skin_faces)
     for _ in range(iterations):
@@ -290,6 +300,7 @@ def resolve_collisions(cage_points, cage_faces, skin_vertices, skin_faces, visib
         displacement[raise_it] = mean[raise_it]
         length = np.linalg.norm(displacement, axis=1, keepdims=True)
         displacement *= np.minimum(1.0, total_limit / np.maximum(length, 1e-12))
+        displacement[still] = 0.0
     return (base + displacement)[weld]
 
 
@@ -384,6 +395,49 @@ def box_transfer(points, female_vertices, male_vertices, rows):
     return result
 
 
+def match_corners(female_corners, male_corners):
+    """Female corner -> male corner, by position in each part's box (greedy, closest first).
+
+    A female corner with no male partner (the female crotch point; the male pelvis is
+    flat there) gets the centre of the male corners around it at the same box height.
+    """
+    f_low, f_size = female_corners.min(0), np.maximum(np.ptp(female_corners, axis=0), 1e-6)
+    m_low, m_size = male_corners.min(0), np.maximum(np.ptp(male_corners, axis=0), 1e-6)
+    fn, mn = (female_corners - f_low) / f_size, (male_corners - m_low) / m_size
+    distance = np.linalg.norm(fn[:, None] - mn[None], axis=-1)
+    pairs, used_f, used_m = {}, set(), set()
+    for i, j in zip(*np.unravel_index(np.argsort(distance, axis=None), distance.shape)):
+        if i in used_f or j in used_m:
+            continue
+        pairs[int(i)] = male_corners[j]
+        used_f.add(i)
+        used_m.add(j)
+    for i in range(len(female_corners)):
+        if i not in pairs:
+            near = np.argsort(np.linalg.norm(fn[:, [0, 2]] - fn[i, [0, 2]], axis=1))[1:5]
+            target = np.mean([pairs[int(k)] for k in near if int(k) in pairs], axis=0)
+            target[UP] = m_low[UP] + fn[i, UP] * m_size[UP]
+            pairs[i] = target
+    return np.array([pairs[i] for i in range(len(female_corners))])
+
+
+def landmark_transfer(points, female_vertices, male_vertices):
+    """Points moved by the smooth space map that takes every female corner onto its male corner."""
+    source = np.unique(np.round(female_vertices, 4), axis=0)
+    target = match_corners(source, np.unique(np.round(male_vertices, 4), axis=0))
+    n = len(source)
+    system = np.zeros((n + 4, n + 4))
+    system[:n, :n] = np.linalg.norm(source[:, None] - source[None], axis=-1)
+    system[:n, n:] = np.column_stack((np.ones(n), source))
+    system[n:, :n] = system[:n, n:].T
+    rhs = np.zeros((n + 4, 3))
+    rhs[:n] = target - source
+    coefficients = np.linalg.solve(system, rhs)
+    warp = np.linalg.norm(points[:, None] - source[None], axis=-1) @ coefficients[:n]
+    warp += np.column_stack((np.ones(len(points)), points)) @ coefficients[n:]
+    return points + warp
+
+
 def cage_edges(cage_points, cage_faces):
     """Welded vertex index of each cage point and the welded edge list (UV seams joined)."""
     _, weld = np.unique(np.round(cage_points, 6), axis=0, return_inverse=True)
@@ -451,9 +505,22 @@ def main():
             group, rows = EDGE_LOOPS[part]
             k = groups.index(group)
             male_cage = box_transfer(cage, female_groups[k][0], male_groups[k][0], rows)
+        elif part in LANDMARKS:
+            k = groups.index(LANDMARKS[part])
+            male_cage = landmark_transfer(cage, female_groups[k][0], male_groups[k][0])
         else:
             male_cage = warp_transfer(cage, female_groups, male_groups)
         fixed = np.zeros(len(cage), dtype=bool)
+        seam_points = {}
+        for other in SEAMS.get(part, []):
+            other_female = engine_to_body_mesh(np.asarray(engine.r15_female_cages[other]["verts"], dtype=np.float64))
+            other_male = np.load(OUT / f"{other}_male.npy")
+            distance = np.linalg.norm(cage[:, None] - other_female[None], axis=-1)
+            shared = distance.min(1) < 1e-4
+            seam_points.update({int(i): other_male[distance[i].argmin()] for i in np.flatnonzero(shared)})
+        for i, position in seam_points.items():
+            male_cage[i] = position
+            fixed[i] = True
         if part in COLLARS:
             collar, base = (groups.index(g) for g in COLLARS[part])
             male_cage, fixed = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
@@ -463,8 +530,9 @@ def main():
         _, _, female_closest = closest_on_mesh(cage, *female_skin)
         female_distance = np.linalg.norm(cage - female_closest, axis=1)
         male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
-        male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"])
-        entry = {"pontos": int(len(cage))}
+        male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
+        entry_seam = len(seam_points)
+        entry = {"pontos": int(len(cage)), "pontos_de_costura_com_partes_anteriores": entry_seam}
         for name, points, skin in (("feminino", cage, female_skin), ("masculino", male_cage, male_skin)):
             poking, inside, covered = collisions(points, cage_faces, *skin, visible[name])
             _, _, closest = closest_on_mesh(points, *skin)
