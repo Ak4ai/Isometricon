@@ -47,7 +47,10 @@ COLLARS = {"UpperTorso": ("Export_pecoco", "Export_torso")}
 EDGE_LOOPS = {"UpperTorso": ("Export_torso", 4)}
 # Cage part -> body group transferred by its corners (landmarks), for parts whose corners
 # are not rings of four (the pelvis: a ring of 6, the hips, the crotch).
-LANDMARKS = {"LowerTorso": "Export_pelve"}
+LANDMARKS = {}
+# Cage part -> (body group, corners per height level, bottom to top, female and male): the
+# levels are split into rings of four (quadrant_rings) for the box transfer.
+LEVEL_RINGS = {"LowerTorso": ("Export_pelve", (7, 4, 6), (6, 4, 6))}
 # Cage part -> parts built before it whose cage points it shares (same position on the
 # female cage, different UVs): those points are copied so the seam stays closed.
 SEAMS = {"LowerTorso": ["UpperTorso"]}
@@ -363,7 +366,27 @@ def _trilinear(cell, u, v, w):
     return (1 - v) * ring(bottom) + v * ring(top)
 
 
-def box_transfer(points, female_vertices, male_vertices, rows):
+def quadrant_rings(vertices, levels):
+    """Rings of 4 corners picked per height level: in each (x, z) quadrant, the corner farthest out.
+
+    For parts whose corners are not plain rings of four (the pelvis has 6 at the
+    top and centre points at the crotch), this keeps the box outline of each level.
+    """
+    corners = np.unique(np.round(vertices, 4), axis=0)
+    order = np.argsort(corners[:, UP])
+    groups = np.array_split(corners[order], np.cumsum(levels)[:-1])
+    rings = []
+    for group in groups:
+        centre = (group.min(0) + group.max(0)) / 2
+        ring = []
+        for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            score = sx * (group[:, 0] - centre[0]) + sz * (group[:, 2] - centre[2])
+            ring.append(group[score.argmax()])
+        rings.append(ring)
+    return np.array(rings)
+
+
+def box_transfer(points, female_vertices, male_vertices, rows, f_rings=None, m_rings=None):
     """Points moved cell by cell between the stacked boxes of the two body groups.
 
     Each point is located in the female box cell it belongs to (inverse trilinear
@@ -372,7 +395,9 @@ def box_transfer(points, female_vertices, male_vertices, rows):
     and on the top face, and its rings follow the tilted edge loops. Points past a
     cell (the cage's offset, the collar above the top) extrapolate the same map.
     """
-    f_rings, m_rings = box_rings(female_vertices, rows), box_rings(male_vertices, rows)
+    if f_rings is None:
+        f_rings, m_rings = box_rings(female_vertices, rows), box_rings(male_vertices, rows)
+    rows = len(f_rings)
     result = np.empty_like(points)
     for index, point in enumerate(points):
         best = None
@@ -505,6 +530,11 @@ def main():
             group, rows = EDGE_LOOPS[part]
             k = groups.index(group)
             male_cage = box_transfer(cage, female_groups[k][0], male_groups[k][0], rows)
+        elif part in LEVEL_RINGS:
+            group, f_levels, m_levels = LEVEL_RINGS[part]
+            k = groups.index(group)
+            f_rings, m_rings = quadrant_rings(female_groups[k][0], f_levels), quadrant_rings(male_groups[k][0], m_levels)
+            male_cage = box_transfer(cage, None, None, None, f_rings, m_rings)
         elif part in LANDMARKS:
             k = groups.index(LANDMARKS[part])
             male_cage = landmark_transfer(cage, female_groups[k][0], male_groups[k][0])
@@ -529,8 +559,12 @@ def main():
         visible = {"feminino": visible_skin(female_groups), "masculino": visible_skin(male_groups)}
         _, _, female_closest = closest_on_mesh(cage, *female_skin)
         female_distance = np.linalg.norm(cage - female_closest, axis=1)
-        male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
-        male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
+        import os
+        stage = os.environ.get("CAGE_STAGE", "all")  # debugging: stop after "transfer" or "projection"
+        if stage != "transfer":
+            male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
+        if stage == "all":
+            male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
         entry_seam = len(seam_points)
         entry = {"pontos": int(len(cage)), "pontos_de_costura_com_partes_anteriores": entry_seam}
         for name, points, skin in (("feminino", cage, female_skin), ("masculino", male_cage, male_skin)):
