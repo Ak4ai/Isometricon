@@ -771,7 +771,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     engine = RobloxWearEngine(body_type="female")
     report = {}
-    knee_rings = {}
+    knee_rings, knee_rows = {}, {}
     for part, groups in PARTS.items():
         cage = engine_to_body_mesh(np.asarray(engine.r15_female_cages[part]["verts"], dtype=np.float64))
         cage_faces = np.asarray(engine.r15_female_cages[part]["faces"])
@@ -793,6 +793,8 @@ def main():
                                                 female_rings=open_edge_planes(cage, cage_faces) if thigh else None)
             if part.endswith("UpperLeg"):
                 knee_rings[part.replace("UpperLeg", "")] = (rings[0], _source_rings(cage)[0])
+                knee_rows[part.replace("UpperLeg", "")] = male_cage[cage[:, UP] < cage[:, UP].min() + 0.003]
+
         elif part in SAME_AS_FEMALE:
             male_cage = cage.copy()
         elif part in EDGE_LOOPS:
@@ -830,6 +832,16 @@ def main():
             for i, position in seam_points.items():
                 male_cage[i] = position
                 fixed[i] = True
+        if part.endswith("LowerLeg"):
+            # Knee ring points of the calf with no twin on the thigh (a front corner) are
+            # clamped to the thigh's knee row outline, after the seam correction, so the
+            # ring stays one clean loop.
+            row = knee_rows[part.replace("LowerLeg", "")]
+            on_knee = cage[:, UP] > cage[:, UP].max() - 0.003
+            on_knee[list(seam_points)] = False  # the shared knee points keep the thigh's position
+            for axis in (0, 2):
+                male_cage[on_knee, axis] = np.clip(male_cage[on_knee, axis], row[:, axis].min(), row[:, axis].max())
+            fixed |= on_knee
         if part in COLLARS:
             collar, base = (groups.index(g) for g in COLLARS[part])
             male_cage, fixed = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
