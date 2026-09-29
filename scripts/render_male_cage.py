@@ -91,7 +91,7 @@ def main():
     views = [(name, [e[0] * 0.4, target[1] + (e[1] - 1.2) * 0.4 + 0.05, e[2] * 0.4]) for name, e in VIEWS] if neck else VIEWS
     if pelvis:
         target = (0.0, 0.86, 0.0)
-        views = [("pelve frente", [0.0, 0.95, 0.8]), ("pelve 3/4", [-0.6, 1.0, 0.6]),
+        views = [("pelve frente", [0.0, 0.9, 0.55]), ("pelve 3/4", [-0.45, 0.95, 0.4]),
                  ("pelve lado", [0.8, 0.9, 0.0]), ("pelve costas", [0.0, 0.95, -0.8]), ("de baixo", [0.0, 0.2, 0.05])]
     if chest:
         # Close to the chest, plus straight from above (the shoulders' top face).
