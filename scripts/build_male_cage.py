@@ -38,8 +38,17 @@ FEMALE_BODY = ROOT / "assets/models/character_female_clean_apose_stage2.obj"
 MALE_BODY = ROOT / "assets/models/character_clean.obj"
 OUT = ROOT / "artifacts/male_cage"
 # Cage part -> body mesh groups it covers (render space: x, up, depth).
+# The pelvis (LowerTorso) is made by hand in Blender: the male pelvis is too thin a slab
+# for the rings to follow automatically.
 PARTS = {"UpperTorso": ["Export_torso", "Export_pecoco"],
-         "LowerTorso": ["Export_pelve", "Export_coxa_esquerda", "Export_coxa_direita"]}
+         "LeftUpperLeg": ["Export_coxa_esquerda"], "RightUpperLeg": ["Export_coxa_direita"],
+         "LeftLowerLeg": ["Export_canela_esquerda"], "RightLowerLeg": ["Export_canela_direita"],
+         "LeftFoot": ["Export_pe_esquerdo"], "RightFoot": ["Export_pe_direito"]}
+# Parts built from the original R15 cage (same points, order and UVs as the female one):
+# the male legs are plain boxes like the R15 legs, while the female legs are curved.
+FROM_R15 = {"LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg"}
+# Parts whose body mesh is identical on both bodies: the female cage is used as it is.
+SAME_AS_FEMALE = {"LeftFoot", "RightFoot"}
 # Cage part -> (collar group, the group it stands on): points closer to the collar group
 # move rigidly with it, standing on the other group's top.
 COLLARS = {"UpperTorso": ("Export_pecoco", "Export_torso")}
@@ -53,7 +62,7 @@ LANDMARKS = {}
 LEVEL_RINGS = {"LowerTorso": ("Export_pelve", (7, 4, 6), (6, 4, 6))}
 # Cage part -> parts built before it whose cage points it shares (same position on the
 # female cage, different UVs): those points are copied so the seam stays closed.
-SEAMS = {"LowerTorso": ["UpperTorso"]}
+SEAMS = {"LowerTorso": ["UpperTorso"], "LeftLowerLeg": ["LeftUpperLeg"], "RightLowerLeg": ["RightUpperLeg"]}
 SEAM_FADE = 0.05  # the seam correction fades over 5 cm below the seam
 UP = 1
 
@@ -538,6 +547,25 @@ def ring_offsets(female_points, male_points, female_skin, male_skin):
     return result
 
 
+def r15_box_transfer(source_points, male_body, margin=0.012):
+    """The R15 cage part fitted into the male body part's slanted box.
+
+    The R15 cage faces the other way in depth (z is mirrored). Its bounding box is
+    mapped trilinearly onto the male part's two rings of four corners (top and bottom,
+    each widened by ``margin``), so the cage follows the leg's slant (the male thigh
+    runs inwards from the hip to the knee) instead of standing upright.
+    """
+    source = source_points * np.array([1.0, 1.0, -1.0])
+    rings = box_rings(male_body, 2)
+    for ring in rings:
+        centre = ring.mean(0)
+        ring[:, 0] += np.sign(ring[:, 0] - centre[0]) * margin
+        ring[:, 2] += np.sign(ring[:, 2] - centre[2]) * margin
+    low, high = source.min(0), source.max(0)
+    uvw = (source - low) / (high - low)  # u across x, v up, w across z
+    return np.array([_trilinear((rings[0], rings[1]), u, v, w) for u, v, w in uvw])
+
+
 def box_transfer(points, female_vertices, male_vertices, rows, f_rings=None, m_rings=None):
     """Points moved cell by cell between the stacked boxes of the two body groups.
 
@@ -678,7 +706,12 @@ def main():
         cage_faces = np.asarray(engine.r15_female_cages[part]["faces"])
         female_groups = [body_part(FEMALE_BODY, [g]) for g in groups]
         male_groups = [body_part(MALE_BODY, [g]) for g in groups]
-        if part in EDGE_LOOPS:
+        if part in FROM_R15:
+            source = engine_to_body_mesh(np.asarray(engine.r15_source_cages[part]["verts"], dtype=np.float64))
+            male_cage = r15_box_transfer(source, male_groups[0][0])
+        elif part in SAME_AS_FEMALE:
+            male_cage = cage.copy()
+        elif part in EDGE_LOOPS:
             group, rows = EDGE_LOOPS[part]
             k = groups.index(group)
             male_cage = box_transfer(cage, female_groups[k][0], male_groups[k][0], rows)
@@ -723,7 +756,7 @@ def main():
         female_distance = np.linalg.norm(cage - female_closest, axis=1)
         import os
         stage = os.environ.get("CAGE_STAGE", "all")  # debugging: stop after "transfer" or "projection"
-        if stage != "transfer" and part not in LEVEL_RINGS:  # the box transfer already fits flat faces
+        if stage != "transfer" and part not in LEVEL_RINGS and part not in FROM_R15 and part not in SAME_AS_FEMALE:  # the box transfer already fits flat faces
             male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         if stage == "all":
             if part in LEVEL_RINGS:
