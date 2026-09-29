@@ -279,6 +279,50 @@ def resolve_collisions(cage_points, cage_faces, skin_vertices, skin_faces, visib
     return (base + displacement)[weld]
 
 
+def cage_edges(cage_points, cage_faces):
+    """Welded vertex index of each cage point and the welded edge list (UV seams joined)."""
+    _, weld = np.unique(np.round(cage_points, 6), axis=0, return_inverse=True)
+    weld = weld.ravel()
+    faces = weld[cage_faces]
+    edges = np.unique(np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1), axis=0)
+    return weld, edges[edges[:, 0] != edges[:, 1]]
+
+
+def shrink_wrap(points, female_distance, skin_vertices, skin_faces, cage_faces, fixed, iterations=1, relax=0.0):
+    """Put each cage point at its female skin distance from the male skin, following its edges.
+
+    A point projected onto the offset surface of the skin lands over the nearest skin
+    feature, so the cage's rings follow the body's corners (chest edges, the waist
+    line) like on the female cage, instead of cutting across them as the smooth warp
+    did. A light Laplacian relaxation between projections keeps the triangles even;
+    ``fixed`` points (the collar) are left where they are.
+    """
+    weld, edges = cage_edges(points, cage_faces)
+    count = weld.max() + 1
+    welded = np.zeros((count, 3))
+    welded[weld] = points
+    distance = np.zeros(count)
+    distance[weld] = female_distance
+    still = np.zeros(count, dtype=bool)
+    still[weld[fixed]] = True
+    degree = np.bincount(edges.ravel(), minlength=count).astype(float)
+    for _ in range(iterations):
+        total = np.zeros_like(welded)
+        np.add.at(total, edges[:, 0], welded[edges[:, 1]])
+        np.add.at(total, edges[:, 1], welded[edges[:, 0]])
+        relaxed = welded + relax * (total / np.maximum(degree, 1)[:, None] - welded)
+        _, _, closest = closest_on_mesh(relaxed, skin_vertices, skin_faces)
+        offset = relaxed - closest
+        length = np.linalg.norm(offset, axis=1)
+        # Points that relaxed inside the skin keep their previous side.
+        _, _, previous = closest_on_mesh(welded, skin_vertices, skin_faces)
+        flip = (offset * (welded - previous)).sum(1) < 0
+        offset[flip] *= -1
+        projected = closest + offset / np.maximum(length, 1e-9)[:, None] * distance[:, None]
+        welded = np.where(still[:, None], welded, projected)
+    return welded[weld]
+
+
 def merged(groups):
     vertices, faces, offset = [], [], 0
     for v, f in groups:
@@ -304,6 +348,14 @@ def main():
                                     female_groups[base], male_groups[base])
         female_skin, male_skin = merged(female_groups), merged(male_groups)
         visible = {"feminino": visible_skin(female_groups), "masculino": visible_skin(male_groups)}
+        _, _, female_closest = closest_on_mesh(cage, *female_skin)
+        female_distance = np.linalg.norm(cage - female_closest, axis=1)
+        fixed = np.zeros(len(cage), dtype=bool)
+        if part in COLLARS:
+            (fcv, fcf), (fbv, fbf) = (female_groups[groups.index(g)] for g in COLLARS[part])
+            fixed = (np.linalg.norm(cage - closest_on_mesh(cage, fcv, fcf)[2], axis=1)
+                     < np.linalg.norm(cage - closest_on_mesh(cage, fbv, fbf)[2], axis=1))
+        male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"])
         entry = {"pontos": int(len(cage))}
         for name, points, skin in (("feminino", cage, female_skin), ("masculino", male_cage, male_skin)):
