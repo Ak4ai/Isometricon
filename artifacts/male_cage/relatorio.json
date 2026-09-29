@@ -1,6 +1,7 @@
 {
   "UpperTorso": {
     "pontos": 231,
+    "pontos_de_costura_com_partes_anteriores": 0,
     "feminino": {
       "distancia_da_pele_cm": {
         "mediana": 1.07,
@@ -11,10 +12,30 @@
     },
     "masculino": {
       "distancia_da_pele_cm": {
-        "mediana": 1.07,
+        "mediana": 1.06,
         "max": 4.24
       },
-      "pele_furando_a_cage": "0 de 551 amostras cobertas",
+      "pele_furando_a_cage": "0 de 550 amostras cobertas",
+      "pontos_da_cage_dentro_da_pele": 0
+    }
+  },
+  "LowerTorso": {
+    "pontos": 92,
+    "pontos_de_costura_com_partes_anteriores": 9,
+    "feminino": {
+      "distancia_da_pele_cm": {
+        "mediana": 1.18,
+        "max": 2.42
+      },
+      "pele_furando_a_cage": "7 de 411 amostras cobertas",
+      "pontos_da_cage_dentro_da_pele": 0
+    },
+    "masculino": {
+      "distancia_da_pele_cm": {
+        "mediana": 1.21,
+        "max": 2.43
+      },
+      "pele_furando_a_cage": "0 de 335 amostras cobertas",
       "pontos_da_cage_dentro_da_pele": 0
     }
   }
