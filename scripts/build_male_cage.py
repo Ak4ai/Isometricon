@@ -42,6 +42,8 @@ PARTS = {"UpperTorso": ["Export_torso", "Export_pecoco"]}
 # Cage part -> (collar group, the group it stands on): points closer to the collar group
 # move rigidly with it, standing on the other group's top.
 COLLARS = {"UpperTorso": ("Export_pecoco", "Export_torso")}
+# Cage part -> (body group, number of edge loops): the cage's rings follow those loops.
+EDGE_LOOPS = {"UpperTorso": ("Export_torso", 4)}
 UP = 1
 
 
@@ -223,7 +225,7 @@ def collisions(cage_points, cage_faces, skin_vertices, skin_faces, visible, reac
 
 
 def resolve_collisions(cage_points, cage_faces, skin_vertices, skin_faces, visible, clearance=0.005,
-                       iterations=150, reach=0.06, total_limit=0.06):
+                       iterations=150, reach=0.06, total_limit=0.06, spread=0.5):
     """Inflate the cage smoothly until no skin pokes through it and no cage point is inside.
 
     Each iteration, every poking skin sample asks the corners of the cage triangle
@@ -264,19 +266,57 @@ def resolve_collisions(cage_points, cage_faces, skin_vertices, skin_faces, visib
                     push[corner] = sample_normals[sample] * value
         push[inside] += skin_face_normals[s_face][inside] * (clearance - gap[inside])[:, None]
         displacement += push
-        # Spread: blend each point's displacement with its neighbours' mean, never below
-        # what it was asked for.
+        # Spread locally: a point takes at least ``spread`` of its neighbours' mean push, so
+        # a bulge fades over a few rings instead of inflating the whole cage.
         total = np.zeros_like(displacement)
         np.add.at(total, edges[:, 0], displacement[edges[:, 1]])
         np.add.at(total, edges[:, 1], displacement[edges[:, 0]])
-        mean = total / np.maximum(degree, 1)[:, None]
-        smoothed = 0.5 * displacement + 0.5 * mean
-        keep = np.linalg.norm(smoothed, axis=1) < np.linalg.norm(displacement, axis=1)
-        smoothed[keep & (np.linalg.norm(push, axis=1) > 0)] = displacement[keep & (np.linalg.norm(push, axis=1) > 0)]
-        displacement = smoothed
+        mean = spread * total / np.maximum(degree, 1)[:, None]
+        raise_it = np.linalg.norm(mean, axis=1) > np.linalg.norm(displacement, axis=1)
+        displacement[raise_it] = mean[raise_it]
         length = np.linalg.norm(displacement, axis=1, keepdims=True)
         displacement *= np.minimum(1.0, total_limit / np.maximum(length, 1e-12))
     return (base + displacement)[weld]
+
+
+def edge_loop_planes(vertices, rows):
+    """The body group's horizontal edge loops, each fitted as a plane y = a + b*x + c*z.
+
+    A box-like part is ``rows`` rings of corners; on the male chest they tilt (the pec
+    line runs from 1.15 at one face to 1.25 at the other), so a ring is a tilted plane.
+    """
+    corners = np.unique(np.round(vertices, 4), axis=0)
+    corners = corners[np.argsort(corners[:, UP])]
+    planes = []
+    for ring in np.array_split(corners, rows):
+        design = np.column_stack((np.ones(len(ring)), ring[:, 0], ring[:, 2]))
+        planes.append(np.linalg.lstsq(design, ring[:, UP], rcond=None)[0])
+    return np.array(planes)
+
+
+def follow_edge_loops(female_points, male_points, female_vertices, male_vertices, rows=4):
+    """Heights of the male cage points set by the edge loops of both bodies.
+
+    A point between two female loops (at its own x, z) keeps its fraction of the way
+    between the matching male loops (at its male x, z), so the cage's rings run along
+    the male body's edge loops, tilt included. Beyond the first and last loops it
+    keeps its distance to them.
+    """
+    f_planes, m_planes = edge_loop_planes(female_vertices, rows), edge_loop_planes(male_vertices, rows)
+    heights = lambda planes, points: planes[:, 0][None] + points[:, [0]] * planes[:, 1][None] + points[:, [2]] * planes[:, 2][None]
+    f_loops, m_loops = heights(f_planes, female_points), heights(m_planes, male_points)
+    result = male_points.copy()
+    for index, y in enumerate(female_points[:, UP]):
+        f, m = f_loops[index], m_loops[index]
+        if y <= f[0]:
+            result[index, UP] = m[0] + (y - f[0])
+        elif y >= f[-1]:
+            result[index, UP] = m[-1] + (y - f[-1])
+        else:
+            k = int(np.searchsorted(f, y) - 1)
+            t = (y - f[k]) / max(f[k + 1] - f[k], 1e-9)
+            result[index, UP] = m[k] + t * (m[k + 1] - m[k])
+    return result
 
 
 def cage_edges(cage_points, cage_faces):
@@ -311,13 +351,14 @@ def shrink_wrap(points, female_distance, skin_vertices, skin_faces, cage_faces, 
         np.add.at(total, edges[:, 0], welded[edges[:, 1]])
         np.add.at(total, edges[:, 1], welded[edges[:, 0]])
         relaxed = welded + relax * (total / np.maximum(degree, 1)[:, None] - welded)
-        _, _, closest = closest_on_mesh(relaxed, skin_vertices, skin_faces)
+        face, _, closest = closest_on_mesh(relaxed, skin_vertices, skin_faces)
         offset = relaxed - closest
         length = np.linalg.norm(offset, axis=1)
-        # Points that relaxed inside the skin keep their previous side.
-        _, _, previous = closest_on_mesh(welded, skin_vertices, skin_faces)
-        flip = (offset * (welded - previous)).sum(1) < 0
-        offset[flip] *= -1
+        # Always to the outside of the skin: points left inside go out along the skin normal.
+        normal = face_normals(skin_vertices, skin_faces)[face]
+        inward = (offset * normal).sum(1) < 0
+        offset[inward] = normal[inward]
+        length[inward] = 1.0
         projected = closest + offset / np.maximum(length, 1e-9)[:, None] * distance[:, None]
         welded = np.where(still[:, None], welded, projected)
     return welded[weld]
@@ -342,6 +383,10 @@ def main():
         female_groups = [body_part(FEMALE_BODY, [g]) for g in groups]
         male_groups = [body_part(MALE_BODY, [g]) for g in groups]
         male_cage = warp_transfer(cage, female_groups, male_groups)
+        if part in EDGE_LOOPS:
+            group, rows = EDGE_LOOPS[part]
+            k = groups.index(group)
+            male_cage = follow_edge_loops(cage, male_cage, female_groups[k][0], male_groups[k][0], rows)
         if part in COLLARS:
             collar, base = (groups.index(g) for g in COLLARS[part])
             male_cage = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
