@@ -43,7 +43,17 @@ OUT = ROOT / "artifacts/male_cage"
 PARTS = {"UpperTorso": ["Export_torso", "Export_pecoco"],
          "LeftUpperLeg": ["Export_coxa_esquerda"], "RightUpperLeg": ["Export_coxa_direita"],
          "LeftLowerLeg": ["Export_canela_esquerda"], "RightLowerLeg": ["Export_canela_direita"],
-         "LeftFoot": ["Export_pe_esquerdo"], "RightFoot": ["Export_pe_direito"]}
+         "LeftFoot": ["Export_pe_esquerdo"], "RightFoot": ["Export_pe_direito"],
+         "LeftUpperArm": ["Export_braco_superior_esquerdo"], "RightUpperArm": ["Export_braco_superior_direito"],
+         "LeftLowerArm": ["Export_antebraco_esquerdo"], "RightLowerArm": ["Export_antebraco_direito"],
+         "LeftHand": ["Export_mao_esquerda"], "RightHand": ["Export_mao_direita"]}
+# The male body has no hand mesh: its forearm runs to the fingertips.
+MALE_GROUPS = {"LeftHand": ["Export_antebraco_esquerdo"], "RightHand": ["Export_antebraco_direito"]}
+# Arms: the female cage moved box to box (both bodies' arm parts are boxes with matching
+# corners: shoulder/elbow rings of four, the forearm elbow/wrist). The male forearm is
+# split at the female forearm's share of forearm + hand to make a wrist ring.
+ARMS = {"LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftHand", "RightHand"}
+WRIST_FRACTION = 0.707
 # Parts built from the original R15 cage (same points, order and UVs as the female one):
 # the male legs are plain boxes like the R15 legs, while the female legs are curved.
 FROM_R15 = {"LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg"}
@@ -62,7 +72,10 @@ LANDMARKS = {}
 LEVEL_RINGS = {"LowerTorso": ("Export_pelve", (7, 4, 6), (6, 4, 6))}
 # Cage part -> parts built before it whose cage points it shares (same position on the
 # female cage, different UVs): those points are copied so the seam stays closed.
-SEAMS = {"LowerTorso": ["UpperTorso"], "LeftLowerLeg": ["LeftUpperLeg"], "RightLowerLeg": ["RightUpperLeg"]}
+SEAMS = {"LowerTorso": ["UpperTorso"], "LeftLowerLeg": ["LeftUpperLeg"], "RightLowerLeg": ["RightUpperLeg"],
+         "LeftUpperArm": ["UpperTorso"], "RightUpperArm": ["UpperTorso"],
+         "LeftLowerArm": ["LeftUpperArm"], "RightLowerArm": ["RightUpperArm"],
+         "LeftHand": ["LeftLowerArm"], "RightHand": ["RightLowerArm"]}
 SEAM_FADE = 0.05  # the seam correction fades over 5 cm below the seam
 UP = 1
 
@@ -70,6 +83,19 @@ UP = 1
 def body_part(path, groups):
     data = CM.parse_clean_obj_groups(str(path), groups)
     return data[0].reshape(-1, 11)[:, :3].astype(np.float64), data[1].reshape(-1, 3)
+
+
+def outward_faces(vertices, faces):
+    """Faces rewound so their normals point away from the part's centre (convex box parts).
+
+    The male right upper arm has a few triangles wound inwards; read as skin they looked
+    like skin poking through the cage.
+    """
+    faces = np.array(faces)
+    normal = np.cross(vertices[faces[:, 1]] - vertices[faces[:, 0]], vertices[faces[:, 2]] - vertices[faces[:, 0]])
+    inward = (normal * (vertices[faces].mean(1) - vertices.mean(0))).sum(1) < 0
+    faces[inward] = faces[inward][:, ::-1]
+    return faces
 
 
 def face_normals(vertices, faces):
@@ -713,6 +739,40 @@ def landmark_transfer(points, female_vertices, male_vertices):
     return points + warp
 
 
+def keep_skin_distance(points, female_distance, vertices, faces, slack=0.01):
+    """Bring points that ended farther from the male skin than on the female cage back to that distance."""
+    _, _, closest = closest_on_mesh(points, vertices, faces)
+    offset = points - closest
+    distance = np.linalg.norm(offset, axis=1)
+    far = distance > female_distance + slack
+    points = points.copy()
+    points[far] = closest[far] + offset[far] / distance[far, None] * female_distance[far, None]
+    return points
+
+
+def end_rings(vertices):
+    """(bottom, top) rings of four corners of an arm part: its 4 lowest and 4 highest corners."""
+    corners = np.unique(np.round(vertices, 4), axis=0)
+    corners = corners[np.argsort(corners[:, UP])]
+    rings = []
+    for ring in (corners[:4], corners[-4:]):
+        centre = ring.mean(0)
+        key = {(np.sign(c[0] - centre[0]), np.sign(c[2] - centre[2])): c for c in ring}
+        rings.append([key[(-1, -1)], key[(1, -1)], key[(1, 1)], key[(-1, 1)]])
+    return np.array(rings)
+
+
+def arm_rings(part, female_vertices, male_vertices):
+    """Female and male (bottom, top) rings for an arm part; the male forearm is split at the wrist."""
+    f_rings = end_rings(female_vertices)
+    m_rings = end_rings(male_vertices)
+    if part.endswith("LowerArm") or part.endswith("Hand"):
+        # m_rings is the male forearm (elbow top, fingertips bottom): cut it at the wrist.
+        wrist = m_rings[1] + WRIST_FRACTION * (m_rings[0] - m_rings[1])
+        m_rings = np.array([wrist, m_rings[1]]) if part.endswith("LowerArm") else np.array([m_rings[0], wrist])
+    return f_rings, m_rings
+
+
 def cage_edges(cage_points, cage_faces):
     """Welded vertex index of each cage point and the welded edge list (UV seams joined)."""
     _, weld = np.unique(np.round(cage_points, 6), axis=0, return_inverse=True)
@@ -776,7 +836,10 @@ def main():
         cage = engine_to_body_mesh(np.asarray(engine.r15_female_cages[part]["verts"], dtype=np.float64))
         cage_faces = np.asarray(engine.r15_female_cages[part]["faces"])
         female_groups = [body_part(FEMALE_BODY, [g]) for g in groups]
-        male_groups = [body_part(MALE_BODY, [g]) for g in groups]
+        male_groups = [body_part(MALE_BODY, [g]) for g in MALE_GROUPS.get(part, groups)]
+        if part in ARMS:
+            female_groups = [(v, outward_faces(v, f)) for v, f in female_groups]
+            male_groups = [(v, outward_faces(v, f)) for v, f in male_groups]
         if part in FROM_R15:
             source = engine_to_body_mesh(np.asarray(engine.r15_source_cages[part]["verts"], dtype=np.float64))
             shared, female_shared = None, None
@@ -801,6 +864,14 @@ def main():
             group, rows = EDGE_LOOPS[part]
             k = groups.index(group)
             male_cage = box_transfer(cage, female_groups[k][0], male_groups[k][0], rows)
+        elif part in ARMS:
+            f_rings, m_rings = arm_rings(part, female_groups[0][0], male_groups[0][0])
+            male_cage = box_transfer(cage, None, None, None, f_rings, m_rings)
+            # The male upper arm is much deeper: the box map scaled the cage's offset with it.
+            # Bring each point back to its female distance from the skin.
+            _, _, f_closest = closest_on_mesh(cage, *female_groups[0])
+            male_cage = keep_skin_distance(male_cage, np.linalg.norm(cage - f_closest, axis=1), *male_groups[0],
+                                           slack=0.002)
         elif part in LEVEL_RINGS:
             group, f_levels, m_levels = LEVEL_RINGS[part]
             k = groups.index(group)
@@ -852,13 +923,47 @@ def main():
         female_distance = np.linalg.norm(cage - female_closest, axis=1)
         import os
         stage = os.environ.get("CAGE_STAGE", "all")  # debugging: stop after "transfer" or "projection"
-        if stage != "transfer" and part not in LEVEL_RINGS and part not in FROM_R15 and part not in SAME_AS_FEMALE:  # the box transfer already fits flat faces
+        mirrored_arm = False
+        if part.startswith("Right") and part in ARMS:
+            # The female cage is an exact mirror image and the male body nearly: the right arm
+            # starts as the left one mirrored point for point. The male arms split their quads
+            # along opposite diagonals, so the collision pass below still fixes a few spots.
+            left = part.replace("Right", "Left", 1)
+            left_female = engine_to_body_mesh(np.asarray(engine.r15_female_cages[left]["verts"], dtype=np.float64))
+            twin = np.linalg.norm((cage * [-1.0, 1.0, 1.0])[:, None] - left_female[None], axis=-1).argmin(1)
+            male_cage = np.load(OUT / f"{left}_male.npy")[twin] * [-1.0, 1.0, 1.0]
+            # Local fix only: points shared with the next arm part (elbow, wrist) stay put and
+            # the push does not spread, so the mirrored shape and the seams are kept.
+            for other in [q for q in ARMS if q.startswith("Right") and q != part]:
+                other_female = engine_to_body_mesh(np.asarray(engine.r15_female_cages[other]["verts"], dtype=np.float64))
+                fixed |= np.linalg.norm(cage[:, None] - other_female[None], axis=-1).min(1) < 1e-4
+            mirrored_arm = True
+            # Keep each point's clearance from the right skin at least its twin's clearance from
+            # the left skin, moving it along its own offset from the skin (the skin normals of the
+            # twisted quads point off to the back).
+            left_skin = [body_part(MALE_BODY, [g]) for g in MALE_GROUPS.get(left, PARTS[left])][0]
+            left_points = np.load(OUT / f"{left}_male.npy")[twin]
+            _, _, left_closest = closest_on_mesh(left_points, *left_skin)
+            wanted = np.linalg.norm(left_points - left_closest, axis=1)
+            face, _, closest = closest_on_mesh(male_cage, male_groups[0][0], outward_faces(*male_groups[0]))
+            offset = male_cage - closest
+            distance = np.linalg.norm(offset, axis=1)
+            normal = face_normals(male_groups[0][0], outward_faces(*male_groups[0]))[face]
+            outside = (offset * normal).sum(1) > 0
+            direction = np.where(outside[:, None], offset / np.maximum(distance, 1e-9)[:, None], normal)
+            corrected = closest + direction * wanted[:, None]
+            # The real gaps are under 1 cm; a bigger move comes from an ambiguous normal on a
+            # twisted quad and is ignored.
+            short = (~outside | (distance < wanted)) & ~fixed & (np.linalg.norm(corrected - male_cage, axis=1) < 0.012)
+            male_cage[short] = corrected[short]
+        if stage != "transfer" and part not in LEVEL_RINGS and part not in FROM_R15 and part not in SAME_AS_FEMALE and part not in ARMS:  # the box transfer already fits flat faces
             male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         if stage == "all":
             if part in LEVEL_RINGS:
                 male_cage = ring_clearance(male_cage, male_skin, fixed)
             else:
-                male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
+                if not mirrored_arm:
+                    male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
         entry_seam = len(seam_points)
         entry = {"pontos": int(len(cage)), "pontos_de_costura_com_partes_anteriores": entry_seam}
         for name, points, skin in (("feminino", cage, female_skin), ("masculino", male_cage, male_skin)):
