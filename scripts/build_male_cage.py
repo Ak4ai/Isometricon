@@ -387,6 +387,36 @@ def quadrant_rings(vertices, levels):
     return np.array(rings)
 
 
+def _map_axis(values, f_low, f_high, m_low, m_high):
+    """Inside [f_low, f_high] scale onto [m_low, m_high]; outside keep the distance to the edge."""
+    scaled = m_low + (values - f_low) * (m_high - m_low) / (f_high - f_low)
+    return np.where(values < f_low, m_low + (values - f_low), np.where(values > f_high, m_high + (values - f_high), scaled))
+
+
+def axis_transfer(points, f_rings, m_rings, female_skin, male_skin):
+    """Points mapped axis by axis: the body's extent is scaled, the cage's offset outside it kept.
+
+    Width and depth come from the whole skin at the part's height (the male thighs
+    stick out wider than the male pelvis); height is piecewise linear through the
+    rings' heights. Each axis is mapped on its own, so flat cage faces stay flat and
+    horizontal bands stay horizontal (the trilinear box map twisted the hip sides),
+    and the cage keeps the female cage's distance outside the body.
+    """
+    f_h, m_h = f_rings[:, :, UP].mean(1), m_rings[:, :, UP].mean(1)
+    def extent(skin, low, high):
+        v = skin[(skin[:, UP] >= low) & (skin[:, UP] <= high)]
+        return v.min(0), v.max(0)
+    f_min, f_max = extent(female_skin, f_h[0], f_h[-1])
+    m_min, m_max = extent(male_skin, m_h[0], m_h[-1])
+    result = np.empty_like(points)
+    for axis in (0, 2):
+        result[:, axis] = _map_axis(points[:, axis], f_min[axis], f_max[axis], m_min[axis], m_max[axis])
+    result[:, UP] = _map_axis(points[:, UP], f_h[0], f_h[-1], m_h[0], m_h[-1])
+    inside = (points[:, UP] >= f_h[0]) & (points[:, UP] <= f_h[-1])
+    result[inside, UP] = np.interp(points[inside, UP], f_h, m_h)
+    return result
+
+
 def box_transfer(points, female_vertices, male_vertices, rows, f_rings=None, m_rings=None):
     """Points moved cell by cell between the stacked boxes of the two body groups.
 
@@ -535,7 +565,7 @@ def main():
             group, f_levels, m_levels = LEVEL_RINGS[part]
             k = groups.index(group)
             f_rings, m_rings = quadrant_rings(female_groups[k][0], f_levels), quadrant_rings(male_groups[k][0], m_levels)
-            male_cage = box_transfer(cage, None, None, None, f_rings, m_rings)
+            male_cage = axis_transfer(cage, f_rings, m_rings, merged(female_groups)[0], merged(male_groups)[0])
         elif part in LANDMARKS:
             k = groups.index(LANDMARKS[part])
             male_cage = landmark_transfer(cage, female_groups[k][0], male_groups[k][0])
@@ -575,7 +605,8 @@ def main():
         if stage != "transfer" and part not in LEVEL_RINGS:  # the box transfer already fits flat faces
             male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         if stage == "all":
-            male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
+            male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed,
+                                           spread=0.9 if part in LEVEL_RINGS else 0.5)  # wide, smooth bulge
         entry_seam = len(seam_points)
         entry = {"pontos": int(len(cage)), "pontos_de_costura_com_partes_anteriores": entry_seam}
         for name, points, skin in (("feminino", cage, female_skin), ("masculino", male_cage, male_skin)):
