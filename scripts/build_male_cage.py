@@ -547,13 +547,70 @@ def ring_offsets(female_points, male_points, female_skin, male_skin):
     return result
 
 
-def r15_box_transfer(source_points, male_body, margin=0.012):
+def _source_rings(source):
+    """Bottom and top rings of four corners of an R15 cage part (box-like, top may slant).
+
+    Each corner takes the box's x/z corner; its height is the lowest (bottom) or highest
+    (top) cage point near that corner, so the thigh's slanted top (low at the crotch,
+    high at the hip) is kept.
+    """
+    low, high = source.min(0), source.max(0)
+    size = high - low
+    rings = []
+    for pick in (np.min, np.max):
+        ring = []
+        for x, z in ((low[0], low[2]), (high[0], low[2]), (high[0], high[2]), (low[0], high[2])):
+            near = (np.abs(source[:, 0] - x) < 0.25 * size[0]) & (np.abs(source[:, 2] - z) < 0.35 * size[2])
+            ring.append((x, pick(source[near, UP]), z))
+        rings.append(ring)
+    return np.array(rings, dtype=np.float64)
+
+
+def _inverse_trilinear(point, cell):
+    """Parameters (u, v, w) of ``point`` in a hexahedral cell (Newton)."""
+    uvw = np.array([0.5, 0.5, 0.5])
+    for _ in range(25):
+        current = _trilinear(cell, *uvw)
+        jacobian = np.empty((3, 3))
+        for axis in range(3):
+            step = np.zeros(3)
+            step[axis] = 1e-5
+            jacobian[:, axis] = (_trilinear(cell, *(uvw + step)) - current) / 1e-5
+        uvw = np.clip(uvw + np.linalg.lstsq(jacobian, point - current, rcond=None)[0], -1.0, 2.0)
+    return uvw
+
+
+def open_edge_planes(points, faces):
+    """Planes y = a + b*x + c*z through a cage part's two open edges (bottom, top).
+
+    The edges used by a single triangle form the part's open loops (where it meets the
+    next part); split by height into the bottom and the top loop.
+    """
+    _, weld = np.unique(np.round(points, 5), axis=0, return_inverse=True)
+    weld = weld.ravel()
+    welded = weld[np.asarray(faces)]
+    edges = np.sort(np.concatenate([welded[:, [0, 1]], welded[:, [1, 2]], welded[:, [2, 0]]]), axis=1)
+    unique, counts = np.unique(edges, axis=0, return_counts=True)
+    border = np.unique(unique[counts == 1])
+    position = np.zeros((weld.max() + 1, 3))
+    position[weld] = points
+    border_points = position[border]
+    middle = (points[:, UP].min() + points[:, UP].max()) / 2
+    planes = []
+    for loop in (border_points[border_points[:, UP] < middle], border_points[border_points[:, UP] >= middle]):
+        design = np.column_stack((np.ones(len(loop)), loop[:, 0], loop[:, 2]))
+        planes.append(np.linalg.lstsq(design, loop[:, UP], rcond=None)[0])
+    return planes
+
+
+def r15_box_transfer(source_points, male_body, source_rings=None, margin=0.012, female_points=None,
+                     female_rings=None):
     """The R15 cage part fitted into the male body part's slanted box.
 
-    The R15 cage faces the other way in depth (z is mirrored). Its bounding box is
-    mapped trilinearly onto the male part's two rings of four corners (top and bottom,
-    each widened by ``margin``), so the cage follows the leg's slant (the male thigh
-    runs inwards from the hip to the knee) instead of standing upright.
+    The R15 cage faces the other way in depth (z is mirrored). Its own rings of four
+    corners (bottom and top, see ``_source_rings``) are mapped trilinearly onto the male
+    part's two rings (each widened by ``margin``), so the cage follows the leg's slant
+    and the thigh's slanted top. ``source_rings`` lets two parts share a ring (the knee).
     """
     source = source_points * np.array([1.0, 1.0, -1.0])
     rings = box_rings(male_body, 2)
@@ -561,9 +618,22 @@ def r15_box_transfer(source_points, male_body, margin=0.012):
         centre = ring.mean(0)
         ring[:, 0] += np.sign(ring[:, 0] - centre[0]) * margin
         ring[:, 2] += np.sign(ring[:, 2] - centre[2]) * margin
-    low, high = source.min(0), source.max(0)
-    uvw = (source - low) / (high - low)  # u across x, v up, w across z
-    return np.array([_trilinear((rings[0], rings[1]), u, v, w) for u, v, w in uvw])
+    f_rings = _source_rings(source) if source_rings is None else source_rings
+    if female_points is None:
+        return box_transfer(source, None, None, None, f_rings, rings), f_rings
+    # Cross-section from the R15 cage (boxy like the male legs), rows from the female
+    # cage: the R15 thigh packs its rows low and leaves the hip rows sparse, the female
+    # cage spreads them evenly over the thigh. A row's height is its fraction between the
+    # female cage's two open edges (knee and slanted top), each fitted as a plane.
+    bottom_plane, top_plane = female_rings
+    at = lambda plane, pts: plane[0] + plane[1] * pts[:, 0] + plane[2] * pts[:, 2]
+    v_all = (female_points[:, UP] - at(bottom_plane, female_points)) / (
+        at(top_plane, female_points) - at(bottom_plane, female_points))
+    result = np.empty_like(source)
+    for index, (point, v) in enumerate(zip(source, v_all)):
+        u, _, w = _inverse_trilinear(point, (f_rings[0], f_rings[1]))
+        result[index] = _trilinear((rings[0], rings[1]), u, float(np.clip(v, 0, 1)), w)
+    return result, f_rings
 
 
 def box_transfer(points, female_vertices, male_vertices, rows, f_rings=None, m_rings=None):
@@ -701,6 +771,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     engine = RobloxWearEngine(body_type="female")
     report = {}
+    knee_rings = {}
     for part, groups in PARTS.items():
         cage = engine_to_body_mesh(np.asarray(engine.r15_female_cages[part]["verts"], dtype=np.float64))
         cage_faces = np.asarray(engine.r15_female_cages[part]["faces"])
@@ -708,7 +779,20 @@ def main():
         male_groups = [body_part(MALE_BODY, [g]) for g in groups]
         if part in FROM_R15:
             source = engine_to_body_mesh(np.asarray(engine.r15_source_cages[part]["verts"], dtype=np.float64))
-            male_cage = r15_box_transfer(source, male_groups[0][0])
+            shared, female_shared = None, None
+            if part.endswith("LowerLeg"):
+                # The knee ring is the thigh's bottom ring, so the knee points land where
+                # the thigh's did.
+                side = part.replace("LowerLeg", "")
+                shared = _source_rings(engine_to_body_mesh(np.asarray(
+                    engine.r15_source_cages[part]["verts"], dtype=np.float64)) * np.array([1.0, 1.0, -1.0]))
+                shared[1] = knee_rings[side][0]
+            thigh = part.endswith("UpperLeg")
+            male_cage, rings = r15_box_transfer(source, male_groups[0][0], shared,
+                                                female_points=cage if thigh else None,
+                                                female_rings=open_edge_planes(cage, cage_faces) if thigh else None)
+            if part.endswith("UpperLeg"):
+                knee_rings[part.replace("UpperLeg", "")] = (rings[0], _source_rings(cage)[0])
         elif part in SAME_AS_FEMALE:
             male_cage = cage.copy()
         elif part in EDGE_LOOPS:

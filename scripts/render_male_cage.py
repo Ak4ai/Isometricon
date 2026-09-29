@@ -81,6 +81,44 @@ def render(shader, model, cage, white, eye, markers=(), target=(0.0, 1.2, 0.0)):
     return Image.frombytes("RGBA", (SIZE, SIZE), pixels).transpose(Image.FLIP_TOP_BOTTOM).convert("RGB")
 
 
+def render_parts(shader, white, cages, parts):
+    """One row per cage part, camera centred on it: female front/side, male front/side/3/4/back."""
+    models = {label: CharacterModel(customization=AvatarCustomization(body_type=body), top_id=None, bottom_id=None,
+                                    hair_id="none") for label, body in (("feminino", BodyType.FEMALE),
+                                                                        ("masculino", BodyType.MALE))}
+    columns = [("feminino", "frente"), ("feminino", "lado"), ("masculino", "frente"), ("masculino", "lado"),
+               ("masculino", "3/4"), ("masculino", "costas")]
+    directions = {"frente": (0, 0.15, 1), "lado": (1, 0.15, 0), "3/4": (-0.75, 0.3, 0.75), "costas": (0, 0.15, -1)}
+    sheet = Image.new("RGB", (SIZE * len(columns), (SIZE + 22) * len(parts)), "white")
+    draw = ImageDraw.Draw(sheet)
+    for row, part in enumerate(parts):
+        points = {"feminino": engine_to_body_mesh(np.asarray(cages[part]["verts"], dtype=np.float64)),
+                  "masculino": np.load(OUT / f"{part}_male.npy")}
+        faces = np.asarray(cages[part]["faces"])
+        for column, (label, view) in enumerate(columns):
+            pts = points[label]
+            centre = (pts.min(0) + pts.max(0)) / 2
+            distance = 2.2 * np.ptp(pts, axis=0).max() + 0.25
+            d = np.array(directions[view], float)
+            eye = centre + d / np.linalg.norm(d) * distance
+            cage = wire_mesh(pts, faces, (0.2, 0.55, 1.0))
+            poking, inside = [], []
+            path = OUT / f"{part}_{label}_colisoes.npz"
+            if path.exists():
+                with np.load(path) as data:
+                    poking, inside = data["poking"], data["inside"]
+            markers = [m for m in (marker_mesh(poking, (1.0, 0.1, 0.1)), marker_mesh(inside, (1.0, 0.9, 0.1), 0.009)) if m]
+            tile = render(shader, models[label], cage, white, list(eye), markers, tuple(centre))
+            for m in markers:
+                m.delete()
+            cage.delete()
+            sheet.paste(tile, (column * SIZE, row * (SIZE + 22) + 22))
+            draw.text((column * SIZE + 6, row * (SIZE + 22) + 5), f"{part} - {label} - {view}", fill="black")
+    for model in models.values():
+        model.delete()
+    return sheet
+
+
 def main():
     neck = "--pescoco" in sys.argv
     chest = "--peito" in sys.argv
@@ -117,6 +155,12 @@ def main():
     shader = Shader("assets/shaders/world_textured.vert", "assets/shaders/world_textured.frag")
     white = upload_texture_rgba(Image.new("RGBA", (4, 4), (255, 255, 255, 255)))
     cages = RobloxWearEngine(body_type="female").r15_female_cages
+    if "--partes" in sys.argv:
+        sheet = render_parts(shader, white, cages, parts)
+        out = OUT / "cage_partes.png"
+        sheet.save(out)
+        print("[OK]", out)
+        return
 
     female_points, male_points, faces, offset = [], [], [], 0
     for part in parts:
