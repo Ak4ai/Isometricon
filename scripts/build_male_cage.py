@@ -116,23 +116,36 @@ def ring_map(point, female, male, margin=0.02):
     return np.array([planar[0], m_low + fraction * (m_high - m_low), planar[1]])
 
 
-def move_collar(cage_points, male_cage, female_collar, male_collar, female_base, male_base):
-    """Points closer to the collar group (the neck) than to its base group, moved rigidly.
+def move_collar(cage_points, male_cage, female_collar, male_collar, female_base, male_base, base_rows,
+                standing=0.015, base_reach=0.065):
+    """The collar moved with the neck, in two consistent parts.
 
-    The collar ring follows the neck's centre across and the base group's top up and
-    down: the male neck sits further back and the male shoulders higher. (Fading this
-    move into the shoulders pulled the upper chest towards the neck through the skin.)
-    Returns the moved points and the mask of the collar points.
+    - Standing collar (above the base group's top face by more than ``standing``):
+      rigid, following the neck's centre across and the top face's height at the
+      neck (the male neck sits further back, the male shoulders higher and tilted).
+    - Base ring (on the top face, within ``base_reach`` of the neck's centre, square
+      distance): across it follows the neck, its height follows the tilted top face.
+    Classifying by "closer to the neck than to the chest" split the base ring in two
+    halves that went different ways, which notched the neck hole.
+    Returns the moved points and the mask of the collar points (both parts).
     """
     (fcv, fcf), (mcv, mcf), (fbv, fbf), (mbv, mbf) = female_collar, male_collar, female_base, male_base
-    near_collar = (np.linalg.norm(cage_points - closest_on_mesh(cage_points, fcv, fcf)[2], axis=1)
-                   < np.linalg.norm(cage_points - closest_on_mesh(cage_points, fbv, fbf)[2], axis=1))
-    shift = np.array([0.0, mbv[:, UP].max() - fbv[:, UP].max(), 0.0])
+    f_top, m_top = edge_loop_planes(fbv, base_rows)[-1], edge_loop_planes(mbv, base_rows)[-1]
+    plane = lambda coefficients, x, z: coefficients[0] + coefficients[1] * x + coefficients[2] * z
     centre_f, centre_m = (fcv.min(0) + fcv.max(0)) / 2, (mcv.min(0) + mcv.max(0)) / 2
-    shift[[0, 2]] = (centre_m - centre_f)[[0, 2]]
-    male_cage = male_cage.copy()
-    male_cage[near_collar] = cage_points[near_collar] + shift
-    return male_cage, near_collar
+    across = (centre_m - centre_f)[[0, 2]]
+    f_height = plane(f_top, cage_points[:, 0], cage_points[:, 2])
+    square = np.maximum(np.abs(cage_points[:, 0] - centre_f[0]), np.abs(cage_points[:, 2] - centre_f[2]))
+    standing_mask = cage_points[:, UP] > f_height + standing
+    base_mask = ~standing_mask & (square < base_reach) & (cage_points[:, UP] > f_height - standing)
+    moved = male_cage.copy()
+    new_x = cage_points[:, 0] + across[0]
+    new_z = cage_points[:, 2] + across[1]
+    lift = plane(m_top, centre_m[0], centre_m[2]) - plane(f_top, centre_f[0], centre_f[2])
+    moved[standing_mask] = np.column_stack((new_x, cage_points[:, UP] + lift, new_z))[standing_mask]
+    base_height = plane(m_top, new_x, new_z) + (cage_points[:, UP] - f_height)
+    moved[base_mask] = np.column_stack((new_x, base_height, new_z))[base_mask]
+    return moved, standing_mask | base_mask
 
 
 def buried(points, other_groups, depth=0.003):
@@ -440,19 +453,15 @@ def main():
             male_cage = box_transfer(cage, female_groups[k][0], male_groups[k][0], rows)
         else:
             male_cage = warp_transfer(cage, female_groups, male_groups)
+        fixed = np.zeros(len(cage), dtype=bool)
         if part in COLLARS:
             collar, base = (groups.index(g) for g in COLLARS[part])
-            male_cage, _ = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
-                                       female_groups[base], male_groups[base])
+            male_cage, fixed = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
+                                           female_groups[base], male_groups[base], EDGE_LOOPS[part][1])
         female_skin, male_skin = merged(female_groups), merged(male_groups)
         visible = {"feminino": visible_skin(female_groups), "masculino": visible_skin(male_groups)}
         _, _, female_closest = closest_on_mesh(cage, *female_skin)
         female_distance = np.linalg.norm(cage - female_closest, axis=1)
-        fixed = np.zeros(len(cage), dtype=bool)
-        if part in COLLARS:
-            (fcv, fcf), (fbv, fbf) = (female_groups[groups.index(g)] for g in COLLARS[part])
-            fixed = (np.linalg.norm(cage - closest_on_mesh(cage, fcv, fcf)[2], axis=1)
-                     < np.linalg.norm(cage - closest_on_mesh(cage, fbv, fbf)[2], axis=1))
         male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"])
         entry = {"pontos": int(len(cage))}
