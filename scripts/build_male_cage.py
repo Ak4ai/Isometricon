@@ -120,8 +120,9 @@ def move_collar(cage_points, male_cage, female_collar, male_collar, female_base,
     """Points closer to the collar group (the neck) than to its base group, moved rigidly.
 
     The collar ring follows the neck's centre across and the base group's top up and
-    down: the male neck sits further back and the male shoulders higher, and a smooth
-    warp averaged those two moves, laying the collar flat on the shoulders.
+    down: the male neck sits further back and the male shoulders higher. (Fading this
+    move into the shoulders pulled the upper chest towards the neck through the skin.)
+    Returns the moved points and the mask of the collar points.
     """
     (fcv, fcf), (mcv, mcf), (fbv, fbf), (mbv, mbf) = female_collar, male_collar, female_base, male_base
     near_collar = (np.linalg.norm(cage_points - closest_on_mesh(cage_points, fcv, fcf)[2], axis=1)
@@ -131,7 +132,7 @@ def move_collar(cage_points, male_cage, female_collar, male_collar, female_base,
     shift[[0, 2]] = (centre_m - centre_f)[[0, 2]]
     male_cage = male_cage.copy()
     male_cage[near_collar] = cage_points[near_collar] + shift
-    return male_cage
+    return male_cage, near_collar
 
 
 def buried(points, other_groups, depth=0.003):
@@ -319,6 +320,57 @@ def follow_edge_loops(female_points, male_points, female_vertices, male_vertices
     return result
 
 
+def box_rings(vertices, rows):
+    """The corners of a box-like body group: ``rows`` rings of 4, ordered (-x-z, +x-z, +x+z, -x+z)."""
+    corners = np.unique(np.round(vertices, 4), axis=0)
+    corners = corners[np.argsort(corners[:, UP])]
+    rings = []
+    for ring in np.array_split(corners, rows):
+        centre = ring.mean(0)
+        key = {(np.sign(c[0] - centre[0]), np.sign(c[2] - centre[2])): c for c in ring}
+        rings.append([key[(-1, -1)], key[(1, -1)], key[(1, 1)], key[(-1, 1)]])
+    return np.array(rings)  # (rows, 4, 3)
+
+
+def _trilinear(cell, u, v, w):
+    """Point of a hexahedral cell (bottom ring, top ring) at parameters u (x), v (up), w (z)."""
+    bottom, top = cell
+    ring = lambda r: ((1 - u) * (1 - w) * r[0] + u * (1 - w) * r[1] + u * w * r[2] + (1 - u) * w * r[3])
+    return (1 - v) * ring(bottom) + v * ring(top)
+
+
+def box_transfer(points, female_vertices, male_vertices, rows):
+    """Points moved cell by cell between the stacked boxes of the two body groups.
+
+    Each point is located in the female box cell it belongs to (inverse trilinear
+    map, Newton) and rebuilt at the same parameters in the matching male cell, so
+    the box's faces map onto the box's faces: the cage keeps its grid on the front
+    and on the top face, and its rings follow the tilted edge loops. Points past a
+    cell (the cage's offset, the collar above the top) extrapolate the same map.
+    """
+    f_rings, m_rings = box_rings(female_vertices, rows), box_rings(male_vertices, rows)
+    result = np.empty_like(points)
+    for index, point in enumerate(points):
+        best = None
+        for k in range(rows - 1):
+            cell = (f_rings[k], f_rings[k + 1])
+            uvw = np.array([0.5, 0.5, 0.5])
+            for _ in range(20):
+                current = _trilinear(cell, *uvw)
+                jacobian = np.empty((3, 3))
+                for axis in range(3):
+                    step = np.zeros(3)
+                    step[axis] = 1e-4
+                    jacobian[:, axis] = (_trilinear(cell, *(uvw + step)) - current) / 1e-4
+                uvw = uvw + np.linalg.lstsq(jacobian, point - current, rcond=None)[0]
+            outside = np.abs(np.clip(uvw, 0, 1) - uvw).sum()
+            if best is None or outside < best[0] or (outside == best[0] and abs(uvw[1] - 0.5) < abs(best[2][1] - 0.5)):
+                best = (outside, k, uvw)
+        _, k, uvw = best
+        result[index] = _trilinear((m_rings[k], m_rings[k + 1]), *uvw)
+    return result
+
+
 def cage_edges(cage_points, cage_faces):
     """Welded vertex index of each cage point and the welded edge list (UV seams joined)."""
     _, weld = np.unique(np.round(cage_points, 6), axis=0, return_inverse=True)
@@ -382,15 +434,16 @@ def main():
         cage_faces = np.asarray(engine.r15_female_cages[part]["faces"])
         female_groups = [body_part(FEMALE_BODY, [g]) for g in groups]
         male_groups = [body_part(MALE_BODY, [g]) for g in groups]
-        male_cage = warp_transfer(cage, female_groups, male_groups)
         if part in EDGE_LOOPS:
             group, rows = EDGE_LOOPS[part]
             k = groups.index(group)
-            male_cage = follow_edge_loops(cage, male_cage, female_groups[k][0], male_groups[k][0], rows)
+            male_cage = box_transfer(cage, female_groups[k][0], male_groups[k][0], rows)
+        else:
+            male_cage = warp_transfer(cage, female_groups, male_groups)
         if part in COLLARS:
             collar, base = (groups.index(g) for g in COLLARS[part])
-            male_cage = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
-                                    female_groups[base], male_groups[base])
+            male_cage, _ = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
+                                       female_groups[base], male_groups[base])
         female_skin, male_skin = merged(female_groups), merged(male_groups)
         visible = {"feminino": visible_skin(female_groups), "masculino": visible_skin(male_groups)}
         _, _, female_closest = closest_on_mesh(cage, *female_skin)

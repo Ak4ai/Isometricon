@@ -83,10 +83,15 @@ def render(shader, model, cage, white, eye, markers=(), target=(0.0, 1.2, 0.0)):
 
 def main():
     neck = "--pescoco" in sys.argv
+    chest = "--peito" in sys.argv
     parts = [a for a in sys.argv[1:] if not a.startswith("--")] or sorted(
         p.stem.removesuffix("_male") for p in OUT.glob("*_male.npy"))
-    target = (0.0, 1.48, 0.0) if neck else (0.0, 1.2, 0.0)
+    target = (0.0, 1.48, 0.0) if neck else (0.0, 1.3, 0.0) if chest else (0.0, 1.2, 0.0)
     views = [(name, [e[0] * 0.4, target[1] + (e[1] - 1.2) * 0.4 + 0.05, e[2] * 0.4]) for name, e in VIEWS] if neck else VIEWS
+    if chest:
+        # Close to the chest, plus straight from above (the shoulders' top face).
+        views = [("peito frente", [0.0, 1.35, 0.75]), ("peito 3/4", [-0.55, 1.45, 0.55]),
+                 ("peito lado", [0.75, 1.35, 0.0]), ("de cima", [0.0, 2.2, 0.02])]
     glfw.init()
     glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -126,7 +131,16 @@ def main():
                     inside.append(data["inside"])
         markers = [m for m in (marker_mesh(np.concatenate(poking) if poking else [], (1.0, 0.1, 0.1)),
                                marker_mesh(np.concatenate(inside) if inside else [], (1.0, 0.9, 0.1), 0.009)) if m]
-        rows.append((label, [render(shader, model, cage, white, eye, markers, target) for _, eye in views]))
+        tiles = []
+        for name, eye in views:
+            hidden = []
+            if name == "de cima":  # the head hides the shoulders from above
+                hidden = [part for part in model.parts if part.name.startswith("head")]
+                model.parts = [part for part in model.parts if part not in hidden]
+            tiles.append(render(shader, model, cage, white, eye, markers,
+                                (0.0, 1.45, 0.0) if name == "de cima" else target))
+            model.parts.extend(hidden)
+        rows.append((label, tiles))
         for m in markers:
             m.delete()
         cage.delete()
@@ -139,7 +153,7 @@ def main():
             sheet.paste(tile, (column * SIZE, row * (SIZE + 22) + 22))
             draw.text((column * SIZE + 6, row * (SIZE + 22) + 5),
                       f"{label} - cage {', '.join(parts)} - {views[column][0]}", fill="black")
-    out = OUT / ("cage_pescoco.png" if neck else "cage_sobre_o_corpo.png")
+    out = OUT / ("cage_pescoco.png" if neck else "cage_peito.png" if chest else "cage_sobre_o_corpo.png")
     sheet.save(out)
     print("[OK]", out)
     glfw.destroy_window(window)
