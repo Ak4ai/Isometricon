@@ -11,8 +11,8 @@
     },
     "masculino": {
       "distancia_da_pele_cm": {
-        "mediana": 1.45,
-        "max": 3.98
+        "mediana": 1.15,
+        "max": 3.05
       },
       "pele_furando_a_cage": "0 de 544 amostras cobertas",
       "pontos_da_cage_dentro_da_pele": 0
