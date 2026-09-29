@@ -417,6 +417,127 @@ def axis_transfer(points, f_rings, m_rings, female_skin, male_skin):
     return result
 
 
+# Pelvis rings, set by hand: female cage/body height -> male height. The female pelvis
+# cage is a box of rings (top 0.91-0.93, band 0.893, low waist 0.872, hip 0.85, crotch
+# 0.76-0.82); the male pelvis is a thin slab whose width changes with height (the pelvis
+# is 0.128 wide at the top, the thighs 0.166 at the hip), so each ring gets its own width.
+PELVIS_LEVELS = ((0.777, 0.786), (0.801, 0.812), (0.855, 0.836), (0.872, 0.852), (0.893, 0.870), (0.905, 0.884))
+
+
+def _extents(skin, height):
+    """Half width, front and back of the skin's cross-section at ``height`` (x centred on 0).
+
+    ``skin`` is (vertices, faces); the section is the crossing points of its triangles.
+    """
+    vertices, faces = skin
+    tri = vertices[faces]
+    crossings = []
+    for i, j in ((0, 1), (1, 2), (2, 0)):
+        a, b = tri[:, i], tri[:, j]
+        span = b[:, UP] - a[:, UP]
+        t = (height - a[:, UP]) / np.where(np.abs(span) < 1e-12, np.nan, span)
+        ok = (t >= 0) & (t <= 1)
+        crossings.append(a[ok] + t[ok, None] * (b[ok] - a[ok]))
+    section = np.concatenate(crossings)
+    if len(section) < 3:
+        return None
+    return np.array([np.abs(section[:, 0]).max(), section[:, 2].max(), section[:, 2].min()])
+
+
+def pelvis_rings_transfer(points, female_skin, male_skin, levels=PELVIS_LEVELS):
+    """Each pelvis cage ring moved to its hand-picked male height, fitted to the body there.
+
+    Between two levels a point interpolates. Across the ring, the body's half width and
+    its front and back at that height are scaled from female to male; the part of a
+    point beyond the body (the cage's offset) is kept as it was on the female cage.
+    """
+    f_levels = np.array([f for f, _ in levels])
+    m_levels = np.array([m for _, m in levels])
+    def level_extents(skin, heights):
+        values = [_extents(skin, h) for h in heights]
+        known = [k for k, v in enumerate(values) if v is not None]
+        # A level past the body's end (the crotch tip) takes the nearest measured level.
+        return np.array([values[k] if values[k] is not None else values[min(known, key=lambda j: abs(j - k))]
+                         for k in range(len(values))])
+    f_ext = level_extents(female_skin, f_levels)
+    m_ext = level_extents(male_skin, m_levels)
+    result = np.empty_like(points)
+    for index, (x, y, z) in enumerate(points):
+        t = np.interp(y, f_levels, np.arange(len(levels)))
+        k = int(min(np.floor(t), len(levels) - 2))
+        w = t - k
+        fe = (1 - w) * f_ext[k] + w * f_ext[k + 1]
+        me = (1 - w) * m_ext[k] + w * m_ext[k + 1]
+        if y < f_levels[0]:
+            new_y = m_levels[0] + (y - f_levels[0])
+        elif y > f_levels[-1]:
+            new_y = m_levels[-1] + (y - f_levels[-1])
+        else:
+            new_y = np.interp(y, f_levels, m_levels)
+        ax = abs(x)
+        new_x = ax * me[0] / fe[0] if ax <= fe[0] else me[0] + (ax - fe[0])
+        if z >= 0:
+            new_z = z * me[1] / fe[1] if z <= fe[1] else me[1] + (z - fe[1])
+        else:
+            new_z = z * me[2] / fe[2] if z >= fe[2] else me[2] + (z - fe[2])
+        result[index] = (np.sign(x) * new_x, new_y, new_z)
+    # Below the crotch ring the horizontal ray passes between the thighs: those points keep
+    # the axis map.
+    above = points[:, UP] >= levels[1][0]
+    result[above] = ring_offsets(points[above], result[above], female_skin, male_skin)
+    return result
+
+
+def ring_clearance(points, skin, fixed, clearance=0.006):
+    """Points closer than ``clearance`` to the skin along their ring's radius move out along it."""
+    from src.clothing.layer_clearance import _farthest_hits
+    tri = skin[0][skin[1]]
+    centres = []
+    for y in points[:, UP]:
+        e = _extents(skin, y)
+        centres.append(0.0 if e is None else (e[1] + e[2]) / 2)
+    origins = np.column_stack((np.zeros(len(points)), points[:, UP], centres))
+    flat = points - origins
+    flat[:, UP] = 0.0
+    radius = np.linalg.norm(flat, axis=1)
+    directions = flat / np.maximum(radius, 1e-9)[:, None]
+    skin_radius = _farthest_hits(origins, directions, radius, tri, reach=1.0)
+    close = np.isfinite(skin_radius) & (radius < skin_radius + clearance) & ~fixed
+    result = points.copy()
+    result[close] = origins[close] + directions[close] * (skin_radius[close] + clearance)[:, None]
+    return result
+
+
+def ring_offsets(female_points, male_points, female_skin, male_skin):
+    """Give each point its female distance to the skin again, along its own ring's radius.
+
+    The ray starts at the centre of the body's cross-section at the point's height and
+    runs horizontally through the point; on the female body the cage's distance past
+    the skin along it is measured, and the male point is put that far past the male
+    skin along its ray. Staying on the ring's radius keeps the rings flat and even.
+    """
+    from src.clothing.layer_clearance import _farthest_hits
+    result = male_points.copy()
+    for points, skin, store in ((female_points, female_skin, "f"), (male_points, male_skin, "m")):
+        tri = skin[0][skin[1]]
+        centres = []
+        for y in points[:, UP]:
+            e = _extents(skin, y)
+            centres.append(0.0 if e is None else (e[1] + e[2]) / 2)
+        origins = np.column_stack((np.zeros(len(points)), points[:, UP], centres))
+        flat = points - origins
+        flat[:, UP] = 0.0
+        radius = np.linalg.norm(flat, axis=1)
+        directions = flat / np.maximum(radius, 1e-9)[:, None]
+        skin_radius = _farthest_hits(origins, directions, radius, tri, reach=1.0)
+        if store == "f":
+            offset = radius - skin_radius
+        else:
+            ok = np.isfinite(skin_radius) & np.isfinite(offset) & (offset > 0)
+            result[ok] = origins[ok] + directions[ok] * (skin_radius[ok] + offset[ok])[:, None]
+    return result
+
+
 def box_transfer(points, female_vertices, male_vertices, rows, f_rings=None, m_rings=None):
     """Points moved cell by cell between the stacked boxes of the two body groups.
 
@@ -565,7 +686,7 @@ def main():
             group, f_levels, m_levels = LEVEL_RINGS[part]
             k = groups.index(group)
             f_rings, m_rings = quadrant_rings(female_groups[k][0], f_levels), quadrant_rings(male_groups[k][0], m_levels)
-            male_cage = axis_transfer(cage, f_rings, m_rings, merged(female_groups)[0], merged(male_groups)[0])
+            male_cage = pelvis_rings_transfer(cage, merged(female_groups), merged(male_groups))
         elif part in LANDMARKS:
             k = groups.index(LANDMARKS[part])
             male_cage = landmark_transfer(cage, female_groups[k][0], male_groups[k][0])
@@ -605,8 +726,10 @@ def main():
         if stage != "transfer" and part not in LEVEL_RINGS:  # the box transfer already fits flat faces
             male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         if stage == "all":
-            male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed,
-                                           spread=0.9 if part in LEVEL_RINGS else 0.5)  # wide, smooth bulge
+            if part in LEVEL_RINGS:
+                male_cage = ring_clearance(male_cage, male_skin, fixed)
+            else:
+                male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
         entry_seam = len(seam_points)
         entry = {"pontos": int(len(cage)), "pontos_de_costura_com_partes_anteriores": entry_seam}
         for name, points, skin in (("feminino", cage, female_skin), ("masculino", male_cage, male_skin)):
