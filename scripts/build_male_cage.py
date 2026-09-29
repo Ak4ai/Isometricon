@@ -54,6 +54,7 @@ LEVEL_RINGS = {"LowerTorso": ("Export_pelve", (7, 4, 6), (6, 4, 6))}
 # Cage part -> parts built before it whose cage points it shares (same position on the
 # female cage, different UVs): those points are copied so the seam stays closed.
 SEAMS = {"LowerTorso": ["UpperTorso"]}
+SEAM_FADE = 0.05  # the seam correction fades over 5 cm below the seam
 UP = 1
 
 
@@ -548,9 +549,19 @@ def main():
             distance = np.linalg.norm(cage[:, None] - other_female[None], axis=-1)
             shared = distance.min(1) < 1e-4
             seam_points.update({int(i): other_male[distance[i].argmin()] for i in np.flatnonzero(shared)})
-        for i, position in seam_points.items():
-            male_cage[i] = position
-            fixed[i] = True
+        if seam_points:
+            # Spread the seam's correction (finished part's position - this transfer's) over
+            # the band under it, fading out downwards, so the whole top edge moves together
+            # instead of 9 points zigzagging off it.
+            ids = np.array(list(seam_points))
+            delta = np.array([seam_points[i] for i in ids]) - male_cage[ids]
+            weights = 1.0 / (np.linalg.norm(male_cage[:, None] - male_cage[ids][None], axis=-1) ** 2 + 1e-6)
+            spread = (weights @ delta) / weights.sum(1)[:, None]
+            below = np.clip((male_cage[ids, UP].mean() - male_cage[:, UP]) / SEAM_FADE, 0.0, 1.0)
+            male_cage += spread * (1 - below * below * (3 - 2 * below))[:, None]
+            for i, position in seam_points.items():
+                male_cage[i] = position
+                fixed[i] = True
         if part in COLLARS:
             collar, base = (groups.index(g) for g in COLLARS[part])
             male_cage, fixed = move_collar(cage, male_cage, female_groups[collar], male_groups[collar],
@@ -561,7 +572,7 @@ def main():
         female_distance = np.linalg.norm(cage - female_closest, axis=1)
         import os
         stage = os.environ.get("CAGE_STAGE", "all")  # debugging: stop after "transfer" or "projection"
-        if stage != "transfer":
+        if stage != "transfer" and part not in LEVEL_RINGS:  # the box transfer already fits flat faces
             male_cage = shrink_wrap(male_cage, female_distance, *male_skin, cage_faces, fixed)
         if stage == "all":
             male_cage = resolve_collisions(male_cage, cage_faces, *male_skin, visible["masculino"], fixed=fixed)
