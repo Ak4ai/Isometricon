@@ -25,7 +25,7 @@ from scripts.experiment_shell_global_affine import global_shell, remap_visible
 from scripts.test_r15_shirt_transfer import CAGE_OBJ, DIRECTORY, FBX, export_outer_cages_obj, load_classic_body
 from src.clothing.experimental_refined_reference import RefinedReferenceField
 from src.clothing.multi_influence_shell import transfer_outer_cage_radial
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 
 GT = ROOT / "artifacts/roblox_ground_truth"
@@ -62,7 +62,7 @@ def main():
     body, body_faces, _ = load_classic_body(FBX)
     export_outer_cages_obj(FBX, CAGE_OBJ)
     engine = RobloxWearEngine(body_type="female")
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
     report = {}
     for case, (asset, export) in CASES.items():
         groups = load_obj_groups(export)

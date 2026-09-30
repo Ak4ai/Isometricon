@@ -833,8 +833,8 @@ def main():
     report = {}
     knee_rings, knee_rows = {}, {}
     for part, groups in PARTS.items():
-        cage = engine_to_body_mesh(np.asarray(engine.r15_female_cages[part]["verts"], dtype=np.float64))
-        cage_faces = np.asarray(engine.r15_female_cages[part]["faces"])
+        cage = engine_to_body_mesh(np.asarray(engine.body_cages[part]["verts"], dtype=np.float64))
+        cage_faces = np.asarray(engine.body_cages[part]["faces"])
         female_groups = [body_part(FEMALE_BODY, [g]) for g in groups]
         male_groups = [body_part(MALE_BODY, [g]) for g in MALE_GROUPS.get(part, groups)]
         if part in ARMS:
@@ -885,7 +885,7 @@ def main():
         fixed = np.zeros(len(cage), dtype=bool)
         seam_points = {}
         for other in SEAMS.get(part, []):
-            other_female = engine_to_body_mesh(np.asarray(engine.r15_female_cages[other]["verts"], dtype=np.float64))
+            other_female = engine_to_body_mesh(np.asarray(engine.body_cages[other]["verts"], dtype=np.float64))
             other_male = np.load(OUT / f"{other}_male.npy")
             distance = np.linalg.norm(cage[:, None] - other_female[None], axis=-1)
             shared = distance.min(1) < 1e-4
@@ -929,13 +929,13 @@ def main():
             # starts as the left one mirrored point for point. The male arms split their quads
             # along opposite diagonals, so the collision pass below still fixes a few spots.
             left = part.replace("Right", "Left", 1)
-            left_female = engine_to_body_mesh(np.asarray(engine.r15_female_cages[left]["verts"], dtype=np.float64))
+            left_female = engine_to_body_mesh(np.asarray(engine.body_cages[left]["verts"], dtype=np.float64))
             twin = np.linalg.norm((cage * [-1.0, 1.0, 1.0])[:, None] - left_female[None], axis=-1).argmin(1)
             male_cage = np.load(OUT / f"{left}_male.npy")[twin] * [-1.0, 1.0, 1.0]
             # Local fix only: points shared with the next arm part (elbow, wrist) stay put and
             # the push does not spread, so the mirrored shape and the seams are kept.
             for other in [q for q in ARMS if q.startswith("Right") and q != part]:
-                other_female = engine_to_body_mesh(np.asarray(engine.r15_female_cages[other]["verts"], dtype=np.float64))
+                other_female = engine_to_body_mesh(np.asarray(engine.body_cages[other]["verts"], dtype=np.float64))
                 fixed |= np.linalg.norm(cage[:, None] - other_female[None], axis=-1).min(1) < 1e-4
             mirrored_arm = True
             # Keep each point's clearance from the right skin at least its twin's clearance from

@@ -36,6 +36,9 @@ from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, v
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODELS_DIR = os.path.join(PROJECT_ROOT, "assets", "models")
 CLOTHING_DIR = os.path.join(MODELS_DIR, "clothing")
+# Clean A-pose mesh of each body. Both have the same groups, pose and cage topology,
+# so skin, HSR and clothing work the same on either (the cages are in wear_engine.BODY_CAGES).
+BODY_MESHES = {"female": "character_female_clean_apose_stage2.obj", "male": "character_male_clean_apose.obj"}
 
 
 def parse_clean_obj_groups(
@@ -322,7 +325,6 @@ def transform_top_hem_vertices(
     raw_v: List[List[float]],
     hem_offset: float = 0.0,
     effective_waist_z: Optional[float] = None,
-    is_female: bool = True,
 ) -> List[List[float]]:
     """Aplica ajustes na altura da barra da blusa/camisa (sobe/desce/cropped) e encaixa sob o cos alto se sobreposto."""
     if hem_offset == 0.0 and effective_waist_z is None:
@@ -338,7 +340,7 @@ def transform_top_hem_vertices(
     is_native = max_z > max_y
 
     z_anchor = 1.25
-    z_min_nominal = 0.985 if is_female else 0.890
+    z_min_nominal = 0.985
 
     for i, (x, y, z) in enumerate(verts):
         h = z if is_native else y
@@ -1067,10 +1069,10 @@ class CharacterModel:
         )
         self.top_id = top_id
         self.bottom_id = bottom_id
-        # A second top worn over the first (a jacket over a shirt); female body only for now.
+        # A second top worn over the first (a jacket over a shirt).
         self.outer_top_id = outer_top_id
         self.outer_top_gap_mm = LAYER_GAP_MM  # extra room between the layers: refits the outer top
-        # Layered shoes: a bundle id, "left,right" asset ids or one asset id (female body only for now).
+        # Layered shoes: a bundle id, "left,right" asset ids or one asset id.
         self.shoes_id = shoes_id
         self.outer_top_pull_mm = LAYER_PULL_MM  # pull of what still pokes through it: runtime only
         self.tool_id = tool_id
@@ -1086,7 +1088,7 @@ class CharacterModel:
                 if not os.path.exists(hair_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="female" if self.customization.is_female else "male")
+                        engine = RobloxWearEngine(body_type=self.body)
                         engine.equip_hair(hair_str)
                     except Exception as e:
                         print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
@@ -1112,7 +1114,7 @@ class CharacterModel:
         if top_hem_offset is not None:
             self.top_hem_offset: float = float(top_hem_offset)
         else:
-            self.top_hem_offset: float = 0.0 if self.customization.is_female else -0.02
+            self.top_hem_offset: float = 0.0
         self.waist_radius_offset: float = float(waist_radius_offset)  # Deslocamento radial do torso na cintura (+ alarga, - afunila em metros)
         self.waist_chamfer: float = float(waist_chamfer)              # Largura do chanfro das quinas do torso em metros (0.0 = quadrado, 0.015 = 1.5cm padrão, até 0.05)
         if head_z_offset is not None:
@@ -1136,6 +1138,20 @@ class CharacterModel:
 
         if self.create_mesh:
             self._build()
+
+    @property
+    def body(self) -> str:
+        """'female' or 'male': picks the body mesh, its cages and the fitted-garment caches."""
+        return "female" if self.customization.is_female else "male"
+
+    @property
+    def clean_obj(self) -> str:
+        """Clean A-pose mesh of the current body."""
+        return os.path.join(MODELS_DIR, BODY_MESHES[self.body])
+
+    def fitted_path(self, asset_id, suffix: str = "") -> str:
+        """Cache of ``asset_id`` fitted to the current body."""
+        return os.path.join(MODELS_DIR, f"character_native_{asset_id}{suffix}_{self.body}.obj")
 
     def set_sleeve_width(self, scale: float) -> None:
         """Ajusta a largura/espessura da ponta da manga em tempo real."""
@@ -1222,7 +1238,7 @@ class CharacterModel:
 
     def set_waist_z(self, target_z: float) -> None:
         """Define a altura absoluta do cós da calça (ex: 1.00m meio do declive, 1.07m alta, 0.94m baixa)."""
-        base_z = 1.00 if self.customization.is_female else 0.935
+        base_z = 1.00
         self.set_waist_height(float(target_z) - base_z)
 
     def reset_waist_adjustments(self) -> None:
@@ -1258,13 +1274,13 @@ class CharacterModel:
         self.reload()
 
     def set_top_hem_z(self, target_z: float) -> None:
-        """Define a altura absoluta da barra da blusa (ex: 0.985m normal feminino, 0.890m normal masculino)."""
-        base_z = 0.985 if self.customization.is_female else 0.890
+        """Define a altura absoluta da barra da blusa (ex: 0.985m normal)."""
+        base_z = 0.985
         self.set_top_hem(float(target_z) - base_z)
 
     def reset_top_hem(self) -> None:
-        """Restaura a altura da barra da blusa para o padrão (-0.02m no masculino, 0.0m no feminino)."""
-        self.top_hem_offset = 0.0 if self.customization.is_female else -0.02
+        """Restaura a altura da barra da blusa para o padrão (0.0m)."""
+        self.top_hem_offset = 0.0
         self.reload()
 
     def set_head_z_offset(self, offset_m: float) -> None:
@@ -1378,10 +1394,7 @@ class CharacterModel:
         from src.rendering.mesh import TexturedMesh
         parts: List[CharacterPart] = []
 
-        is_fem = self.customization.is_female
-        arm_suffix = "_female.obj" if is_fem else ".obj"
-        clean_file = "character_female_clean_apose_stage2.obj" if (is_fem and os.path.exists(os.path.join(MODELS_DIR, "character_female_clean_apose_stage2.obj"))) else ("character_female_clean_apose.obj" if is_fem else "character_clean.obj")
-        clean_path = os.path.join(MODELS_DIR, clean_file)
+        clean_path = self.clean_obj
         side_map = {"left": "esquerdo", "right": "direito"}
 
         top_str = str(self.top_id).lower() if self.top_id is not None else "none"
@@ -1415,9 +1428,7 @@ class CharacterModel:
             return parts
 
         # 2. Resolução Adaptativa Universal por lado (left e right independentes)
-        top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}{arm_suffix}")
-        if not os.path.exists(top_obj_path):
-            top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
+        top_obj_path = self.fitted_path(self.top_id)
 
         top_pts = []
         if os.path.exists(top_obj_path):
@@ -1442,14 +1453,9 @@ class CharacterModel:
             side_short = not side_sleeveless and not side_long
 
             # Resolução anatômica com HSR adaptativo por comprimento de manga
-            if is_fem:
-                upper_arm_visible = not side_long
-                forearm_visible = not side_long
-                hand_visible = True
-            else:
-                upper_arm_visible = True
-                forearm_visible = True
-                hand_visible = False
+            upper_arm_visible = not side_long
+            forearm_visible = not side_long
+            hand_visible = True
 
             def make_side_arm_tf(is_bare):
                 def side_arm_tf(raw_v):
@@ -1478,7 +1484,7 @@ class CharacterModel:
                     v_arr, i_arr = ab_data
                     parts.append(CharacterPart(f"forearm_{side}", TexturedMesh(v_arr, i_arr), self.white_tex_id))
 
-            # Mão (separada no modelo feminino A-pose, com gênero gramatical correto: esquerda/direita)
+            # Mão (separada no modelo A-pose, com gênero gramatical correto: esquerda/direita)
             if hand_visible:
                 hand_side = "esquerda" if side == "left" else "direita"
                 hand_data = parse_clean_obj_groups(
@@ -1573,9 +1579,9 @@ class CharacterModel:
                 if 1.15 <= v_mat[i, 1] <= 1.38 and v_mat[i, 2] > 0.160:
                     v_mat[i, 2] = 0.160 + (v_mat[i, 2] - 0.160) * 0.40
 
-        y_top_bound = (1.4566 if is_fem else 1.4830) if (is_none_top or is_open_top) else (eff_hem + 0.010)
+        y_top_bound = 1.4566 if (is_none_top or is_open_top) else (eff_hem + 0.010)
         tilt = waist_tilt if not is_none_bottom else 0.0
-        y_bot_bound = (0.7769 if is_fem else 0.8003) if is_none_bottom else (eff_waist - 0.015)
+        y_bot_bound = 0.7769 if is_none_bottom else (eff_waist - 0.015)
 
         if not is_open_top and y_top_bound <= (y_bot_bound - 0.020):
             return None
@@ -1617,7 +1623,7 @@ class CharacterModel:
 
         worn = [path for path, none in ((top_obj_path, is_none_top), (bottom_obj_path, is_none_bottom)) if not none]
         worn += [path for path in extra_obj_paths if path]
-        if not self.customization.is_female or not worn:
+        if not worn:
             return False
         masks = []
         for path in worn:
@@ -1676,12 +1682,11 @@ class CharacterModel:
         if is_none_bottom or fitted_asset_type(top_obj_path) not in OUTER_TOP_TYPES:
             return top_obj_path
         gap_mm = int(round(self.outer_top_gap_mm))
-        path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}_over_{self.bottom_id}"
-                                        f"{f'_g{gap_mm}' if gap_mm else ''}_female.obj")
+        path = self.fitted_path(self.top_id, f"_over_{self.bottom_id}{f'_g{gap_mm}' if gap_mm else ''}")
         if not is_valid_v2_obj(path):
             try:
                 from src.clothing.wear_engine import RobloxWearEngine
-                engine = RobloxWearEngine(body_type="female")
+                engine = RobloxWearEngine(body_type=self.body)
                 engine.layer_under_asset = [self.bottom_id]
                 engine.layer_gap = gap_mm / 1000.0
                 engine.wear(self.top_id, output_obj=path)
@@ -1690,17 +1695,17 @@ class CharacterModel:
                 return top_obj_path
         return path if is_valid_v2_obj(path) else top_obj_path
 
-    def _add_shoes(self, is_fem, vertex_transform):
+    def _add_shoes(self, vertex_transform):
         """Wear the layered shoes (each foot fitted with its own cages); returns their fitted OBJ paths."""
         self._hide_feet = False
-        if self.shoes_id is None or not is_fem:
+        if self.shoes_id is None:
             return []
         from src.clothing.wear_engine import RobloxWearEngine
         from src.rendering.mesh import TexturedMesh
-        engine = RobloxWearEngine(body_type="female")
+        engine = RobloxWearEngine(body_type=self.body)
         paths = []
         for asset_id in engine.resolve_shoe_pair(self.shoes_id):
-            path = os.path.join(MODELS_DIR, f"character_native_{asset_id}_female.obj")
+            path = self.fitted_path(asset_id)
             if not is_valid_v2_obj(path):
                 try:
                     engine.wear(asset_id, output_obj=path)
@@ -1725,9 +1730,9 @@ class CharacterModel:
         self._hide_feet = bool(paths)
         return paths
 
-    def _add_outer_top(self, is_fem, vertex_transform):
+    def _add_outer_top(self, vertex_transform):
         """Wear ``outer_top_id`` over the other garments; returns its fitted OBJ path or None."""
-        if self.outer_top_id is None or not is_fem:
+        if self.outer_top_id is None:
             return None
         from src.clothing.layer_clearance import body_cage_from_sidecars, covered_vertices, pull_inner_layer
         from src.rendering.mesh import TexturedMesh
@@ -1736,11 +1741,11 @@ class CharacterModel:
         under = [i for i in (self.top_id, self.bottom_id) if i is not None and str(i).lower() not in ("none", "0")]
         gap_mm = int(round(self.outer_top_gap_mm))
         suffix = "".join(f"_over_{i}" for i in under) + (f"_g{gap_mm}" if gap_mm else "")
-        path = os.path.join(MODELS_DIR, f"character_native_{self.outer_top_id}{suffix}_female.obj")
+        path = self.fitted_path(self.outer_top_id, suffix)
         if not is_valid_v2_obj(path):
             try:
                 from src.clothing.wear_engine import RobloxWearEngine
-                engine = RobloxWearEngine(body_type="female")
+                engine = RobloxWearEngine(body_type=self.body)
                 engine.layer_under_asset = under
                 engine.layer_gap = gap_mm / 1000.0
                 engine.wear(self.outer_top_id, output_obj=path)
@@ -1785,8 +1790,7 @@ class CharacterModel:
         self.textures.append(self.white_tex_id)
 
         is_fem = self.customization.is_female
-        clean_filename = "character_female_clean_apose_stage2.obj" if (is_fem and os.path.exists(os.path.join(MODELS_DIR, "character_female_clean_apose_stage2.obj"))) else ("character_female_clean_apose.obj" if is_fem else "character_clean.obj")
-        clean_obj = os.path.join(MODELS_DIR, clean_filename)
+        clean_obj = self.clean_obj
         skin_color = list(self.customization.skin_color_rgb)
 
         # 1.1 Resolução de Cabelo Customizado por ID Roblox
@@ -1801,7 +1805,7 @@ class CharacterModel:
                 if not os.path.exists(hair_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="female" if is_fem else "male")
+                        engine = RobloxWearEngine(body_type=self.body)
                         engine.equip_hair(hair_str)
                     except Exception as e:
                         print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
@@ -1818,13 +1822,13 @@ class CharacterModel:
         self.textures.append(head_tex_id)
 
         # Transformação completa de cabelo: escala nos eixos X, Y, Z ao redor do centro da cabeça (0, 1.70, 0),
-        # soma dos offsets manuais do usuário (X, Y, Z) e compatibilização anatômica com modelo feminino
+        # soma dos offsets manuais do usuário (X, Y, Z) e alinhamento postural da cabeça
         def hair_custom_tf(verts):
             pivot_x = 0.0
             pivot_y = 1.70
             pivot_z = 0.0
-            fem_dy = 0.0
-            fem_dz = self.head_z_offset if is_fem else 0.0
+            head_dy = 0.0
+            head_dz = self.head_z_offset
 
             sx = self.hair_scale_x
             sy = self.hair_scale_y
@@ -1833,65 +1837,30 @@ class CharacterModel:
             oy = self.hair_offset_y
             oz = self.hair_offset_z
 
-            if not is_fem and sx == 1.0 and sy == 1.0 and sz == 1.0 and ox == 0.0 and oy == 0.0 and oz == 0.0:
+            if sx == 1.0 and sy == 1.0 and sz == 1.0 and ox == 0.0 and oy == 0.0 and oz == 0.0 and head_dz == 0.0:
                 return verts
 
             out = []
             for v in verts:
                 vx = pivot_x + (v[0] - pivot_x) * sx + ox
-                vy = pivot_y + (v[1] - pivot_y) * sy + oy + fem_dy
-                vz = pivot_z + (v[2] - pivot_z) * sz + oz + fem_dz
+                vy = pivot_y + (v[1] - pivot_y) * sy + oy + head_dy
+                vz = pivot_z + (v[2] - pivot_z) * sz + oz + head_dz
                 out.append([vx, vy, vz])
             return out
 
-        # 3. Cabeça 3D
-        if is_fem:
-            # Cabeça feminina exportada diretamente de Collection 6 (com alinhamento postural no eixo Z)
-            head_data = parse_clean_obj_groups(clean_obj, ["Export_cabeca"])
-            if head_data:
-                v_h = head_data[0].reshape(-1, 11).copy()
-                if abs(self.head_z_offset) > 1e-5:
-                    v_h[:, 2] += self.head_z_offset
-                mesh = TexturedMesh(v_h.flatten().astype(np.float32), head_data[1])
-                self.parts.append(CharacterPart("head", mesh, head_tex_id))
+        # 3. Cabeça 3D (no modelo limpo de cada corpo, com alinhamento postural no eixo Z)
+        head_data = parse_clean_obj_groups(clean_obj, ["Export_cabeca"])
+        if head_data:
+            v_h = head_data[0].reshape(-1, 11).copy()
+            if abs(self.head_z_offset) > 1e-5:
+                v_h[:, 2] += self.head_z_offset
+            mesh = TexturedMesh(v_h.flatten().astype(np.float32), head_data[1])
+            self.parts.append(CharacterPart("head", mesh, head_tex_id))
 
-            if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
-                default_fitted = os.path.join(CLOTHING_DIR, "Hair_fitted_116773763268018.obj")
-                if os.path.exists(default_fitted):
-                    self.customization.custom_hair_obj = default_fitted
-        elif self.customization.is_rounded_head:
-            rounded_head_obj = os.path.join(MODELS_DIR, "character_head_rounded.obj")
-            head_data = parse_clean_obj_groups(rounded_head_obj, [""])
-            if head_data:
-                mesh = TexturedMesh(head_data[0], head_data[1])
-                self.parts.append(CharacterPart("head", mesh, head_tex_id))
-
-            if self.customization.should_render_3d_nose:
-                nose_data = parse_clean_obj_groups(clean_obj, ["Export_nariz"])
-                if nose_data:
-                    mesh = TexturedMesh(nose_data[0], nose_data[1])
-                    self.parts.append(CharacterPart("nose", mesh, head_tex_id))
-
-            if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
-                # Se não fornecido cabelo 3D explícito para rounded, usa o cabelo fitted dedicado se disponível
-                default_fitted = os.path.join(CLOTHING_DIR, "Hair_fitted_116773763268018.obj")
-                if os.path.exists(default_fitted):
-                    self.customization.custom_hair_obj = default_fitted
-                else:
-                    hair_data = parse_clean_obj_groups(clean_obj, ["Export_cabelo"], vertex_transform=hair_custom_tf)
-                    if hair_data:
-                        mesh = TexturedMesh(hair_data[0], hair_data[1])
-                        self.parts.append(CharacterPart("hair", mesh, head_tex_id))
-        else:
-            allowed = ["Export_cabeca"]
-            if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
-                allowed.append("Export_cabelo")
-            if self.customization.should_render_3d_nose:
-                allowed.append("Export_nariz")
-            head_data = parse_clean_obj_groups(clean_obj, allowed)
-            if head_data:
-                mesh = TexturedMesh(head_data[0], head_data[1])
-                self.parts.append(CharacterPart("head_blocky", mesh, head_tex_id))
+        if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
+            default_fitted = os.path.join(CLOTHING_DIR, "Hair_fitted_116773763268018.obj")
+            if os.path.exists(default_fitted):
+                self.customization.custom_hair_obj = default_fitted
 
         # 4. Cabelo 3D Customizado / Fitted
         if self.customization.custom_hair_obj and os.path.exists(self.customization.custom_hair_obj):
@@ -1912,7 +1881,7 @@ class CharacterModel:
         neck_data = parse_clean_obj_groups(clean_obj, ["Export_pecoco"], default_color=skin_color)
         if neck_data:
             v_n = neck_data[0].reshape(-1, 11).copy()
-            if is_fem and abs(self.head_z_offset) > 1e-5:
+            if abs(self.head_z_offset) > 1e-5:
                 v_n[:, 2] += self.head_z_offset
             mesh = TexturedMesh(v_n.flatten().astype(np.float32), neck_data[1])
             self.parts.append(CharacterPart("neck", mesh, self.white_tex_id))
@@ -1931,25 +1900,14 @@ class CharacterModel:
         waist_geo = None
         bottom_obj_path = None
         if not is_none_bottom:
-            if is_fem:
-                bottom_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.bottom_id}_female.obj")
-                if not is_valid_v2_obj(bottom_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="female")
-                        engine.wear(self.bottom_id, output_obj=bottom_obj_path)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: gerando bottom feminino com cage: {e}")
-                        bottom_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.bottom_id}.obj")
-            else:
-                bottom_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.bottom_id}.obj")
-                if not is_valid_v2_obj(bottom_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="male")
-                        engine.wear(self.bottom_id, output_obj=bottom_obj_path)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: gerando bottom masculino com cage: {e}")
+            bottom_obj_path = self.fitted_path(self.bottom_id)
+            if not is_valid_v2_obj(bottom_obj_path):
+                try:
+                    from src.clothing.wear_engine import RobloxWearEngine
+                    engine = RobloxWearEngine(body_type=self.body)
+                    engine.wear(self.bottom_id, output_obj=bottom_obj_path)
+                except Exception as e:
+                    print(f"[CharacterModel] Aviso: gerando bottom com cage: {e}")
 
             if bottom_obj_path and os.path.exists(bottom_obj_path):
                 waist_geo = detect_bottom_waistband_geometry(bottom_obj_path)
@@ -1958,34 +1916,23 @@ class CharacterModel:
             eff_waist = waist_geo["c_waist"] + self.waist_height_offset
             waist_tilt = waist_geo["tilt"]
         else:
-            eff_waist = (1.00 if is_fem else 0.935) + self.waist_height_offset
-            waist_tilt = 0.18 if is_fem else 0.15
+            eff_waist = 1.00 + self.waist_height_offset
+            waist_tilt = 0.18
 
         # Resolução antecipada do Top com geração automática v2
         top_obj_path = None
         if not is_none_top:
-            if is_fem:
-                top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}_female.obj")
-                if not is_valid_v2_obj(top_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="female")
-                        engine.wear(self.top_id, output_obj=top_obj_path)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: gerando top feminino com cage: {e}")
-                        top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
-                top_obj_path = self._top_over_pants(top_obj_path, is_none_bottom)
-            else:
-                top_obj_path = os.path.join(MODELS_DIR, f"character_native_{self.top_id}.obj")
-                if not is_valid_v2_obj(top_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="male")
-                        engine.wear(self.top_id, output_obj=top_obj_path)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: gerando top masculino com cage: {e}")
+            top_obj_path = self.fitted_path(self.top_id)
+            if not is_valid_v2_obj(top_obj_path):
+                try:
+                    from src.clothing.wear_engine import RobloxWearEngine
+                    engine = RobloxWearEngine(body_type=self.body)
+                    engine.wear(self.top_id, output_obj=top_obj_path)
+                except Exception as e:
+                    print(f"[CharacterModel] Aviso: gerando top com cage: {e}")
+            top_obj_path = self._top_over_pants(top_obj_path, is_none_bottom)
 
-        eff_hem = (0.985 if is_fem else 0.890) + self.top_hem_offset
+        eff_hem = 0.985 + self.top_hem_offset
         is_open_top = False
         top_layer = None
 
@@ -2037,7 +1984,6 @@ class CharacterModel:
                         v1,
                         hem_offset=self.top_hem_offset,
                         effective_waist_z=waist_for_tuck,
-                        is_female=is_fem,
                     )
 
                 top_data = parse_obj_as_mesh(top_obj_path, vertex_transform=top_tf)
@@ -2125,8 +2071,8 @@ class CharacterModel:
 
         # 9.0 Peça por cima do top (jaqueta sobre camisa): fica por fora de tudo, e o
         # que as peças de baixo tiverem furando é puxado para baixo dela.
-        outer_obj_path = self._add_outer_top(is_fem, top_tf if "top_tf" in locals() else None)
-        shoe_paths = self._add_shoes(is_fem, lambda raw_v: transform_hip_vertices(
+        outer_obj_path = self._add_outer_top(top_tf if "top_tf" in locals() else None)
+        shoe_paths = self._add_shoes(lambda raw_v: transform_hip_vertices(
             raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset))
 
         # 9.1 HSR do Roblox: com a máscara de todas as peças vestidas, a pele inteira
@@ -2158,52 +2104,25 @@ class CharacterModel:
         # 10. Constrói malha de depuração da cage (para visualização wireframe em tempo real)
         try:
             from src.rendering.mesh import TexturedMesh
-            if is_fem:
-                female_cages_path_stage2 = os.path.join(MODELS_DIR, "female_cages_apose_stage2.obj")
-                female_cages_path_old = os.path.join(MODELS_DIR, "clothing", "female_cages_apose.obj")
-                female_cages_path = female_cages_path_stage2 if os.path.exists(female_cages_path_stage2) else female_cages_path_old
-                if os.path.exists(female_cages_path):
-                    v_arr = []
-                    i_arr = []
-                    cage_color = [0.0, 1.0, 0.85]  # Ciano para cages femininas R15 manuais
-                    with open(female_cages_path, "r", encoding="utf-8", errors="ignore") as f:
-                        for line in f:
-                            line = line.strip()
-                            if line.startswith("v "):
-                                parts_coord = [float(x) for x in line.split()[1:4]]
-                                # female_cages.obj já está em coordenadas OpenGL (X, Y_altura, Z_profundidade)
-                                v_arr.extend([parts_coord[0], parts_coord[1], parts_coord[2], 0.0, 1.0, 0.0, 0.0, 0.0, cage_color[0], cage_color[1], cage_color[2]])
-                            elif line.startswith("f "):
-                                tokens = [int(tok.split("/")[0]) - 1 for tok in line.split()[1:]]
-                                if len(tokens) == 3:
-                                    i_arr.extend(tokens)
-                                elif len(tokens) > 3:
-                                    for i in range(1, len(tokens) - 1):
-                                        i_arr.extend([tokens[0], tokens[i], tokens[i + 1]])
-                    v_np = np.array(v_arr, dtype=np.float32)
-                    i_np = np.array(i_arr, dtype=np.uint32)
-                    self.cage_debug_mesh = TexturedMesh(v_np, i_np)
-                else:
-                    self.cage_debug_mesh = None
-            else:
-                cage_path = os.path.join(MODELS_DIR, "roblox_cage_data.npz")
-                if os.path.exists(cage_path):
-                    cage_data = np.load(cage_path)
-                    c_verts = cage_data["cage_verts_rest"]  # (1711, 3)
-                    c_faces = cage_data["cage_faces"]       # (2690, 3)
-                    v_arr = []
-                    cage_color = [0.2, 0.7, 1.0]  # Azul para cage masculina
-                    for v in c_verts:
-                        # Coordenadas Blender -> OpenGL: (x, z, -y)
-                        v_arr.extend([float(v[0]), float(v[2]), float(-v[1]), 0.0, 1.0, 0.0, 0.0, 0.0, cage_color[0], cage_color[1], cage_color[2]])
-                    i_arr = []
-                    for f in c_faces:
-                        i_arr.extend([int(f[0]), int(f[1]), int(f[2])])
-                    v_np = np.array(v_arr, dtype=np.float32)
-                    i_np = np.array(i_arr, dtype=np.uint32)
-                    self.cage_debug_mesh = TexturedMesh(v_np, i_np)
-                else:
-                    self.cage_debug_mesh = None
+            from src.clothing.wear_engine import BODY_CAGES
+            cage_path = os.path.join(MODELS_DIR, BODY_CAGES[self.body])
+            self.cage_debug_mesh = None
+            if os.path.exists(cage_path):
+                v_arr = []
+                i_arr = []
+                cage_color = [0.0, 1.0, 0.85]  # Ciano para as cages R15
+                with open(cage_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("v "):
+                            parts_coord = [float(x) for x in line.split()[1:4]]
+                            # As cages já estão em coordenadas OpenGL (X, Y_altura, Z_profundidade)
+                            v_arr.extend([parts_coord[0], parts_coord[1], parts_coord[2], 0.0, 1.0, 0.0, 0.0, 0.0, cage_color[0], cage_color[1], cage_color[2]])
+                        elif line.startswith("f "):
+                            tokens = [int(tok.split("/")[0]) - 1 for tok in line.split()[1:]]
+                            for i in range(1, len(tokens) - 1):
+                                i_arr.extend([tokens[0], tokens[i], tokens[i + 1]])
+                self.cage_debug_mesh = TexturedMesh(np.array(v_arr, dtype=np.float32), np.array(i_arr, dtype=np.uint32))
         except Exception as e:
             print(f"[CharacterModel] Erro criando malha de depuração da cage: {e}")
             self.cage_debug_mesh = None
@@ -2300,7 +2219,7 @@ class CharacterModel:
                 if not os.path.exists(hair_obj_path):
                     try:
                         from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type="female" if self.customization.is_female else "male")
+                        engine = RobloxWearEngine(body_type=self.body)
                         engine.equip_hair(hair_str)
                     except Exception as e:
                         print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")

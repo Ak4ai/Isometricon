@@ -21,7 +21,7 @@ ASSET = "109837605892174"
 def chart_labels(engine, trace):
     charts = face_charts(trace["projection_faces"], trace["uv_index"])
     uv_regions = {}
-    for name, part in engine.r15_female_cages.items():
+    for name, part in engine.body_cages.items():
         if name.endswith("Forearm"):
             continue
         for uv in part["face_uvs"].reshape(-1, 2):

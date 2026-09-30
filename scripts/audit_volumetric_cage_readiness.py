@@ -32,7 +32,7 @@ def audit(engine, asset_id):
     _, seam_ids = np.unique(np.round(outer, 5), axis=0, return_inverse=True)
     seam_counts = np.bincount(seam_ids)
     uv_parts = {}
-    for part_name, part in engine.r15_female_cages.items():
+    for part_name, part in engine.body_cages.items():
         if part_name.endswith("Forearm"):
             continue
         for uv in part["face_uvs"].reshape(-1, 2):

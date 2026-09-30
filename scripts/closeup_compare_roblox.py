@@ -18,7 +18,7 @@ from scripts.compare_roblox_ground_truth import STUD_CM, align_studio_to_engine,
 from scripts.experiment_adaptive_prism_roblox import shells
 from scripts.experiment_dual_cage_prism import bind_dual_cage
 from scripts.test_r15_shirt_transfer import CAGE_OBJ, DIRECTORY, FBX, export_outer_cages_obj, load_classic_body
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 
 METHODS = ("radial 1x (so local)", "radial<->global por combined")
@@ -29,7 +29,7 @@ def main():
     body, body_faces, _ = load_classic_body(FBX)
     export_outer_cages_obj(FBX, CAGE_OBJ)
     engine = RobloxWearEngine(body_type="female")
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
     skin = (body, body_faces, np.tile([218, 187, 164], (len(body_faces), 1)))
     for case in names:
         asset, export = CASES[case]

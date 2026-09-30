@@ -8,7 +8,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from scripts.experimental_wrap_frames import affine_map, rotation_map, normalized_edges_map
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 
@@ -61,13 +61,13 @@ def main():
         raise ValueError(f"Unknown variant: {label}")
     engine = RobloxWearEngine(body_type="female")
     directory = ROOT / "assets/models/clothing"
-    targets = {"female": engine.r15_female_cages,
-               "blocky": load_r15_female_cages(
+    targets = {"female": engine.body_cages,
+               "blocky": load_r15_cages(
                    str(ROOT / "artifacts/clothing_audit/BlockyCharacter_OuterCages.obj"),
                    is_source_cage=True)}
     report = {}
     for body_name, cages in targets.items():
-        engine.r15_female_cages = cages
+        engine.body_cages = cages
         for asset in ASSETS if body_name == "female" else ASSETS[:1]:
             path = next(directory.glob(f"*_{asset}.obj"))
             vertices, faces, _, _ = engine.load_obj(str(path))

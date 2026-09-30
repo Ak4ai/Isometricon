@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.audit_binding_charts import ASSETS
 from scripts.test_r15_shirt_transfer import FBX, CAGE_OBJ, load_classic_body
 from scripts.experiment_chart_blend import load_body_for_preview
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 from src.clothing.multi_influence_shell import _neighborhoods
 
@@ -22,7 +22,7 @@ def main():
     report = {}
     for body_name, assets in [('female', ASSETS), ('blocky', ASSETS[:1])]:
         if body_name == 'blocky':
-            engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+            engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
             body, body_faces, _ = load_classic_body(FBX)
         else:
             body, body_faces = load_body_for_preview(ROOT / 'assets/models/character_female_clean_apose_stage2.obj')

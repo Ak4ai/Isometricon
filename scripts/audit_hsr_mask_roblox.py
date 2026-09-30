@@ -27,7 +27,7 @@ from scripts.batch_compare_roblox import CASES, GT
 from scripts.compare_roblox_ground_truth import align_studio_to_engine, load_obj_groups
 from scripts.import_roblox_clothing import fetch_roblox_asset
 from scripts.test_r15_shirt_transfer import CAGE_OBJ, DIRECTORY, FBX, export_outer_cages_obj, load_classic_body
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import _rbxm_properties, _unique_uv_positions, retarget_garment_with_wrap_layer
 
 HSR_DIR = DIRECTORY / "hsr"
@@ -71,8 +71,8 @@ def main():
     body, body_faces, _ = load_classic_body(FBX)
     export_outer_cages_obj(FBX, CAGE_OBJ)
     engine = RobloxWearEngine(body_type="female")
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
-    target_uv, cage_points = _unique_uv_positions(engine.r15_female_cages)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
+    target_uv, cage_points = _unique_uv_positions(engine.body_cages)
     centroids = body[body_faces].mean(1)
     report = {}
     for case, (asset, export) in CASES.items():

@@ -91,7 +91,7 @@ def test_entire_wrap_preserves_garment_when_target_frame_is_reflected():
     rotation, translation = wrap["reference_origin"]
     reflection = np.diag([1., -1., 1.])
     parent = reference @ rotation.T + translation
-    engine = SimpleNamespace(load_obj=load, r15_female_cages={"Control": {
+    engine = SimpleNamespace(load_obj=load, body_cages={"Control": {
         "verts": parent @ reflection.T, "faces": faces, "face_uvs": uv[face_uv]}})
     result, _ = retarget_garment_with_wrap_layer(engine, garment, str(rbxm), directory / "wrap_cages")
     np.testing.assert_allclose(result, garment @ reflection.T, atol=1e-6)

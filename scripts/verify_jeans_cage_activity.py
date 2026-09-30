@@ -62,7 +62,7 @@ def main():
     # A uniform, in-memory displacement preserves UV seam equality and changes
     # only the destination cage. No project asset or clothing cache is edited.
     delta = np.array([0.01, 0.0, 0.0])
-    for part in engine.r15_female_cages.values():
+    for part in engine.body_cages.values():
         part["verts"] = np.asarray(part["verts"]) + delta
     changed, _ = retarget_garment_with_wrap_layer(engine, garment, str(rbxm), cache)
     displacement = changed - original

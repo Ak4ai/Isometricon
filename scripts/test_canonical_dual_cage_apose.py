@@ -1,12 +1,12 @@
 import numpy as np
 import os
-from src.clothing.wear_engine import load_r15_female_cages, closest_point_on_triangle, SpatialGrid3D
+from src.clothing.wear_engine import load_r15_cages, closest_point_on_triangle, SpatialGrid3D
 
 print("=== TESTANDO CANONICAL ROBLOX DUAL CAGE WRAPDEFORMER ===")
 
 # 1. Carrega Source Cages (roblox_source_cages.obj) e Target Cages (female_cages.obj)
-src_cages = load_r15_female_cages('assets/models/clothing/roblox_source_cages.obj')
-fem_cages = load_r15_female_cages('assets/models/clothing/female_cages_apose.obj')
+src_cages = load_r15_cages('assets/models/clothing/roblox_source_cages.obj')
+fem_cages = load_r15_cages('assets/models/clothing/female_cages_apose.obj')
 
 # 2. Carrega a malha original do suéter
 raw_sw = []
@@ -29,7 +29,7 @@ with open('assets/models/clothing/Knit_Sweater_-_Black_9240757332.obj', 'r', enc
 raw_sw = np.array(raw_sw, dtype=np.float64)
 
 # Converte o suéter para o espaço de coordenadas das cages no motor:
-# Em roblox_source_cages após load_r15_female_cages:
+# Em roblox_source_cages após load_r15_cages:
 # X = X_obj, Y_engine = -Z_obj (profundidade), Z_engine = Y_obj (altura)
 # No suéter original:
 # X_obj é invertido (-X_obj é Left), Z_obj é invertido (-Z_obj é frente), Y_obj é altura com shift

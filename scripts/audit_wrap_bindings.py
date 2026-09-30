@@ -25,7 +25,7 @@ def audit_asset(engine, asset_id):
     # UV identities, rather than spatial proximity, tell us which R15 part
     # each outer-cage face represents. At part seams multiple names may occur.
     uv_parts = defaultdict(set)
-    for name, part in engine.r15_female_cages.items():
+    for name, part in engine.body_cages.items():
         if name.endswith("Forearm"):
             continue
         part_uv = np.asarray([uv for uv_face in part["face_uvs"] for uv in uv_face])

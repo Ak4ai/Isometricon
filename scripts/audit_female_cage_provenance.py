@@ -16,19 +16,19 @@ from src.clothing.wrap_layer_fit import _unique_uv_positions,_match_reference_to
 def main():
     package_path=ROOT/'assets/models/female_clothing_package_stage2.json'
     package=json.loads(package_path.read_text())
-    calls=[];original=wear.load_r15_female_cages
+    calls=[];original=wear.load_r15_cages
     def traced(path,*args,**kwargs):
         resolved=Path(path).resolve()
         calls.append(dict(path=str(resolved),sha256=hashlib.sha256(resolved.read_bytes()).hexdigest(),
                           is_source_cage=kwargs.get('is_source_cage',False)))
         return original(path,*args,**kwargs)
-    wear.load_r15_female_cages=traced
+    wear.load_r15_cages=traced
     try:engine=wear.RobloxWearEngine(body_type='female')
-    finally:wear.load_r15_female_cages=original
+    finally:wear.load_r15_cages=original
     expected=original(str(ROOT/'assets/models'/package['cage_obj']),is_source_cage=False)
-    differences={name:float(np.linalg.norm(engine.r15_female_cages[name]['verts']-part['verts'],axis=1).max())
+    differences={name:float(np.linalg.norm(engine.body_cages[name]['verts']-part['verts'],axis=1).max())
                  for name,part in expected.items() if not name.endswith('Forearm')}
-    uv,pos=_unique_uv_positions(engine.r15_female_cages)
+    uv,pos=_unique_uv_positions(engine.body_cages)
     rows={}
     for path in sorted((ROOT/'artifacts/clothing_audit/radial_frames').glob('female_*_binding.npz')):
         key=path.name.removesuffix('_binding.npz');data_path=path.with_name(key+'.npz')

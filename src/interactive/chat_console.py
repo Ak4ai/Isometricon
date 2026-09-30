@@ -179,7 +179,7 @@ def get_imported_top_options() -> Dict[str, int]:
     if os.path.exists(models_dir):
         for f in glob.glob(os.path.join(models_dir, "character_native_*.obj")):
             base = os.path.basename(f)
-            m = re.match(r"character_native_(\d+)(?:_female)?\.obj$", base)
+            m = re.match(r"character_native_(\d+)(?:_female|_male)?\.obj$", base)
             if m:
                 aid = int(m.group(1))
                 if aid not in bottom_ids and aid not in hair_ids and aid not in tool_ids:
@@ -1685,8 +1685,7 @@ class SkinCommandHandler:
             if not self.character_model:
                 return False, "[Erro] Modelo de personagem nao disponivel.", RED
 
-            is_fem = getattr(self.character_model.customization, "is_female", False)
-            base_z = 1.00 if is_fem else 0.935
+            base_z = 1.00
 
             # Se veio de /calca altura <valor> ou /calca cintura <valor>
             if args and args[0].lower() in ("altura", "cintura", "alt", "h", "z"):
@@ -1817,13 +1816,13 @@ class SkinCommandHandler:
                 return True, f"[Cintura] Altura ajustada para o meio do declive ({base_z:.2f}m).", GREEN
 
             if action in ("alta", "high", "highwaist"):
-                target_z = 1.070 if is_fem else 0.980
+                target_z = 1.070
                 self.character_model.set_waist_z(target_z)
                 eff = base_z + self.character_model.waist_height_offset
                 return True, f"[Cintura] Cintura alta ajustada para {eff:.3f}m.", GREEN
 
             if action in ("baixa", "low", "lowrise"):
-                target_z = 0.940 if is_fem else 0.880
+                target_z = 0.940
                 self.character_model.set_waist_z(target_z)
                 eff = base_z + self.character_model.waist_height_offset
                 return True, f"[Cintura] Cintura baixa ajustada para {eff:.3f}m.", GREEN
@@ -1871,8 +1870,7 @@ class SkinCommandHandler:
             if not self.character_model:
                 return False, "[Erro] Modelo de personagem nao disponivel.", RED
 
-            is_fem = getattr(self.character_model.customization, "is_female", False)
-            base_z = 0.985 if is_fem else 0.890
+            base_z = 0.985
 
             if sub_cmd in ("crop", "cropped") and not args:
                 args = ["cropped"]
@@ -1900,25 +1898,25 @@ class SkinCommandHandler:
                 return True, f"[Barra] Altura da barra restaurada para o padrao ({eff_z:.3f}m, offset: {def_off:+.3f}m).", GREEN
 
             if action in ("meio", "mid", "media"):
-                def_off = 0.0 if is_fem else -0.02
+                def_off = 0.0
                 self.character_model.set_top_hem(def_off)
                 eff_z = base_z + def_off
                 return True, f"[Barra] Barra ajustada para o caimento padrao ({eff_z:.3f}m).", GREEN
 
             if action in ("alta", "high"):
-                target_z = 1.070 if is_fem else 0.980
+                target_z = 1.070
                 self.character_model.set_top_hem_z(target_z)
                 eff = base_z + self.character_model.top_hem_offset
                 return True, f"[Barra] Barra ajustada para cintura alta ({eff:.3f}m).", GREEN
 
             if action in ("cropped", "crop"):
-                target_z = 1.090 if is_fem else 1.020
+                target_z = 1.090
                 self.character_model.set_top_hem_z(target_z)
                 eff = base_z + self.character_model.top_hem_offset
                 return True, f"[Barra] Barra ajustada para cropped ({eff:.3f}m), expondo a regiao da barriga.", GREEN
 
             if action in ("longa", "baixa", "low"):
-                target_z = 0.950 if is_fem else 0.900
+                target_z = 0.950
                 self.character_model.set_top_hem_z(target_z)
                 eff = base_z + self.character_model.top_hem_offset
                 return True, f"[Barra] Barra alongada ajustada para {eff:.3f}m.", GREEN
@@ -2045,9 +2043,7 @@ class SkinCommandHandler:
             else:
                 return False, f"[Import] ID ou URL do Roblox inválido: '{raw_target}'. Ex: /import 9240757332", RED
 
-        is_fem = getattr(self.character_model.customization, "is_female", False)
-        body_type = "female" if is_fem else "male"
-        suffix = "_female.obj" if is_fem else ".obj"
+        body_type = self.character_model.body
 
         from src.clothing.wear_engine import RobloxWearEngine, TOP_ASSET_TYPES, BOTTOM_ASSET_TYPES
         engine = RobloxWearEngine(body_type=body_type)
@@ -2097,8 +2093,7 @@ class SkinCommandHandler:
             is_top = meta.get("is_top", type_id in TOP_ASSET_TYPES or type_id not in BOTTOM_ASSET_TYPES)
 
         # 4. Verifica se o modelo ajustado já existe
-        models_dir = os.path.join(PROJECT_ROOT, "assets", "models")
-        fitted_obj = os.path.join(models_dir, f"character_native_{asset_id}{suffix}")
+        fitted_obj = self.character_model.fitted_path(asset_id)
         is_already_fitted = os.path.exists(fitted_obj) and not force_reload
 
         if is_already_fitted:

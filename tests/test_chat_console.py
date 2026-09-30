@@ -677,28 +677,27 @@ def test_barra_commands_and_autocomplete():
     assert "longa" in chat.suggestions
     assert "reset" in chat.suggestions
 
-    # 8. Modelo Masculino: padrão -2cm (-0.02m) e base 0.890m
+    # 8. Modelo Masculino: mesmo corpo em A-pose do feminino, padrão 0cm e base 0.985m
     cust_male = AvatarCustomization(body_type=BodyType.MALE)
     model_male = CharacterModel(customization=cust_male, create_mesh=False)
     handler_male = SkinCommandHandler(character_model=model_male)
 
-    assert model_male.top_hem_offset == pytest.approx(-0.02)
+    assert model_male.top_hem_offset == pytest.approx(0.0)
     success, msg, _ = handler_male.execute("/barra")
     assert success is True
-    assert "Altura base: 0.890m" in msg
-    assert "Deslocamento: -0.020m (-2.0cm)" in msg
+    assert "Altura base: 0.985m" in msg
 
     success, msg, _ = handler_male.execute("/barra sobe 5cm")
     assert success is True
-    assert model_male.top_hem_offset == pytest.approx(0.03)
+    assert model_male.top_hem_offset == pytest.approx(0.05)
 
     success, msg, _ = handler_male.execute("/barra reset")
     assert success is True
-    assert model_male.top_hem_offset == pytest.approx(-0.02)
+    assert model_male.top_hem_offset == pytest.approx(0.0)
 
     success, msg, _ = handler_male.execute("/barra meio")
     assert success is True
-    assert model_male.top_hem_offset == pytest.approx(-0.02)
+    assert model_male.top_hem_offset == pytest.approx(0.0)
 
 
 def test_skin_command_cintura_radius():

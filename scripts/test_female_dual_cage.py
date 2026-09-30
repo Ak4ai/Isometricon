@@ -2,7 +2,7 @@ import numpy as np
 import os
 from src.clothing.wear_engine import (
     RobloxWearEngine,
-    load_r15_female_cages,
+    load_r15_cages,
     closest_point_on_triangle,
     SpatialGrid3D,
     smoothstep
@@ -45,8 +45,8 @@ apose_verts[:, 1] = adj_verts[:, 2] * uniform_scale + loc_y
 apose_verts[:, 2] = adj_verts[:, 1] * uniform_scale + loc_z
 
 # Carrega Cages
-cages = load_r15_female_cages('assets/models/clothing/female_cages.obj')
-src_roblox = load_r15_female_cages('assets/models/clothing/roblox_source_cages.obj')
+cages = load_r15_cages('assets/models/clothing/female_cages.obj')
+src_roblox = load_r15_cages('assets/models/clothing/roblox_source_cages.obj')
 
 def get_R(v1, v2):
     v1 = v1 / np.linalg.norm(v1)

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'artifacts/clothing_audit';MODELS=ROOT/'assets/models'
 sys.path.insert(0,str(ROOT))
-from src.clothing.wear_engine import load_r15_female_cages, _align_target_faces_by_uv
+from src.clothing.wear_engine import load_r15_cages, _align_target_faces_by_uv
 scene=json.loads((OUT/'scene_snapshot.json').read_text())['objects']
 reference=json.loads((OUT/'r15_reference_snapshot.json').read_text())
 manifest=json.loads((MODELS/'female_clothing_package_stage2.json').read_text())
@@ -64,8 +64,8 @@ for name in [n for n in reference if n.endswith('_OuterCage') and n in scene]:
     report[name]={'vertices':len(outv),'faces':len(emitted_faces),'uv_loops':len(emitted_uv),'max_position_error':geom_error,'max_uv_error':uv_error,'faces_exact':True}
     voff+=len(outv);uoff+=len(expected_uv)
 assert len(cage_parts)==15 and len(report)==15
-runtime_loaded=load_r15_female_cages(str(MODELS/manifest['cage_obj']),is_source_cage=False)
-reference_loaded=load_r15_female_cages(str(MODELS/manifest['reference_cage_obj']),is_source_cage=True)
+runtime_loaded=load_r15_cages(str(MODELS/manifest['cage_obj']),is_source_cage=False)
+reference_loaded=load_r15_cages(str(MODELS/manifest['reference_cage_obj']),is_source_cage=True)
 for name in report:
     runtime_name=name.replace('_OuterCage','')
     triangles=[]

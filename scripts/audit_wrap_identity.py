@@ -22,7 +22,7 @@ def audit(engine, asset_id):
     reference, faces, uv, _ = engine.load_obj(str(directory / "wrap_cages" / (wrap["reference_id"] + ".obj")))
     ref_rotation, ref_origin = wrap["reference_origin"]
     parent = np.asarray(reference) @ ref_rotation.T + ref_origin
-    engine.r15_female_cages = {"Reference": {
+    engine.body_cages = {"Reference": {
         "verts": rotate(parent), "faces": faces, "face_uvs": uv[faces],
     }}
     trace = {}
@@ -46,7 +46,7 @@ def audit(engine, asset_id):
 
 if __name__ == "__main__":
     engine = RobloxWearEngine(body_type="female")
-    original = engine.r15_female_cages
+    original = engine.body_cages
     for item in sys.argv[1:] or ("114590471167431", "109837605892174"):
         audit(engine, item)
-        engine.r15_female_cages = original
+        engine.body_cages = original

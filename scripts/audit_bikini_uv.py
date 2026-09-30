@@ -12,7 +12,7 @@ engine = RobloxWearEngine(body_type="female")
 directory = ROOT / "assets/models/clothing/wrap_cages"
 reference, faces, ref_uv, _ = engine.load_obj(str(directory / "82250283136857.obj"))
 outer, outer_faces, outer_uv, _ = engine.load_obj(str(directory / "97841210530386.obj"))
-body_uv, _ = _unique_uv_positions(engine.r15_female_cages)
+body_uv, _ = _unique_uv_positions(engine.body_cages)
 
 
 def compare(name, query, keys):

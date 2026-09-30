@@ -8,7 +8,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.blender_client import execute_blender_code
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 
 OUT = ROOT / 'artifacts' / 'clothing_audit'
 OUT.mkdir(exist_ok=True)
@@ -48,8 +48,8 @@ print(json.dumps(result))
 response = execute_blender_code(code, timeout=20)
 scene = json.loads(response['result']['result'])
 (OUT / 'scene_snapshot.json').write_text(json.dumps(scene), encoding='utf-8')
-source = load_r15_female_cages(str(ROOT/'assets/models/clothing/roblox_source_cages.obj'), True)
-raw = load_r15_female_cages(str(ROOT/'assets/models/clothing/female_cages_apose.obj'))
+source = load_r15_cages(str(ROOT/'assets/models/clothing/roblox_source_cages.obj'), True)
+raw = load_r15_cages(str(ROOT/'assets/models/clothing/female_cages_apose.obj'))
 engine = RobloxWearEngine(body_type='female')
 body = read_obj(ROOT/'assets/models/character_female_clean_apose.obj')
 mapping = {'UpperTorso':'Export_torso','LowerTorso':'Export_pelve','Head':'Export_cabeca',
@@ -62,7 +62,7 @@ mapping = {'UpperTorso':'Export_torso','LowerTorso':'Export_pelve','Head':'Expor
 report = {'parts':{}, 'body_scene_differences':{}, 'body_names':list(body)}
 for name, p in raw.items():
     if name.endswith('Forearm'): continue
-    sv=source[name]['verts']; v=p['verts']; f=p['faces']; repaired=engine.r15_female_cages[name]['verts']
+    sv=source[name]['verts']; v=p['verts']; f=p['faces']; repaired=engine.body_cages[name]['verts']
     obj=scene['objects'].get(name+'_OuterCage',{})
     bv=np.array(obj.get('verts',[]))
     displacement=np.linalg.norm(repaired-v,axis=1)
@@ -105,7 +105,7 @@ print(json.dumps(report,indent=2))
 # Orthographic technical comparison. Green: exported body, cyan: cage.
 from PIL import Image, ImageDraw
 im=Image.new('RGB',(1500,1000),'#161922'); draw=ImageDraw.Draw(im)
-for col,(title,parts) in enumerate([('EXPORTED CAGE',raw),('RUNTIME REPAIRED CAGE',engine.r15_female_cages),('CURRENT BLENDER CAGE',None)]):
+for col,(title,parts) in enumerate([('EXPORTED CAGE',raw),('RUNTIME REPAIRED CAGE',engine.body_cages),('CURRENT BLENDER CAGE',None)]):
     draw.text((col*500+20,12),title,fill='white')
     for row,axes in enumerate([(0,2),(1,2)]):
         def screen(v):return (col*500+250+float(v[axes[0]])*235,row*490+470-float(v[axes[1]])*235)

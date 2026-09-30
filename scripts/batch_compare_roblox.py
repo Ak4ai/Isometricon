@@ -23,7 +23,7 @@ from scripts.experiment_adaptive_prism_roblox import shells
 from scripts.experiment_dual_cage_prism import bind_dual_cage
 from scripts.sweep_radial_radius_roblox import score
 from scripts.test_r15_shirt_transfer import CAGE_OBJ, DIRECTORY, FBX, export_outer_cages_obj, load_classic_body
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 
 EXPORTS = Path("C:/Users/Henrique/Pictures/testesroblox")
@@ -47,7 +47,7 @@ def main():
     body, body_faces, _ = load_classic_body(FBX)
     export_outer_cages_obj(FBX, CAGE_OBJ)
     engine = RobloxWearEngine(body_type="female")
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
     report, rows = {}, []
     for case, (asset, export) in CASES.items():
         groups = load_obj_groups(export)

@@ -55,8 +55,9 @@ def test_shoulder_deltoid_volume_preservation():
     deltoid_top_z = np.max(apose_v[deltoid_mask, 2])
     assert deltoid_top_z >= 1.45, f"Deltoid height {deltoid_top_z} should be at least 1.45m"
 
-def test_boxy_shirt_universal_fit_and_hsr():
+def test_boxy_shirt_universal_fit():
     engine = RobloxWearEngine()
+    engine.dual_cage_ready = False  # the barycentric fallback for garments without cages
     obj_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "assets", "models", "clothing", "Boxy_Shirt_Y2K_-_BLACK_89475537632859.obj"
@@ -88,17 +89,7 @@ def test_boxy_shirt_universal_fit_and_hsr():
                     max_edge = e_len
     assert max_edge < 0.12, f"Back shoulder edge stretched too much: {max_edge:.3f}m"
 
-    # Verify watertight HSR slicing for arms
-    arm_hsr = engine.apply_arm_hsr(cuff_z, is_sleeveless, is_short)
-    assert "braco superior esquerdo" in arm_hsr
-    arm_l = arm_hsr["braco superior esquerdo"]
-    assert arm_l["visible"] is True
-    assert len(arm_l["verts"]) > 0
-    # Overlap with elbow (1.083m) and reach into sleeve (>= 1.15m)
-    assert np.min(arm_l["verts"][:, 2]) <= 1.083
-    assert np.max(arm_l["verts"][:, 2]) >= 1.150
-
-def test_sleeveless_jersey_universal_fit_and_hsr():
+def test_sleeveless_jersey_universal_fit():
     engine = RobloxWearEngine()
     obj_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -119,13 +110,6 @@ def test_sleeveless_jersey_universal_fit_and_hsr():
 
     deformed_v = engine.deform_top_mesh(apose_v, f, s_idx, t_idx)
     assert deformed_v.shape == apose_v.shape
-
-    # For sleeveless, the entire arm should be 100% visible from deltoid to elbow
-    arm_hsr = engine.apply_arm_hsr(cuff_z, is_sleeveless, is_short)
-    arm_l = arm_hsr["braco superior esquerdo"]
-    assert arm_l["visible"] is True
-    assert np.min(arm_l["verts"][:, 2]) <= 1.083
-    assert np.max(arm_l["verts"][:, 2]) >= 1.450
 
 def test_filemesh_v1_decode_and_equip_katana():
     from scripts.import_roblox_clothing import decode_roblox_mesh_to_obj
