@@ -106,8 +106,10 @@ class Skeleton:
                 reach = 1.25 * np.percentile(own_radial, 90)
             else:
                 reach = 0.1
+            if self.names[child].startswith("UpperArm"):
+                continue  # arms and sleeves move rigidly with the arm, independent of the torso
             if self.names[parent] == "Torso":
-                # Shoulders (and the neck) bend on the limb's side only: the torso, its skin and
+                # The neck bends on the head's side only: the torso, its skin and
                 # the body of a shirt, stays put, or an arm would drag the armhole with it.
                 # Include the parent side of the plane: leaving those vertices at their
                 # default child weight would jump from 100% child to 100% parent at zero.
