@@ -23,7 +23,7 @@ shirt[:,1]-=cage_origin[1]
 src,src_faces,src_uv,_=engine.load_obj(str(DIR/'reference.obj'))
 cage,cage_faces,cage_uv,_=engine.load_obj(str(DIR/'cage.obj'))
 dst_uv=[];dst_xyz=[]
-for name,part in engine.r15_female_cages.items():
+for name,part in engine.body_cages.items():
     if name.endswith('Forearm'):continue
     for face,tri_uv in zip(part['faces'],part['face_uvs']):
         for idx,uv in zip(face,tri_uv):

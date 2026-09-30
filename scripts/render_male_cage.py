@@ -154,7 +154,7 @@ def main():
     gl.glViewport(0, 0, SIZE, SIZE)
     shader = Shader("assets/shaders/world_textured.vert", "assets/shaders/world_textured.frag")
     white = upload_texture_rgba(Image.new("RGBA", (4, 4), (255, 255, 255, 255)))
-    cages = RobloxWearEngine(body_type="female").r15_female_cages
+    cages = RobloxWearEngine(body_type="female").body_cages
     if "--partes" in sys.argv:
         sheet = render_parts(shader, white, cages, parts)
         out = OUT / "cage_partes.png"

@@ -6,11 +6,11 @@ base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 import numpy as np
-from src.clothing.wear_engine import load_r15_female_cages
+from src.clothing.wear_engine import load_r15_cages
 fem_obj = os.path.join(base_dir, "assets", "models", "clothing", "female_cages.obj")
 fem_npz = os.path.join(base_dir, "assets", "models", "roblox_female_cage_data.npz")
 
-cages = load_r15_female_cages(fem_obj)
+cages = load_r15_cages(fem_obj)
 ut = cages["UpperTorso"]
 ut_v = ut["verts"]
 ut_f = ut["faces"]

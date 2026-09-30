@@ -420,11 +420,11 @@ def retarget_garment_with_wrap_layer(engine, garment_vertices: np.ndarray, rbxm_
     faces = np.asarray(faces, dtype=np.int32)
     # Cages are paired with the body by UV below, not by triangle count: some
     # catalog references (e.g. 2684 faces) drop a few triangles of the R15 layout.
-    target_uv, target_positions = _unique_uv_positions(engine.r15_female_cages)
+    target_uv, target_positions = _unique_uv_positions(engine.body_cages)
     if target_override is not None:
         target_positions = np.asarray(target_override, dtype=np.float64)
     uv_index = _match_reference_to_body_uv(reference_uv, target_uv, faces,
-                                           _body_uv_adjacency(engine.r15_female_cages, target_uv))
+                                           _body_uv_adjacency(engine.body_cages, target_uv))
     outer_index = _match_outer_to_reference(reference_uv, faces, outer_uv, outer_faces)
     outer_original = outer
     missing_outer = outer_index < 0

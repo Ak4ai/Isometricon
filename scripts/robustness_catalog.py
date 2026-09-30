@@ -36,7 +36,7 @@ def main():
     name = sys.argv[1] if len(sys.argv) > 1 else "catalog"
     sample = json.loads((GT / f"{name}_sample.json").read_text())
     engine = RobloxWearEngine(body_type="female")
-    _, cage_positions = _unique_uv_positions(engine.r15_female_cages)
+    _, cage_positions = _unique_uv_positions(engine.body_cages)
     results = {}
     for category, ids in sample.items():
         for asset in ids:

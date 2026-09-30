@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 import src.clothing.wrap_layer_fit as wrap_fit
 from scripts.inspect_classic_mannequin_fbx import load_classic_body, export_outer_cages_obj
@@ -168,7 +168,7 @@ def main():
         wrap_fit._local_map = mirrored_normal_map
     engine = RobloxWearEngine(body_type="female")
     export_outer_cages_obj(FBX, CAGE_OBJ)
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
     source, faces, _, _ = engine.load_obj(str(next(DIRECTORY.glob(f"*_{ASSET}.obj"))))
     trace = {}
     fitted, fit = retarget_garment_with_wrap_layer(

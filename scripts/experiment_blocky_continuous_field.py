@@ -8,14 +8,14 @@ from scripts.experiment_wrap_mls import weighted_affine
 from scripts.experiment_wrap_binding import optimize_bindings
 from scripts.inspect_classic_mannequin_fbx import export_outer_cages_obj, load_classic_body
 from scripts.test_r15_shirt_transfer import ROOT, FBX, CAGE_OBJ, DIRECTORY, ASSET, depth_preview, edge_metrics
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 
 
 def main():
     engine = RobloxWearEngine(body_type="female")
     export_outer_cages_obj(FBX, CAGE_OBJ)
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
     garment, faces, _, _ = engine.load_obj(str(next(DIRECTORY.glob(f"*_{ASSET}.obj"))))
     trace = {}
     baseline, _ = retarget_garment_with_wrap_layer(

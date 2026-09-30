@@ -5,8 +5,9 @@ import numpy as np
 import pytest
 
 from src.clothing.wear_engine import (
+    BODY_CAGES,
     _align_target_faces_by_uv,
-    load_r15_female_cages,
+    load_r15_cages,
 )
 
 
@@ -47,10 +48,11 @@ def test_missing_uv_binding_fails_instead_of_using_indices():
         _align_target_faces_by_uv(source, target, "NoUV")
 
 
-def test_exported_r15_reference_and_stage2_target_pair_by_uv_for_all_parts():
+@pytest.mark.parametrize("body", sorted(BODY_CAGES))
+def test_exported_r15_reference_and_body_cages_pair_by_uv_for_all_parts(body):
     root = Path(__file__).resolve().parents[1]
-    source = load_r15_female_cages(str(root / "assets/models/roblox_reference_cages.obj"), is_source_cage=True)
-    target = load_r15_female_cages(str(root / "assets/models/female_cages_apose_stage2.obj"))
+    source = load_r15_cages(str(root / "assets/models/roblox_reference_cages.obj"), is_source_cage=True)
+    target = load_r15_cages(str(root / "assets/models" / BODY_CAGES[body]))
     body_parts = [
         "Head", "UpperTorso", "LowerTorso",
         "LeftUpperArm", "LeftLowerArm", "LeftHand",
@@ -66,3 +68,13 @@ def test_exported_r15_reference_and_stage2_target_pair_by_uv_for_all_parts():
         assert aligned.shape == target[name]["faces"].shape
         assert np.all(aligned >= 0)
         assert np.all(aligned < len(target[name]["verts"]))
+
+
+def test_body_cages_share_the_body_uv_points():
+    """The male cage is the female cage's topology and UVs on the male body."""
+    from src.clothing.wrap_layer_fit import _unique_uv_positions
+
+    root = Path(__file__).resolve().parents[1]
+    uvs = {body: _unique_uv_positions(load_r15_cages(str(root / "assets/models" / path)))[0]
+           for body, path in BODY_CAGES.items()}
+    np.testing.assert_allclose(uvs["male"], uvs["female"], atol=1e-3)

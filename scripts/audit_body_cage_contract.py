@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.clothing.wear_engine import (
     RobloxWearEngine, _align_target_faces_by_uv, closest_point_on_triangle,
-    load_r15_female_cages,
+    load_r15_cages,
 )
 
 MODELS = ROOT / "assets/models"
@@ -77,9 +77,9 @@ def face_uv_keys(part):
 
 def main():
     package = json.loads((MODELS / "female_clothing_package_stage2.json").read_text(encoding="utf-8"))
-    source = load_r15_female_cages(str(MODELS / package["reference_cage_obj"]), is_source_cage=True)
-    exported = load_r15_female_cages(str(MODELS / package["cage_obj"]), is_source_cage=False)
-    runtime = RobloxWearEngine(body_type="female").r15_female_cages
+    source = load_r15_cages(str(MODELS / package["reference_cage_obj"]), is_source_cage=True)
+    exported = load_r15_cages(str(MODELS / package["cage_obj"]), is_source_cage=False)
+    runtime = RobloxWearEngine(body_type="female").body_cages
     body = load_body_parts(MODELS / package["body_obj"])
     all_vertices = []
     all_faces = []

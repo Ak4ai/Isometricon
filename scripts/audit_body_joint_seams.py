@@ -29,7 +29,7 @@ def audit(engine):
         if name.endswith("Forearm"):
             continue
         source = uv_positions(source_part)
-        target = uv_positions(engine.r15_female_cages[name])
+        target = uv_positions(engine.body_cages[name])
         if source.keys() != target.keys():
             raise ValueError(f"UV set differs in {name}")
         for uv, point in source.items():

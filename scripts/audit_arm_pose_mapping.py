@@ -9,7 +9,7 @@ from src.clothing.wear_engine import RobloxWearEngine
 engine=RobloxWearEngine(body_type='female')
 ref,_,uv,_=engine.load_obj(str(ROOT/'artifacts/clothing_audit/office_shirt_wraplayer/reference.obj'))
 for name in ('UpperTorso','LeftUpperArm','RightUpperArm','LeftLowerArm','RightLowerArm'):
-    part=engine.r15_female_cages[name]
+    part=engine.body_cages[name]
     part_uv=np.unique(np.round(np.vstack(part['face_uvs']),6),axis=0)
     match=np.concatenate([((chunk[:,None,:]-uv[None,:,:])**2).sum(2).argmin(1) for chunk in np.array_split(part_uv,20)])
     garment=ref[match]

@@ -15,14 +15,14 @@ from scripts.test_r15_shirt_transfer import (
     load_classic_body,
 )
 from src.clothing.multi_influence_shell import transfer_outer_cage_radial
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import retarget_garment_with_wrap_layer
 
 
 def main():
     export_outer_cages_obj(FBX, CAGE_OBJ)
     engine = RobloxWearEngine(body_type="female")
-    engine.r15_female_cages = load_r15_female_cages(str(CAGE_OBJ), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(CAGE_OBJ), is_source_cage=True)
     vertices, faces, _, _ = engine.load_obj(str(next(DIRECTORY.glob(f"*_{ASSET}.obj"))))
     trace = {}
     baseline, _ = retarget_garment_with_wrap_layer(

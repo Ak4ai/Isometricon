@@ -28,6 +28,15 @@ BOTTOM_ASSET_TYPES = {66, 69, 70, 71, 72} # Pants, Shorts, LeftShoe, RightShoe, 
 # Shoes: rigid up to the ankle (engine height), cage-fitted above it over this blend height.
 SHOE_RIGID_TOP = 0.10
 SHOE_BLEND_HEIGHT = 0.08
+# R15 outer cages of each body, in assets/models. Both bodies share the A-pose and the
+# cage topology and UVs (the male cage was built from the female one), so a garment is
+# fitted to either the same way.
+BODY_CAGES = {"female": "female_cages_apose_stage2.obj", "male": "male_cages_apose.obj"}
+
+
+def body_name(body_type) -> str:
+    """'female' or 'male' for any of the spellings the console and the CLI accept."""
+    return "female" if str(body_type).lower() in ("female", "feminino", "fem", "f", "mulher", "woman") else "male"
 
 # Tabela canônica de 24 rotações ortogonais do formato binário da Roblox (CFrame special cases)
 # Os ângulos estão em graus e são aplicados na ordem Y -> X -> Z
@@ -340,8 +349,8 @@ def slice_mesh_below_z(vertices, faces, plane_z):
     return compact_verts, compact_faces
 
 
-def load_r15_female_cages(obj_path, is_source_cage: bool = False):
-    """Carrega as 15 cages R15 femininas diretamente do OBJ, convertendo para coordenadas do motor.
+def load_r15_cages(obj_path, is_source_cage: bool = False):
+    """Carrega as 15 cages R15 de um corpo diretamente do OBJ, convertendo para coordenadas do motor.
 
     Retorna dict: {part_name: {"verts": np.ndarray(N,3), "faces": np.ndarray(M,3),
                                 "grid": SpatialGrid3D, "bbox_min": np.ndarray(3), "bbox_max": np.ndarray(3)}}
@@ -602,34 +611,21 @@ class RobloxWearEngine:
     """Motor completo de deformação, ajuste e vestuário Roblox em Python puro."""
 
     def __init__(self, cage_data_path=None, body_type="male"):
-        self.body_type = str(body_type).lower()
-        self.is_female = self.body_type in ("female", "feminino", "fem")
+        self.body_type = body_name(body_type)
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         std_cage_path = os.path.join(base_dir, "assets", "models", "roblox_cage_data.npz")
         self.std_cage_data = np.load(std_cage_path)
 
-        if self.is_female:
-            fem_cage_path = os.path.join(base_dir, "assets", "models", "roblox_female_cage_data.npz")
-            if not os.path.exists(fem_cage_path):
-                raise FileNotFoundError(f"Arquivo de dados da cage feminina não encontrado: {fem_cage_path}")
-            self.cage_data = np.load(fem_cage_path)
-            # Source cages are the standard Roblox mannequin (where clothing was authored)
-            self.src_verts_apose = self.std_cage_data["cage_verts_apose"]
-            self.src_verts_tpose_85 = self.std_cage_data["cage_verts_tpose_85"]
-            self.src_verts_rest = self.std_cage_data["cage_verts_rest"]
-            # Target destination cages are the sculpted female cages
-            self.dst_verts_rest = self.cage_data["cage_verts_rest"]
-            self.dst_verts_apose = self.cage_data["cage_verts_apose"]
-            self.dst_verts_tpose_85 = self.cage_data["cage_verts_tpose_85"]
-        else:
-            self.cage_data = self.std_cage_data
-            self.src_verts_apose = self.std_cage_data["cage_verts_apose"]
-            self.src_verts_tpose_85 = self.std_cage_data["cage_verts_tpose_85"]
-            self.src_verts_rest = self.std_cage_data["cage_verts_rest"]
-            self.dst_verts_rest = self.std_cage_data["cage_verts_rest"]
-            self.dst_verts_apose = self.std_cage_data["cage_verts_apose"]
-            self.dst_verts_tpose_85 = self.std_cage_data["cage_verts_tpose_85"]
+        # Last-resort fit (garments without usable cages): the standard Roblox mannequin
+        # onto the female A-pose cage, which the male body shares the pose of.
+        self.cage_data = np.load(os.path.join(base_dir, "assets", "models", "roblox_female_cage_data.npz"))
+        self.src_verts_apose = self.std_cage_data["cage_verts_apose"]
+        self.src_verts_tpose_85 = self.std_cage_data["cage_verts_tpose_85"]
+        self.src_verts_rest = self.std_cage_data["cage_verts_rest"]
+        self.dst_verts_rest = self.cage_data["cage_verts_rest"]
+        self.dst_verts_apose = self.cage_data["cage_verts_apose"]
+        self.dst_verts_tpose_85 = self.cage_data["cage_verts_tpose_85"]
 
         self.cage_verts_apose = self.src_verts_apose
         self.cage_verts_rest = self.dst_verts_rest
@@ -640,15 +636,11 @@ class RobloxWearEngine:
         if "cage_face_groups" in self.cage_data and len(self.cage_data["cage_face_groups"]) == len(self.cage_faces):
             self.cage_face_groups = self.cage_data["cage_face_groups"]
         else:
-            groups_path = os.path.join(os.path.dirname(std_cage_path), "cage_face_groups.npy")
-            if os.path.exists(groups_path) and not self.is_female:
-                self.cage_face_groups = np.load(groups_path)
-            else:
-                v_a = self.cage_verts_apose[self.cage_faces]
-                c_x = np.mean(v_a[:, :, 0], axis=1)
-                self.cage_face_groups = np.zeros(len(self.cage_faces), dtype=np.int32)
-                self.cage_face_groups[c_x > 0.25] = 1
-                self.cage_face_groups[c_x < -0.25] = 2
+            v_a = self.cage_verts_apose[self.cage_faces]
+            c_x = np.mean(v_a[:, :, 0], axis=1)
+            self.cage_face_groups = np.zeros(len(self.cage_faces), dtype=np.int32)
+            self.cage_face_groups[c_x > 0.25] = 1
+            self.cage_face_groups[c_x < -0.25] = 2
 
 
         # Acelerador A-Pose Global (Parte Superior)
@@ -695,63 +687,18 @@ class RobloxWearEngine:
         self.elbow_z = float(self.elbow_l[2])
         self.wrist_z = float(self.wrist_l[2])
 
-        # Cages R15 femininas e source cages de referência do Roblox
-        self.r15_female_cages = None
+        # R15 cages of this body and the Roblox reference cages the garments were made on
+        self.body_cages = None
         self.r15_source_cages = None
-        self.female_dual_cage_ready = False
-        if self.is_female:
-            cage_dir = os.path.join(base_dir, "assets", "models", "clothing")
-            r15_fem_obj_stage2 = os.path.join(base_dir, "assets", "models", "female_cages_apose_stage2.obj")
-            
-            if os.path.exists(r15_fem_obj_stage2):
-                r15_fem_obj = r15_fem_obj_stage2
-                self.using_stage2_cages = True
-            else:
-                r15_fem_obj = os.path.join(cage_dir, "female_cages_apose.obj")
-                self.using_stage2_cages = False
-            
-            r15_src_obj = os.path.join(base_dir, "assets", "models", "roblox_reference_cages.obj")
-            if os.path.exists(r15_fem_obj) and os.path.exists(r15_src_obj):
-                self.r15_female_cages = load_r15_female_cages(r15_fem_obj, is_source_cage=False)
-                self.r15_source_cages = load_r15_female_cages(r15_src_obj, is_source_cage=True)
-                print(
-                    f"[R15] Carregadas cages femininas de {os.path.basename(r15_fem_obj)} "
-                    f"e referÃªncia UV de {os.path.basename(r15_src_obj)}."
-                )
-                self._init_female_dual_cage()
-
-    def _repair_female_cages_symmetry(self, c_fem: dict, c_src: dict) -> None:
-        """Repara e garante simetria bilateral perfeita na cage feminina para todas as partes R15."""
-        for part in c_fem:
-            if part not in c_src:
-                continue
-            sv = c_src[part]["verts"]
-            fv = c_fem[part]["verts"]
-
-            if part == "LowerTorso" and len(fv) > 82:
-                p58 = (fv[57] + fv[48] + fv[60]) / 3.0
-                fv[58] = p58
-                fv[82] = np.array([-p58[0], p58[1], p58[2]])
-
-            visited = set()
-            for i in range(len(sv)):
-                if i in visited:
-                    continue
-                target = np.array([-sv[i, 0], sv[i, 1], sv[i, 2]])
-                twin = int(np.argmin(np.linalg.norm(sv - target, axis=1)))
-                if np.linalg.norm(sv[twin] - target) < 1e-4:
-                    visited.add(i)
-                    visited.add(twin)
-                    if abs(sv[i, 0]) < 0.01:
-                        continue
-                    if (sv[i, 0] * fv[i, 0] < 0) and (sv[twin, 0] * fv[twin, 0] < 0):
-                        tmp = fv[i].copy()
-                        fv[i] = fv[twin].copy()
-                        fv[twin] = tmp
-                    elif sv[i, 0] * fv[i, 0] < 0:
-                        fv[i] = np.array([-fv[twin, 0], fv[twin, 1], fv[twin, 2]])
-                    elif sv[twin, 0] * fv[twin, 0] < 0:
-                        fv[twin] = np.array([-fv[i, 0], fv[i, 1], fv[i, 2]])
+        self.dual_cage_ready = False
+        body_obj = os.path.join(base_dir, "assets", "models", BODY_CAGES[self.body_type])
+        r15_src_obj = os.path.join(base_dir, "assets", "models", "roblox_reference_cages.obj")
+        if os.path.exists(body_obj) and os.path.exists(r15_src_obj):
+            self.body_cages = load_r15_cages(body_obj, is_source_cage=False)
+            self.r15_source_cages = load_r15_cages(r15_src_obj, is_source_cage=True)
+            print(f"[R15] Carregadas cages de {os.path.basename(body_obj)} "
+                  f"e referência UV de {os.path.basename(r15_src_obj)}.")
+            self._init_dual_cage()
 
     def _under_outer_cage(self, asset_id, body_positions):
         """Fitted outer cage of ``asset_id`` per body-cage UV point (the body where it has none)."""
@@ -785,7 +732,7 @@ class RobloxWearEngine:
         from .wrap_layer_fit import _unique_uv_positions
         under = self.layer_under_asset
         under = [under] if isinstance(under, (int, str)) else [a for a in under if a is not None]
-        _, body = _unique_uv_positions(self.r15_female_cages)
+        _, body = _unique_uv_positions(self.body_cages)
         positions, lift = body.copy(), np.zeros(len(body))
         used = []
         for asset_id in under:
@@ -804,7 +751,7 @@ class RobloxWearEngine:
         if gap:
             # Manual extra room between the layers, along the layered shell's normals.
             from .hsr import _cage_vertex_normals, body_cage_faces
-            positions += _cage_vertex_normals(positions, body_cage_faces(self.r15_female_cages)) * gap
+            positions += _cage_vertex_normals(positions, body_cage_faces(self.body_cages)) * gap
         print(f"[WrapLayer] Encaixando sobre a cage externa de {used} (folga {gap * 1000:.0f} mm)")
         return positions
 
@@ -842,7 +789,7 @@ class RobloxWearEngine:
 
     def _fit_asset_wrap_layer(self, verts, meta, faces=None):
         """Use an asset's own cages when UVs and garment-to-cage distance validate."""
-        if not self.is_female or not self.r15_female_cages or not meta.get("rbxm_path"):
+        if not self.body_cages or not meta.get("rbxm_path"):
             return None
         try:
             from .wrap_layer_fit import retarget_garment_with_wrap_layer
@@ -868,13 +815,13 @@ class RobloxWearEngine:
         try:
             from .hsr import engine_to_body_mesh, hidden_body_cage_mask
             from .wrap_layer_fit import _unique_uv_positions
-            _, cage_positions = _unique_uv_positions(self.r15_female_cages)
+            _, cage_positions = _unique_uv_positions(self.body_cages)
             hidden = hidden_body_cage_mask(meta["rbxm_path"], trace, len(cage_positions),
                                            os.path.join(os.path.dirname(meta["obj_path"]), "hsr"))
             if hidden is not None:
                 from .hsr import body_cage_faces
                 result[1]["hsr"] = {"cage_points": engine_to_body_mesh(cage_positions), "hidden": hidden,
-                                    "cage_faces": body_cage_faces(self.r15_female_cages)}
+                                    "cage_faces": body_cage_faces(self.body_cages)}
                 print(f"[HSR] {int(hidden.sum())} de {len(hidden)} pontos da cage cobertos pela roupa")
         except Exception as exc:  # HSR is optional: without it the skin keeps the rule-based cuts.
             print(f"[HSR] Sem dados de HSR: {exc}")
@@ -911,13 +858,13 @@ class RobloxWearEngine:
         print(f"[WrapLayer] Cages do asset aplicadas: {result[1]}")
         return result
 
-    def _init_female_dual_cage(self):
+    def _init_dual_cage(self):
         """Inicializa e pré-computa os aceleradores espaciais da Dual Cage R15 feminina bilateral."""
-        if not self.r15_female_cages or not self.r15_source_cages:
+        if not self.body_cages or not self.r15_source_cages:
             return
 
         c_src = self.r15_source_cages
-        c_fem = self.r15_female_cages
+        c_fem = self.body_cages
         
         # Never reorder or repair these vertices by index: the binding is established by UVs below.
 
@@ -990,9 +937,9 @@ class RobloxWearEngine:
         self.ta_ras, self.tb_ras, self.tc_ras, self.fn_ras, self.grid_arm_r_s = prep_grid(self.v_arm_r_s, self.f_arm_r)
         self.ta_raf, self.tb_raf, self.tc_raf, self.fn_raf, _ = prep_grid(self.v_arm_r_f, self.f_arm_r_target)
 
-        self.female_dual_cage_ready = True
+        self.dual_cage_ready = True
 
-    def deform_female_dual_cage(
+    def deform_dual_cage(
         self,
         apose_verts: np.ndarray,
         faces: list,
@@ -1430,7 +1377,7 @@ class RobloxWearEngine:
         # Ancoragem Anatômica Universal dos Ombros:
         # A peça de roupa repousa sobre a sustentação anatômica dos ombros/clavícula.
         # Topo anatômico do ombro: Z ≈ 1.475m (feminino), Z ≈ 1.485m (masculino), com +0.020m para jaquetas/bombers.
-        target_shoulder_z = 1.475 if self.is_female else (1.505 if is_jacket else 1.485)
+        target_shoulder_z = 1.475
         sh_mask = (np.abs(verts[:, 0]) >= 0.35) & (np.abs(verts[:, 0]) <= 0.75) & (verts[:, 1] > 0)
         shoulder_y = float(np.max(verts[sh_mask, 1])) if np.any(sh_mask) else y_max_orig
         loc_z = target_shoulder_z - shoulder_y * uniform_scale
@@ -1467,7 +1414,7 @@ class RobloxWearEngine:
         # Transforma para o espaço 3D da A-Pose canônica (sem distorções destrutivas manuais)
         world_apose = np.zeros_like(adj_verts)
         world_apose[:, 0] = -adj_verts[:, 0] * uniform_scale
-        world_apose[:, 1] = adj_verts[:, 2] * uniform_scale + (-0.051 if self.is_female else 0.007)
+        world_apose[:, 1] = adj_verts[:, 2] * uniform_scale + -0.051
         world_apose[:, 2] = adj_verts[:, 1] * uniform_scale + loc_z
 
         return world_apose, lowest_sleeve_z, is_sleeveless, is_short_sleeves, is_long_sleeves
@@ -1480,7 +1427,7 @@ class RobloxWearEngine:
 
         if target_waist_z is None:
             # Meio do caminho do declive anatômico (entre 0.928m da pelve e 1.067m da cintura superior)
-            target_waist_z = 1.000 if self.is_female else 0.935
+            target_waist_z = 1.000
         target_sole_z = -0.010
         target_z_span = target_waist_z - target_sole_z
 
@@ -1499,8 +1446,8 @@ class RobloxWearEngine:
         """Aplica a deformação baricêntrica contínua particionada por membros (Torso, Braço E, Braço D).
         Elimina 100% de rasgos na dorsal e costuras do ombro via relaxamento Laplaciano no anel da costura.
         """
-        if self.is_female and self.female_dual_cage_ready:
-            return self.deform_female_dual_cage(input_verts, faces, sleeve_indices, torso_indices, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
+        if self.dual_cage_ready:
+            return self.deform_dual_cage(input_verts, faces, sleeve_indices, torso_indices, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
 
         tri_a = self.cage_verts_apose[self.cage_faces[:, 0]]
         tri_b = self.cage_verts_apose[self.cage_faces[:, 1]]
@@ -1548,12 +1495,8 @@ class RobloxWearEngine:
             tan_vec = rot_offset - n_dist * dst_norm
 
             # Damping de puffiness normal (impede peças oversized/boxy de inflarem desmedidamente)
-            max_n = 0.045 if is_jacket else (0.035 if self.is_female else 0.030)
-            min_n = 0.010 if (self.is_female and is_sleeve) else 0.005
-
-            # Amortecimento anatômico do ombro masculino (impede ombros de armadura de futebol americano)
-            if not self.is_female and not is_jacket and abs(p[0]) > 0.20 and p[2] > 1.35:
-                max_n = 0.020
+            max_n = 0.045 if is_jacket else 0.035
+            min_n = 0.010 if is_sleeve else 0.005
 
             tan_len = float(np.linalg.norm(tan_vec))
 
@@ -1574,7 +1517,7 @@ class RobloxWearEngine:
                     d_n = n_dist
 
                 # Damping tangencial no tronco (evita que a barra forme pontas excessivamente largas)
-                max_tan = 0.045 if is_jacket else (0.038 if (self.is_female and is_sleeve) else (0.026 if self.is_female else 0.032))
+                max_tan = 0.045 if is_jacket else (0.038 if is_sleeve else 0.026)
                 if tan_len > max_tan:
                     d_tan = tan_vec * ((max_tan + (tan_len - max_tan) * 0.30) / tan_len)
                 else:
@@ -1589,9 +1532,9 @@ class RobloxWearEngine:
             layer_offset = (0.005 * dst_norm) if p[2] < 1.02 else np.zeros(3)
             return p_t + d_n * dst_norm + d_tan + layer_offset
 
-        sh_start = 0.12 if self.is_female else 0.18
-        sh_end   = 0.21 if self.is_female else 0.28
-        seam_x_min = 0.11 if self.is_female else 0.16
+        sh_start = 0.12
+        sh_end   = 0.21
+        seam_x_min = 0.11
 
         deformed = input_verts.copy()
         if is_sleeveless or len(sleeve_indices) == 0:
@@ -1749,24 +1692,22 @@ class RobloxWearEngine:
 
             p_target = best_u * ta + best_v * tb + best_w * tc
             eff_offset = best_offset.copy()
-            if self.is_female:
-                # Transição suave e contínua de offset, evitando degraus ou vincos artificiais nas coxas
-                if p_target[2] < 0.78:
-                    eff_offset = best_offset * 0.75
-                elif p_target[2] < 0.90:
-                    t = (p_target[2] - 0.78) / 0.12
-                    eff_offset = best_offset * (0.75 + 0.25 * t)
+            # Transição suave e contínua de offset, evitando degraus ou vincos artificiais nas coxas
+            if p_target[2] < 0.78:
+                eff_offset = best_offset * 0.75
+            elif p_target[2] < 0.90:
+                t = (p_target[2] - 0.78) / 0.12
+                eff_offset = best_offset * (0.75 + 0.25 * t)
             off_vec = R @ eff_offset
-            if self.is_female:
-                norm_comp = float(np.dot(off_vec, dst_norm))
-                min_clear = 0.003
-                if p_target[2] > 0.86 and dst_norm[1] < -0.3:
-                    min_clear = 0.006
-                    # Fivela do cinto frontal (|X| < 0.04 e Z entre 0.90 e 0.96)
-                    if abs(p_target[0]) < 0.04 and 0.90 < p_target[2] < 0.96:
-                        min_clear = 0.012
-                if norm_comp < min_clear:
-                    off_vec += (min_clear - norm_comp) * dst_norm
+            norm_comp = float(np.dot(off_vec, dst_norm))
+            min_clear = 0.003
+            if p_target[2] > 0.86 and dst_norm[1] < -0.3:
+                min_clear = 0.006
+                # Fivela do cinto frontal (|X| < 0.04 e Z entre 0.90 e 0.96)
+                if abs(p_target[0]) < 0.04 and 0.90 < p_target[2] < 0.96:
+                    min_clear = 0.012
+            if norm_comp < min_clear:
+                off_vec += (min_clear - norm_comp) * dst_norm
             deformed[i] = p_target + off_vec
 
         return deformed
@@ -1821,9 +1762,6 @@ class RobloxWearEngine:
             R = np.column_stack([dst_u, dst_v, dst_norm]) @ np.column_stack([src_u, src_v, src_norm]).T
             p_target = best_u * ta + best_v * tb + best_w * tc
             raw_deformed[i] = p_target + R @ best_offset
-
-        if not self.is_female:
-            return raw_deformed
 
         # 1. Identifica grupos de vértices coincidentes (costuras de textura UV / arestas duras)
         pos_map = {}
@@ -2051,7 +1989,7 @@ class RobloxWearEngine:
 
         Cada vértice é projetado na cage R15 correspondente (LowerTorso, pernas, pés).
         """
-        if not self.r15_female_cages:
+        if not self.body_cages:
             return rest_verts
 
         deformed = np.zeros_like(rest_verts)
@@ -2078,12 +2016,12 @@ class RobloxWearEngine:
             signed_offset = float(np.dot(p - best_qm, best_nm))
             cloth_offset = max(0.002, min(signed_offset, 0.020))
 
-            region_name = _assign_cage_region(p, _BOTTOM_CAGE_REGIONS, self.r15_female_cages)
+            region_name = _assign_cage_region(p, _BOTTOM_CAGE_REGIONS, self.body_cages)
             if region_name is None:
                 region_name = "LowerTorso"
 
             cage_assignment[i] = region_name
-            part_data = self.r15_female_cages[region_name]
+            part_data = self.body_cages[region_name]
             proj_q, normal, dist = self._project_onto_r15_cage(p, part_data)
 
             deformed[i] = proj_q + cloth_offset * normal
@@ -2121,110 +2059,6 @@ class RobloxWearEngine:
             smoothed_disp = new_disp
 
         return rest_verts + smoothed_disp
-
-    def _slim_arm(self, world_verts: np.ndarray, y_scale: float = 0.78, x_scale: float = 0.88) -> np.ndarray:
-        """Aplica afiamento anatômico XY suave ao braço para harmonizar com o estilo estilizado anime.
-        - y_scale: 0.78 (profundidade suave)
-        - x_scale: 0.88 (largura lateral suave)
-        Ambas as escalas são em torno do centro anatômico, preservando a curvatura e as alturas Z."""
-        verts = world_verts.copy()
-        _wrist_z    = self.wrist_z       # 0.684
-        _elbow_z    = 1.093
-        _shoulder_z = 1.482
-        # Centro Y anatômico por zona (profundidade)
-        _yc = {'wrist': -0.030, 'elbow': +0.054, 'shoulder': +0.025}
-        # Centro X anatômico: eixo do braço (X médio da cage)
-        x_center = float((world_verts[:, 0].min() + world_verts[:, 0].max()) / 2)
-
-        for i in range(len(verts)):
-            z = verts[i, 2]
-            if z <= _wrist_z:
-                yc = _yc['wrist']
-            elif z <= _elbow_z:
-                t  = (z - _wrist_z) / (_elbow_z - _wrist_z)
-                yc = _yc['wrist'] + t * (_yc['elbow'] - _yc['wrist'])
-            elif z <= _shoulder_z:
-                t  = (z - _elbow_z) / (_shoulder_z - _elbow_z)
-                yc = _yc['elbow'] + t * (_yc['shoulder'] - _yc['elbow'])
-            else:
-                yc = _yc['shoulder']
-            # Comprimir Y (profundidade) em torno do centro anatômico
-            verts[i, 1] = yc + (verts[i, 1] - yc) * y_scale
-            # Comprimir X (largura) em torno do centro do braço
-            verts[i, 0] = x_center + (verts[i, 0] - x_center) * x_scale
-
-        return verts
-
-    def square_sleeve_cuffs(
-        self,
-        deformed_verts: np.ndarray,
-        sleeve_idx: set,
-        is_long: bool,
-        is_short: bool,
-    ) -> np.ndarray:
-        """Aplica quadratura anatômica estilizada nas pontas das mangas:
-        - Na barra extrema (cuff), projeta a seção transversal elíptica em um quadrado/squircle (~85%).
-        - Suaviza gradualmente (via smoothstep Hermite) conforme sobe pelo braço, retornando ao formato
-          natural e orgânico da roupa em direção ao cotovelo/ombro.
-        """
-        verts = deformed_verts.copy()
-        if not sleeve_idx:
-            return verts
-
-        for side_mult in [1, -1]:
-            s_side = [i for i in sleeve_idx if (verts[i, 0] * side_mult) > 0]
-            if not s_side:
-                continue
-
-            s_v = verts[s_side]
-            min_z = float(np.min(s_v[:, 2]))
-            transition_len = 0.14 if is_long else 0.09
-            max_trans_z = min_z + transition_len
-
-            cuff_verts = s_v[s_v[:, 2] < min_z + 0.040]
-            if len(cuff_verts) == 0:
-                continue
-
-            cx = float((cuff_verts[:, 0].min() + cuff_verts[:, 0].max()) / 2)
-            cy = float((cuff_verts[:, 1].min() + cuff_verts[:, 1].max()) / 2)
-            rx = float((cuff_verts[:, 0].max() - cuff_verts[:, 0].min()) / 2)
-            ry = float((cuff_verts[:, 1].max() - cuff_verts[:, 1].min()) / 2)
-
-            if rx < 1e-4 or ry < 1e-4:
-                continue
-
-            for i in s_side:
-                z = verts[i, 2]
-                if z < max_trans_z:
-                    t = (z - min_z) / transition_len
-                    t = min(max(t, 0.0), 1.0)
-                    # Curva suave: 85% quadrado na ponta extrema, decaindo para 0% no topo da transição
-                    factor = (1.0 - (t * t * (3.0 - 2.0 * t))) * 0.85
-
-                    if factor > 0.001:
-                        dx = verts[i, 0] - cx
-                        dy = verts[i, 1] - cy
-                        if abs(dx) < 1e-6 and abs(dy) < 1e-6:
-                            continue
-
-                        theta = np.arctan2(dy, dx)
-                        cos_t = np.cos(theta)
-                        sin_t = np.sin(theta)
-
-                        denom_box = max(abs(cos_t) / min(rx, 0.046 if self.is_female else 0.080), abs(sin_t) / min(ry, 0.046 if self.is_female else 0.075))
-                        r_box_unit = 1.0 / denom_box
-
-                        denom_ellipse = np.sqrt((cos_t / rx)**2 + (sin_t / ry)**2)
-                        r_ellipse_unit = 1.0 / denom_ellipse
-
-                        box_ratio = r_box_unit / r_ellipse_unit
-                        box_dx = dx * box_ratio
-                        box_dy = dy * box_ratio
-
-                        verts[i, 0] = cx + (1.0 - factor) * dx + factor * box_dx
-                        verts[i, 1] = cy + (1.0 - factor) * dy + factor * box_dy
-
-        return verts
 
     def taper_female_sleeves(self, verts: np.ndarray, sleeve_idx: set, is_jacket: bool = False) -> np.ndarray:
         """Afina anatomicamente a manga longa ao longo do antebraço feminino (do cotovelo ao punho),
@@ -2295,58 +2129,6 @@ class RobloxWearEngine:
             v = new_v
         return v
 
-    def apply_arm_hsr(self, lowest_sleeve_z, is_sleeveless, is_short_sleeves, max_cuff_z=None, cuff_center_map=None, has_bare_shoulders=False):
-        """Retorna as malhas dos braços do personagem ajustadas para a roupa atual.
-        Para manga longa com cuff_center_map, translada a mão fatiada para o centro exato da manga.
-        Se os ombros estiverem nus (has_bare_shoulders ou is_sleeveless), preserva o braço superior 100% íntegro."""
-        res = {}
-        for side in ["esquerdo", "direito"]:
-            name = f"braco superior {side}"
-            v_raw = self.cage_data[f"{name}_verts"]
-            f_raw = self.cage_data[f"{name}_faces"]
-            mw = self.cage_data[f"{name}_matrix_world"]
-            world_verts = (mw[:3, :3] @ v_raw.T).T + mw[:3, 3]
-            # Slim arm moderado (apenas a pele)
-            world_verts = self._slim_arm(world_verts, y_scale=0.74, x_scale=0.86)
-
-            if is_sleeveless or has_bare_shoulders or is_short_sleeves:
-                res[name] = {"visible": True, "verts": world_verts, "faces": f_raw}
-            else:
-                res[name] = {"visible": False, "verts": world_verts, "faces": f_raw}
-
-            ab_name = f"antebraco {side}"
-            ab_v = self.cage_data[f"{ab_name}_verts"]
-            ab_f = self.cage_data[f"{ab_name}_faces"]
-            ab_mw = self.cage_data[f"{ab_name}_matrix_world"]
-            ab_world = (ab_mw[:3, :3] @ ab_v.T).T + ab_mw[:3, 3]
-            # Slim forearm moderado (apenas a pele)
-            ab_world = self._slim_arm(ab_world, y_scale=0.78, x_scale=0.88)
-
-            if is_sleeveless or is_short_sleeves:
-                res[ab_name] = {"visible": True, "verts": ab_world, "faces": ab_f}
-            else:
-                # Manga Longa / 3/4: fatia o antebraço logo acima da barra da manga,
-                # mantendo a mão visível e embutida com folga estanque dentro da manga (>= 0.760m),
-                # sem que o cotovelo ou antebraço superior furem o tecido.
-                effective_cuff = max_cuff_z if max_cuff_z is not None else lowest_sleeve_z
-                cut_ab_z = min(max(effective_cuff + 0.020, self.wrist_z + 0.020), 1.050)
-                s_ab_v, s_ab_f = slice_mesh_below_z(ab_world, ab_f, cut_ab_z)
-
-                # Alinhamento concêntrico: se o centro do punho da manga for conhecido,
-                # translada a mão para emergir perfeitamente do meio da manga
-                if cuff_center_map and side in cuff_center_map and len(s_ab_v) > 0:
-                    target_cx, target_cy = cuff_center_map[side]
-                    cur_hx = float((s_ab_v[:, 0].min() + s_ab_v[:, 0].max()) / 2)
-                    cur_hy = float((s_ab_v[:, 1].min() + s_ab_v[:, 1].max()) / 2)
-                    s_ab_v = s_ab_v.copy()
-                    s_ab_v[:, 0] += (target_cx - cur_hx)
-                    s_ab_v[:, 1] += (target_cy - cur_hy)
-
-                res[ab_name] = {"visible": True, "verts": s_ab_v, "faces": s_ab_f}
-
-        return res
-
-
     def wear(self, asset_id, output_obj=None, body_type=None, target_waist_z=None):
         """Executa o pipeline nativo completo de ponta a ponta sem Blender."""
         target_body = str(body_type).lower() if body_type is not None else self.body_type
@@ -2412,9 +2194,9 @@ class RobloxWearEngine:
                     lowest_sleeve_z = 2.0
                     is_sleeveless, is_short, is_long = True, False, False
                 cuff_z = lowest_sleeve_z
-            elif self.is_female and self.female_dual_cage_ready:
+            elif self.dual_cage_ready:
                 ut_s = self.r15_source_cages["UpperTorso"]["verts"]
-                ut_f = self.r15_female_cages["UpperTorso"]["verts"]
+                ut_f = self.body_cages["UpperTorso"]["verts"]
                 scale = (ut_f[:, 2].max() - ut_f[:, 2].min()) / (ut_s[:, 2].max() - ut_s[:, 2].min() + 1e-8)
                 z_shift = ut_f[:, 2].max() - ut_s[:, 2].max() * scale
                 y_shift = ut_f[:, 1].mean() - ut_s[:, 1].mean() * scale
@@ -2441,7 +2223,7 @@ class RobloxWearEngine:
                 sleeve_label = "REGATA" if is_sleeveless else ("MANGA CURTA" if is_short else "MANGA LONGA")
                 print(f"[*] Tipo de Manga: {sleeve_label} (Z cuff = {cuff_z:.3f}m, Casaco={is_jacket}, Vestido={is_dress})")
 
-                deformed_verts = self.deform_female_dual_cage(
+                deformed_verts = self.deform_dual_cage(
                     v_canon, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless
                 )
             else:
@@ -2452,28 +2234,6 @@ class RobloxWearEngine:
                 print(f"[*] Tipo de Manga: {sleeve_label} (Z cuff = {cuff_z:.3f}m, Casaco={is_jacket}, Vestido={is_dress})")
 
                 deformed_verts = self.deform_top_mesh(apose_verts, faces, sleeve_idx, torso_idx, is_jacket=is_jacket, is_sleeveless=is_sleeveless)
-
-            if not self.is_female:
-                # Calibração da ponta da manga longa (Z):
-                # Garante que a barra da manga termine na altura anatômica do punho (Z ≈ 0.740m),
-                # deixando a mão (~5.6cm) exposta e visível de forma natural, sem alterar a largura ou espessura da roupa.
-                if is_long and sleeve_idx:
-                    target_cuff_z = self.wrist_z + 0.056  # 0.740m
-                    elbow_z = 1.080
-                    for side_mult in [1, -1]:
-                        s_side = [i for i in sleeve_idx if (deformed_verts[i, 0] * side_mult) > 0]
-                        if s_side:
-                            min_s_z = float(np.min(deformed_verts[s_side, 2]))
-                            if min_s_z < target_cuff_z:
-                                for i in s_side:
-                                    z = deformed_verts[i, 2]
-                                    if z < elbow_z:
-                                        t = (elbow_z - z) / (elbow_z - min_s_z + 1e-8)
-                                        deformed_verts[i, 2] = elbow_z - t * (elbow_z - target_cuff_z)
-
-                # Estilização Blocky: Aplica quadratura nas pontas das mangas com transição suave (apenas masculino)
-                if sleeve_idx and not is_sleeveless:
-                    deformed_verts = self.square_sleeve_cuffs(deformed_verts, sleeve_idx, is_long, is_short)
 
             # Recalcula a altura real da bainha da manga pós-deformação da cage
             cuff_center_map = {}
@@ -2505,8 +2265,8 @@ class RobloxWearEngine:
             # Detecção de ombros nus / mangas destacadas / tomara-que-caia:
             # Se a roupa não possui cobertura estruturada de ombro (|X| > 0.22 e Z > 1.35 com teto >= 1.42m),
             # os ombros são anatomicamente expostos e os braços superiores devem ser preservados 100% íntegros
-            sh_x_cut = 0.16 if self.is_female else 0.22
-            sh_z_ceil = 1.390 if self.is_female else 1.420
+            sh_x_cut = 0.16
+            sh_z_ceil = 1.390
             shoulder_pts = deformed_verts[(np.abs(deformed_verts[:, 0]) > sh_x_cut) & (deformed_verts[:, 2] > 1.35)]
             has_bare_shoulders = (
                 is_sleeveless
@@ -2516,7 +2276,6 @@ class RobloxWearEngine:
             if has_bare_shoulders and not is_sleeveless:
                 print(f"[*] Detecção Anatômica: Ombros nus / mangas destacadas (pts={len(shoulder_pts)} -> preservando braço superior completo)")
 
-            arm_hsr = None
         else:
             wrap_result = self._fit_asset_wrap_layer(verts, meta, faces)
             if wrap_result is not None:
@@ -2526,63 +2285,14 @@ class RobloxWearEngine:
                 tpose_verts = self.fit_bottom_clothing(verts, target_waist_z=target_waist_z)
                 deformed_verts = self.deform_bottom_mesh(tpose_verts, faces)
 
-            arm_hsr = None
             cuff_z = None
             is_short, is_sleeveless, is_long = False, False, False
 
         if output_obj is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            suffix = "_female.obj" if self.body_type in ("female", "feminino", "fem") else ".obj"
-            output_obj = os.path.join(base_dir, "assets", "models", f"character_native_{asset_id}{suffix}")
+            output_obj = os.path.join(base_dir, "assets", "models", f"character_native_{asset_id}_{self.body_type}.obj")
 
-        models_dir = os.path.dirname(output_obj)
-        # Exporta as malhas dos braços fatiados pelo HSR para OBJ (específicas por asset e padrão)
-        if arm_hsr:
-            arm_suffix = "_female.obj" if self.is_female else ".obj"
-            for side, eng_name in [("left", "braco superior esquerdo"), ("right", "braco superior direito")]:
-                arm_data = arm_hsr.get(eng_name)
-                # Exporta tanto arquivo específico quanto padrão se for manga longa
-                paths = [
-                    os.path.join(models_dir, f"character_native_arm_{side}_{asset_id}.obj"),
-                    os.path.join(models_dir, f"character_native_arm_{side}_{asset_id}{arm_suffix}"),
-                ]
-                if is_long:
-                    paths.append(os.path.join(models_dir, f"character_native_arm_{side}.obj"))
-                    paths.append(os.path.join(models_dir, f"character_native_arm_{side}{arm_suffix}"))
-                for arm_obj_path in set(paths):
-                    if arm_data and arm_data.get("visible", False):
-                        with open(arm_obj_path, "w", encoding="utf-8") as f:
-                            f.write(f"# Isometricon Native Sliced Arm: {side}\n")
-                            for v in arm_data["verts"]:
-                                f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
-                            for face in arm_data["faces"]:
-                                f.write("f " + " ".join(str(idx + 1) for idx in face) + "\n")
-                    else:
-                        with open(arm_obj_path, "w", encoding="utf-8") as f:
-                            f.write("# Arm hidden\n")
-
-            for side, eng_name in [("left", "antebraco esquerdo"), ("right", "antebraco direito")]:
-                ab_data = arm_hsr.get(eng_name)
-                paths = [
-                    os.path.join(models_dir, f"character_native_forearm_{side}_{asset_id}.obj"),
-                    os.path.join(models_dir, f"character_native_forearm_{side}_{asset_id}{arm_suffix}"),
-                ]
-                if is_long:
-                    paths.append(os.path.join(models_dir, f"character_native_forearm_{side}.obj"))
-                    paths.append(os.path.join(models_dir, f"character_native_forearm_{side}{arm_suffix}"))
-                for ab_obj_path in set(paths):
-                    if ab_data and ab_data.get("visible", False):
-                        with open(ab_obj_path, "w", encoding="utf-8") as f:
-                            f.write(f"# Isometricon Native Forearm: {side}\n")
-                            for v in ab_data["verts"]:
-                                f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
-                            for face in ab_data["faces"]:
-                                f.write("f " + " ".join(str(idx + 1) for idx in face) + "\n")
-                    else:
-                        with open(ab_obj_path, "w", encoding="utf-8") as f:
-                            f.write("# Forearm hidden\n")
-
-        if self.is_female and meta.get("is_top", False) and not used_asset_wrap:
+        if meta.get("is_top", False) and not used_asset_wrap:
             # Inverte X no final para leitura frontal correta de logos/texturas, invertendo winding para preservar normais externas.
             # Só no encaixe antigo: o WrapLayer já sai na orientação do corpo (confere com o Roblox) e espelhá-lo invertia os textos.
             deformed_verts[:, 0] = -deformed_verts[:, 0]
@@ -2625,13 +2335,13 @@ class RobloxWearEngine:
         from .hsr import body_cage_faces, engine_to_body_mesh, ray_hidden_mask, sidecar_path
         hsr_path = sidecar_path(output_obj)
         hsr_info = wrap_result[1].get("hsr") if used_asset_wrap and wrap_result is not None else None
-        if hsr_info is None and self.is_female and self.r15_female_cages:
+        if hsr_info is None and self.body_cages:
             # No usable Roblox HSR data: derive the covered skin from the fitted garment
             # itself (the final vertices, in the same space the renderer receives).
             try:
                 from .wrap_layer_fit import _unique_uv_positions
-                _, cage_positions = _unique_uv_positions(self.r15_female_cages)
-                cage_faces = body_cage_faces(self.r15_female_cages)
+                _, cage_positions = _unique_uv_positions(self.body_cages)
+                cage_faces = body_cage_faces(self.body_cages)
                 garment_faces = np.asarray([f[:3] for f in faces], dtype=np.int64)
                 hidden = ray_hidden_mask(cage_positions, cage_faces, deformed_verts, garment_faces,
                                          reach_fraction=0.12)
@@ -2665,7 +2375,6 @@ class RobloxWearEngine:
             "verts": deformed_verts,
             "faces": faces,
             "uvs": uvs,
-            "arm_hsr": arm_hsr
         }
 
     def equip_tool(self, asset_id, hand="right", output_obj=None):

@@ -21,7 +21,7 @@ def part_affine_shell(engine, trace):
     output = np.zeros_like(outer, dtype=np.float64)
     weights = np.zeros(len(outer), dtype=np.float64)
     diagnostics = {}
-    for name, part in engine.r15_female_cages.items():
+    for name, part in engine.body_cages.items():
         if name.endswith("Forearm"):
             continue
         uv = np.asarray([u for face in part["face_uvs"] for u in face])

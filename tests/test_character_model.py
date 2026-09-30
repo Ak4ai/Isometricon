@@ -142,10 +142,13 @@ def test_slice_mesh_between_y():
 
 
 def test_character_model_male_default_hem():
+    # The male body shares the female A-pose mesh layout, so its hem default is the same.
     from src.clothing.customization import AvatarCustomization, BodyType
     cust = AvatarCustomization(body_type=BodyType.MALE)
     model = CharacterModel(customization=cust, create_mesh=False)
-    assert model.top_hem_offset == pytest.approx(-0.02)
+    assert model.top_hem_offset == pytest.approx(0.0)
+    assert model.body == "male"
+    assert model.fitted_path(123).endswith("character_native_123_male.obj")
     model.delete()
 
 

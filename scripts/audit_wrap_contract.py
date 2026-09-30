@@ -6,7 +6,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from src.clothing.wear_engine import RobloxWearEngine, load_r15_female_cages
+from src.clothing.wear_engine import RobloxWearEngine, load_r15_cages
 from src.clothing.wrap_layer_fit import read_wrap_layer, retarget_garment_with_wrap_layer, _local_map
 
 
@@ -33,7 +33,7 @@ def main():
         "reflection": np.diag([1., -1., 1.]),
         "scale_2": np.eye(3) * 2,
     }.items():
-        engine.r15_female_cages = {"Control": {
+        engine.body_cages = {"Control": {
             "verts": reference @ matrix.T, "faces": faces, "face_uvs": uv[face_uv]}}
         trace = {}
         output, _ = retarget_garment_with_wrap_layer(engine, garment, str(rbxm), directory / "wrap_cages", trace)
@@ -46,10 +46,10 @@ def main():
     permutation_difference = max(float(np.linalg.norm(m - maps[0])) for m in maps)
 
     cage_path = ROOT / "artifacts/clothing_audit/BlockyCharacter_OuterCages.obj"
-    engine.r15_female_cages = load_r15_female_cages(str(cage_path), is_source_cage=True)
+    engine.body_cages = load_r15_cages(str(cage_path), is_source_cage=True)
     trace = {}
     _, fit = retarget_garment_with_wrap_layer(engine, garment, str(rbxm), directory / "wrap_cages", trace)
-    parts_by_uv = {tuple(np.round(u, 5)): name for name, part in engine.r15_female_cages.items()
+    parts_by_uv = {tuple(np.round(u, 5)): name for name, part in engine.body_cages.items()
                    if not name.endswith("Forearm") for u in part["face_uvs"].reshape(-1, 2)}
     labels = np.array([parts_by_uv[tuple(trace["target_uv"][i])] for i in trace["uv_index"]])
     edges = np.unique(np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1), axis=0)

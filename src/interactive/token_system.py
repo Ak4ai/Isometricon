@@ -389,29 +389,6 @@ class ModularCharacter:
         engine = RobloxWearEngine()
         wear_data = engine.wear(asset_id)
 
-        # Atualiza a visibilidade e malha dos braços superiores e antebraços conforme HSR
-        if wear_data.get("arm_hsr"):
-            for arm_name, arm_info in wear_data["arm_hsr"].items():
-                if arm_name in self.parts:
-                    if not arm_info["visible"]:
-                        self.parts[arm_name].mesh = None
-                    else:
-                        s_verts = arm_info["verts"]
-                        s_faces = arm_info["faces"]
-                        v_data = []
-                        pivot = self.parts[arm_name].pivot
-                        for v in s_verts:
-                            v_local = v - pivot
-                            v_data.append([
-                                v_local[0], v_local[1], v_local[2],
-                                0.0, 1.0, 0.0,
-                                0.5, 0.5,
-                                0.85, 0.85, 0.85
-                            ])
-                        v_arr = np.array(v_data, dtype=np.float32)
-                        i_arr = np.array(s_faces.flatten(), dtype=np.uint32)
-                        self.parts[arm_name].mesh = TexturedMesh(v_arr, i_arr)
-
         if wear_data.get("is_top") and "torso" in self.parts:
             self.parts["torso"].mesh = None
 
