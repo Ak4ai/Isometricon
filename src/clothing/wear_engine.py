@@ -34,6 +34,12 @@ SHOE_BLEND_HEIGHT = 0.08
 BODY_CAGES = {"female": "female_cages_apose_stage2.obj", "male": "male_cages_apose.obj"}
 
 
+def hair_fitted_path(asset_id, body_type) -> str:
+    """Hair (or hat) ``asset_id`` fitted to the head of ``body_type``."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base_dir, "assets", "models", "clothing", f"Hair_fitted_{asset_id}_{body_name(body_type)}.obj")
+
+
 def body_name(body_type) -> str:
     """'female' or 'male' for any of the spellings the console and the CLI accept."""
     return "female" if str(body_type).lower() in ("female", "feminino", "fem", "f", "mulher", "woman") else "male"
@@ -87,88 +93,6 @@ def euler_yxz_to_matrix(y_deg: float, x_deg: float, z_deg: float) -> np.ndarray:
     Rz = np.array([[cz, -sz, 0.0], [sz, cz, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64)
 
     return Ry @ Rx @ Rz
-
-def extract_attachment_cframe_from_rbxm(data_or_path):
-    """Extrai R_att (matriz 3x3) e p_att (vetor 3D) do Attachment de um arquivo ou payload RBXM do Roblox."""
-    import struct
-    try:
-        import lz4.block
-    except ImportError:
-        lz4 = None
-
-    if isinstance(data_or_path, (int, str)):
-        data_or_path = str(data_or_path)
-        if os.path.exists(data_or_path):
-            with open(data_or_path, "rb") as fp:
-                data = fp.read()
-        else:
-            data = fetch_roblox_asset(data_or_path)
-    elif isinstance(data_or_path, (bytes, bytearray)):
-        data = bytes(data_or_path)
-    else:
-        return np.eye(3, dtype=np.float64), np.zeros(3, dtype=np.float64)
-
-    if not data:
-        return np.eye(3, dtype=np.float64), np.zeros(3, dtype=np.float64)
-
-    if data.startswith(b"\x1f\x8b"):
-        try:
-            data = gzip.decompress(data)
-        except Exception:
-            pass
-
-    if not data.startswith(b"<roblox!"):
-        return np.eye(3, dtype=np.float64), np.zeros(3, dtype=np.float64)
-
-    idx = 32
-    classes = {}
-    R_att = np.eye(3, dtype=np.float64)
-    p_att = np.zeros(3, dtype=np.float64)
-
-    while idx + 16 <= len(data):
-        fourcc, comp_len, decomp_len, res = struct.unpack("<4sIII", data[idx:idx+16])
-        chunk_bytes = data[idx+16:idx+16+comp_len]
-        idx += 16 + comp_len
-
-        if comp_len > 0 and lz4 is not None:
-            try:
-                dec = lz4.block.decompress(chunk_bytes, uncompressed_size=decomp_len)
-            except Exception:
-                dec = chunk_bytes
-        else:
-            dec = chunk_bytes
-
-        if fourcc == b"INST":
-            c_id, name_len = struct.unpack("<II", dec[:8])
-            classes[c_id] = dec[8:8+name_len].decode("ascii", errors="ignore")
-        elif fourcc == b"PROP":
-            c_id, name_len = struct.unpack("<II", dec[:8])
-            p_name = dec[8:8+name_len].decode("ascii", errors="ignore")
-            type_id = dec[8+name_len]
-            val_bytes = dec[8+name_len+1:]
-            c_name = classes.get(c_id, f"Class_{c_id}")
-            if p_name == "CFrame" and c_name == "Attachment":
-                rot_type = val_bytes[0]
-                if rot_type == 0 and len(val_bytes) >= 49:
-                    rot_floats = struct.unpack("<9f", val_bytes[1:37])
-                    R_att = np.array(rot_floats, dtype=np.float64).reshape(3, 3)
-                    p0 = decode_roblox_float_be(val_bytes[37:41])
-                    p1 = decode_roblox_float_be(val_bytes[41:45])
-                    p2 = decode_roblox_float_be(val_bytes[45:49])
-                    p_att = np.array([p0, p1, p2], dtype=np.float64)
-                    break
-                elif rot_type in ROBLOX_ROTATION_TABLE and len(val_bytes) >= 13:
-                    y_deg, x_deg, z_deg = ROBLOX_ROTATION_TABLE[rot_type]
-                    R_att = euler_yxz_to_matrix(y_deg, x_deg, z_deg)
-                    p0 = decode_roblox_float_be(val_bytes[1:5])
-                    p1 = decode_roblox_float_be(val_bytes[5:9])
-                    p2 = decode_roblox_float_be(val_bytes[9:13])
-                    p_att = np.array([p0, p1, p2], dtype=np.float64)
-                    break
-        elif fourcc == b"END ":
-            break
-
-    return R_att, p_att
 
 class SpatialGrid3D:
     """Estrutura de aceleração espacial 3D uniforme em NumPy puro."""
@@ -2615,9 +2539,6 @@ class RobloxWearEngine:
         raw_obj = meta["obj_path"]
         rbxm_path = meta.get("rbxm_path")
 
-        # Alinhamento CFrame preciso do HairAttachment / HatAttachment do modelo Roblox
-        R_att, p_att = extract_attachment_cframe_from_rbxm(rbxm_path if (rbxm_path and os.path.exists(rbxm_path)) else asset_id)
-
         raw_verts = []
         raw_uvs = []
         raw_faces = []
@@ -2631,25 +2552,15 @@ class RobloxWearEngine:
                 elif line.startswith("f "):
                     raw_faces.append(line.split()[1:])
 
-        raw_verts = np.array(raw_verts, dtype=np.float64)
+        # The accessory's attachment meets the same attachment on the Roblox head, and the
+        # head cages carry it from the Roblox head to ours (see hair_fit).
+        from .hair_fit import fit_head_accessory
+        from .hsr import engine_to_body_mesh
+        if not rbxm_path or not os.path.exists(rbxm_path) or not self.body_cages:
+            raise ValueError(f"Cabelo {asset_id} sem .rbxm ou sem cages do corpo para encaixar")
+        v_world = engine_to_body_mesh(fit_head_accessory(raw_verts, rbxm_path, self.r15_source_cages, self.body_cages))
 
-        # 1. Alinha com Attachment do Roblox:
-        # v_rel = (v_mesh - p_att) @ R_att
-        # Remove o offset de ancoragem do criador e orienta no padrão Roblox
-        v_rel = (raw_verts - p_att) @ R_att
-
-        # 2. Converte para coordenadas do Isometricon:
-        # Calibrado milimetricamente usando como base o cabelo masculino padrão do jogo (Hair_fitted_116773763268018):
-        # - Rotação de 180° no plano horizontal (inversão de X e Z) para converter do referencial Roblox (-Z frontal)
-        #   para o referencial Isometricon (+Z frontal)
-        # - Escalas anatômicas: X=0.2078m/stud, Y=0.2000m/stud, Z=0.2220m/stud
-        # - Ancoragem canônica no topo da cabeça: Y_anchor = 1.815m, X_center = 0.005m, Z_center = -0.003m
-        v_world = np.zeros_like(v_rel)
-        v_world[:, 0] = -v_rel[:, 0] * 0.2078 + 0.0050
-        v_world[:, 1] =  v_rel[:, 1] * 0.2000 + 1.8150
-        v_world[:, 2] = -v_rel[:, 2] * 0.2220 - 0.0028
-
-        out_obj = os.path.join(clothing_dir, f"Hair_fitted_{asset_id}.obj")
+        out_obj = hair_fitted_path(asset_id, self.body_type)
         with open(out_obj, "w", encoding="utf-8") as f:
             f.write(f"# Isometricon Native Fitted Hair: {asset_id} ({meta['name']})\n")
             for v in v_world:
