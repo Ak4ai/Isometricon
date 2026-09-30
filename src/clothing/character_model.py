@@ -1027,6 +1027,10 @@ LAYER_PULL_MM = 15.0
 # 5 mm between the layers clears most lapel collisions (trench coat, lab coat) with no visible change.
 LAYER_GAP_MM = 5.0
 CULL_COVERED = True
+DEFAULT_HAIR_ID = "116773763268018"
+# Head (with neck and hair) moved forward (m) on each body, under the /postura adjustment.
+# Relative to the top of its torso the female head sits 2.5 cm further back than the male one.
+BODY_HEAD_FORWARD = {"female": 0.025, "male": 0.0}
 
 
 @dataclass
@@ -1121,6 +1125,21 @@ class CharacterModel:
         if self.create_mesh:
             self._build()
 
+    def _fitted_hair(self, hair_id) -> Optional[str]:
+        """``hair_id`` fitted to this body's head (fitted on first use), or None."""
+        from src.clothing.wear_engine import hair_fitted_path
+        path = hair_fitted_path(hair_id, self.body)
+        if not os.path.exists(path):
+            try:
+                from src.clothing.wear_engine import RobloxWearEngine
+                RobloxWearEngine(body_type=self.body).equip_hair(hair_id)
+            except Exception as e:
+                print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_id}: {e}")
+        if not os.path.exists(path):
+            # Hairs fitted by hand (no .rbxm) are shared by both bodies.
+            path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_id}.obj")
+        return path if os.path.exists(path) else None
+
     def _resolve_hair(self) -> None:
         """Point the customization at ``hair_id`` fitted to this body's head, fitting it on first use."""
         if self.hair_id is None:
@@ -1131,22 +1150,17 @@ class CharacterModel:
             self.customization.custom_hair_tex = None
             self.customization.hair_style = HairStyle.BALD
             return
-        from src.clothing.wear_engine import hair_fitted_path
-        hair_obj_path = hair_fitted_path(hair_str, self.body)
-        if not os.path.exists(hair_obj_path):
-            try:
-                from src.clothing.wear_engine import RobloxWearEngine
-                RobloxWearEngine(body_type=self.body).equip_hair(hair_str)
-            except Exception as e:
-                print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
-        if not os.path.exists(hair_obj_path):
-            # Hairs fitted by hand (no .rbxm) are shared by both bodies.
-            hair_obj_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_str}.obj")
-        if os.path.exists(hair_obj_path):
+        hair_obj_path = self._fitted_hair(hair_str)
+        if hair_obj_path:
             self.customization.custom_hair_obj = hair_obj_path
             tex_path = find_clothing_texture(hair_str)
             if tex_path:
                 self.customization.custom_hair_tex = tex_path
+
+    @property
+    def head_forward(self) -> float:
+        """Forward shift of the head, neck and hair: the body's posture plus /postura."""
+        return BODY_HEAD_FORWARD[self.body] + self.head_z_offset
 
     @property
     def body(self) -> str:
@@ -1867,7 +1881,7 @@ class CharacterModel:
             pivot_y = 1.70
             pivot_z = 0.0
             head_dy = 0.0
-            head_dz = self.head_z_offset
+            head_dz = self.head_forward
 
             sx = self.hair_scale_x
             sy = self.hair_scale_y
@@ -1891,15 +1905,17 @@ class CharacterModel:
         head_data = parse_clean_obj_groups(clean_obj, ["Export_cabeca"])
         if head_data:
             v_h = head_data[0].reshape(-1, 11).copy()
-            if abs(self.head_z_offset) > 1e-5:
-                v_h[:, 2] += self.head_z_offset
+            if abs(self.head_forward) > 1e-5:
+                v_h[:, 2] += self.head_forward
             mesh = TexturedMesh(v_h.flatten().astype(np.float32), head_data[1])
             self.parts.append(CharacterPart("head", mesh, head_tex_id))
 
+        current = self.customization.custom_hair_obj
+        if current and os.path.basename(current).startswith(f"Hair_fitted_{DEFAULT_HAIR_ID}"):
+            self.customization.custom_hair_obj = None  # the default hair of the body shown before
         if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
-            default_fitted = os.path.join(CLOTHING_DIR, "Hair_fitted_116773763268018.obj")
-            if os.path.exists(default_fitted):
-                self.customization.custom_hair_obj = default_fitted
+            # Default hair, fitted to this body's head; it keeps the customization's hair colour.
+            self.customization.custom_hair_obj = self._fitted_hair(DEFAULT_HAIR_ID)
 
         # 4. Cabelo 3D Customizado / Fitted
         if self.customization.custom_hair_obj and os.path.exists(self.customization.custom_hair_obj):
@@ -1920,8 +1936,8 @@ class CharacterModel:
         neck_data = parse_clean_obj_groups(clean_obj, ["Export_pecoco"], default_color=skin_color)
         if neck_data:
             v_n = neck_data[0].reshape(-1, 11).copy()
-            if abs(self.head_z_offset) > 1e-5:
-                v_n[:, 2] += self.head_z_offset
+            if abs(self.head_forward) > 1e-5:
+                v_n[:, 2] += self.head_forward
             mesh = TexturedMesh(v_n.flatten().astype(np.float32), neck_data[1])
             self.parts.append(CharacterPart("neck", mesh, self.white_tex_id))
 
