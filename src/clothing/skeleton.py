@@ -123,6 +123,32 @@ def rotation_y(angle: float) -> np.ndarray:
     return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
 
 
+def rotation_z(angle: float) -> np.ndarray:
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+
+# Angle between each arm and the vertical in the rest pose (the bodies are exported in A-pose).
+REST_ARM_ANGLE = np.radians(5.0)
+
+
+def rest_rotations(skeleton: "Skeleton", arm_angle: float = REST_ARM_ANGLE) -> dict:
+    """Rotations from the A-pose to the game's rest pose: arms hanging close to the body.
+
+    Each upper arm turns about the front axis at the shoulder until it is ``arm_angle`` off
+    the vertical; the forearm then straightens in line with it (the hand follows).
+    """
+    rotations = {}
+    for side, sign in (("L", 1.0), ("R", -1.0)):
+        upper, lower = skeleton.index(f"UpperArm_{side}"), skeleton.index(f"LowerArm_{side}")
+        angle = lambda b: np.arctan2(sign * (skeleton.tails[b, 0] - skeleton.heads[b, 0]),
+                                     skeleton.heads[b, 1] - skeleton.tails[b, 1])
+        turn = arm_angle - angle(upper)
+        rotations[f"UpperArm_{side}"] = rotation_z(sign * turn)
+        rotations[f"LowerArm_{side}"] = rotation_z(sign * (arm_angle - angle(lower) - turn))
+    return rotations
+
+
 def walk_rotations(walk_time: float):
     """Bone rotations and root offset of the game's walk cycle (the one of the world token)."""
     from src.interactive.token_system import walk_pose

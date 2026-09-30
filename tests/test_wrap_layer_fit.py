@@ -193,3 +193,15 @@ def test_outer_cage_missing_a_large_region_is_still_paired():
     paired = _match_outer_to_reference(reference_uv, reference_faces, outer_uv, outer_faces)
     np.testing.assert_array_equal(paired[keep], np.arange(keep.sum()))
     assert (paired[~keep] == -1).all()
+
+
+def test_body_uv_parts_follow_unique_uv_order():
+    from pathlib import Path
+    from src.clothing.wear_engine import load_r15_cages
+    from src.clothing.wrap_layer_fit import _unique_uv_positions, body_uv_parts
+    cages = load_r15_cages(str(Path(__file__).resolve().parents[1] / "assets/models/female_cages_apose_stage2.obj"))
+    _, positions = _unique_uv_positions(cages)
+    parts = body_uv_parts(cages)
+    assert len(parts) == len(positions)
+    head = np.array([p == "Head" for p in parts])
+    assert positions[head, 2].min() > positions[~head, 2].mean()

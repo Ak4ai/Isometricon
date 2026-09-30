@@ -317,6 +317,33 @@ def _unique_uv_positions(cages: dict) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(list(positions), dtype=np.float64), np.asarray(list(positions.values()))
 
 
+def body_uv_parts(cages: dict) -> list:
+    """Body part name of each `_unique_uv_positions` point, in the same order."""
+    parts = {}
+    for name, part in cages.items():
+        if name.endswith("Forearm"):
+            continue
+        for uv_face in part["face_uvs"]:
+            for uv in uv_face:
+                parts.setdefault(tuple(np.round(uv, 5)), name)
+    return list(parts.values())
+
+
+def garment_body_parts(cages: dict, trace: dict) -> list:
+    """Body part each garment vertex is bound to: the part of the cage triangle it was projected on.
+
+    This follows the cage topology, not proximity: the hem of a wide left trouser leg that
+    crosses the middle is still bound to the left leg's cage.
+    """
+    names = body_uv_parts(cages)
+    corners = trace["uv_index"][trace["projection_faces"][trace["face_indices"]]]
+    parts = []
+    for a, b, c in corners:
+        options = [names[a], names[b], names[c]]
+        parts.append(max(set(options), key=options.count))
+    return parts
+
+
 def _basis(a: np.ndarray, b: np.ndarray, c: np.ndarray):
     e1 = b - a
     l1 = np.linalg.norm(e1)

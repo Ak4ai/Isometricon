@@ -34,6 +34,11 @@ SHOE_BLEND_HEIGHT = 0.08
 BODY_CAGES = {"female": "female_cages_apose_stage2.obj", "male": "male_cages_apose.obj"}
 
 
+def body_parts_path(fitted_obj) -> str:
+    """Sidecar with the body cage part each vertex of a fitted garment is bound to."""
+    return os.path.splitext(fitted_obj)[0] + "_parts.npy"
+
+
 def hair_fitted_path(asset_id, body_type) -> str:
     """Hair (or hat) ``asset_id`` fitted to the head of ``body_type``."""
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -776,6 +781,8 @@ class RobloxWearEngine:
             result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace,
                                                       target_positions=layered)
             info = result[1]
+            from .wrap_layer_fit import garment_body_parts
+            info["body_parts"] = garment_body_parts(self.body_cages, trace)  # bone of each vertex when animated
             # The per-triangle fit extrapolates badly far from the outer cage, so it is
             # only trusted with the garment close to a sane cage. The radial + prism fit
             # handles far points (prism residual, hanging parts) and is used whenever the
@@ -2296,7 +2303,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v30: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v31: {asset_id}\n")
             f.write(f"# asset_type {int(meta.get('type_id', 0))}\n")  # layering order at runtime
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
@@ -2333,6 +2340,12 @@ class RobloxWearEngine:
                                 cage_faces=hsr_info["cage_faces"])
         elif os.path.exists(hsr_path):
             os.remove(hsr_path)  # a stale mask must not cull skin under a garment fitted without it
+        parts_path = body_parts_path(output_obj)
+        body_parts = wrap_result[1].get("body_parts") if used_asset_wrap and wrap_result is not None else None
+        if body_parts is not None and len(body_parts) == len(deformed_verts):
+            np.save(parts_path, np.asarray(body_parts))
+        elif os.path.exists(parts_path):
+            os.remove(parts_path)
 
         t1 = time.perf_counter()
         elapsed = (t1 - t0) * 1000
