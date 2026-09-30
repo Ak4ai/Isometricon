@@ -1086,7 +1086,7 @@ def test_import_hair_auto_classification():
     assert "equipado" in feedback.lower()
     assert model.hair_id == 131607970996365
     assert model.customization.custom_hair_obj is not None
-    assert "Hair_fitted_131607970996365.obj" in model.customization.custom_hair_obj
+    assert "Hair_fitted_131607970996365_male.obj" in model.customization.custom_hair_obj
     assert model.customization.resolved_hair_2d_style == "none"
 
     model.delete()

@@ -1077,26 +1077,7 @@ class CharacterModel:
         self.outer_top_pull_mm = LAYER_PULL_MM  # pull of what still pokes through it: runtime only
         self.tool_id = tool_id
         self.hair_id = hair_id
-        if self.hair_id is not None:
-            hair_str = str(self.hair_id).strip()
-            if hair_str.lower() in ("none", "0", "false", "sem", "careca", "bald"):
-                self.customization.custom_hair_obj = None
-                self.customization.custom_hair_tex = None
-                self.customization.hair_style = HairStyle.BALD
-            else:
-                hair_obj_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_str}.obj")
-                if not os.path.exists(hair_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type=self.body)
-                        engine.equip_hair(hair_str)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
-                if os.path.exists(hair_obj_path):
-                    self.customization.custom_hair_obj = hair_obj_path
-                    tex_path = find_clothing_texture(hair_str)
-                    if tex_path:
-                        self.customization.custom_hair_tex = tex_path
+        self._resolve_hair()
         self.create_mesh = create_mesh
 
         # Ajustes dinâmicos de proporção de mangas e braços controláveis via chat/CLI
@@ -1138,6 +1119,33 @@ class CharacterModel:
 
         if self.create_mesh:
             self._build()
+
+    def _resolve_hair(self) -> None:
+        """Point the customization at ``hair_id`` fitted to this body's head, fitting it on first use."""
+        if self.hair_id is None:
+            return
+        hair_str = str(self.hair_id).strip()
+        if hair_str.lower() in ("none", "0", "false", "sem", "careca", "bald"):
+            self.customization.custom_hair_obj = None
+            self.customization.custom_hair_tex = None
+            self.customization.hair_style = HairStyle.BALD
+            return
+        from src.clothing.wear_engine import hair_fitted_path
+        hair_obj_path = hair_fitted_path(hair_str, self.body)
+        if not os.path.exists(hair_obj_path):
+            try:
+                from src.clothing.wear_engine import RobloxWearEngine
+                RobloxWearEngine(body_type=self.body).equip_hair(hair_str)
+            except Exception as e:
+                print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
+        if not os.path.exists(hair_obj_path):
+            # Hairs fitted by hand (no .rbxm) are shared by both bodies.
+            hair_obj_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_str}.obj")
+        if os.path.exists(hair_obj_path):
+            self.customization.custom_hair_obj = hair_obj_path
+            tex_path = find_clothing_texture(hair_str)
+            if tex_path:
+                self.customization.custom_hair_tex = tex_path
 
     @property
     def body(self) -> str:
@@ -1794,26 +1802,7 @@ class CharacterModel:
         skin_color = list(self.customization.skin_color_rgb)
 
         # 1.1 Resolução de Cabelo Customizado por ID Roblox
-        if self.hair_id is not None:
-            hair_str = str(self.hair_id).strip()
-            if hair_str.lower() in ("none", "0", "false", "sem", "careca", "bald"):
-                self.customization.custom_hair_obj = None
-                self.customization.custom_hair_tex = None
-                self.customization.hair_style = HairStyle.BALD
-            else:
-                hair_obj_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_str}.obj")
-                if not os.path.exists(hair_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type=self.body)
-                        engine.equip_hair(hair_str)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
-                if os.path.exists(hair_obj_path):
-                    self.customization.custom_hair_obj = hair_obj_path
-                    tex_path = find_clothing_texture(hair_str)
-                    if tex_path:
-                        self.customization.custom_hair_tex = tex_path
+        self._resolve_hair()
 
         # 2. Textura Atlas dinâmica da cabeça (Rosto, olhos, boca e franja 2D)
         atlas_builder = HeadAtlasBuilder()
@@ -2209,25 +2198,7 @@ class CharacterModel:
             self.tool_id = tool_id if tool_id not in ("none", 0, "0", False) else None
         if hair_id is not None:
             self.hair_id = hair_id
-            hair_str = str(hair_id).strip()
-            if hair_str.lower() in ("none", "0", "false", "sem", "careca", "bald"):
-                self.customization.custom_hair_obj = None
-                self.customization.custom_hair_tex = None
-                self.customization.hair_style = HairStyle.BALD
-            else:
-                hair_obj_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_str}.obj")
-                if not os.path.exists(hair_obj_path):
-                    try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        engine = RobloxWearEngine(body_type=self.body)
-                        engine.equip_hair(hair_str)
-                    except Exception as e:
-                        print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_str}: {e}")
-                if os.path.exists(hair_obj_path):
-                    self.customization.custom_hair_obj = hair_obj_path
-                    tex_path = find_clothing_texture(hair_str)
-                    if tex_path:
-                        self.customization.custom_hair_tex = tex_path
+            self._resolve_hair()
         self.reload()
 
 
@@ -2378,13 +2349,16 @@ def parse_character_cli_args(args: List[str]) -> Tuple[AvatarCustomization, int,
                 hair_style = HairStyle.BUZZ_CUT
             elif val.isdigit():
                 hair_style = HairStyle.ANIME_LONG
-                fitted_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{val}.obj")
+                from src.clothing.wear_engine import RobloxWearEngine, hair_fitted_path
+                body = "female" if body_type == BodyType.FEMALE else "male"
+                fitted_path = hair_fitted_path(val, body)
                 if not os.path.exists(fitted_path):
                     try:
-                        from src.clothing.wear_engine import RobloxWearEngine
-                        RobloxWearEngine(body_type="female" if body_type == BodyType.FEMALE else "male").equip_hair(val)
+                        RobloxWearEngine(body_type=body).equip_hair(val)
                     except Exception:
                         pass
+                if not os.path.exists(fitted_path):
+                    fitted_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{val}.obj")
                 if os.path.exists(fitted_path):
                     custom_hair_obj = fitted_path
                     custom_hair_tex = find_clothing_texture(val)
