@@ -115,34 +115,6 @@ def covered_vertices(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarr
     return covered
 
 
-def outside_cloth(points: np.ndarray, origins: np.ndarray, triangles: np.ndarray) -> np.ndarray:
-    """Per point, whether cloth lies between it and its origin (a point inside the body).
-
-    ``triangles`` is (T, 3, 3). A skin point with cloth between it and its bone is out of
-    the garment: a tight garment the body pokes through.
-    """
-    points = np.asarray(points, dtype=np.float64)
-    origins = np.asarray(origins, dtype=np.float64)
-    result = np.zeros(len(points), dtype=bool)
-    if not len(points) or not len(triangles):
-        return result
-    tri_low, tri_high = triangles.min(1), triangles.max(1)
-    order = np.lexsort(points.T)
-    for start in range(0, len(order), 64):
-        batch = order[start:start + 64]
-        ends = np.vstack([points[batch], origins[batch]])
-        near = np.all((tri_low <= ends.max(0)) & (tri_high >= ends.min(0)), axis=1)
-        if not near.any():
-            continue
-        direction = points[batch] - origins[batch]
-        length = np.linalg.norm(direction, axis=1)
-        direction /= np.maximum(length, 1e-9)[:, None]
-        hits = _farthest_hits(origins[batch], direction, length / 2, triangles[near],
-                              np.maximum(length / 2 - 1e-3, 1e-4))
-        result[batch] = np.isfinite(hits)
-    return result
-
-
 def outside_fraction(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray, reach: float = 0.08,
                      body=None) -> float:
     """Share of the covered inner vertices that sit outside the outer garment."""

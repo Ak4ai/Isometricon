@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from src.clothing.hsr import (HEADER_BYTES, cull_hidden_triangles, hidden_reference_vertices,
                               hsr_asset_id, load_hsr_data, subdivide)
@@ -87,3 +88,24 @@ def test_ray_mask_hides_a_lone_point_seen_through_a_tiny_gap():
     hidden[5 + 0] = False  # a lone point at the left edge
     hidden = _hide_isolated_visible(hidden, points, np.array(faces))
     np.testing.assert_array_equal(np.flatnonzero(~hidden), [2, 7, 12, 17, 22])
+
+
+def test_wrapped_limbs_cover_the_armpit_only_under_sleeves():
+    """A sweater closes the open armpit border of the arm cage; a sleeveless jersey does not."""
+    import os
+    from src.clothing.character_model import MODELS_DIR
+    from src.clothing.hsr import close_wrapped_limbs, sidecar_path
+    from src.clothing.wear_engine import BODY_CAGES, load_r15_cages
+    from src.clothing.wrap_layer_fit import _unique_uv_positions, body_uv_parts
+
+    cases = {"9240757332": True, "97346273111638": False}  # sweater, basketball jersey
+    paths = {top: os.path.join(MODELS_DIR, f"character_native_{top}_male.obj") for top in cases}
+    if not all(os.path.exists(sidecar_path(p)) for p in paths.values()):
+        pytest.skip("roupas encaixadas não geradas")
+    parts = np.array(body_uv_parts(load_r15_cages(os.path.join(MODELS_DIR, BODY_CAGES["male"]))))
+    arms = np.isin(parts, ["LeftUpperArm", "RightUpperArm"])
+    for top, sleeved in cases.items():
+        hidden = np.load(sidecar_path(paths[top]))["hidden"].astype(bool)
+        closed = close_wrapped_limbs(hidden, "male", paths[top])
+        assert (closed | ~hidden).all()  # only ever adds cover
+        assert ((closed & ~hidden & arms).any()) == sleeved

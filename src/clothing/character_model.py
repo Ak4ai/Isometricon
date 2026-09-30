@@ -1659,7 +1659,9 @@ class CharacterModel:
         cage_points = masks[0][0]
         if any(len(hidden) != len(cage_points) for _, hidden in masks):
             return False
-        hidden = np.logical_or.reduce([mask for _, mask in masks])
+        from src.clothing.hsr import close_wrapped_limbs
+        hidden = np.logical_or.reduce([close_wrapped_limbs(mask.astype(bool), self.body, path)
+                                       for path, (_, mask) in zip(worn, masks)])
 
         def hip_tf(raw_v):
             return transform_hip_vertices(raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset)

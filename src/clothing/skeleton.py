@@ -6,8 +6,8 @@ skinning matrix is simply its posed transform.
 
 Weights: every vertex follows one bone (its body part), except near a joint, where it blends
 with the other bone of the joint. The blend only depends on the vertex position and the
-child bone's axis, so the two sides of a seam (a thigh and its shin, a shirt and its sleeve)
-get the same weights and stay joined when the joint bends.
+child bone's axis. Shoulders are one-sided: torso vertices stay on the torso, while
+the arm blends into it at the joint. Other joints blend both adjoining parts.
 """
 from __future__ import annotations
 
@@ -50,12 +50,34 @@ class Skeleton:
     def index(self, name: str) -> int:
         return self.names.index(name)
 
+    def reconcile_fitted_bones(self, fitted, nearest):
+        """Use a nearer ancestor after fitting without crossing to another limb.
+
+        A source cage label describes the wrap projection, not necessarily the final
+        garment's anatomical position. A side panel projected onto the arm can end up
+        on the torso after fitting. It must then follow the torso. A wide trouser leg,
+        however, must not switch to the other leg just because that leg is nearer.
+        """
+        fitted, nearest = np.asarray(fitted), np.asarray(nearest)
+        result = fitted.copy()
+        ancestor = fitted.copy()
+        for _ in self.names:
+            valid = ancestor >= 0
+            if not valid.any():
+                break
+            matched = valid & (ancestor == nearest)
+            result[matched] = nearest[matched]
+            ancestor[valid] = self.parents[ancestor[valid]]
+        return result
+
     def weights(self, points: np.ndarray, bones: np.ndarray, blend: float = BLEND_RADIUS):
         """(indices, weights), each (N, 2): the vertex's bone and the other bone of a nearby joint.
 
         ``bones`` is each vertex's own bone. Near the joint between a bone and one of its
         children, the child's weight rises smoothly along the child's axis, from 0 at
-        ``blend`` before the joint to 1 at ``blend`` after it.
+        ``blend`` before the joint to 1 at ``blend`` after it. At the shoulder and
+        neck it rises from 0 at the joint to 1 at ``2 * blend`` on the child's side;
+        the torso itself never receives weights from those children.
         """
         points = np.asarray(points, dtype=np.float64)
         bones = np.asarray(bones)
@@ -87,7 +109,9 @@ class Skeleton:
             if self.names[parent] == "Torso":
                 # Shoulders (and the neck) bend on the limb's side only: the torso, its skin and
                 # the body of a shirt, stays put, or an arm would drag the armhole with it.
-                near = mine & (along > 0) & (along < 2 * blend) & (radial < reach)
+                # Include the parent side of the plane: leaving those vertices at their
+                # default child weight would jump from 100% child to 100% parent at zero.
+                near = (bones == child) & (along < 2 * blend) & (radial < reach)
                 t = np.clip(along[near] / (2 * blend), 0.0, 1.0)
             else:
                 near = mine & (np.abs(along) < blend) & (radial < reach)
