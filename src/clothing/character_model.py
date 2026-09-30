@@ -1699,55 +1699,6 @@ class CharacterModel:
         print(f"[HSR] Pele recortada pelas máscaras de {len(worn)} peça(s): {int(hidden.sum())} pontos da cage cobertos")
         return True
 
-    # Skin parts that clothes can hide; the hands and the head always show.
-    # The neck is left to HSR: rays from the nape run down the back into a low-cut top
-    # and would call it covered.
-    CULLABLE_SKIN = ("arm_left", "arm_right", "forearm_left", "forearm_right", "trunk_skin", "legs_skin",
-                     "feet_skin")
-
-    def _cull_skin_under_cloth(self) -> None:
-        """Drop the skin triangles the worn garments cover completely.
-
-        The HSR masks leave some skin under the cloth (a square shoulder corner under a
-        sweater). It is invisible in the fitting pose, but once the arms hang or swing the
-        sleeve slides off it and the skin pokes through. Skin with cloth straight out from
-        the skeleton, a few centimetres beyond it, is never meant to be seen.
-        """
-        from src.clothing.layer_clearance import skin_under_cloth
-        from src.clothing.skeleton import Skeleton
-        skeleton = Skeleton.load(self.body)
-        bones = (skeleton.heads, skeleton.tails)
-        cloth = [p for p in self.parts if p.source_obj is not None and hasattr(p.mesh, "read_indices")]
-        if not cloth:
-            return
-        rows = [p.mesh.read_vertices() for p in cloth]
-        faces, offset = [], 0
-        for part, part_rows in zip(cloth, rows):
-            faces.append(part.mesh.read_indices().reshape(-1, 3) + offset)
-            offset += len(part_rows)
-        cloth_points = np.vstack([r[:, :3] for r in rows])
-        cloth_faces = np.vstack(faces)
-        removed = 0
-        for part in [p for p in self.parts if p.name in self.CULLABLE_SKIN and hasattr(p.mesh, "read_indices")]:
-            skin_rows = part.mesh.read_vertices()
-            skin_faces = part.mesh.read_indices().reshape(-1, 3)
-            if not len(skin_faces):
-                continue
-            used = np.unique(skin_faces)  # HSR already dropped most of the skin under the cloth
-            covered = np.zeros(len(skin_rows), dtype=bool)
-            covered[used] = skin_under_cloth(skin_rows[used, :3], bones, cloth_points, cloth_faces)
-            hidden = covered[skin_faces].all(1)
-            if hidden.all():
-                # An empty index buffer would make the mesh draw every vertex unindexed.
-                removed += len(hidden)
-                part.mesh.delete()
-                self.parts.remove(part)
-            elif hidden.any():
-                removed += int(hidden.sum())
-                part.mesh.update_buffers(skin_rows.ravel(), skin_faces[~hidden].ravel().astype(np.uint32))
-        if removed:
-            print(f"[Pele] {removed} triângulos de pele cobertos pela roupa removidos")
-
     def _top_over_pants(self, top_obj_path, is_none_bottom):
         """A coat, sweater or dress worn as the top is fitted over the pants' outer cage."""
         from src.clothing.layer_clearance import OUTER_TOP_TYPES, fitted_asset_type
@@ -2134,7 +2085,6 @@ class CharacterModel:
         # é desenhada e só os triângulos cobertos pelas roupas são removidos.
         self._apply_hsr_skin(clean_obj, skin_color, top_obj_path, bottom_obj_path,
                              is_none_top, is_none_bottom, extra_obj_paths=(outer_obj_path, *shoe_paths))
-        self._cull_skin_under_cloth()
 
         # 9. Tool / Katana / Acessório opcional
         if self.tool_id is not None:
