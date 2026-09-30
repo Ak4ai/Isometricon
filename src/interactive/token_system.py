@@ -3,7 +3,7 @@
 import json
 import math
 import os
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -191,6 +191,63 @@ class CharacterPart:
             self.mesh = None
 
 
+def walk_leg_angles(phase: float) -> Tuple[float, float, float]:
+    """Calcula (hip_pitch, knee_pitch, foot_pitch) em radianos para o ciclo de passada completo.
+
+    Convenção OpenGL Isometricon (mat4_rotate_x):
+    - Ângulo negativo: gira para frente (+Z)
+    - Ângulo positivo: gira para trás (-Z)
+    """
+    phi = phase % (2.0 * math.pi)
+    # Avanço do quadril: no início do ciclo (phi=0), a perna está estendida à frente (-26 graus -> +Z)
+    hip = -math.cos(phi) * math.radians(26.0)
+
+    if phi < math.pi:
+        # Fase de apoio (Stance): pé no solo empurrando o corpo para trás (+Z para -Z)
+        # Leve amortecimento do joelho para trás (ângulo positivo)
+        cushion = math.sin(phi) * math.radians(8.0)
+        knee = cushion
+        foot = -math.sin(phi - math.pi / 4.0) * math.radians(8.0)
+    else:
+        # Fase de oscilação (Swing): pé no ar avançando de trás para frente (-Z para +Z)
+        s = (phi - math.pi) / math.pi
+        # Flexão profunda do joelho para trás (ângulo positivo de até 48 graus)
+        knee = math.sin(s * math.pi) * math.radians(48.0)
+        # Tornozelo aponta levemente para cima para não arrastar no chão
+        foot = -math.sin(s * math.pi) * math.radians(10.0)
+
+    return hip, knee, foot
+
+
+def walk_pose(walk_time: float) -> Dict[str, float]:
+    """Target joint angles (radians) and pelvis bounce (m) of the walk cycle at ``walk_time``.
+
+    Pitch angles follow mat4_rotate_x: negative swings forward (+Z), positive backward.
+    """
+    hip_L, knee_L, foot_L = walk_leg_angles(walk_time)
+    # Perna esquerda e perna direita em oposição de fase (defasadas por PI)
+    hip_R, knee_R, foot_R = walk_leg_angles(walk_time + math.pi)
+    # Braços balançam em oposição às pernas
+    arm_amp = math.radians(24.0)
+    forearm_amp = math.radians(26.0)
+    base_elbow = math.radians(6.0)
+    # Perna esquerda avança (hip_L < 0) -> Braço esquerdo recua (arm_L > 0)
+    arm_L = math.cos(walk_time) * arm_amp
+    arm_R = -math.cos(walk_time) * arm_amp
+    return {
+        "hip_L": hip_L, "knee_L": knee_L, "foot_L": foot_L,
+        "hip_R": hip_R, "knee_R": knee_R, "foot_R": foot_R,
+        "arm_L": arm_L, "arm_R": arm_R,
+        # Cotovelos flexionam para frente (ângulo negativo) quando o braço avança
+        "forearm_L": -max(0.0, -arm_L) * (forearm_amp / arm_amp) - base_elbow,
+        "forearm_R": -max(0.0, -arm_R) * (forearm_amp / arm_amp) - base_elbow,
+        # Pelvis bounce vertical (passada saltitante em cada passo)
+        "bounce": abs(math.sin(walk_time)) * 0.04,
+        # Torso: leve rotação em yaw acompanhando o balanço dos ombros
+        "torso_yaw": -math.cos(walk_time) * math.radians(4.0),
+        "head_pitch": math.sin(walk_time * 2.0) * math.radians(1.5),
+    }
+
 class ModularCharacter:
     """Gerencia a hierarquia Forward Kinematics (FK) e animação procedural de caminhada."""
 
@@ -288,57 +345,17 @@ class ModularCharacter:
             self.parts[name].local_rot[axis] += (target - curr) * factor
 
     def _compute_leg_angles(self, phase: float) -> Tuple[float, float, float]:
-        """Calcula (hip_pitch, knee_pitch, foot_pitch) em radianos para o ciclo de passada completo.
-
-        Convenção OpenGL Isometricon (mat4_rotate_x):
-        - Ângulo negativo: gira para frente (+Z)
-        - Ângulo positivo: gira para trás (-Z)
-        """
-        phi = phase % (2.0 * math.pi)
-        # Avanço do quadril: no início do ciclo (phi=0), a perna está estendida à frente (-26 graus -> +Z)
-        hip = -math.cos(phi) * math.radians(26.0)
-
-        if phi < math.pi:
-            # Fase de apoio (Stance): pé no solo empurrando o corpo para trás (+Z para -Z)
-            # Leve amortecimento do joelho para trás (ângulo positivo)
-            cushion = math.sin(phi) * math.radians(8.0)
-            knee = cushion
-            foot = -math.sin(phi - math.pi / 4.0) * math.radians(8.0)
-        else:
-            # Fase de oscilação (Swing): pé no ar avançando de trás para frente (-Z para +Z)
-            s = (phi - math.pi) / math.pi
-            # Flexão profunda do joelho para trás (ângulo positivo de até 48 graus)
-            knee = math.sin(s * math.pi) * math.radians(48.0)
-            # Tornozelo aponta levemente para cima para não arrastar no chão
-            foot = -math.sin(s * math.pi) * math.radians(10.0)
-
-        return hip, knee, foot
+        return walk_leg_angles(phase)
 
     def update_animation(self, dt: float, is_moving: bool, walk_time: float) -> None:
         """Atualiza a rotação dos membros para a caminhada natural ou postura em repouso."""
         if is_moving:
-            # Perna esquerda e perna direita em oposição de fase (defasadas por PI)
-            hip_L, knee_L, foot_L = self._compute_leg_angles(walk_time)
-            hip_R, knee_R, foot_R = self._compute_leg_angles(walk_time + math.pi)
-
-            # Braços balançam em oposição às pernas
-            arm_amp = math.radians(24.0)
-            forearm_amp = math.radians(26.0)
-            base_elbow = math.radians(6.0)
-
-            # Perna esquerda avança (hip_L < 0) -> Braço esquerdo recua (target_arm_L > 0)
-            target_arm_L = math.cos(walk_time) * arm_amp
-            target_arm_R = -math.cos(walk_time) * arm_amp
-
-            # Cotovelos flexionam para frente (ângulo negativo) quando o braço avança
-            target_forearm_L = -max(0.0, -target_arm_L) * (forearm_amp / arm_amp) - base_elbow
-            target_forearm_R = -max(0.0, -target_arm_R) * (forearm_amp / arm_amp) - base_elbow
-
-            # Pelvis bounce vertical (passada saltitante em cada passo)
-            target_bounce = abs(math.sin(walk_time)) * 0.04
-            # Torso: leve rotação em yaw acompanhando o balanço dos ombros
-            target_torso_yaw = -math.cos(walk_time) * math.radians(4.0)
-            target_head_pitch = math.sin(walk_time * 2.0) * math.radians(1.5)
+            pose = walk_pose(walk_time)
+            hip_L, knee_L, foot_L = pose["hip_L"], pose["knee_L"], pose["foot_L"]
+            hip_R, knee_R, foot_R = pose["hip_R"], pose["knee_R"], pose["foot_R"]
+            target_arm_L, target_arm_R = pose["arm_L"], pose["arm_R"]
+            target_forearm_L, target_forearm_R = pose["forearm_L"], pose["forearm_R"]
+            target_bounce, target_torso_yaw, target_head_pitch = pose["bounce"], pose["torso_yaw"], pose["head_pitch"]
         else:
             hip_L, knee_L, foot_L = 0.0, 0.0, 0.0
             hip_R, knee_R, foot_R = 0.0, 0.0, 0.0

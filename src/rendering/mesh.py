@@ -194,6 +194,20 @@ class TexturedMesh:
             gl.glDrawArrays(gl.GL_TRIANGLES, 0, self.vertex_count)
         gl.glBindVertexArray(0)
 
+    def read_vertices(self) -> np.ndarray:
+        """Copy of the vertex buffer, one row of 11 floats per vertex."""
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vbo)
+        data = gl.glGetBufferSubData(gl.GL_ARRAY_BUFFER, 0, self.vertex_count * 11 * 4)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
+        return np.frombuffer(bytes(data), dtype=np.float32).reshape(-1, 11).copy()
+
+    def update_vertices(self, vertices: np.ndarray) -> None:
+        """Overwrite the vertex buffer in place (same vertex count), e.g. every animation frame."""
+        v_data = np.ascontiguousarray(vertices, dtype=np.float32)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vbo)
+        gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, v_data.nbytes, v_data)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
+
     def delete(self) -> None:
         """Libera os buffers de GPU."""
         if hasattr(self, "vao") and self.vao:

@@ -358,7 +358,7 @@ def main() -> None:
         if tool_id:
             print(f"🔹 Tool/Arma  : {tool_id}")
         print("-" * 68)
-        print("⌨️  [Q/E] Girar 90° | [Espaço] Turntable ON/OFF | [C] Wireframe Cage ON/OFF | [Mouse Wheel] Zoom | [Shift+Drag/MMB] Pan | [R] Reset Câmera\n")
+        print("⌨️  [Q/E] Girar 90° | [Espaço] Turntable ON/OFF | [C] Wireframe Cage ON/OFF | [W] Andar ON/OFF | [Mouse Wheel] Zoom | [Shift+Drag/MMB] Pan | [R] Reset Câmera\n")
 
         character_model = CharacterModel(
             customization=char_customization,
@@ -367,6 +367,9 @@ def main() -> None:
             tool_id=tool_id,
             create_mesh=True,
         )
+        from src.clothing.character_animation import CharacterAnimator
+        # Walk in place, clothes skinned to the body's game rig ([W] toggles it).
+        character_animator = CharacterAnimator(character_model, walking="--andar" in sys.argv or "--walk" in sys.argv)
         if "--cage" in sys.argv or "--debug-cage" in sys.argv:
             character_model.show_cage = True
             print("[Debug] Modo de Depuração da Cage ATIVADO por linha de comando.")
@@ -516,6 +519,9 @@ def main() -> None:
                 turntable_state["active"] = not turntable_state["active"]
                 st = "ATIVADO" if turntable_state["active"] else "PAUSADO"
                 print(f"[Turntable] Rotação automática {st}")
+            elif key == glfw.KEY_W and action == glfw.PRESS:
+                character_animator.walking = not character_animator.walking
+                print(f"[Animação] Caminhada {'ATIVADA' if character_animator.walking else 'PAUSADA'}")
             elif key == glfw.KEY_C and action == glfw.PRESS:
                 character_model.show_cage = not character_model.show_cage
                 st = "ATIVADA" if character_model.show_cage else "DESATIVADA"
@@ -688,6 +694,7 @@ def main() -> None:
         elif char_demo:
             if turntable_state["active"]:
                 turntable_state["yaw"] = (turntable_state["yaw"] + dt * 45.0) % 360.0
+            character_animator.update(dt)
         else:
             texture_timer += dt
             if texture_timer >= TEXTURE_CHANGE_INTERVAL:
