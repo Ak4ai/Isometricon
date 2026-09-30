@@ -212,6 +212,93 @@ def _hide_isolated_visible(hidden: np.ndarray, cage_points: np.ndarray, cage_fac
     return welded_hidden[weld]
 
 
+# Limb cage parts and the bone whose axis measures their height.
+LIMB_CAGE_BONES = {"LeftUpperArm": "UpperArm_L", "RightUpperArm": "UpperArm_R",
+                   "LeftLowerArm": "LowerArm_L", "RightLowerArm": "LowerArm_R",
+                   "LeftUpperLeg": "UpperLeg_L", "RightUpperLeg": "UpperLeg_R",
+                   "LeftLowerLeg": "LowerLeg_L", "RightLowerLeg": "LowerLeg_R"}
+# Rays cast around a limb's bone to test whether a garment wraps it, how far they reach (m)
+# and how many must meet the garment. Toward the torso a sleeve has no wall of its own: those
+# rays cross the body to the far side of the shirt, so the reach spans a torso. At the
+# shoulder one or two rays slip out through the neck opening. A sleeveless top leaves the
+# whole outer half of the turn empty (4-6 hits out of 16).
+WRAP_RAYS = 16
+WRAP_REACH = 0.6
+WRAP_MIN_HITS = 14
+
+
+def _garment_triangles(fitted_obj_path) -> np.ndarray:
+    """(T, 3, 3) triangles of a fitted garment OBJ, in body-mesh coordinates."""
+    vertices, faces = [], []
+    with open(fitted_obj_path, encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            if line.startswith("v "):
+                vertices.append([float(x) for x in line.split()[1:4]])
+            elif line.startswith("f "):
+                ids = [int(token.split("/")[0]) - 1 for token in line.split()[1:]]
+                faces += [[ids[0], ids[i], ids[i + 1]] for i in range(1, len(ids) - 1)]
+    return engine_to_body_mesh(np.asarray(vertices, dtype=np.float64))[np.asarray(faces)]
+
+
+def _wrapped(triangles, centre, axis) -> bool:
+    """Whether the rays leaving ``centre`` across ``axis`` meet the garment all around (WRAP_MIN_HITS)."""
+    from .layer_clearance import _farthest_hits
+    side = np.cross(axis, [0.0, 0.0, 1.0])
+    side /= np.linalg.norm(side)
+    front = np.cross(side, axis)
+    turns = np.linspace(0.0, 2 * np.pi, WRAP_RAYS, endpoint=False)
+    directions = np.cos(turns)[:, None] * side + np.sin(turns)[:, None] * front
+    hits = _farthest_hits(np.repeat(centre[None], WRAP_RAYS, 0), directions,
+                          np.full(WRAP_RAYS, WRAP_REACH / 2), triangles, WRAP_REACH / 2)
+    return int(np.isfinite(hits).sum()) >= WRAP_MIN_HITS
+
+
+def close_wrapped_limbs(hidden: np.ndarray, body: str, fitted_obj_path) -> np.ndarray:
+    """The garment's HSR mask, also covering the limb cage where the garment wraps the limb.
+
+    Roblox's limb cages are open along the side facing the torso (the armpit, between the
+    legs), and their masks leave the points around that opening visible even under a sleeve
+    that goes all around the arm; once the arm moves, the skin there comes out through the
+    sleeve. Here, at the height of each such point along its limb, rays are cast all around
+    the bone in the fitting pose: only when they meet the garment all around (a sleeve or a
+    trouser leg, WRAP_MIN_HITS) is the point covered. A sleeveless top, a short sleeve below its hem or a
+    skirt never wraps the limb, so their masks are left as they were.
+    """
+    from .skeleton import Skeleton
+    from .wear_engine import BODY_CAGES, load_r15_cages
+    from .wrap_layer_fit import _unique_uv_positions, body_uv_parts
+    models = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                          "assets", "models")
+    cages = load_r15_cages(os.path.join(models, BODY_CAGES[body]))
+    body_uv, positions = _unique_uv_positions(cages)
+    if len(body_uv) != len(hidden) or not os.path.exists(fitted_obj_path):
+        return hidden
+    positions = engine_to_body_mesh(positions)
+    parts = np.array(body_uv_parts(cages))
+    triangles = _garment_triangles(fitted_obj_path)
+    skeleton = Skeleton.load(body)
+    result = hidden.copy()
+    for part, bone_name in LIMB_CAGE_BONES.items():
+        todo = np.flatnonzero((parts == part) & ~hidden)
+        if not len(todo):
+            continue
+        bone = skeleton.index(bone_name)
+        head = skeleton.heads[bone]
+        axis = skeleton.tails[bone] - head
+        length = np.linalg.norm(axis)
+        axis /= length
+        reach = length + WRAP_REACH
+        near = triangles[np.all((triangles.min(1) <= head + reach) & (triangles.max(1) >= head - reach), axis=1)]
+        wrapped = {}
+        for point in todo:
+            height = float(np.clip((positions[point] - head) @ axis, 0.0, length))
+            key = round(height, 2)
+            if key not in wrapped:
+                wrapped[key] = _wrapped(near, head + axis * height, axis)
+            result[point] = wrapped[key]
+    return result
+
+
 def engine_to_body_mesh(points: np.ndarray) -> np.ndarray:
     """Engine (x, depth, up) -> body mesh / OpenGL space (x, up, -depth)."""
     points = np.asarray(points, dtype=np.float64)

@@ -86,3 +86,39 @@ def test_rest_arms_clear_the_hips_on_each_body():
         angles[body] = animator._rest_arm_angle(*animator._body_cage())
     assert angles["male"] == pytest.approx(REST_ARM_ANGLE)
     assert angles["female"] > angles["male"]  # wider hips push the hands out
+
+
+def test_arm_rotation_does_not_move_torso_vertices(skeleton):
+    from src.clothing.skeleton import rotation_z
+    arm, torso = skeleton.index('UpperArm_L'), skeleton.index('Torso')
+    axis = skeleton.tails[arm] - skeleton.heads[arm]
+    axis /= np.linalg.norm(axis)
+    rows = np.zeros((2, 11))
+    rows[:, :3] = skeleton.heads[arm] + np.array([.02, .03])[:, None] * axis
+    indices, weights = skeleton.weights(rows[:, :3], np.array([torso, arm]))
+    posed = skin(rows, indices, weights, skeleton.pose({'UpperArm_L': rotation_z(.6)}))
+    np.testing.assert_allclose(posed[0], rows[0], atol=1e-10)
+    assert np.linalg.norm(posed[1, :3] - rows[1, :3]) > .001
+
+
+def test_shoulder_blend_is_continuous_across_joint_plane(skeleton):
+    from src.clothing.skeleton import rotation_z
+    arm = skeleton.index('UpperArm_L')
+    axis = skeleton.tails[arm] - skeleton.heads[arm]
+    axis /= np.linalg.norm(axis)
+    radial = np.cross(axis, [1., 0., 0.])
+    radial *= .025 / np.linalg.norm(radial)
+    rows = np.zeros((2, 11))
+    rows[:, :3] = skeleton.heads[arm] + radial + np.array([-1e-6, 1e-6])[:, None] * axis
+    indices, weights = skeleton.weights(rows[:, :3], np.full(2, arm))
+    posed = skin(rows, indices, weights, skeleton.pose({'UpperArm_L': rotation_z(.6)}))
+    assert np.linalg.norm(posed[1, :3] - posed[0, :3]) < 1e-5
+
+
+def test_fitted_panel_can_return_to_torso_but_not_switch_legs(skeleton):
+    names = skeleton.names
+    fitted = np.array([names.index(n) for n in ['UpperArm_L', 'UpperLeg_L', 'LowerLeg_L', 'Torso']])
+    nearest = np.array([names.index(n) for n in ['Torso', 'UpperLeg_R', 'UpperLeg_L', 'UpperArm_L']])
+    corrected = skeleton.reconcile_fitted_bones(fitted, nearest)
+    assert [names[i] for i in corrected] == ['Torso', 'UpperLeg_L', 'UpperLeg_L', 'Torso']
+    np.testing.assert_array_equal(fitted, [names.index(n) for n in ['UpperArm_L', 'UpperLeg_L', 'LowerLeg_L', 'Torso']])
