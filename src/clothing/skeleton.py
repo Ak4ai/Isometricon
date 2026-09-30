@@ -84,8 +84,14 @@ class Skeleton:
                 reach = 1.25 * np.percentile(own_radial, 90)
             else:
                 reach = 0.1
-            near = mine & (np.abs(along) < blend) & (radial < reach)
-            t = np.clip((along[near] + blend) / (2 * blend), 0.0, 1.0)
+            if self.names[parent] == "Torso":
+                # Shoulders (and the neck) bend on the limb's side only: the torso, its skin and
+                # the body of a shirt, stays put, or an arm would drag the armhole with it.
+                near = mine & (along > 0) & (along < 2 * blend) & (radial < reach)
+                t = np.clip(along[near] / (2 * blend), 0.0, 1.0)
+            else:
+                near = mine & (np.abs(along) < blend) & (radial < reach)
+                t = np.clip((along[near] + blend) / (2 * blend), 0.0, 1.0)
             t = t * t * (3 - 2 * t)
             rows = np.flatnonzero(near)
             indices[rows] = np.stack([np.full(len(rows), child), np.full(len(rows), parent)], axis=1)
