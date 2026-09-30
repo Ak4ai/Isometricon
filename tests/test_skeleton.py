@@ -58,3 +58,14 @@ def test_walk_cycle_poses_every_limb():
     for bone in ("UpperLeg_L", "LowerLeg_R", "UpperArm_L", "LowerArm_R", "Torso", "Head"):
         assert bone in rotations
     assert root[1] >= 0
+
+
+def test_rest_pose_hangs_the_arms_close_to_the_body(skeleton):
+    from src.clothing.skeleton import REST_ARM_ANGLE, rest_rotations
+    matrices = skeleton.pose(rest_rotations(skeleton))
+    for side in "LR":
+        hand = skeleton.index(f"Hand_{side}")
+        shoulder = skeleton.heads[skeleton.index(f"UpperArm_{side}")]
+        wrist = (matrices[hand] @ np.r_[skeleton.heads[hand], 1.0])[:3]
+        arm = wrist - shoulder
+        assert np.degrees(np.arctan2(abs(arm[0]), -arm[1])) == pytest.approx(np.degrees(REST_ARM_ANGLE), abs=1.0)

@@ -1011,7 +1011,7 @@ def is_valid_v2_obj(path: str) -> bool:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for _ in range(5):
                 line = f.readline()
-                if "Universal Fitted Clothing v30" in line:
+                if "Universal Fitted Clothing v31" in line:
                     return True
                 if any(f"Universal Fitted Clothing v{k}" in line for k in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28)):
                     return False  # Regenerate fits made before the geometric HSR fallback.
@@ -1036,6 +1036,7 @@ class CharacterPart:
     mesh: Any  # TexturedMesh
     texture_id: int
     transform: Optional[np.ndarray] = None
+    source_obj: Optional[str] = None  # fitted garment OBJ, for the animation's bone binding
 
 
 class CharacterModel:
@@ -1727,7 +1728,7 @@ class CharacterModel:
             texture_id = upload_texture_rgba(Image.open(texture_path)) if texture_path else self.white_tex_id
             if texture_id != self.white_tex_id:
                 self.textures.append(texture_id)
-            self.parts.append(CharacterPart(f"shoe_{asset_id}", TexturedMesh(data[0], data[1]), texture_id))
+            self.parts.append(CharacterPart(f"shoe_{asset_id}", TexturedMesh(data[0], data[1]), texture_id, source_obj=path))
             paths.append(path)
         if paths:
             # The shoes replace the feet: our block feet are wider than a heel or a slim
@@ -1783,7 +1784,7 @@ class CharacterModel:
         texture_id = upload_texture_rgba(Image.open(texture_path)) if texture_path else self.white_tex_id
         if texture_id != self.white_tex_id:
             self.textures.append(texture_id)
-        self.parts.append(CharacterPart("outer_top", TexturedMesh(data[0], data[1]), texture_id))
+        self.parts.append(CharacterPart("outer_top", TexturedMesh(data[0], data[1]), texture_id, source_obj=path))
         return path
 
     def _build(self) -> None:
@@ -1983,7 +1984,7 @@ class CharacterModel:
                     self.textures.append(top_tex_id)
                 if top_data:
                     mesh = TexturedMesh(top_data[0], top_data[1])
-                    self.parts.append(CharacterPart("top", mesh, top_tex_id))
+                    self.parts.append(CharacterPart("top", mesh, top_tex_id, source_obj=top_obj_path))
                     self._garment_buffers["top"] = top_data
 
         # 8. Pele exposta do tronco (Torso e Pelve) com tampas herméticas e auto-detecção
@@ -2029,7 +2030,7 @@ class CharacterModel:
                 self.textures.append(bottom_tex_id)
             if bottom_data:
                 mesh = TexturedMesh(bottom_data[0], bottom_data[1])
-                self.parts.append(CharacterPart("bottom", mesh, bottom_tex_id))
+                self.parts.append(CharacterPart("bottom", mesh, bottom_tex_id, source_obj=bottom_obj_path))
                 self._garment_buffers["bottom"] = bottom_data
             # Pants that end at the ankle leave the feet bare. Pants reaching the floor
             # cover them (boots, tights, long hems), where the blocky feet would poke out.
