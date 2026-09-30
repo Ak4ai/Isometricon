@@ -201,6 +201,16 @@ class TexturedMesh:
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
         return np.frombuffer(bytes(data), dtype=np.float32).reshape(-1, 11).copy()
 
+    def read_indices(self) -> np.ndarray:
+        """Copy of the index buffer (empty when the mesh is not indexed)."""
+        if not self.ebo or not self.index_count:
+            return np.zeros(0, dtype=np.uint32)
+        gl.glBindVertexArray(0)
+        gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.ebo)
+        data = gl.glGetBufferSubData(gl.GL_ELEMENT_ARRAY_BUFFER, 0, self.index_count * 4)
+        gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, 0)
+        return np.frombuffer(bytes(data), dtype=np.uint32).copy()
+
     def update_vertices(self, vertices: np.ndarray) -> None:
         """Overwrite the vertex buffer in place (same vertex count), e.g. every animation frame."""
         v_data = np.ascontiguousarray(vertices, dtype=np.float32)
