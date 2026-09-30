@@ -132,7 +132,8 @@ def skin_under_cloth(points: np.ndarray, bones: tuple, cloth: np.ndarray, cloth_
     "Leaving the body" is judged from the skeleton (``bones`` = (heads, tails)): the rays kept
     point away from the nearest bone, whatever the orientation of the skin's faces. One ray
     is not enough, and neither is requiring all of them: from an armpit corner some slip out
-    between the sleeve and the torso. ``reach`` spans a sleeve's length.
+    between the sleeve and the torso. ``reach`` spans a sleeve: from the shoulder, rays run
+    down inside it before meeting cloth.
     """
     points = np.asarray(points, dtype=np.float64)
     cloth = np.asarray(cloth, dtype=np.float64)
