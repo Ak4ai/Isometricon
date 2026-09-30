@@ -69,3 +69,20 @@ def test_rest_pose_hangs_the_arms_close_to_the_body(skeleton):
         wrist = (matrices[hand] @ np.r_[skeleton.heads[hand], 1.0])[:3]
         arm = wrist - shoulder
         assert np.degrees(np.arctan2(abs(arm[0]), -arm[1])) == pytest.approx(np.degrees(REST_ARM_ANGLE), abs=1.0)
+
+
+def test_rest_arms_clear_the_hips_on_each_body():
+    from src.clothing.character_animation import CharacterAnimator
+    from src.clothing.skeleton import REST_ARM_ANGLE
+
+    class Model:
+        def __init__(self, body):
+            self.body = body
+
+    angles = {}
+    for body in ("female", "male"):
+        animator = CharacterAnimator(Model(body))
+        animator.skeleton = Skeleton.load(body)
+        angles[body] = animator._rest_arm_angle(*animator._body_cage())
+    assert angles["male"] == pytest.approx(REST_ARM_ANGLE)
+    assert angles["female"] > angles["male"]  # wider hips push the hands out

@@ -132,7 +132,7 @@ def rotation_z(angle: float) -> np.ndarray:
 REST_ARM_ANGLE = np.radians(5.0)
 
 
-def rest_rotations(skeleton: "Skeleton", arm_angle: float = REST_ARM_ANGLE) -> dict:
+def rest_rotations(skeleton: "Skeleton", arm_angle: float = REST_ARM_ANGLE, sides: str = "LR") -> dict:
     """Rotations from the A-pose to the game's rest pose: arms hanging close to the body.
 
     Each upper arm turns about the front axis at the shoulder until it is ``arm_angle`` off
@@ -140,6 +140,8 @@ def rest_rotations(skeleton: "Skeleton", arm_angle: float = REST_ARM_ANGLE) -> d
     """
     rotations = {}
     for side, sign in (("L", 1.0), ("R", -1.0)):
+        if side not in sides:
+            continue
         upper, lower = skeleton.index(f"UpperArm_{side}"), skeleton.index(f"LowerArm_{side}")
         angle = lambda b: np.arctan2(sign * (skeleton.tails[b, 0] - skeleton.heads[b, 0]),
                                      skeleton.heads[b, 1] - skeleton.tails[b, 1])
@@ -147,6 +149,36 @@ def rest_rotations(skeleton: "Skeleton", arm_angle: float = REST_ARM_ANGLE) -> d
         rotations[f"UpperArm_{side}"] = rotation_z(sign * turn)
         rotations[f"LowerArm_{side}"] = rotation_z(sign * (arm_angle - angle(lower) - turn))
     return rotations
+
+
+def rest_arm_angle(skeleton: "Skeleton", body_points: np.ndarray, arm_radius: float,
+                   margin: float = 0.01, smallest: float = REST_ARM_ANGLE, largest: float = np.radians(35.0)) -> float:
+    """Smallest rest angle at which both forearms and hands clear the body (hips, thighs) by ``margin``.
+
+    ``body_points`` are the torso, pelvis and leg surface (the body cage); the arm is taken
+    as a tube of ``arm_radius`` around its bones. Wide hips need the arms further out.
+    """
+    t = np.linspace(0.0, 1.0, 6)[:, None]
+    for angle in np.arange(smallest, largest, np.radians(1.0)):
+        matrices = skeleton.pose(rest_rotations(skeleton, angle))
+        clear = True
+        for side, sign in (("L", 1.0), ("R", -1.0)):
+            points = []
+            for name in (f"LowerArm_{side}", f"Hand_{side}"):
+                b = skeleton.index(name)
+                segment = skeleton.heads[b] + t * (skeleton.tails[b] - skeleton.heads[b])
+                points.append(segment @ matrices[b][:3, :3].T + matrices[b][:3, 3])
+            for point in np.vstack(points):
+                level = body_points[np.abs(body_points[:, 1] - point[1]) < 0.03]
+                level = level[level[:, 0] * sign > 0]
+                if len(level) and sign * point[0] - arm_radius < (sign * level[:, 0]).max() + margin:
+                    clear = False
+                    break
+            if not clear:
+                break
+        if clear:
+            return float(angle)
+    return float(largest)
 
 
 def walk_rotations(walk_time: float):

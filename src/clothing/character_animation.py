@@ -16,7 +16,7 @@ import os
 
 import numpy as np
 
-from .skeleton import CAGE_PART_BONES, Skeleton, rest_rotations, skin, walk_rotations
+from .skeleton import CAGE_PART_BONES, Skeleton, rest_arm_angle, rest_rotations, skin, walk_rotations
 
 # Model parts that follow one bone as a whole.
 RIGID_PARTS = {"head": "Head", "hair_3d": "Head", "hair": "Head", "nose": "Head"}
@@ -56,6 +56,19 @@ class CharacterAnimator:
             bones.append(np.full(len(verts), self.skeleton.index(bone)))
         return np.vstack(points), np.concatenate(bones)
 
+    def _rest_arm_angle(self, cage_points, cage_bones):
+        """Rest angle of the arms that keeps the hands off this body's hips."""
+        names = np.array(self.skeleton.names)[cage_bones]
+        trunk_and_legs = ~(np.char.find(names.astype(str), "Arm") >= 0) & ~(np.char.find(names.astype(str), "Hand") >= 0)
+        arm_radius = []
+        for bone in ("LowerArm_L", "Hand_L"):
+            b = self.skeleton.index(bone)
+            head, axis = self.skeleton.heads[b], self.skeleton.tails[b] - self.skeleton.heads[b]
+            offset = cage_points[cage_bones == b] - head
+            along = offset @ axis / (axis @ axis)
+            arm_radius.append(np.linalg.norm(offset - along[:, None] * axis, axis=1))
+        return rest_arm_angle(self.skeleton, cage_points[trunk_and_legs], float(np.median(np.concatenate(arm_radius))))
+
     def _fitted_bones(self, part, rows):
         """Bones from the cage parts the garment's vertices were bound to, or None."""
         from .wear_engine import body_parts_path
@@ -72,8 +85,8 @@ class CharacterAnimator:
 
     def _bind(self):
         self.skeleton = Skeleton.load(self.model.body)
-        self.rest = rest_rotations(self.skeleton)
         cage_points, cage_bones = self._body_cage()
+        self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones))
         self._bindings = []
         for part in self.model.parts:
             if part.transform is not None or not hasattr(part.mesh, "read_vertices"):
