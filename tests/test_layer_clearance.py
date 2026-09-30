@@ -58,3 +58,26 @@ def test_covered_vertices_are_those_under_the_outer_cloth():
     inner, _ = _cylinder(0.19, 0.5, 1.0)
     covered = covered_vertices(inner, outer, faces)
     np.testing.assert_array_equal(covered, inner[:, 1] >= 0.8)
+
+
+def _box(half, centre=(0.0, 0.0, 0.0), skip_face=None):
+    """Closed box of triangles (optionally without one side) around ``centre``."""
+    c = np.asarray(centre, dtype=np.float64)
+    corners = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], dtype=np.float64) * half + c
+    quads = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    faces = []
+    for i, (a, b, c_, d) in enumerate(quads):
+        if i != skip_face:
+            faces += [(a, b, c_), (a, c_, d)]
+    return corners, np.array(faces)
+
+
+def test_skin_under_cloth_needs_nearly_every_outward_ray_blocked():
+    from src.clothing.layer_clearance import skin_under_cloth
+    bones = (np.array([[0.0, -0.05, 0.0]]), np.array([[0.0, 0.05, 0.0]]))  # a short vertical bone
+    skin = np.array([[0.05, 0.0, 0.0], [0.4, 0.0, 0.0]])  # inside the cloth box, far outside it
+    cloth, faces = _box(0.15)
+    assert skin_under_cloth(skin, bones, cloth, faces).tolist() == [True, False]
+    # A shirt left open on one whole side shows the skin behind it.
+    open_cloth, open_faces = _box(0.15, skip_face=1)  # the +x side, which the skin faces
+    assert skin_under_cloth(skin[:1], bones, open_cloth, open_faces).tolist() == [False]

@@ -113,6 +113,72 @@ def covered_vertices(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarr
     return covered
 
 
+# Ray directions for the skin cover test: the 26 neighbours of a cube cell.
+_DIRECTIONS = np.array([(x, y, z) for x in (-1, 0, 1) for y in (-1, 0, 1) for z in (-1, 0, 1) if (x, y, z) != (0, 0, 0)],
+                       dtype=np.float64)
+_DIRECTIONS /= np.linalg.norm(_DIRECTIONS, axis=1)[:, None]
+
+
+# Share of the rays leaving a skin vertex that may miss the cloth with the vertex still
+# counted as covered. Under a sweater, at most 10% slip out through the gap Roblox shirts
+# (and their cages) leave under the arm; exposed skin loses 60-90% of them.
+SKIN_ESCAPE_FRACTION = 0.25
+
+
+def skin_under_cloth(points: np.ndarray, bones: tuple, cloth: np.ndarray, cloth_faces: np.ndarray,
+                     reach: float = 0.6) -> np.ndarray:
+    """Skin vertices enclosed by cloth: nearly every ray leaving the body from them hits it.
+
+    "Leaving the body" is judged from the skeleton (``bones`` = (heads, tails)): the rays kept
+    point away from the nearest bone, whatever the orientation of the skin's faces. One ray
+    is not enough, and neither is requiring all of them: from an armpit corner some slip out
+    between the sleeve and the torso. ``reach`` spans a sleeve's length.
+    """
+    points = np.asarray(points, dtype=np.float64)
+    cloth = np.asarray(cloth, dtype=np.float64)
+    triangles = cloth[np.asarray(cloth_faces).reshape(-1, 3)]
+    low, high = triangles.min((0, 1)) - reach, triangles.max((0, 1)) + reach
+    band = np.flatnonzero(((points >= low) & (points <= high)).all(1))
+    covered = np.zeros(len(points), dtype=bool)
+    if not len(band):
+        return covered
+    heads, tails = (np.asarray(b, dtype=np.float64) for b in bones)
+    axis = tails - heads
+    p = points[band]
+    t = np.clip(np.einsum("nbk,bk->nb", p[:, None] - heads[None], axis) / (axis ** 2).sum(1), 0.0, 1.0)
+    closest = heads[None] + t[..., None] * axis[None]
+    radial = p - closest[np.arange(len(p)), np.linalg.norm(p[:, None] - closest, axis=2).argmin(1)]
+    radial /= np.maximum(np.linalg.norm(radial, axis=1), 1e-9)[:, None]
+    outward = radial @ _DIRECTIONS.T > 0.2  # (n, 26) rays that leave the body
+    escaped = np.zeros(len(p))
+    for k, direction in enumerate(_DIRECTIONS):
+        rays = np.flatnonzero(outward[:, k])
+        if not len(rays):
+            continue
+        # Rays sharing a direction only meet triangles whose shadow along it covers their
+        # origin: project on the plane across the direction and keep those per small batch.
+        u = np.cross(direction, [0.0, 0.0, 1.0] if abs(direction[2]) < 0.9 else [1.0, 0.0, 0.0])
+        u /= np.linalg.norm(u)
+        plane = np.stack([u, np.cross(direction, u)], axis=1)
+        flat = triangles @ plane
+        tri_low, tri_high = flat.min(1), flat.max(1)
+        origins = p[rays] - direction * 1e-3
+        flat_origins = origins @ plane
+        order = np.lexsort(flat_origins.T)
+        for start in range(0, len(order), 32):
+            batch = order[start:start + 32]
+            low, high = flat_origins[batch].min(0), flat_origins[batch].max(0)
+            near = np.all((tri_low <= high) & (tri_high >= low), axis=1)
+            if not near.any():
+                escaped[rays[batch]] += 1
+                continue
+            hits = _farthest_hits(origins[batch], np.repeat(direction[None], len(batch), 0),
+                                  np.full(len(batch), reach / 2), triangles[near], reach / 2)
+            escaped[rays[batch]] += ~np.isfinite(hits)
+    covered[band] = escaped <= SKIN_ESCAPE_FRACTION * np.maximum(outward.sum(1), 1)
+    return covered
+
+
 def outside_fraction(inner: np.ndarray, outer: np.ndarray, outer_faces: np.ndarray, reach: float = 0.08,
                      body=None) -> float:
     """Share of the covered inner vertices that sit outside the outer garment."""
