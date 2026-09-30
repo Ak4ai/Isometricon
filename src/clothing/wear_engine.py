@@ -711,6 +711,59 @@ class RobloxWearEngine:
         scale = float(np.sqrt(((dest - dest_mean) ** 2).sum(1).mean() / ((source - source_mean) ** 2).sum(1).mean()))
         return ((points @ rotation.T - source_mean) * scale + dest_mean).astype(np.float32)
 
+    def _rigid_footwear(self, verts, faces, fitted, trace):
+        """Boots that come with a garment (pants with boots) keep their shape below the ankle.
+
+        Like layered shoes: the cage fit crushes a boot onto our flat box foot, so on each
+        side the part below SHOE_RIGID_TOP follows the foot's similarity map, blending into
+        the cage fit over SHOE_BLEND_HEIGHT. Garments that end above the feet are untouched.
+        """
+        fitted = np.asarray(fitted, dtype=np.float64)
+        if fitted[:, 2].min() > SHOE_RIGID_TOP / 2:
+            return fitted
+        faces = np.asarray([f[:3] for f in faces], dtype=np.int64)
+        top = SHOE_RIGID_TOP + SHOE_BLEND_HEIGHT
+        low_faces = faces[(fitted[faces, 2] < top).all(1)]
+        # Connected pieces of cloth below the blend top: a piece reaching out to both feet
+        # is a long skirt's hem (no boots); the others go to the foot on their side (wide
+        # trouser hems can cross the middle a little).
+        parent = np.arange(len(fitted))
+
+        def root(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+        for a, b, c in low_faces:
+            for u, v in ((a, b), (b, c)):
+                ru, rv = root(u), root(v)
+                if ru != rv:
+                    parent[ru] = rv
+        low = np.unique(low_faces)
+        roots = np.array([root(i) for i in low])
+        points = np.asarray(verts, dtype=np.float64)
+        out = fitted.copy()
+        feet = {1: [], -1: []}
+        for piece in np.unique(roots):
+            members = low[roots == piece]
+            xs = fitted[members, 0]
+            if min(-xs.min(), xs.max()) > 0.12:  # reaches both feet (they sit about 0.16 out)
+                return fitted
+            feet[1 if xs.mean() > 0 else -1].append(members)
+        for members in feet.values():
+            if not members:
+                continue
+            foot = np.concatenate(members)
+            if len(foot) < 8:
+                continue
+            rigid = self._fit_shoe_affine(points[foot], trace)
+            if rigid is None:
+                continue
+            t = np.clip((fitted[foot, 2] - SHOE_RIGID_TOP) / SHOE_BLEND_HEIGHT, 0.0, 1.0)
+            weight = (t * t * (3 - 2 * t))[:, None]
+            out[foot] = (1 - weight) * rigid + weight * fitted[foot]
+        return out.astype(np.float32)
+
     def _fit_asset_wrap_layer(self, verts, meta, faces=None):
         """Use an asset's own cages when UVs and garment-to-cage distance validate."""
         if not self.body_cages or not meta.get("rbxm_path"):
@@ -772,6 +825,7 @@ class RobloxWearEngine:
             try:
                 from .radial_prism_fit import fit_radial_prism
                 fitted, audit = fit_radial_prism(verts, faces, trace)
+                fitted = self._rigid_footwear(verts, faces, fitted, trace)
                 print(f"[WrapLayer] Cages do asset aplicadas (radial + prisma): {result[1]} {audit}")
                 return fitted, {**result[1], **audit, "method": "radial_prism"}
             except Exception as exc:  # Keep the per-triangle fit if the prism fit cannot bind.
@@ -2242,7 +2296,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v29: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v30: {asset_id}\n")
             f.write(f"# asset_type {int(meta.get('type_id', 0))}\n")  # layering order at runtime
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
