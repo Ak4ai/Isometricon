@@ -1686,8 +1686,10 @@ class CharacterModel:
         return True
 
     # Skin parts that clothes can hide; the hands and the head always show.
+    # The neck is left to HSR: rays from the nape run down the back into a low-cut top
+    # and would call it covered.
     CULLABLE_SKIN = ("arm_left", "arm_right", "forearm_left", "forearm_right", "trunk_skin", "legs_skin",
-                     "feet_skin", "neck")
+                     "feet_skin")
 
     def _cull_skin_under_cloth(self) -> None:
         """Drop the skin triangles the worn garments cover completely.
