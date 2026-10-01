@@ -34,11 +34,17 @@ WALK_SPEED = 11.0
 
 
 def _nearest(points, targets, chunk=2048):
-    nearest = np.empty(len(points), dtype=np.int64)
-    for start in range(0, len(points), chunk):
-        distance = ((points[start:start + chunk, None, :] - targets[None]) ** 2).sum(-1)
-        nearest[start:start + chunk] = distance.argmin(1)
-    return nearest
+    """Index of the nearest target for each point. Render buffers repeat every vertex once
+    per face corner, so the search runs on the distinct positions only."""
+    points = np.ascontiguousarray(points, dtype=np.float32)
+    targets = np.ascontiguousarray(targets, dtype=np.float32)
+    unique, inverse = np.unique(points, axis=0, return_inverse=True)
+    nearest = np.empty(len(unique), dtype=np.int64)
+    squares = (targets ** 2).sum(1)
+    for start in range(0, len(unique), chunk):
+        block = unique[start:start + chunk]
+        nearest[start:start + chunk] = (squares[None] - 2.0 * block @ targets.T).argmin(1)
+    return nearest[inverse.ravel()]
 
 
 class CharacterAnimator:

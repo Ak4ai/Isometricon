@@ -1,6 +1,7 @@
 """Gerenciamento de malhas e buffers OpenGL (VAO, VBO, EBO)."""
 
 import ctypes
+import threading
 from typing import Optional
 import OpenGL.GL as gl
 import numpy as np
@@ -121,6 +122,11 @@ class Mesh:
             pass
 
 
+# Set ``DEFERRED.on = True`` on a thread without the GL context: meshes built there keep
+# their data and upload it on the first draw.
+DEFERRED = threading.local()
+
+
 class TexturedMesh:
     """Representa uma malha 3D texturizada com suporte a Texture Atlas (Layout: Pos3, Norm3, UV2, Col3 = 44 bytes)."""
 
@@ -131,9 +137,10 @@ class TexturedMesh:
         usage: int = gl.GL_STATIC_DRAW,
     ):
         self.usage = usage
-        self.vao: int = gl.glGenVertexArrays(1)
-        self.vbo: int = gl.glGenBuffers(1)
-        self.ebo: Optional[int] = gl.glGenBuffers(1) if indices is not None else None
+        self.vao: int = 0
+        self.vbo: int = 0
+        self.ebo: Optional[int] = None
+        self._pending = None  # (vertices, indices) not sent to the GPU yet
 
         self.index_count = 0
         self.vertex_count = 0
@@ -145,9 +152,25 @@ class TexturedMesh:
         vertices: np.ndarray,
         indices: Optional[np.ndarray] = None,
     ) -> None:
-        """Atualiza os dados nos buffers de GPU."""
+        """Atualiza os dados nos buffers de GPU.
+
+        On a thread building meshes in the background (``DEFERRED.on``) the data is only
+        kept; it goes to the GPU on the first draw, on the thread that owns the context.
+        """
         v_data = np.ascontiguousarray(vertices, dtype=np.float32)
         self.vertex_count = len(v_data) // 11 if v_data.ndim == 1 else len(v_data)
+        if getattr(DEFERRED, "on", False):
+            i_data = np.ascontiguousarray(indices, dtype=np.uint32) if indices is not None and len(indices) else None
+            self.index_count = len(i_data) if i_data is not None else 0
+            self._pending = (v_data, i_data)
+            return
+        self._pending = None
+        self._upload(v_data, indices)
+
+    def _upload(self, v_data: np.ndarray, indices: Optional[np.ndarray]) -> None:
+        if not self.vao:
+            self.vao = gl.glGenVertexArrays(1)
+            self.vbo = gl.glGenBuffers(1)
 
         gl.glBindVertexArray(self.vao)
 
@@ -185,8 +208,16 @@ class TexturedMesh:
 
         gl.glBindVertexArray(0)
 
+    def _realize(self) -> None:
+        """Send data kept by a background build to the GPU."""
+        if self._pending is not None:
+            v_data, i_data = self._pending
+            self._pending = None
+            self._upload(v_data, i_data)
+
     def draw(self) -> None:
         """Desenha a malha indexada na GPU."""
+        self._realize()
         gl.glBindVertexArray(self.vao)
         if self.index_count > 0:
             gl.glDrawElements(gl.GL_TRIANGLES, self.index_count, gl.GL_UNSIGNED_INT, None)
@@ -196,6 +227,8 @@ class TexturedMesh:
 
     def read_vertices(self) -> np.ndarray:
         """Copy of the vertex buffer, one row of 11 floats per vertex."""
+        if self._pending is not None:
+            return self._pending[0].reshape(-1, 11).copy()
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vbo)
         data = gl.glGetBufferSubData(gl.GL_ARRAY_BUFFER, 0, self.vertex_count * 11 * 4)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
@@ -203,6 +236,8 @@ class TexturedMesh:
 
     def read_indices(self) -> np.ndarray:
         """Copy of the index buffer (empty when the mesh is not indexed)."""
+        if self._pending is not None:
+            return np.zeros(0, dtype=np.uint32) if self._pending[1] is None else self._pending[1].copy()
         if not self.ebo or not self.index_count:
             return np.zeros(0, dtype=np.uint32)
         gl.glBindVertexArray(0)
@@ -214,12 +249,16 @@ class TexturedMesh:
     def update_vertices(self, vertices: np.ndarray) -> None:
         """Overwrite the vertex buffer in place (same vertex count), e.g. every animation frame."""
         v_data = np.ascontiguousarray(vertices, dtype=np.float32)
+        if self._pending is not None:
+            self._pending = (v_data.ravel(), self._pending[1])
+            return
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vbo)
         gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, v_data.nbytes, v_data)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
 
     def delete(self) -> None:
         """Libera os buffers de GPU."""
+        self._pending = None
         if hasattr(self, "vao") and self.vao:
             gl.glDeleteVertexArrays(1, [self.vao])
             self.vao = 0

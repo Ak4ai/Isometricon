@@ -498,8 +498,20 @@ class SkinCommandHandler:
         self._pending_main_thread_callbacks: List[Callable[[], None]] = []
         self._callback_lock = threading.Lock()
 
+    @property
+    def busy_status(self) -> str:
+        """Text for the loading badge, or "" when nothing is running in the background."""
+        if self.is_importing:
+            return self.import_status or f"Importando #{self.import_asset_id}..."
+        model = self.character_model
+        if model is not None and getattr(model, "is_loading", False):
+            return model.loading_status or "Atualizando personagem..."
+        return ""
+
     def process_pending_callbacks(self) -> None:
         """Executa quaisquer tarefas agendadas por threads secundárias na thread principal (OpenGL)."""
+        if self.character_model is not None and hasattr(self.character_model, "poll"):
+            self.character_model.poll()  # swaps in a character built in the background
         with self._callback_lock:
             if not self._pending_main_thread_callbacks:
                 return
@@ -987,7 +999,7 @@ class SkinCommandHandler:
 
             # ID numérico do Roblox para equipar cabelo diretamente
             if val.isdigit() or ("roblox.com" in val):
-                return self._handle_import_roblox(["import", val, "hair"], run_async=False)
+                return self._handle_import_roblox(["import", val, "hair"], run_async=run_async)
 
             # Estilo
             if val in ("bald", "careca", "none", "sem"):
@@ -1975,6 +1987,41 @@ class SkinCommandHandler:
         return False, f"[Erro] Comando desconhecido: '/{sub_cmd}'. Digite /help para a lista completa.", RED
 
     def _handle_import_roblox(self, args: List[str], run_async: bool = True) -> Tuple[bool, str, Tuple[int, int, int]]:
+        """Import a Roblox asset. With a live model it runs on a background thread (the catalog
+        query, the download and the fitting all block), and the result arrives as a chat message."""
+        GOLD, RED, CYAN = (255, 215, 0), (255, 85, 85), (85, 255, 255)
+        model = self.character_model
+        # "help"/"status" and missing arguments answer at once.
+        wants_asset = bool(args) and args[0].lower() not in ("help", "ajuda", "?", "status", "info")
+        if run_async and wants_asset and model is not None and getattr(model, "create_mesh", False):
+            if self.is_importing:
+                return False, "[Import] Já existe uma importação em andamento; aguarde terminar.", GOLD
+            target = next((a for a in args if a.isdigit()), args[0])
+            self.is_importing = True
+            self.import_asset_id = target
+            self.import_status = f"Importando {target}..."
+
+            def worker():
+                try:
+                    success, message, color = self._import_roblox(args)
+                except Exception as exc:
+                    success, message, color = False, f"[Import] Erro: {exc}", RED
+
+                def done():
+                    self.is_importing = False
+                    self.import_status = ""
+                    self.import_asset_id = None
+                    if self.chat_console:
+                        self.chat_console.add_message(message, color)
+
+                with self._callback_lock:
+                    self._pending_main_thread_callbacks.append(done)
+
+            threading.Thread(target=worker, daemon=True, name="RobloxImport").start()
+            return True, "[Import] Importando em segundo plano; a interface continua liberada.", CYAN
+        return self._import_roblox(args)
+
+    def _import_roblox(self, args: List[str]) -> Tuple[bool, str, Tuple[int, int, int]]:
         GREEN = (85, 255, 85)
         GOLD = (255, 215, 0)
         RED = (255, 85, 85)
@@ -2106,72 +2153,17 @@ class SkinCommandHandler:
                 label = "Calça / Roupa Inferior"
                 return True, f"[Import] {label} '{asset_name}' ({asset_id}) vestida com sucesso!", GREEN
 
-        # Se não está em cache e for modo síncrono (ex: unit tests com create_mesh=False)
-        if not run_async or not getattr(self.character_model, "create_mesh", True):
-            try:
-                wear_res = engine.wear(asset_id, body_type=body_type)
-            except Exception as e:
-                return False, f"[Import] Erro ao adaptar/vestir o asset {asset_id} ({body_type}): {e}", RED
+        # Ainda sem cache: adapta a roupa ao corpo (com modelo ao vivo, já fora da thread principal)
+        try:
+            engine.wear(asset_id, body_type=body_type)
+        except Exception as e:
+            return False, f"[Import] Erro ao adaptar/vestir o asset {asset_id} ({body_type}): {e}", RED
 
-            if is_top:
-                self.character_model.update_customization(top_id=asset_id)
-                label = "Roupa Superior"
-                sub_info = " (Manga adaptada)"
-                return True, f"[Import] {label} '{asset_name}' ({asset_id}) vestida com sucesso!{sub_info}", GREEN
-            else:
-                self.character_model.update_customization(bottom_id=asset_id)
-                label = "Calça / Roupa Inferior"
-                return True, f"[Import] {label} '{asset_name}' ({asset_id}) vestida com sucesso!", GREEN
-
-        # 5. Execução em segundo plano (Thread separada) para NÃO travar a interface/jogo
-        self.is_importing = True
-        self.import_asset_id = asset_id
-        self.import_status = f"Importando #{asset_id}..."
-
-        def worker():
-            try:
-                wear_res = engine.wear(asset_id, body_type=body_type)
-
-                def on_success():
-                    self.is_importing = False
-                    self.import_status = ""
-                    self.import_asset_id = None
-                    if is_top:
-                        self.character_model.update_customization(top_id=asset_id)
-                        label = "Roupa Superior"
-                    else:
-                        self.character_model.update_customization(bottom_id=asset_id)
-                        label = "Calça / Roupa Inferior"
-                    if self.chat_console:
-                        self.chat_console.add_message(
-                            f"[Import] {label} '{asset_name}' (#{asset_id}) adaptada e vestida com sucesso!",
-                            (85, 255, 85)
-                        )
-
-                with self._callback_lock:
-                    self._pending_main_thread_callbacks.append(on_success)
-
-            except Exception as e:
-                def on_error():
-                    self.is_importing = False
-                    self.import_status = ""
-                    self.import_asset_id = None
-                    if self.chat_console:
-                        self.chat_console.add_message(
-                            f"[Import] Erro ao adaptar/vestir o asset #{asset_id}: {e}",
-                            (255, 85, 85)
-                        )
-
-                with self._callback_lock:
-                    self._pending_main_thread_callbacks.append(on_error)
-
-        t = threading.Thread(target=worker, daemon=True, name=f"RobloxWear-{asset_id}")
-        t.start()
-
-        return True, (
-            f"[Import] Baixando e adaptando '{asset_name}' (#{asset_id}) em segundo plano...\n"
-            f"[Import] A interface continua liberada! A roupa será equipada automaticamente ao terminar."
-        ), CYAN
+        if is_top:
+            self.character_model.update_customization(top_id=asset_id)
+            return True, f"[Import] Roupa Superior '{asset_name}' ({asset_id}) vestida com sucesso! (Manga adaptada)", GREEN
+        self.character_model.update_customization(bottom_id=asset_id)
+        return True, f"[Import] Calça / Roupa Inferior '{asset_name}' ({asset_id}) vestida com sucesso!", GREEN
 
 
 
@@ -2850,7 +2842,7 @@ class ChatConsole:
             self.command_handler.process_pending_callbacks()
 
         # Atualiza animação do loading spinner se estiver importando roupa em background
-        is_importing = bool(self.command_handler and self.command_handler.is_importing)
+        is_importing = bool(self.command_handler and self.command_handler.busy_status)
         if is_importing:
             self.loading_timer += dt
             if self.loading_timer >= 0.12:
@@ -2877,7 +2869,7 @@ class ChatConsole:
             if self.is_open or (now - m.timestamp < 8.0)
         ]
 
-        is_importing = bool(self.command_handler and self.command_handler.is_importing)
+        is_importing = bool(self.command_handler and self.command_handler.busy_status)
         if not self.is_open and not visible_messages and not is_importing:
             return
 
@@ -3078,9 +3070,9 @@ class ChatConsole:
             draw.text((box_x, height - 22), hint_text, font=self.font, fill=(160, 160, 170, 160))
 
         # Badge animada de Loading / Importando em segundo plano (canto superior direito)
-        if self.command_handler and self.command_handler.is_importing:
+        if self.command_handler and self.command_handler.busy_status:
             spinner = self.SPINNER_FRAMES[self.loading_frame % len(self.SPINNER_FRAMES)]
-            status_text = self.command_handler.import_status or f"Importando #{self.command_handler.import_asset_id}..."
+            status_text = self.command_handler.busy_status
             badge_text = f"[ {spinner} ] {status_text}"
 
             try:
