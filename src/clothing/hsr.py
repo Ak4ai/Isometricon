@@ -354,19 +354,46 @@ def _closest_on_triangles(points, a, b, c):
     return bary
 
 
-def vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cage, chunk=64):
+def closest_on_surface(points, a, b, c, chunk=256):
+    """(triangle index, barycentric coordinates) of each point's closest point on the triangles.
+
+    Exact, but not brute force: equal points (render buffers repeat every vertex per face
+    corner) are solved once, and each batch of neighbouring points only looks at the
+    triangles whose box lies within the distance to their nearest triangle corner.
+    """
+    points = np.asarray(points, dtype=np.float64)
+    if not len(points):
+        return np.zeros(0, dtype=np.int64), np.zeros((0, 3))
+    unique, inverse = np.unique(points, axis=0, return_inverse=True)
+    tri_low = np.minimum(np.minimum(a, b), c)
+    tri_high = np.maximum(np.maximum(a, b), c)
+    order = np.lexsort(np.floor(unique / 0.1).T)  # neighbours in the same batch
+    best = np.empty(len(unique), dtype=np.int64)
+    bary = np.empty((len(unique), 3))
+    squares = (a ** 2).sum(1)
+    for start in range(0, len(order), chunk):
+        rows = order[start:start + chunk]
+        p = unique[rows]
+        # No closest point is farther than the nearest triangle corner.
+        corner = (p ** 2).sum(1)[:, None] - 2.0 * p @ a.T + squares[None]
+        bound = float(np.sqrt(max(corner.min(1).max(), 0.0))) + 1e-6
+        candidates = np.flatnonzero(np.all((tri_low <= p.max(0) + bound) & (tri_high >= p.min(0) - bound), axis=1))
+        ca, cb, cc = a[candidates], b[candidates], c[candidates]
+        weights = _closest_on_triangles(p, ca, cb, cc)
+        closest = weights[..., 0, None] * ca[None] + weights[..., 1, None] * cb[None] + weights[..., 2, None] * cc[None]
+        nearest = ((closest - p[:, None]) ** 2).sum(-1).argmin(1)
+        best[rows] = candidates[nearest]
+        bary[rows] = weights[np.arange(len(p)), nearest]
+    inverse = inverse.ravel()
+    return best[inverse], bary[inverse]
+
+
+def vertex_hidden_on_cage_surface(positions, cage_points, cage_faces, hidden_cage):
     """Hidden fraction at each point's closest point on the body-cage surface (0..1)."""
-    a, b, c = (cage_points[cage_faces[:, k]] for k in range(3))
+    a, b, c = (np.asarray(cage_points, dtype=np.float64)[cage_faces[:, k]] for k in range(3))
     flags = hidden_cage[cage_faces].astype(np.float64)
-    out = np.empty(len(positions))
-    for start in range(0, len(positions), chunk):
-        p = positions[start:start + chunk]
-        bary = _closest_on_triangles(p, a, b, c)
-        closest = bary[..., 0, None] * a[None] + bary[..., 1, None] * b[None] + bary[..., 2, None] * c[None]
-        best = ((closest - p[:, None]) ** 2).sum(-1).argmin(1)
-        rows = np.arange(len(p))
-        out[start:start + chunk] = (bary[rows, best] * flags[best]).sum(-1)
-    return out
+    best, bary = closest_on_surface(positions, a, b, c)
+    return (bary * flags[best]).sum(-1)
 
 
 def cull_hidden_triangles(positions: np.ndarray, faces: np.ndarray, cage_points: np.ndarray,

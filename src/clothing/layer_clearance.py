@@ -30,13 +30,36 @@ def fitted_asset_type(obj_path) -> int | None:
 
 
 def _farthest_hits(origins, directions, lengths, triangles, reach):
-    """Distance along each ray to the farthest triangle hit within ``reach`` of ``lengths`` (nan if none)."""
-    v0, e1, e2 = triangles[:, 0], triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
-    result = np.full(len(origins), np.nan)
+    """Distance along each ray to the farthest triangle hit within ``reach`` of ``lengths`` (nan if none).
+
+    Exact, but not brute force: equal rays (render buffers repeat every vertex per face
+    corner) are cast once, and each batch of neighbouring rays only meets the triangles whose
+    box touches the stretch of the rays where a hit counts.
+    """
+    origins = np.asarray(origins, dtype=np.float64)
+    directions = np.asarray(directions, dtype=np.float64)
+    lengths = np.asarray(lengths, dtype=np.float64)
     reach = np.broadcast_to(np.asarray(reach, dtype=np.float64), (len(origins),))
-    for start in range(0, len(origins), 128):
-        o, d, length = origins[start:start + 128], directions[start:start + 128], lengths[start:start + 128]
-        tolerance = reach[start:start + 128, None]
+    if not len(origins):
+        return np.zeros(0)
+    rays = np.column_stack((origins, directions, lengths, reach))
+    rays, inverse = np.unique(rays, axis=0, return_inverse=True)
+    o_all, d_all, length_all, reach_all = rays[:, :3], rays[:, 3:6], rays[:, 6], rays[:, 7]
+    # The part of each ray where a hit counts: t in (max(0, length - reach), length + reach).
+    near = o_all + d_all * np.maximum(length_all - reach_all, 0.0)[:, None]
+    far = o_all + d_all * (length_all + reach_all)[:, None]
+    low, high = np.minimum(near, far), np.maximum(near, far)
+    order = np.lexsort(np.floor((low + high) / 0.2).T)  # neighbours in the same batch
+    tri_low, tri_high = triangles.min(1), triangles.max(1)
+    result = np.full(len(rays), np.nan)
+    for start in range(0, len(order), 128):
+        rows = order[start:start + 128]
+        touched = np.all((tri_low <= high[rows].max(0) + 1e-9) & (tri_high >= low[rows].min(0) - 1e-9), axis=1)
+        if not touched.any():
+            continue
+        tri = triangles[touched]
+        v0, e1, e2 = tri[:, 0], tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]
+        o, d, length = o_all[rows], d_all[rows], length_all[rows]
         p = np.cross(d[:, None], e2[None])
         det = np.einsum("tk,rtk->rt", e1, p)
         ok = np.abs(det) > 1e-12
@@ -46,23 +69,17 @@ def _farthest_hits(origins, directions, lengths, triangles, reach):
         q = np.cross(s, e1[None])
         v = np.einsum("rk,rtk->rt", d, q) * inv
         t = np.einsum("tk,rtk->rt", e2, q) * inv
-        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0) & (np.abs(t - length[:, None]) < tolerance)
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0) & (np.abs(t - length[:, None]) < reach_all[rows, None])
         farthest = np.where(hit, t, -np.inf).max(1)
-        result[start:start + 128] = np.where(np.isfinite(farthest), farthest, np.nan)
-    return result
+        result[rows] = np.where(np.isfinite(farthest), farthest, np.nan)
+    return result[inverse.ravel()]
 
 
-def _closest_body_points(points, body_points, body_faces, chunk=64):
-    from .hsr import _closest_on_triangles
+def _closest_body_points(points, body_points, body_faces):
+    from .hsr import closest_on_surface
     a, b, c = (body_points[body_faces[:, k]] for k in range(3))
-    closest = np.empty_like(points)
-    for start in range(0, len(points), chunk):
-        p = points[start:start + chunk]
-        bary = _closest_on_triangles(p, a, b, c)
-        candidates = bary[..., 0, None] * a[None] + bary[..., 1, None] * b[None] + bary[..., 2, None] * c[None]
-        best = ((candidates - p[:, None]) ** 2).sum(-1).argmin(1)
-        closest[start:start + chunk] = candidates[np.arange(len(p)), best]
-    return closest
+    best, bary = closest_on_surface(points, a, b, c)
+    return bary[:, 0, None] * a[best] + bary[:, 1, None] * b[best] + bary[:, 2, None] * c[best]
 
 
 def _outer_surface(inner, outer, outer_faces, reach, body=None):
