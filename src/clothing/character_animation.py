@@ -29,6 +29,8 @@ SKIN_PARTS = {"neck": "Neck", "arm_left": "UpperArm_L", "forearm_left": "LowerAr
 SKIN_REGIONS = {"trunk_skin": ("Torso", "Pelvis"),
                 "legs_skin": ("UpperLeg_L", "LowerLeg_L", "Foot_L", "UpperLeg_R", "LowerLeg_R", "Foot_R"),
                 "feet_skin": ("Foot_L", "Foot_R")}
+# Distance down the arm (m from the shoulder) past which arm-bound cloth is surely sleeve.
+SLEEVE_BLEND = 0.08
 # Walk cycle speed (radians of the cycle per second), as the world token at its default speed.
 WALK_SPEED = 11.0
 
@@ -127,9 +129,68 @@ class CharacterAnimator:
                     if bones is None:
                         bones = cage_bones[_nearest(rows[:, :3].astype(np.float64), cage_points)]
                 indices, weights = self.skeleton.weights(rows[:, :3], bones)
+                if part.source_obj is not None:
+                    self._attach_sleeves(rows[:, :3], part.mesh.read_indices().reshape(-1, 3), bones, indices, weights)
             self._bindings.append((part, rows, indices, weights))
         self._bound_key = self._key()
         self._shown = None
+
+    def _attach_sleeves(self, points, faces, bones, indices, weights):
+        """Smooth arm/torso weights for the cloth around each shoulder (edits ``indices``/``weights``).
+
+        The cage part each cloth vertex was fitted on is a noisy label near the armpit: the
+        outer half of a sleeve is bound to the arm and its inner half to the torso, so a
+        swinging arm (it moves rigidly, independent of the torso) would open the sleeve like
+        a ring. The labels are kept only where they are certain: arm cloth well down the
+        sleeve, and torso cloth away from the arm. In between, the arm's weight is the
+        harmonic interpolation over the garment's own mesh, so the sleeve stays one piece,
+        joined to the body of the garment. Torso cloth away from the arm and the skin are
+        untouched.
+        """
+        if not len(faces):
+            return
+        key = {}
+        weld = np.array([key.setdefault(tuple(p), len(key)) for p in np.round(points, 5).tolist()])
+        count = len(key)
+        position = np.zeros((count, 3))
+        position[weld] = points
+        bone_of = np.zeros(count, dtype=np.int64)
+        bone_of[weld] = bones
+        welded = weld[faces]
+        edges = np.unique(np.sort(np.concatenate([welded[:, [0, 1]], welded[:, [1, 2]], welded[:, [2, 0]]]), axis=1),
+                          axis=0)
+        edges = edges[edges[:, 0] != edges[:, 1]]
+        degree = np.bincount(edges.ravel(), minlength=count).astype(np.float64)
+        torso = self.skeleton.index("Torso")
+        for side in "LR":
+            arm = self.skeleton.index(f"UpperArm_{side}")
+            if not (bone_of == arm).any():
+                continue
+            head, tail = self.skeleton.heads[arm], self.skeleton.tails[arm]
+            axis = (tail - head) / np.linalg.norm(tail - head)
+            offset = position - head
+            along = offset @ axis
+            radial = np.linalg.norm(offset - along[:, None] * axis, axis=1)
+            reach = 1.25 * np.percentile(radial[bone_of == arm], 90)
+            involved = (bone_of == arm) | (bone_of == torso)
+            sure_arm = (bone_of == arm) & (along > SLEEVE_BLEND)
+            sure_torso = (bone_of == torso) & ((radial > reach) | (along < 0.0))
+            free = involved & ~sure_arm & ~sure_torso
+            if not free.any():
+                continue
+            follow = np.where(bone_of == arm, 1.0, 0.0)
+            inside = involved[edges[:, 0]] & involved[edges[:, 1]]
+            e0, e1 = edges[inside, 0], edges[inside, 1]
+            links = np.bincount(np.concatenate([e0, e1]), minlength=count).astype(np.float64)
+            solve = free & (links > 0)
+            for _ in range(300):
+                total = np.zeros(count)
+                np.add.at(total, e0, follow[e1])
+                np.add.at(total, e1, follow[e0])
+                follow[solve] = total[solve] / links[solve]
+            rows = np.flatnonzero(free[weld])
+            indices[rows] = [arm, torso]
+            weights[rows] = np.stack([follow[weld[rows]], 1.0 - follow[weld[rows]]], axis=1)
 
     def _key(self):
         return tuple(id(p.mesh) for p in self.model.parts)
