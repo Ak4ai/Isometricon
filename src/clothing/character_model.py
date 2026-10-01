@@ -9,7 +9,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 import math
+import hashlib
 import os
+import threading
 import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -924,11 +926,44 @@ def detect_bottom_waistband_geometry(obj_path: str) -> Optional[Dict[str, float]
         return None
 
 
+# Results of the heavy geometric steps of a build (layering, HSR), by a hash of their inputs:
+# rebuilding after a change that does not touch them (hair, colours, another garment) is quick.
+_MEMO: Dict[Tuple[str, str], Any] = {}
+
+
+def _memo(tag: str, inputs, compute):
+    digest = hashlib.sha1()
+    for value in inputs:
+        if isinstance(value, np.ndarray):
+            digest.update(np.ascontiguousarray(value).tobytes())
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                digest.update(np.ascontiguousarray(item).tobytes() if isinstance(item, np.ndarray) else repr(item).encode())
+        else:
+            digest.update(repr(value).encode())
+    key = (tag, digest.hexdigest())
+    if key not in _MEMO:
+        if len(_MEMO) >= 64:
+            _MEMO.pop(next(iter(_MEMO)))
+        _MEMO[key] = compute()
+    return _MEMO[key]
+
+
+# Images of the textures created by a background build (thread-local ``images`` dict):
+# they get a placeholder id there and are uploaded on the main thread afterwards.
+_DEFERRED_TEXTURES = threading.local()
+
+
 def upload_texture_rgba(img: Image.Image) -> int:
     """Faz upload de imagem PIL para textura OpenGL 2D com filtro linear e clamp."""
     import OpenGL.GL as gl
 
     img = img.convert("RGBA")
+    pending = getattr(_DEFERRED_TEXTURES, "images", None)
+    if pending is not None:
+        placeholder = -(len(pending) + 1)
+        pending[placeholder] = img
+        return placeholder
     img_data = np.array(img, dtype=np.uint8)
 
     tex_id = gl.glGenTextures(1)
@@ -1067,7 +1102,15 @@ class CharacterModel:
         hair_scale_z: Optional[float] = None,
         outer_top_id: Optional[Union[int, str]] = None,
         shoes_id: Optional[Union[int, str, tuple]] = None,
+        async_loading: bool = False,
     ) -> None:
+        # With ``async_loading`` every (re)build runs on a background thread and the result is
+        # swapped in by ``poll()`` on the main thread, so fitting clothes never freezes the UI.
+        self.async_loading = bool(async_loading)
+        self.loading_status: str = ""  # shown by the HUD while a build is running
+        self._dirty = False
+        self._worker = None
+        self._worker_result = None
         self.customization = customization if customization is not None else AvatarCustomization(
             head_type=HeadType.ROUNDED,
             mouth_style=MouthStyle.ANIME_ORIGINAL,
@@ -1123,7 +1166,7 @@ class CharacterModel:
         self.cage_debug_mesh: Optional[Any] = None
 
         if self.create_mesh:
-            self._build()
+            self.reload()
 
     def _fitted_hair(self, hair_id) -> Optional[str]:
         """``hair_id`` fitted to this body's head (fitted on first use), or None."""
@@ -1660,8 +1703,10 @@ class CharacterModel:
         if any(len(hidden) != len(cage_points) for _, hidden in masks):
             return False
         from src.clothing.hsr import close_wrapped_limbs
-        hidden = np.logical_or.reduce([close_wrapped_limbs(mask.astype(bool), self.body, path)
-                                       for path, (_, mask) in zip(worn, masks)])
+        hidden = np.logical_or.reduce([
+            _memo("limbs", (mask, self.body, path, os.path.getmtime(path)),
+                  lambda mask=mask, path=path: close_wrapped_limbs(mask.astype(bool), self.body, path))
+            for path, (_, mask) in zip(worn, masks)])
 
         def hip_tf(raw_v):
             return transform_hip_vertices(raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset)
@@ -1690,7 +1735,8 @@ class CharacterModel:
             if not name.startswith("hand_"):
                 rows, faces = subdivide(vertices.reshape(-1, 11), faces, levels=2)
                 vertices = rows.ravel()
-                faces = cull_hidden_triangles(rows[:, :3], faces, cage_points, hidden, cage_faces)
+                faces = _memo("hsr", (rows[:, :3], faces, cage_points, hidden, cage_faces),
+                              lambda: cull_hidden_triangles(rows[:, :3], faces, cage_points, hidden, cage_faces))
             if len(faces):
                 new_parts.append(CharacterPart(name, TexturedMesh(vertices.astype(np.float32), faces.astype(np.uint32).ravel()),
                                                self.white_tex_id))
@@ -1785,12 +1831,14 @@ class CharacterModel:
         for part in [p for p in self.parts if p.name in self._garment_buffers]:
             vertices, indices = self._garment_buffers[part.name]
             rows = np.asarray(vertices, dtype=np.float32).reshape(-1, 11).copy()
-            pulled = pull_inner_layer(rows[:, :3], outer, data[1], clearance=self.outer_top_pull_mm / 1000.0,
-                                      body=body)
+            pulled = _memo("pull", (rows[:, :3], outer, data[1], self.outer_top_pull_mm, body),
+                           lambda: pull_inner_layer(rows[:, :3], outer, data[1],
+                                                    clearance=self.outer_top_pull_mm / 1000.0, body=body))
             faces = np.asarray(indices).reshape(-1, 3)
             # Triangles covered by the outer top at all three corners are hidden, like HSR
             # does for skin: where a ray misses the outer cloth a pull alone can leave a leak.
-            hidden = covered_vertices(pulled, outer, data[1], body=body)[faces].all(1) if CULL_COVERED else None
+            hidden = _memo("covered", (pulled, outer, data[1], body),
+                           lambda: covered_vertices(pulled, outer, data[1], body=body))[faces].all(1)                 if CULL_COVERED else None
             if not np.allclose(pulled, rows[:, :3]) or (hidden is not None and hidden.any()):
                 rows[:, :3] = pulled
                 kept = faces if hidden is None else faces[~hidden]
@@ -2030,9 +2078,12 @@ class CharacterModel:
                                                           layer_top_and_bottom)
                 top_rows = top_layer[0].reshape(-1, 11).copy()
                 rows = bottom_data[0].reshape(-1, 11).copy()
-                new_top, new_bottom = layer_top_and_bottom(top_rows[:, :3], top_layer[1], rows[:, :3], bottom_data[1],
-                                                           fitted_asset_type(top_obj_path),
-                                                           body=body_cage_from_sidecars(top_obj_path, bottom_obj_path))
+                layer_body = body_cage_from_sidecars(top_obj_path, bottom_obj_path)
+                top_type = fitted_asset_type(top_obj_path)
+                new_top, new_bottom = _memo(
+                    "layers", (top_rows[:, :3], top_layer[1], rows[:, :3], bottom_data[1], top_type, layer_body),
+                    lambda: layer_top_and_bottom(top_rows[:, :3], top_layer[1], rows[:, :3], bottom_data[1],
+                                                 top_type, body=layer_body))
                 rows[:, :3] = new_bottom
                 bottom_data = (rows.ravel().astype(np.float32), bottom_data[1])
                 if not np.array_equal(new_top, top_rows[:, :3]):
@@ -2181,9 +2232,68 @@ class CharacterModel:
 
     def reload(self) -> None:
         """Recarrega todas as malhas e texturas do modelo aplicando a customização atual."""
+        if self.create_mesh and self.async_loading:
+            self._dirty = True  # built in the background, swapped in by poll()
+            self.loading_status = self.loading_status or "Atualizando personagem..."
+            return
         self.delete()
         if self.create_mesh:
             self._build()
+
+    @property
+    def is_loading(self) -> bool:
+        return self._dirty or self._worker is not None
+
+    def _needs_fitting(self) -> bool:
+        """Whether the top or the pants still have no fitted cache for this body (the slow case)."""
+        ids = [i for i in (self.top_id, self.bottom_id) if i is not None and str(i).lower() not in
+               ("none", "0", "false", "sem", "naked")]
+        return any(not is_valid_v2_obj(self.fitted_path(i)) for i in ids)
+
+    def poll(self) -> None:
+        """Main thread, every frame: start pending background builds and swap in finished ones."""
+        if self._worker is not None:
+            if self._worker.is_alive():
+                return
+            self._worker = None
+            builder, images, error = self._worker_result
+            self._worker_result = None
+            if error is not None:
+                print(f"[CharacterModel] Erro montando o personagem: {error}")
+            else:
+                ids = {key: upload_texture_rgba(image) for key, image in images.items()}
+                self.delete()
+                for part in builder.parts:
+                    part.texture_id = ids.get(part.texture_id, part.texture_id)
+                self.parts = builder.parts
+                self.textures = [ids.get(t, t) for t in builder.textures]
+                self.white_tex_id = ids.get(builder.white_tex_id, builder.white_tex_id)
+                self.cage_debug_mesh = builder.cage_debug_mesh
+                self._garment_buffers = builder._garment_buffers
+                self._hide_feet = getattr(builder, "_hide_feet", False)
+        if not self._dirty:
+            self.loading_status = ""
+            return
+        self._dirty = False
+        self.loading_status = ("Ajustando roupas ao corpo..." if self._needs_fitting() else "Atualizando personagem...")
+        import copy
+        builder = copy.copy(self)  # a snapshot of the ids and adjustments, with its own parts
+        builder.async_loading = False
+        builder.parts, builder.textures = [], []
+        builder.white_tex_id, builder.cage_debug_mesh = None, None
+
+        def run():
+            from src.rendering.mesh import DEFERRED
+            DEFERRED.on = True
+            _DEFERRED_TEXTURES.images = {}
+            try:
+                builder._build()
+                self._worker_result = (builder, _DEFERRED_TEXTURES.images, None)
+            except Exception as exc:  # the old model stays on screen
+                self._worker_result = (None, {}, exc)
+
+        self._worker = threading.Thread(target=run, daemon=True, name="CharacterBuild")
+        self._worker.start()
 
     def update_customization(
         self,
@@ -2217,7 +2327,8 @@ class CharacterModel:
             self.tool_id = tool_id if tool_id not in ("none", 0, "0", False) else None
         if hair_id is not None:
             self.hair_id = hair_id
-            self._resolve_hair()
+            if not self.async_loading:
+                self._resolve_hair()  # may fit the hair; a background build does it itself
         self.reload()
 
 

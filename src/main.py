@@ -366,6 +366,9 @@ def main() -> None:
             bottom_id=bottom_id,
             tool_id=tool_id,
             create_mesh=True,
+            # Clothes are fitted and the model assembled off the main thread, so the window
+            # stays responsive (a screenshot run waits for the finished model instead).
+            async_loading=screenshot_path is None,
         )
         from src.clothing.character_animation import CharacterAnimator
         # Walk in place, clothes skinned to the body's game rig ([W] toggles it).

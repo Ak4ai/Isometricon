@@ -1320,3 +1320,31 @@ def test_shoes_command_sets_and_clears_the_shoes():
     assert not chat.execute("/sapato tenis", run_async=False)[0]
     assert chat.execute("/sapato none", run_async=False)[0]
     assert model.shoes_id is None and calls[-1] == "reload"
+
+
+def test_busy_status_covers_imports_and_background_builds():
+    """The loading badge shows for a running import and while the character is rebuilt."""
+    model = CharacterModel(create_mesh=False)
+    handler = SkinCommandHandler(character_model=model)
+    assert handler.busy_status == ""
+
+    model._dirty = True
+    model.loading_status = "Ajustando roupas ao corpo..."
+    assert handler.busy_status == "Ajustando roupas ao corpo..."
+
+    handler.is_importing = True
+    handler.import_status = "Importando 123..."
+    assert handler.busy_status == "Importando 123..."
+
+    chat = ChatConsole(command_handler=handler, create_gl=False)
+    assert chat._generate_hud_image(800, 600, []) is not None
+    model.delete()
+
+
+def test_async_model_defers_reloads_to_poll():
+    """With async loading a reload only marks the model; nothing is built on the caller's thread."""
+    model = CharacterModel(create_mesh=False)
+    model.create_mesh, model.async_loading = True, True
+    model.reload()
+    assert model.is_loading and model.parts == []
+    assert model.loading_status
