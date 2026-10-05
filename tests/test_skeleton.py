@@ -122,3 +122,29 @@ def test_fitted_panel_can_return_to_torso_but_not_switch_legs(skeleton):
     corrected = skeleton.reconcile_fitted_bones(fitted, nearest)
     assert [names[i] for i in corrected] == ['Torso', 'UpperLeg_L', 'UpperLeg_L', 'Torso']
     np.testing.assert_array_equal(fitted, [names.index(n) for n in ['UpperArm_L', 'UpperLeg_L', 'LowerLeg_L', 'Torso']])
+
+
+def test_pelvis_between_the_thighs_blends_with_the_nearer_leg(skeleton):
+    pelvis = skeleton.index("Pelvis")
+    legs = {side: skeleton.index(f"UpperLeg_{side}") for side in "LR"}
+    hip = skeleton.heads[legs["L"]]
+    # Wide trouser legs make both thighs reach across the middle of the pelvis.
+    wide = np.array([hip + [0.30, 0.0, 0.0], skeleton.heads[legs["R"]] - [0.30, 0.0, 0.0]])
+    seat = np.array([[0.04, hip[1], hip[2]], [-0.04, hip[1], hip[2]]])
+    bones = np.array([legs["L"], legs["R"], pelvis, pelvis])
+    indices, weights = skeleton.weights(np.vstack([wide, seat]), bones)
+    assert set(indices[2]) == {legs["L"], pelvis}
+    assert set(indices[3]) == {legs["R"], pelvis}
+
+
+def test_wide_cloth_bends_around_the_knee_over_a_longer_stretch(skeleton):
+    knee, thigh = skeleton.index("LowerLeg_L"), skeleton.index("UpperLeg_L")
+    axis = skeleton.tails[knee] - skeleton.heads[knee]
+    axis /= np.linalg.norm(axis)
+    side = np.cross(axis, [0.0, 0.0, 1.0])
+    side /= np.linalg.norm(side)
+    below = skeleton.heads[knee] + 0.06 * axis  # 6 cm past the knee
+    points = np.array([below + 0.02 * side, below + 0.15 * side, below + 0.151 * side])
+    indices, weights = skeleton.weights(points, np.array([knee, knee, knee]))
+    assert weights[0].max() == pytest.approx(1.0)  # tight cloth and skin: already the shin's
+    assert 0.5 < weights[1, 0] < 1.0 and indices[1, 1] == thigh  # baggy cloth: still bending

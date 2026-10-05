@@ -87,6 +87,9 @@ class Skeleton:
         axes = self.tails - self.heads
         lengths = np.linalg.norm(axes, axis=1)
         axes = axes / lengths[:, None]
+        # A parent's vertex near two of its children (the pelvis between the thighs) blends
+        # with the child whose axis it is nearest to, whatever the order of the bones.
+        claimed = np.full(len(points), np.inf)
         for child in range(len(self.names)):
             parent = self.parents[child]
             if parent < 0:
@@ -116,8 +119,15 @@ class Skeleton:
                 near = (bones == child) & (along < 2 * blend) & (radial < reach)
                 t = np.clip(along[near] / (2 * blend), 0.0, 1.0)
             else:
-                near = mine & (np.abs(along) < blend) & (radial < reach)
-                t = np.clip((along[near] + blend) / (2 * blend), 0.0, 1.0)
+                # Far from a straight limb's bone (knee, elbow) the bend sweeps a long arc, so
+                # the transition is as long as the distance to the bone, or wide cloth (a
+                # baggy trouser leg) would stretch around the joint.
+                straight = self.parents[parent] >= 0 and axes[child] @ axes[parent] > 0.7
+                width = np.maximum(blend, radial) if straight else np.full(len(points), blend)
+                near = mine & (np.abs(along) < width) & (radial < reach)
+                near &= (bones == child) | (radial < claimed)
+                claimed[near & (bones == parent)] = radial[near & (bones == parent)]
+                t = np.clip((along[near] + width[near]) / (2 * width[near]), 0.0, 1.0)
             t = t * t * (3 - 2 * t)
             rows = np.flatnonzero(near)
             indices[rows] = np.stack([np.full(len(rows), child), np.full(len(rows), parent)], axis=1)
