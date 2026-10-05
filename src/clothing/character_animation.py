@@ -45,6 +45,8 @@ FAR_CLOTH = (0.20, 0.40)
 WRAP_SLICE, WRAP_GAP = 0.08, np.radians(120)
 # How far (m) along the garment trunk cloth counts as part of a patch of limb cloth.
 WRAP_REACH = 0.15
+# A connected piece of a garment with at least this share of its vertices on one limb is all on it.
+LIMB_PIECE = 0.6
 # A connected piece of a garment with no more vertices than this moves as one.
 SMALL_PIECE = 30
 # Bones that can move one cloth vertex.
@@ -86,6 +88,21 @@ def _reaches(count, e0, e1, seeds):
     """Mask of the vertices connected, through the edges (e0, e1), to a seed vertex."""
     roots = _components(count, e0, e1)
     return np.isin(roots, np.unique(roots[seeds]))
+
+
+def _spread(bone_of, stray, edges):
+    """Give the stray vertices the bone of the cloth around them, from their edge inwards (in place)."""
+    stray = stray.copy()
+    while stray.any():
+        took = False
+        for a, b in ((edges[:, 0], edges[:, 1]), (edges[:, 1], edges[:, 0])):
+            fill = stray[a] & ~stray[b]
+            if fill.any():
+                bone_of[a[fill]] = bone_of[b[fill]]
+                stray[a[fill]] = False
+                took = True
+        if not took:
+            break
 
 
 def _within(position, edges, seeds, limit):
@@ -224,6 +241,8 @@ class CharacterAnimator:
         - a small piece (a chain link, a button) is rigid: it goes with the bone most of it has;
         - a piece on the limbs alone (a glove, a leg warmer) that is almost all on one side
           belongs to that side;
+        - a piece that is mostly on one limb (a sleeve sewn apart from the body of a coat) is
+          all on that limb, whatever body part its inner side was nearest to;
         - in a piece that reaches the trunk, cloth of a bone must join, through the garment,
           cloth of that bone's parent, down from the trunk (a sleeve is hand, forearm,
           upper arm, torso); cloth that does not takes the bone of the cloth around it.
@@ -245,6 +264,11 @@ class CharacterAnimator:
                     few, many = sorted((is_left, is_right), key=lambda mask: mask.sum())
                     if few.any() and few.sum() < 0.35 * (few.sum() + many.sum()):
                         bone_of[few] = mirror[bone_of[few]]
+            else:
+                for chain in (chain for pair in chains.values() for chain in pair):
+                    own = np.isin(bone_of, chain)
+                    if (inside & own).sum() >= LIMB_PIECE * inside.sum():
+                        _spread(bone_of, inside & ~own, edges)
         same = bone_of[edges[:, 0]] == bone_of[edges[:, 1]]
         region = _components(count, edges[same, 0], edges[same, 1])
         region_bone = {int(r): int(bone_of[r]) for r in np.unique(region)}  # a root vertex stands for its region
@@ -264,16 +288,7 @@ class CharacterAnimator:
                     grew = True
         with_trunk = np.isin(piece, np.unique(piece[~on_limb[bone_of]]))
         stray = with_trunk & ~np.isin(region, list(rooted))
-        while stray.any():
-            took = False
-            for a, b in ((edges[:, 0], edges[:, 1]), (edges[:, 1], edges[:, 0])):
-                fill = stray[a] & ~stray[b]
-                if fill.any():
-                    bone_of[a[fill]] = bone_of[b[fill]]
-                    stray[a[fill]] = False
-                    took = True
-            if not took:
-                break
+        _spread(bone_of, stray, edges)
         return bone_of
 
     def _stretches(self):
