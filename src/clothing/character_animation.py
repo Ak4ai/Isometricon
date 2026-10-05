@@ -47,6 +47,12 @@ WRAP_REACH = 0.15
 LIMB_PIECE = 0.6
 # A connected piece of a garment with no more vertices than this moves as one.
 SMALL_PIECE = 30
+# The arms open at rest as far as the clothes need and no further than this. From the study of the
+# catalogue (scripts/study_rest_arm_angle.py): every ordinary garment, the widest trousers and
+# coats included, is cleared by 30 degrees; only ball gowns and whole-body costumes ask for more,
+# and those ask for the fitting pose itself.
+REST_ARM_LIMIT = np.radians(30.0)
+FITTING_ARM_ANGLE = np.radians(45.0)
 # Bones that can move one cloth vertex.
 CLOTH_INFLUENCES = 4
 # Walk cycle speed (radians of the cycle per second), as the world token at its default speed.
@@ -140,8 +146,9 @@ class CharacterAnimator:
             bones.append(np.full(len(verts), self.skeleton.index(bone)))
         return np.vstack(points), np.concatenate(bones)
 
-    def _rest_arm_angle(self, cage_points, cage_bones):
-        """Rest angle of the arms that keeps the hands off this body's hips."""
+    def _rest_arm_angle(self, cage_points, cage_bones, cloth_points=None):
+        """Rest angle of the arms that keeps the hands off this body's hips, and off the clothes
+        the arms do not carry (a wide coat, a ball gown)."""
         names = np.array(self.skeleton.names)[cage_bones]
         trunk_and_legs = ~(np.char.find(names.astype(str), "Arm") >= 0) & ~(np.char.find(names.astype(str), "Hand") >= 0)
         arm_radius = []
@@ -151,7 +158,15 @@ class CharacterAnimator:
             offset = cage_points[cage_bones == b] - head
             along = offset @ axis / (axis @ axis)
             arm_radius.append(np.linalg.norm(offset - along[:, None] * axis, axis=1))
-        return rest_arm_angle(self.skeleton, cage_points[trunk_and_legs], float(np.median(np.concatenate(arm_radius))))
+        radius = float(np.median(np.concatenate(arm_radius)))
+        alone = rest_arm_angle(self.skeleton, cage_points[trunk_and_legs], radius)
+        if cloth_points is None or not len(cloth_points):
+            return alone
+        dressed = rest_arm_angle(self.skeleton, np.vstack([cage_points[trunk_and_legs], cloth_points]), radius,
+                                 largest=FITTING_ARM_ANGLE)
+        if dressed >= FITTING_ARM_ANGLE:
+            return alone  # a costume the arms are inside of: no opening clears it
+        return max(alone, min(dressed, REST_ARM_LIMIT))
 
     def _fitted_bones(self, part, rows):
         """Bones from the cage parts the garment's vertices were bound to, or None."""
@@ -206,6 +221,11 @@ class CharacterAnimator:
                 else:
                     indices, weights = self.skeleton.weights(rows[:, :3], bones)
             self._bindings.append((part, rows, indices, weights))
+        arms = [b for side in "LR" for b in self._subtree(self.skeleton.index("UpperArm_" + side))]
+        beside_arms = [rows[np.where(np.isin(indices, arms), weights, 0.0).sum(1) < 0.05, :3]
+                       for part, rows, indices, weights in self._bindings if part.source_obj is not None]
+        if beside_arms:
+            self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones, np.vstack(beside_arms)))
         self._bound_key = self._key()
         self._shown = None
 
