@@ -259,6 +259,11 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
         bindings.append(found)
     rebound = _keep_limb_pieces_on_their_limb(points, np.asarray(faces), bindings, inner, outer, prisms, lower, upper,
                                               trace.get("cage_point_parts"))
+    leg_prism = None
+    if trace.get("cage_point_parts") is not None:
+        prism_parts = np.asarray(trace["cage_point_parts"]).astype(str)[prisms]
+        leg_parts = [part for name, parts in LIMB_PARTS.items() if "leg" in name for part in parts]
+        leg_prism = np.isin(prism_parts, leg_parts).sum(1) >= 2
     for index, found in enumerate(bindings):
         face_id, t, bary, residual = found
         face = prisms[face_id]
@@ -274,6 +279,13 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
             raise ValueError("Prisma de cage sem referencial utilizável")
         result[index] = bary @ target_section + transform @ residual
         residual_length[index] = np.linalg.norm(residual)
+        if leg_prism is not None and leg_prism[face_id]:
+            # Cloth between a leg and the middle of the body keeps its place between the two:
+            # on a body whose legs are closer together than the reference's, the offset it
+            # was authored with would carry it across the middle, into the other leg.
+            source_leg, target_leg = bary @ inner[face], bary @ target_inner[face]
+            if abs(source_leg[0]) > 1e-4 and points[index, 0] / source_leg[0] < 1.0:
+                result[index, 0] = target_leg[0] * points[index, 0] / source_leg[0]
 
     hanging = residual_length > HANGING_RESIDUAL
     if hanging.any():
