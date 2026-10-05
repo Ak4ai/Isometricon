@@ -62,6 +62,106 @@ def closest_prism_binding(point, inner, outer, faces, lower, upper):
     return best_distance, best
 
 
+# A connected piece of a garment with at least this share of its vertices on one limb is all on it.
+LIMB_PIECE = 0.6
+LIMB_PARTS = {"left arm": ("LeftUpperArm", "LeftLowerArm", "LeftHand"), "right arm": ("RightUpperArm", "RightLowerArm", "RightHand"),
+              "left leg": ("LeftUpperLeg", "LeftLowerLeg", "LeftFoot"), "right leg": ("RightUpperLeg", "RightLowerLeg", "RightFoot")}
+
+
+def _keep_limb_pieces_on_their_limb(points, faces, bindings, inner, outer, prisms, lower, upper, point_parts):
+    """Rebind (in place) the strays of the garment pieces that belong to one limb; returns how many.
+
+    A vertex binds to the nearest cage prism, whatever body part that is. The inner side of
+    a sleeve sewn apart from the body of a coat can be nearest to the torso or to the thigh
+    the hand hangs beside: bound there, it stays behind when the arm is fitted elsewhere and
+    the sleeve is drawn into long triangles. A connected piece with most of its vertices on
+    one limb is that limb's: its other vertices bind to the nearest prism of that limb.
+    """
+    if point_parts is None or not len(faces):
+        return 0
+    point_parts = np.asarray(point_parts).astype(str)
+    prism_parts = point_parts[prisms]
+    prism_part = np.where(prism_parts[:, 1] == prism_parts[:, 2], prism_parts[:, 1], prism_parts[:, 0])
+    bound_part = prism_part[[found[0] for found in bindings]]
+    keys = {}
+    weld = np.array([keys.setdefault(tuple(p), len(keys)) for p in np.round(points, 5).tolist()])
+    parent = list(range(len(keys)))
+
+    def find(v):
+        while parent[v] != v:
+            parent[v] = parent[parent[v]]
+            v = parent[v]
+        return v
+
+    for a, b, c in weld[faces].tolist():
+        parent[find(a)] = find(b)
+        parent[find(b)] = find(c)
+    piece = np.array([find(v) for v in weld])
+    count = 0
+
+    def rebind(indices, allowed):
+        nonlocal count
+        allowed = np.flatnonzero(allowed)
+        for index in indices:
+            _, found = closest_prism_binding(points[index], inner, outer, prisms[allowed], lower[allowed], upper[allowed])
+            if found is not None:
+                bindings[index] = (int(allowed[found[0]]),) + found[1:]
+                bound_part[index] = prism_part[allowed[found[0]]]
+                count += 1
+
+    on_a_limb = np.zeros(len(points), dtype=bool)
+    for root in np.unique(piece):
+        inside = piece == root
+        for parts in LIMB_PARTS.values():
+            own = np.isin(bound_part, parts)
+            if (inside & own).sum() >= LIMB_PIECE * inside.sum():
+                rebind(np.flatnonzero(inside & ~own), np.isin(prism_part, parts))
+                on_a_limb |= inside
+
+    # In the rest of the garment, cloth bound to an arm must reach the torso up that arm
+    # through cloth bound to it (hand, forearm, upper arm, torso: a sleeve). The side of a
+    # coat that was merely nearest to the forearm of the reference pose is not a sleeve: it
+    # would follow the arm to where our body holds it and stick out as a fin.
+    edges = np.concatenate((faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]))
+    arm_parts = [part for name, parts in LIMB_PARTS.items() if "arm" in name for part in parts]
+    above = {part: parts[k - 1] if k else "UpperTorso" for name, parts in LIMB_PARTS.items() if "arm" in name
+             for k, part in enumerate(parts)}
+    for _ in range(3):  # hand, forearm, upper arm
+        same = bound_part[edges[:, 0]] == bound_part[edges[:, 1]]
+        region_parent = list(range(len(points)))
+
+        def region_of(v):
+            while region_parent[v] != v:
+                region_parent[v] = region_parent[region_parent[v]]
+                v = region_parent[v]
+            return v
+
+        for a, b in np.concatenate((edges[same], np.column_stack((np.arange(len(points)), np.arange(len(points)))))).tolist():
+            region_parent[region_of(a)] = region_of(b)
+        # Vertices repeated at the same place (texture seams) are one vertex of the garment.
+        first = {}
+        for index, key in enumerate(weld.tolist()):
+            if key in first and bound_part[first[key]] == bound_part[index]:
+                region_parent[region_of(index)] = region_of(first[key])
+            first.setdefault(key, index)
+        region = np.array([region_of(v) for v in range(len(points))])
+        borders = {}
+        welded_part = {}
+        for index, key in enumerate(weld.tolist()):
+            welded_part.setdefault(key, set()).add(bound_part[index])
+        for a, b in edges[~same].tolist():
+            borders.setdefault(region[a], set()).add(bound_part[b])
+            borders.setdefault(region[b], set()).add(bound_part[a])
+        for index, key in enumerate(weld.tolist()):
+            borders.setdefault(region[index], set()).update(welded_part[key] - {bound_part[index]})
+        stray = np.array([bound_part[v] in above and not on_a_limb[v] and above[bound_part[v]] not in borders.get(region[v], ())
+                          for v in range(len(points))])
+        if not stray.any():
+            break
+        rebind(np.flatnonzero(stray), ~np.isin(prism_part, arm_parts))
+    return count
+
+
 def _global_map(reference, target):
     """Least-squares linear map (row vectors) from the reference cage to the body cage."""
     matrix, *_ = np.linalg.lstsq(reference - reference.mean(0), target - target.mean(0), rcond=None)
@@ -151,10 +251,15 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
     points = np.asarray(garment, dtype=np.float64)
     result = np.empty_like(points)
     residual_length = np.empty(len(points))
-    for index, point in enumerate(points):
+    bindings = []
+    for point in points:
         _, found = closest_prism_binding(point, inner, outer, prisms, lower, upper)
         if found is None:
             raise ValueError("Nenhum prisma de cage para um vértice da roupa")
+        bindings.append(found)
+    rebound = _keep_limb_pieces_on_their_limb(points, np.asarray(faces), bindings, inner, outer, prisms, lower, upper,
+                                              trace.get("cage_point_parts"))
+    for index, found in enumerate(bindings):
         face_id, t, bary, residual = found
         face = prisms[face_id]
         source_section = (1 - t) * inner[face] + t * outer[face]
@@ -183,5 +288,5 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
         offset[movable] = offset[anchor[movable]]
         offset = _harmonic_fill(offset, faces, hanging & (anchor >= 0), ~hanging)
         result[movable] = points[movable] @ global_map + offset[movable]
-    return result, {"hanging_vertices": int(hanging.sum()),
+    return result, {"hanging_vertices": int(hanging.sum()), "rebound_to_limb": rebound,
                     "residual_p99": float(np.quantile(residual_length, .99))}
