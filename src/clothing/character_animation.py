@@ -37,6 +37,18 @@ SLEEVE_BLEND = 0.08
 LEG_BLEND = 0.10
 # (limb pair, trunk, blend distance) of the joints where cloth weights are smoothed over the garment.
 LIMB_BLENDS = [("UpperArm_", "Torso", SLEEVE_BLEND), ("UpperLeg_", "Pelvis", LEG_BLEND)]
+# Cloth that does not wrap a limb follows it fully up to the first distance (m) from the bone and
+# not at all past the second.
+FAR_CLOTH = (0.20, 0.40)
+# Cloth wraps a stretch of a limb when most of its slices this long (m) leave no gap this wide (rad)
+# around the bone.
+WRAP_SLICE, WRAP_GAP = 0.08, np.radians(120)
+# How far (m) along the garment trunk cloth counts as part of a patch of limb cloth.
+WRAP_REACH = 0.15
+# A connected piece of a garment with no more vertices than this moves as one.
+SMALL_PIECE = 30
+# Bones that can move one cloth vertex.
+CLOTH_INFLUENCES = 4
 # Walk cycle speed (radians of the cycle per second), as the world token at its default speed.
 WALK_SPEED = 11.0
 
@@ -55,8 +67,8 @@ def _nearest(points, targets, chunk=2048):
     return nearest[inverse.ravel()]
 
 
-def _reaches(count, e0, e1, seeds):
-    """Mask of the vertices connected, through the edges (e0, e1), to a seed vertex."""
+def _components(count, e0, e1):
+    """A label per vertex, equal for the vertices joined by the edges (e0, e1)."""
     parent = list(range(count))
 
     def find(v):
@@ -67,8 +79,29 @@ def _reaches(count, e0, e1, seeds):
 
     for a, b in zip(e0.tolist(), e1.tolist()):
         parent[find(a)] = find(b)
-    roots = np.array([find(v) for v in range(count)])
+    return np.array([find(v) for v in range(count)])
+
+
+def _reaches(count, e0, e1, seeds):
+    """Mask of the vertices connected, through the edges (e0, e1), to a seed vertex."""
+    roots = _components(count, e0, e1)
     return np.isin(roots, np.unique(roots[seeds]))
+
+
+def _within(position, edges, seeds, limit):
+    """Mask of the vertices no farther than ``limit`` from a seed, walking along the edges."""
+    distance = np.where(seeds, 0.0, np.inf)
+    if not seeds.any():
+        return seeds
+    length = np.linalg.norm(position[edges[:, 0]] - position[edges[:, 1]], axis=1)
+    while True:
+        closer = distance.copy()
+        np.minimum.at(closer, edges[:, 0], distance[edges[:, 1]] + length)
+        np.minimum.at(closer, edges[:, 1], distance[edges[:, 0]] + length)
+        closer[closer > limit] = np.inf
+        if np.array_equal(closer, distance):
+            return np.isfinite(distance)
+        distance = closer
 
 
 class CharacterAnimator:
@@ -135,6 +168,8 @@ class CharacterAnimator:
         self._cage_binding = cage_points, cage_bones
         self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones))
         self._bindings = []
+        no_arm = ~np.isin(cage_bones, [b for side in "LR" for b in self._subtree(self.skeleton.index("UpperArm_" + side))])
+        beside = cage_bones[no_arm]  # the body part beside a point, the arms aside
         for part in self.model.parts:
             if part.transform is not None or not hasattr(part.mesh, "read_vertices"):
                 continue
@@ -157,10 +192,11 @@ class CharacterAnimator:
                     bones = self._fitted_bones(part, rows)
                     if bones is None:
                         bones = cage_bones[_nearest(rows[:, :3].astype(np.float64), cage_points)]
-                indices, weights = self.skeleton.weights(rows[:, :3], bones)
                 if part.source_obj is not None:
-                    indices, weights = self._attach_limbs(rows[:, :3], part.mesh.read_indices().reshape(-1, 3),
-                                                          bones, indices, weights)
+                    indices, weights = self._cloth_weights(rows[:, :3], part.mesh.read_indices().reshape(-1, 3), bones,
+                                                           beside[_nearest(rows[:, :3].astype(np.float64), cage_points[no_arm])])
+                else:
+                    indices, weights = self.skeleton.weights(rows[:, :3], bones)
             self._bindings.append((part, rows, indices, weights))
         self._bound_key = self._key()
         self._shown = None
@@ -173,22 +209,155 @@ class CharacterAnimator:
                 found.append(other)
         return found
 
-    def _attach_limbs(self, points, faces, bones, indices, weights):
-        """(indices, weights) with smooth limb/trunk weights for the cloth around the shoulders and hips.
+    def _mirror(self):
+        """For each bone, the same bone on the other side of the body (itself in the middle)."""
+        names = self.skeleton.names
+        swap = {"L": "R", "R": "L"}
+        return np.array([names.index(n[:-1] + swap[n[-1]]) if n[-2:] in ("_L", "_R") else i for i, n in enumerate(names)])
+
+    def _clean_labels(self, bone_of, edges):
+        """The bone of each cloth vertex with the labels a garment cannot have removed.
+
+        The cage part a vertex was fitted on only says which cage was nearest. A skirt that
+        hangs next to the hands has cloth labelled with the hand, and a leg warmer has cloth
+        labelled with the other leg. Within one connected piece of the garment:
+        - a small piece (a chain link, a button) is rigid: it goes with the bone most of it has;
+        - a piece on the limbs alone (a glove, a leg warmer) that is almost all on one side
+          belongs to that side;
+        - in a piece that reaches the trunk, cloth of a bone must join, through the garment,
+          cloth of that bone's parent, down from the trunk (a sleeve is hand, forearm,
+          upper arm, torso); cloth that does not takes the bone of the cloth around it.
+        """
+        bone_of = bone_of.copy()
+        count = len(bone_of)
+        parents = self.skeleton.parents
+        chains = {stem: [self._subtree(self.skeleton.index(stem + side)) for side in "LR"] for stem, _, _ in LIMB_BLENDS}
+        on_limb = np.isin(np.arange(len(parents)), [b for pair in chains.values() for chain in pair for b in chain])
+        mirror = self._mirror()
+        piece = _components(count, edges[:, 0], edges[:, 1])
+        for root in np.unique(piece):
+            inside = piece == root
+            if inside.sum() <= SMALL_PIECE:
+                bone_of[inside] = np.bincount(bone_of[inside]).argmax()
+            elif on_limb[bone_of[inside]].all():
+                for left, right in chains.values():
+                    is_left, is_right = inside & np.isin(bone_of, left), inside & np.isin(bone_of, right)
+                    few, many = sorted((is_left, is_right), key=lambda mask: mask.sum())
+                    if few.any() and few.sum() < 0.35 * (few.sum() + many.sum()):
+                        bone_of[few] = mirror[bone_of[few]]
+        same = bone_of[edges[:, 0]] == bone_of[edges[:, 1]]
+        region = _components(count, edges[same, 0], edges[same, 1])
+        region_bone = {int(r): int(bone_of[r]) for r in np.unique(region)}  # a root vertex stands for its region
+        borders = {}
+        for a, b in zip(region[edges[~same, 0]].tolist(), region[edges[~same, 1]].tolist()):
+            borders.setdefault(a, set()).add(b)
+            borders.setdefault(b, set()).add(a)
+        rooted = {r for r, bone in region_bone.items() if not on_limb[bone]}
+        grew = True
+        while grew:
+            grew = False
+            for r, bone in region_bone.items():
+                if r in rooted:
+                    continue
+                if any(n in rooted and region_bone[n] == parents[bone] for n in borders.get(r, ())):
+                    rooted.add(r)
+                    grew = True
+        with_trunk = np.isin(piece, np.unique(piece[~on_limb[bone_of]]))
+        stray = with_trunk & ~np.isin(region, list(rooted))
+        while stray.any():
+            took = False
+            for a, b in ((edges[:, 0], edges[:, 1]), (edges[:, 1], edges[:, 0])):
+                fill = stray[a] & ~stray[b]
+                if fill.any():
+                    bone_of[a[fill]] = bone_of[b[fill]]
+                    stray[a[fill]] = False
+                    took = True
+            if not took:
+                break
+        return bone_of
+
+    def _stretches(self):
+        """(bone that gives the axis, bones of the stretch) for the two stretches of each limb:
+        the upper one, and the lower one with its hand or foot."""
+        found = []
+        for stem, _, _ in LIMB_BLENDS:
+            for side in "LR":
+                chain = self._subtree(self.skeleton.index(stem + side))
+                found += [(chain[0], chain[:1]), (chain[1], chain[1:])]
+        return found
+
+    def _around(self, bone, points):
+        """(distance along, distance from, angle around) a bone's axis for each point."""
+        head, tail = self.skeleton.heads[bone], self.skeleton.tails[bone]
+        axis = (tail - head) / np.linalg.norm(tail - head)
+        offset = points - head
+        along = offset @ axis
+        across = offset - along[:, None] * axis
+        u = np.cross(axis, [0.0, 0.0, 1.0] if abs(axis[2]) < 0.9 else [1.0, 0.0, 0.0])
+        u /= np.linalg.norm(u)
+        return along, np.linalg.norm(across, axis=1), np.arctan2(across @ np.cross(axis, u), across @ u)
+
+    def _wrapping(self, position, bone_of, edges):
+        """Mask of the cloth that wraps the limb it is labelled with (a sleeve, a trouser leg,
+        however wide), as opposed to cloth that only lies or hangs near it (the side of a coat
+        next to the arm, a cape behind the legs). Each connected patch of a stretch of limb
+        wraps it when most of its slices leave no wide gap around the bone."""
+        wraps = np.zeros(len(position), dtype=bool)
+        trunk = ~np.isin(bone_of, [b for _, labels in self._stretches() for b in labels])
+        for bone, labels in self._stretches():
+            mine = np.isin(bone_of, labels)
+            if not mine.any():
+                continue
+            both = mine[edges[:, 0]] & mine[edges[:, 1]]
+            patch = _components(len(position), edges[both, 0], edges[both, 1])
+            for root in np.unique(patch[mine]):
+                inside = mine & (patch == root)
+                # The other half of a sleeve is often labelled with the torso: the patch is
+                # taken with the trunk cloth the garment joins to it nearby.
+                allowed = inside | trunk
+                joined = edges[allowed[edges[:, 0]] & allowed[edges[:, 1]]]
+                ring = np.flatnonzero(_within(position, joined, inside, WRAP_REACH))
+                along, _, angle = self._around(bone, position[ring])
+                slices = np.floor(along / WRAP_SLICE).astype(int)
+                closed = []
+                for k in np.unique(slices[inside[ring]]):
+                    turns = np.sort(angle[slices == k])
+                    closed.append(np.diff(np.concatenate([turns, turns[:1] + 2 * np.pi])).max() < WRAP_GAP)
+                wraps[inside] = np.mean(closed) > 0.5
+        return wraps
+
+    def _carried(self, position, bone_of, wraps, chain_bones):
+        """How much of each vertex a limb carries (0 to 1), for the cloth labelled with its bones:
+        all of the cloth that wraps it, and of the rest less the farther it is from the bone
+        (the side of a skirt goes with the leg, the hem of a ball gown stays with the trunk)."""
+        carried = np.zeros(len(position))
+        near, far = FAR_CLOTH
+        for bone in chain_bones:
+            mine = np.flatnonzero(bone_of == bone)
+            if len(mine):
+                head, tail = self.skeleton.heads[bone], self.skeleton.tails[bone]
+                along = np.clip((position[mine] - head) @ (tail - head) / ((tail - head) @ (tail - head)), 0.0, 1.0)
+                distance = np.linalg.norm(position[mine] - (head + along[:, None] * (tail - head)), axis=1)
+                carried[mine] = np.where(wraps[mine], 1.0, np.clip((far - distance) / (far - near), 0.0, 1.0))
+        return carried
+
+    def _cloth_weights(self, points, faces, bones, nearest):
+        """(indices, weights) of a garment's vertices, smooth over the garment's own mesh.
 
         The cage part each cloth vertex was fitted on is a noisy label near the armpit and
         the hip: the outer half of a sleeve is bound to the arm and its inner half to the
         torso, so a swinging arm (it moves rigidly, independent of the torso) would open the
         sleeve like a ring; the seat of a pair of trousers is bound to the pelvis right next
-        to cloth bound to a thigh, so a raised leg would tear it. The labels are kept only
-        where they are certain: limb cloth well down the limb, and trunk cloth away from the
-        limbs. In between, each limb's weight is the harmonic interpolation over the
-        garment's own mesh, so the garment stays one piece; cloth between the two limbs
-        (the crotch) gets a share of both. Trunk cloth away from the limbs and the skin are
-        untouched.
+        to cloth bound to a thigh, and the left half of a skirt to the left leg right next to
+        the right half, so a raised leg would tear them. The labels are kept only where they
+        are certain: limb cloth well down the limb and away from where the garment joins it
+        to the opposite limb's, and trunk cloth away from the limbs. In between, each limb's
+        share is the harmonic interpolation over the garment's own mesh, so the garment stays
+        one piece. Trunk cloth away from the limbs keeps its weights.
         """
+        bones = np.asarray(bones).copy()
         if not len(faces):
-            return indices, weights
+            return self.skeleton.weights(points, bones)
         key = {}
         weld = np.array([key.setdefault(tuple(p), len(key)) for p in np.round(points, 5).tolist()])
         count = len(key)
@@ -200,35 +369,54 @@ class CharacterAnimator:
         edges = np.unique(np.sort(np.concatenate([welded[:, [0, 1]], welded[:, [1, 2]], welded[:, [2, 0]]]), axis=1),
                           axis=0)
         edges = edges[edges[:, 0] != edges[:, 1]]
+        bone_of = self._clean_labels(bone_of, edges)
+        # A fitted label is trusted where the cloth wraps that limb. Cloth that only lies near
+        # a limb belongs to the body part beside it, never an arm: the forearms and hands hang
+        # next to the garments of the trunk, and only a sleeve follows them. The label of
+        # the upper arm stays: a cap sleeve covers the shoulder without going round the arm.
+        wraps = self._wrapping(position, bone_of, edges)
+        nearest_of = np.zeros(count, dtype=np.int64)
+        nearest_of[weld] = nearest
+        limbs = np.isin(bone_of, [b for _, labels in self._stretches() for b in labels])
+        upper_arm = np.isin(bone_of, [self.skeleton.index("UpperArm_" + side) for side in "LR"])
+        piece = _components(count, edges[:, 0], edges[:, 1])
+        small = np.bincount(piece, minlength=count)[piece] <= SMALL_PIECE  # rigid: one bone for the piece
+        bone_of = np.where(limbs & ~wraps & ~upper_arm & ~small, nearest_of, bone_of)
+        bones = bone_of[weld]
+        indices, weights = self.skeleton.weights(points, bones)
+        dense = np.zeros((len(points), len(self.skeleton.names)))  # a weight per bone
+        np.add.at(dense, (np.repeat(np.arange(len(points)), indices.shape[1]), indices.ravel()), weights.ravel())
+        mirror = self._mirror()
         for limb_stem, trunk_name, blend in LIMB_BLENDS:
             trunk = self.skeleton.index(trunk_name)
-            sides = []  # (limb, certain limb cloth, trunk cloth away from this limb)
-            for side in "LR":
-                limb = self.skeleton.index(limb_stem + side)
-                if not (bone_of == limb).any():
+            roots = [self.skeleton.index(limb_stem + side) for side in "LR"]
+            chains = [np.isin(bone_of, self._subtree(root)) for root in roots]
+            # Where the garment joins the cloth of the two limbs (the crotch seam of trousers,
+            # the middle of a skirt), neither limb is certain.
+            joined = np.zeros(count, dtype=bool)
+            crossing = (chains[0][edges[:, 0]] & chains[1][edges[:, 1]]) | (chains[1][edges[:, 0]] & chains[0][edges[:, 1]])
+            joined[edges[crossing].ravel()] = True
+            joined = _within(position, edges, joined, 2 * blend)
+            sides = []  # (root bone, how much it carries of its cloth, where that is certain, trunk cloth away from it)
+            for root, chain in zip(roots, chains):
+                if not chain.any():
                     continue
-                head, tail = self.skeleton.heads[limb], self.skeleton.tails[limb]
+                head, tail = self.skeleton.heads[root], self.skeleton.tails[root]
                 axis = (tail - head) / np.linalg.norm(tail - head)
                 offset = position - head
                 along = offset @ axis
                 radial = np.linalg.norm(offset - along[:, None] * axis, axis=1)
-                reach = 1.25 * np.percentile(radial[bone_of == limb], 90)
-                sure = (bone_of == limb) & (along > blend)
-                # Where the garment joins this limb's cloth to the opposite limb's (the crotch
-                # seam of trousers), the limb is certain only past the end of that seam.
-                opposite = bone_of == self.skeleton.index(limb_stem + ("R" if side == "L" else "L"))
-                seam = np.concatenate([edges[opposite[edges[:, 1]] & (bone_of[edges[:, 0]] == limb), 0],
-                                       edges[opposite[edges[:, 0]] & (bone_of[edges[:, 1]] == limb), 1]])
-                if len(seam):
-                    sure &= along > along[seam].max() + blend
-                if sure.any():
-                    sides.append((limb, sure, (radial > reach) | (along < 0.0)))
+                reach = 1.25 * np.percentile(radial[chain], 90)
+                sure = chain & ((bone_of != root) | (along > blend)) & ~joined
+                sides.append((root, chain * self._carried(position, bone_of, wraps, self._subtree(root)), sure,
+                              (radial > reach) | (along < 0.0)))
             if not sides:
                 continue
-            limbs = np.isin(bone_of, [limb for limb, _, _ in sides])
-            involved = limbs | (bone_of == trunk)
-            away = (bone_of == trunk) & np.all([far for _, _, far in sides], axis=0)
-            certain = np.any([sure for _, sure, _ in sides], axis=0)
+            # Everything the garment joins to the limbs' cloth takes part, whatever its label.
+            limbs = np.any(chains, axis=0)
+            involved = np.isin(piece, np.unique(piece[limbs])) | (bone_of == trunk)
+            away = involved & ~limbs & np.all([far for _, _, _, far in sides], axis=0)
+            certain = np.any([sure for _, _, sure, _ in sides], axis=0)
             free = involved & ~away & ~certain
             if not free.any():
                 continue
@@ -237,8 +425,8 @@ class CharacterAnimator:
             links = np.bincount(np.concatenate([e0, e1]), minlength=count).astype(np.float64)
             solve = free & (links > 0)
             follows = []
-            for limb, sure, _ in sides:
-                follow = np.where(bone_of == limb, 1.0, 0.0)
+            for _, carried, _, _ in sides:
+                follow = carried.copy()
                 for _ in range(300):
                     total = np.zeros(count)
                     np.add.at(total, e0, follow[e1])
@@ -255,31 +443,34 @@ class CharacterAnimator:
                 follows[loose] = follows[source[_nearest(position[loose], position[source])]]
             follows /= np.maximum(follows.sum(1, keepdims=True), 1.0)
             # This joint's cloth weights come from the garment alone: certain cloth is whole.
-            joint = [limb for limb, _, _ in sides] + [trunk]
-            whole = np.flatnonzero((involved & ~free)[weld] & np.isin(indices, joint).all(1))
-            indices[whole] = bones[whole, None]
-            weights[whole] = 0.0
-            weights[whole, 0] = 1.0
-            # The limb's share of a vertex goes to the bones it already had down that limb
-            # (its knee or elbow blend); what is left stays with the trunk.
-            rows = np.flatnonzero(free[weld])
-            had = indices.shape[1]
-            pad = len(sides) + 1
-            indices = np.concatenate([indices, np.repeat(indices[:, :1], pad, axis=1)], axis=1)
-            weights = np.concatenate([weights, np.zeros((len(weights), pad))], axis=1)
+            joint = roots + [trunk]
+            whole = np.flatnonzero((involved & ~free)[weld] & (dense[:, joint].sum(1) > 1 - 1e-9))
+            dense[whole] = 0.0
+            dense[whole, bones[whole]] = 1.0
+            # Each limb's share of a vertex goes to the bones it already had down that limb
+            # (its knee or elbow blend), or to the same bones of this limb when they were the
+            # opposite limb's; what is left stays with the trunk.
+            rows = np.flatnonzero((involved & ~away)[weld])
             share = follows[weld[rows]]
-            old_indices, old_weights = indices[rows, :had].copy(), weights[rows, :had].copy()
-            weights[rows] = 0.0
-            for column, (limb, _, _) in enumerate(sides):
-                down = np.isin(old_indices, self._subtree(limb)) & (old_weights > 0)
-                kept = np.where(down, old_weights, 0.0)
-                own = kept.sum(1) > 0
-                weights[rows[own], :had] += (kept[own] / kept[own].sum(1, keepdims=True)) * share[own, column, None]
-                indices[rows, had + column] = limb
-                weights[rows[~own], had + column] = share[~own, column]
-            indices[rows, had + len(sides)] = trunk
-            weights[rows, had + len(sides)] = 1.0 - share.sum(1)
-        return indices, weights
+            before = dense[rows]
+            after = np.zeros_like(before)
+            for column, (root, _, _, _) in enumerate(sides):
+                chain_bones = self._subtree(root)
+                own = np.zeros_like(before)
+                own[:, chain_bones] = before[:, chain_bones]
+                other = np.zeros_like(before)
+                other[:, chain_bones] = before[:, mirror[chain_bones]]
+                own = np.where(own.sum(1, keepdims=True) > 0, own, other)
+                own[own.sum(1) == 0, root] = 1.0
+                after += own / own.sum(1, keepdims=True) * share[:, column, None]
+            rest = before.copy()
+            rest[:, [b for root, _, _, _ in sides for b in self._subtree(root)]] = 0.0
+            rest[rest.sum(1) == 0, trunk] = 1.0
+            after += rest / rest.sum(1, keepdims=True) * (1.0 - share.sum(1))[:, None]
+            dense[rows] = after
+        indices = np.argsort(-dense, axis=1)[:, :CLOTH_INFLUENCES]
+        weights = np.take_along_axis(dense, indices, axis=1)
+        return indices, weights / weights.sum(1, keepdims=True)
 
     def _key(self):
         return tuple(id(p.mesh) for p in self.model.parts)
