@@ -29,8 +29,6 @@ SKIN_PARTS = {"neck": "Neck", "arm_left": "UpperArm_L", "forearm_left": "LowerAr
 SKIN_REGIONS = {"trunk_skin": ("Torso", "Pelvis"),
                 "legs_skin": ("UpperLeg_L", "LowerLeg_L", "Foot_L", "UpperLeg_R", "LowerLeg_R", "Foot_R"),
                 "feet_skin": ("Foot_L", "Foot_R")}
-# Bones a garment worn on the lower body can follow.
-LOWER_BODY = ("Pelvis", "UpperLeg_L", "LowerLeg_L", "Foot_L", "UpperLeg_R", "LowerLeg_R", "Foot_R")
 # Distance down the arm (m from the shoulder) past which arm-bound cloth is surely sleeve,
 # and down the thigh (m from the hip) past which leg-bound cloth is surely trouser leg.
 SLEEVE_BLEND = 0.08
@@ -170,13 +168,6 @@ class CharacterAnimator:
         bones = bone_of[_nearest(rows[:, :3].astype(np.float64), mesh_space)]
         cage_points, cage_bones = self._cage_binding
         nearest = cage_bones[_nearest(rows[:, :3].astype(np.float64), cage_points)]
-        if part.name == "bottom":
-            # Wide trousers hang next to the hands in the fitting pose and some of their cloth
-            # was fitted on the arm cages; a garment of the lower body follows the lower body.
-            lower = np.isin(cage_bones, [self.skeleton.index(name) for name in LOWER_BODY])
-            stray = ~np.isin(bones, cage_bones[lower])
-            bones[stray] = cage_bones[lower][_nearest(rows[stray, :3].astype(np.float64), cage_points[lower])]
-            nearest[~np.isin(nearest, cage_bones[lower])] = self.skeleton.index("Pelvis")
         return self.skeleton.reconcile_fitted_bones(bones, nearest)
 
     def _bind(self):
@@ -396,7 +387,10 @@ class CharacterAnimator:
         upper_arm = np.isin(bone_of, [self.skeleton.index("UpperArm_" + side) for side in "LR"])
         piece = _components(count, edges[:, 0], edges[:, 1])
         small = np.bincount(piece, minlength=count)[piece] <= SMALL_PIECE  # rigid: one bone for the piece
-        bone_of = np.where(limbs & ~wraps & ~upper_arm & ~small, nearest_of, bone_of)
+        # A piece on the limbs alone is something worn on them (a glove, a sticker on the
+        # forearm, a bracelet): it stays where it was fitted, wrapping the limb or not.
+        worn_on_limbs = ~np.isin(piece, np.unique(piece[~limbs]))
+        bone_of = np.where(limbs & ~wraps & ~upper_arm & ~small & ~worn_on_limbs, nearest_of, bone_of)
         bones = bone_of[weld]
         indices, weights = self.skeleton.weights(points, bones)
         dense = np.zeros((len(points), len(self.skeleton.names)))  # a weight per bone
