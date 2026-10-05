@@ -66,3 +66,31 @@ def test_torso_mesh_cannot_bind_to_a_nearby_arm(body):
     _, rows, indices, weights = animator._bindings[0]
     posed = skin(rows, indices, weights, skeleton.pose({'UpperArm_L': rotation_z(.7)}))
     np.testing.assert_allclose(posed, rows, atol=1e-7)
+
+
+@pytest.mark.parametrize("body", ["female", "male"])
+def test_a_skirt_is_not_split_between_the_legs(body):
+    """Cloth labelled half with each leg, all round both, gets weights without a jump along the garment."""
+    from src.clothing.skeleton import Skeleton
+
+    animator = CharacterAnimator.__new__(CharacterAnimator)
+    animator.skeleton = skeleton = Skeleton.load(body)
+    hip = skeleton.heads[skeleton.index("UpperLeg_L")]
+    turns, levels = 24, 12
+    angle = np.arange(turns) * 2 * np.pi / turns
+    points = np.array([[0.25 * np.cos(a), hip[1] + 0.08 - 0.05 * k, hip[2] + 0.25 * np.sin(a)]
+                       for k in range(levels) for a in angle])
+    faces = np.array([[k * turns + i, k * turns + (i + 1) % turns, (k + 1) * turns + i]
+                      for k in range(levels - 1) for i in range(turns)]
+                     + [[k * turns + (i + 1) % turns, (k + 1) * turns + (i + 1) % turns, (k + 1) * turns + i]
+                        for k in range(levels - 1) for i in range(turns)])
+    bones = np.where(points[:, 1] > hip[1], skeleton.index("Pelvis"),
+                     np.where(points[:, 0] > 0, skeleton.index("UpperLeg_L"), skeleton.index("UpperLeg_R")))
+    indices, weights = animator._cloth_weights(points, faces, bones, bones)
+    dense = np.zeros((len(points), len(skeleton.names)))
+    np.add.at(dense, (np.repeat(np.arange(len(points)), indices.shape[1]), indices.ravel()), weights.ravel())
+    np.testing.assert_allclose(dense.sum(1), 1.0)
+    edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    assert np.abs(dense[edges[:, 0]] - dense[edges[:, 1]]).max() < 0.5
+    side = points[:, 0] > 0.2  # the cloth beside the left leg goes with it
+    assert dense[side & (points[:, 1] < hip[1] - 0.3), skeleton.index("UpperLeg_L")].min() > 0.5

@@ -359,6 +359,36 @@ def write_report(out, runs):
     print(f"[OK] {len(results)} testadas: {count} | {len(skipped)} fora do teste -> {out}")
 
 
+def local_garments():
+    """(asset id, name) of every garment downloaded to assets/models/clothing."""
+    found = {}
+    for path in sorted(Path(CLOTHING_DIR).glob("*.rbxm")):
+        match = re.search(r"_(\d{6,})$", path.stem)
+        if match and "hair" not in path.stem.lower():
+            found[match.group(1)] = path.stem[:match.start()].replace("_", " ").strip()
+    return found
+
+
+def slot_of(asset_id, body_name):
+    """('top' | 'bottom' | 'dress' | None, error): fits the garment on first use."""
+    path = os.path.join(MODELS_DIR, f"character_native_{asset_id}_{body_name}.obj")
+    if not is_valid_v2_obj(path):
+        try:
+            RobloxWearEngine(body_type=body_name).wear(asset_id, output_obj=path)
+        except Exception as exc:
+            return None, f"{type(exc).__name__}: {exc}"
+    asset_type = fitted_asset_type(path)
+    if asset_type in TOP_TYPES:
+        return "top", None
+    if asset_type in BOTTOM_TYPES:
+        return "bottom", None
+    if asset_type == DRESS:
+        with open(path, encoding="utf-8", errors="ignore") as handle:
+            heights = [float(line.split()[3]) for line in handle if line.startswith("v ")]
+        return ("dress" if max(heights) > 1.2 else "bottom"), None
+    return None, f"tipo de asset {asset_type} fora do teste (sapato, acessório...)"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=0)
