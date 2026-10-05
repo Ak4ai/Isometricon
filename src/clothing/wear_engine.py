@@ -781,8 +781,9 @@ class RobloxWearEngine:
             result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace,
                                                       target_positions=layered)
             info = result[1]
-            from .wrap_layer_fit import garment_body_parts
+            from .wrap_layer_fit import body_uv_parts, garment_body_parts
             info["body_parts"] = garment_body_parts(self.body_cages, trace)  # bone of each vertex when animated
+            trace["cage_point_parts"] = np.array(body_uv_parts(self.body_cages))[trace["uv_index"]]
             # The per-triangle fit extrapolates badly far from the outer cage, so it is
             # only trusted with the garment close to a sane cage. The radial + prism fit
             # handles far points (prism residual, hanging parts) and is used whenever the
@@ -2303,7 +2304,7 @@ class RobloxWearEngine:
         vert_normals /= vn_lens
 
         with open(output_obj, "w", encoding="utf-8") as f:
-            f.write(f"# Isometricon Universal Fitted Clothing v31: {asset_id}\n")
+            f.write(f"# Isometricon Universal Fitted Clothing v33: {asset_id}\n")
             f.write(f"# asset_type {int(meta.get('type_id', 0))}\n")  # layering order at runtime
             for v in deformed_verts:
                 f.write(f"v {v[0]:.5f} {v[1]:.5f} {v[2]:.5f}\n")
