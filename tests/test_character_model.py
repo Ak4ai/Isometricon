@@ -141,51 +141,6 @@ def test_slice_mesh_between_y():
     assert float(sv[:, 1].max()) <= y_max + 1e-4
 
 
-def test_character_model_male_default_hem():
-    # The male body shares the female A-pose mesh layout, so its hem default is the same.
-    from src.clothing.customization import AvatarCustomization, BodyType
-    cust = AvatarCustomization(body_type=BodyType.MALE)
-    model = CharacterModel(customization=cust, create_mesh=False)
-    assert model.top_hem_offset == pytest.approx(0.0)
-    assert model.body == "male"
-    assert model.fitted_path(123).endswith("character_native_123_male.obj")
-    model.delete()
-
-
-def test_character_model_waist_radius():
-    model = CharacterModel(create_mesh=False)
-    assert model.waist_radius_offset == 0.0
-    model.set_waist_radius(-0.02)
-    assert model.waist_radius_offset == pytest.approx(-0.02)
-    model.set_waist_radius(0.02)
-    assert model.waist_radius_offset == pytest.approx(0.02)
-    model.reset_waist_radius()
-    assert model.waist_radius_offset == 0.0
-
-    # reset_waist_adjustments should also reset waist_radius_offset
-    model.set_waist_radius(-0.015)
-    model.reset_waist_adjustments()
-    assert model.waist_radius_offset == 0.0
-    model.delete()
-
-
-def test_character_model_waist_chamfer():
-    model = CharacterModel(create_mesh=False)
-    assert model.waist_chamfer == pytest.approx(0.015)
-    model.set_waist_chamfer(0.025)
-    assert model.waist_chamfer == pytest.approx(0.025)
-    model.set_waist_chamfer(0.0)
-    assert model.waist_chamfer == pytest.approx(0.0)
-    model.reset_waist_chamfer()
-    assert model.waist_chamfer == pytest.approx(0.015)
-
-    # reset_waist_adjustments should restore chamfer to 0.015
-    model.set_waist_chamfer(0.035)
-    model.reset_waist_adjustments()
-    assert model.waist_chamfer == pytest.approx(0.015)
-    model.delete()
-
-
 def test_bevel_torso_corners():
     from src.clothing.character_model import bevel_torso_corners, parse_clean_obj_groups, MODELS_DIR
     import os
@@ -206,42 +161,6 @@ def test_bevel_torso_corners():
     assert len(v_bev) == len(v_mat)
     # Check that corner vertices were separated along X and Z
     assert np.any(np.abs(v_bev[:, [0, 2]] - v_mat[:, [0, 2]]) > 1e-4)
-
-
-def test_character_model_head_z_offset():
-    from src.clothing.customization import AvatarCustomization, BodyType
-
-    # Male defaults to 0.0
-    cust_male = AvatarCustomization(body_type=BodyType.MALE)
-    model_m = CharacterModel(customization=cust_male, create_mesh=False)
-    assert model_m.head_z_offset == pytest.approx(0.0)
-
-    # Female defaults to 0.0 (anatomical posture baked into clean A-pose mesh)
-    cust_fem = AvatarCustomization(body_type=BodyType.FEMALE)
-    model_f = CharacterModel(customization=cust_fem, create_mesh=False)
-    assert model_f.head_z_offset == pytest.approx(0.0)
-
-    # Custom initial offset
-    model_custom = CharacterModel(customization=cust_fem, head_z_offset=-0.030, create_mesh=False)
-    assert model_custom.head_z_offset == pytest.approx(-0.030)
-
-    # Set and reset methods
-    model_f.set_head_z_offset(-0.050)
-    assert model_f.head_z_offset == pytest.approx(-0.050)
-    model_f.set_head_z_offset(0.0)
-    assert model_f.head_z_offset == pytest.approx(0.0)
-
-    model_f.reset_head_z_offset()
-    assert model_f.head_z_offset == pytest.approx(0.0)
-
-    model_m.set_head_z_offset(-0.020)
-    assert model_m.head_z_offset == pytest.approx(-0.020)
-    model_m.reset_head_z_offset()
-    assert model_m.head_z_offset == pytest.approx(0.0)
-
-    model_m.delete()
-    model_f.delete()
-    model_custom.delete()
 
 
 def test_character_model_hair_offset_and_scale():

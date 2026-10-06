@@ -175,215 +175,6 @@ def parse_clean_obj_groups(
     return v_arr, i_arr
 
 
-def transform_sleeve_vertices(
-    raw_v: List[List[float]],
-    width_scale: float = 1.0,
-    length_offset: float = 0.0,
-    shift_x: float = 0.0,
-    shift_y: float = 0.0,
-    shift_z: float = 0.0,
-) -> List[List[float]]:
-    """Aplica ajustes dinâmicos de largura, comprimento e deslocamento horizontal/vertical à ponta das mangas."""
-    if (
-        width_scale == 1.0
-        and length_offset == 0.0
-        and shift_x == 0.0
-        and shift_y == 0.0
-        and shift_z == 0.0
-    ):
-        return raw_v
-
-    verts = [list(v) for v in raw_v]
-    for side_mult in [1, -1]:
-        s_idxs = [i for i, v in enumerate(verts) if (v[0] * side_mult) > 0.18 and v[2] < 1.45]
-        if not s_idxs:
-            continue
-
-        s_zs = [verts[i][2] for i in s_idxs]
-        z_min = float(min(s_zs))
-
-        # Centro do anel da ponta da manga (cuff)
-        cuff_pts = [verts[i] for i in s_idxs if verts[i][2] < z_min + 0.040]
-        if not cuff_pts:
-            cuff_pts = [verts[i] for i in s_idxs if verts[i][2] < z_min + 0.080]
-        cx = float((min(p[0] for p in cuff_pts) + max(p[0] for p in cuff_pts)) / 2)
-        cy = float((min(p[1] for p in cuff_pts) + max(p[1] for p in cuff_pts)) / 2)
-
-        elbow_z = 1.15
-        trans_len = 0.16
-
-        for i in s_idxs:
-            x, y, z = verts[i]
-            # 1. Comprimento da manga (+ desce/alonga, - sobe/encurta)
-            if length_offset != 0.0 and z < elbow_z:
-                t = max(0.0, min(1.0, (elbow_z - z) / (elbow_z - z_min + 1e-8)))
-                z = z - length_offset * t
-
-            # 2. Deslocamento e largura da ponta da manga (suaviza em direção ao cotovelo)
-            if z < z_min + trans_len:
-                t = max(0.0, min(1.0, (z_min + trans_len - z) / trans_len))
-                w = t * t * (3.0 - 2.0 * t)  # Hermite smoothstep
-
-                dx = (shift_x * side_mult) * w
-                dy = shift_y * w
-                dz = shift_z * w
-
-                curr_cx = cx + dx
-                curr_cy = cy + dy
-
-                x = x + dx
-                y = y + dy
-                z = z + dz
-
-                # Largura da ponta em torno do centro deslocado
-                if width_scale != 1.0:
-                    scale = 1.0 + (width_scale - 1.0) * (t ** 1.2)
-                    x = curr_cx + (x - curr_cx) * scale
-                    y = curr_cy + (y - curr_cy) * scale
-
-            verts[i] = [x, y, z]
-
-    return verts
-
-
-def conform_clothing_to_female_cage(raw_v: List[List[float]], is_bottom: bool = False) -> List[List[float]]:
-    """Deprecado: A deformação agora é executada geometricamente de forma nativa pelo RobloxWearEngine."""
-    return raw_v
-
-
-def transform_hip_vertices(
-    raw_v: List[List[float]],
-    glute_scale: float = 1.0,
-    width_scale: float = 1.0,
-    waist_height_offset: float = 0.0,
-) -> List[List[float]]:
-    """Aumenta dinamicamente o relevo e projeção dos glúteos (bunda), largura do quadril e altura da cintura/cós."""
-    if glute_scale == 1.0 and width_scale == 1.0 and waist_height_offset == 0.0:
-        return raw_v
-
-    verts = [list(v) for v in raw_v]
-    if not verts:
-        return verts
-
-    # Detecta se os vértices estão em espaço nativo do motor (z=altura, y=profundidade)
-    # ou em espaço clean/Blender (y=altura, z=profundidade)
-    sample = verts[:min(100, len(verts))]
-    max_z = max(v[2] for v in sample)
-    max_y = max(v[1] for v in sample)
-    is_native = max_z > max_y
-
-    for i, (x, y, z) in enumerate(verts):
-        h = z if is_native else y
-        d = y if is_native else z
-
-        # Faixa vertical da região do quadril/glúteos: altura entre 0.60m e 0.94m (pelve e topo das coxas)
-        if 0.60 < h < 0.94:
-            # Curva suave gaussiana em torno do centro anatômico dos glúteos (H ≈ 0.81m)
-            tz = float(np.exp(-((h - 0.81) / 0.085) ** 2))
-
-            # 1. Relevo na parte da bunda: exclusivamente posterior
-            # - No espaço nativo: +Y é posterior (costas/bunda), -Y é anterior (barriga/frente)
-            #   Incrementar Y expande os glúteos para trás (-Z em OpenGL).
-            # - No espaço clean: -Z é posterior (costas/bunda), +Z é anterior (barriga/frente)
-            #   Decrementar Z expande os glúteos para trás (-Z em OpenGL).
-            if glute_scale != 1.0:
-                if is_native and d > 0.01:
-                    td = min(1.0, d / 0.05)
-                    dy = (glute_scale - 1.0) * 0.055 * tz * td
-                    y = y + dy
-                elif not is_native and d < -0.01:
-                    td = min(1.0, abs(d) / 0.05)
-                    dz = - (glute_scale - 1.0) * 0.055 * tz * td
-                    z = z + dz
-
-            # 2. Largura lateral do quadril (se ajustada)
-            if width_scale != 1.0:
-                x = x * (1.0 + (width_scale - 1.0) * tz * 0.45)
-
-        # 3. Ajuste de altura da cintura/cós (sobe / desce)
-        if waist_height_offset != 0.0 and h > 0.72:
-            t_w = max(0.0, min(1.0, (h - 0.72) / (0.98 - 0.72)))
-            w_w = t_w * t_w * (3.0 - 2.0 * t_w)  # Hermite smoothstep
-            dh = waist_height_offset * w_w
-            if is_native:
-                z = z + dh
-            else:
-                y = y + dh
-
-            # Ajuste de largura e profundidade para acompanhar o declive do tronco (taper)
-            taper_factor = 1.0 - (0.70 * waist_height_offset * w_w)
-            x = x * taper_factor
-            if is_native:
-                y = y * taper_factor
-            else:
-                z = z * taper_factor
-
-        verts[i] = [x, y, z]
-
-    return verts
-
-
-def transform_top_hem_vertices(
-    raw_v: List[List[float]],
-    hem_offset: float = 0.0,
-    effective_waist_z: Optional[float] = None,
-) -> List[List[float]]:
-    """Aplica ajustes na altura da barra da blusa/camisa (sobe/desce/cropped) e encaixa sob o cos alto se sobreposto."""
-    if hem_offset == 0.0 and effective_waist_z is None:
-        return raw_v
-
-    verts = [list(v) for v in raw_v]
-    if not verts:
-        return verts
-
-    sample = verts[:min(100, len(verts))]
-    max_z = max(v[2] for v in sample)
-    max_y = max(v[1] for v in sample)
-    is_native = max_z > max_y
-
-    z_anchor = 1.25
-    z_min_nominal = 0.985
-
-    for i, (x, y, z) in enumerate(verts):
-        h = z if is_native else y
-
-        # Aplica exclusivamente aos vertices do tronco da blusa (|x| <= 0.32 e abaixo do busto h < 1.30)
-        if abs(x) <= 0.32 and h < 1.30:
-            # 1. Deslocamento da barra da blusa (sobe / desce / cropped)
-            if hem_offset != 0.0 and h < z_anchor:
-                t = max(0.0, min(1.0, (z_anchor - h) / (z_anchor - z_min_nominal + 1e-8)))
-                w = t * t * (3.0 - 2.0 * t)  # Hermite smoothstep
-                dh = hem_offset * w
-                if is_native:
-                    z = z + dh
-                else:
-                    y = y + dh
-
-                # Afunilamento no declive da cintura conforme a barra sobe
-                taper = 1.0 - (0.45 * hem_offset * w)
-                x = x * taper
-                if is_native:
-                    y = y * taper
-                else:
-                    z = z * taper
-
-            # 2. Se a calca estiver com cintura alta e ultrapassar a barra da camisa:
-            # Encaixa o tecido suavemente para dentro do cos da calca evitando colisao e z-fighting
-            if effective_waist_z is not None and h < effective_waist_z:
-                t_tuck = max(0.0, min(1.0, (effective_waist_z - h) / 0.05))
-                w_tuck = t_tuck * t_tuck * (3.0 - 2.0 * t_tuck)
-                scale = 1.0 - 0.08 * w_tuck
-                x = x * scale
-                if is_native:
-                    y = y * scale
-                else:
-                    z = z * scale
-
-        verts[i] = [x, y, z]
-
-    return verts
-
-
 def slice_mesh_between_y(
     verts_11: np.ndarray,
     faces_3: np.ndarray,
@@ -615,6 +406,10 @@ def slice_mesh_between_y(
     return out_verts, out_faces
 
 
+# Width (m) of the bevel on the torso's four vertical corners, as Blender's Ctrl+B.
+TORSO_CHAMFER = 0.015
+
+
 def bevel_torso_corners(
     v_mat: np.ndarray,
     faces: np.ndarray,
@@ -699,64 +494,6 @@ def bevel_torso_corners(
 
     out_faces = np.array(faces_list, dtype=np.uint32)
     return v_mat, out_faces
-
-
-def transform_arm_vertices(
-    raw_v: List[List[float]],
-    width_scale: float = 1.0,
-    length_scale: float = 1.0,
-    hand_z_offset: float = 0.0,
-    is_hand_only: bool = False,
-) -> List[List[float]]:
-    """Aplica ajustes dinâmicos de largura e comprimento às malhas de braço e antebraço.
-    Suporta tanto o espaço nativo do motor (Z=altura, Y=profundidade) quanto o clean OBJ (Y=altura, Z=profundidade).
-    """
-    if width_scale == 1.0 and length_scale == 1.0 and hand_z_offset == 0.0:
-        return raw_v
-
-    verts = [list(v) for v in raw_v]
-    if not verts:
-        return verts
-
-    sample = verts[:min(100, len(verts))]
-    max_z = max(v[2] for v in sample)
-    max_y = max(v[1] for v in sample)
-    is_native = max_z > max_y
-
-    xs = [v[0] for v in verts]
-    cx = float((min(xs) + max(xs)) / 2)
-    shoulder_height = 1.482
-
-    if is_native:
-        # Espaço nativo do motor: Z é altura, Y é profundidade
-        ys = [v[1] for v in verts]
-        cy = float((min(ys) + max(ys)) / 2)
-        for i in range(len(verts)):
-            x, y, z = verts[i]
-            if width_scale != 1.0:
-                x = cx + (x - cx) * width_scale
-                y = cy + (y - cy) * width_scale
-            if length_scale != 1.0:
-                z = shoulder_height + (z - shoulder_height) * length_scale
-            if is_hand_only and hand_z_offset != 0.0:
-                z = z - hand_z_offset
-            verts[i] = [x, y, z]
-    else:
-        # Espaço clean OBJ: Y é altura, Z é profundidade
-        zs = [v[2] for v in verts]
-        cz = float((min(zs) + max(zs)) / 2)
-        for i in range(len(verts)):
-            x, y, z = verts[i]
-            if width_scale != 1.0:
-                x = cx + (x - cx) * width_scale
-                z = cz + (z - cz) * width_scale
-            if length_scale != 1.0:
-                y = shoulder_height + (y - shoulder_height) * length_scale
-            if is_hand_only and hand_z_offset != 0.0:
-                y = y - hand_z_offset
-            verts[i] = [x, y, z]
-
-    return verts
 
 
 def parse_obj_as_mesh(
@@ -1089,11 +826,6 @@ class CharacterModel:
         tool_id: Optional[Union[int, str]] = None,
         hair_id: Optional[Union[int, str]] = None,
         create_mesh: bool = True,
-        waist_height_offset: float = 0.0,
-        top_hem_offset: Optional[float] = None,
-        waist_radius_offset: float = 0.0,
-        waist_chamfer: float = 0.015,
-        head_z_offset: Optional[float] = None,
         hair_offset_x: Optional[float] = None,
         hair_offset_y: Optional[float] = None,
         hair_offset_z: Optional[float] = None,
@@ -1127,29 +859,6 @@ class CharacterModel:
         self.hair_id = hair_id
         self._resolve_hair()
         self.create_mesh = create_mesh
-
-        # Ajustes dinâmicos de proporção de mangas e braços controláveis via chat/CLI
-        self.sleeve_width_scale: float = 1.0    # 1.0 = normal; >1.0 mais larga, <1.0 mais estreita
-        self.sleeve_length_offset: float = 0.0  # 0.0 = normal; + desce/alonga, - sobe/encurta (em metros)
-        self.sleeve_shift_x: float = 0.0        # Horizontal lateral: + fora, - dentro (em metros)
-        self.sleeve_shift_y: float = 0.0        # Horizontal profundidade: + frente, - trás (em metros)
-        self.sleeve_shift_z: float = 0.0        # Vertical: + sobe, - desce (em metros)
-        self.arm_width_scale: float = 1.0       # 1.0 = normal; >1.0 mais largo, <1.0 mais fino
-        self.arm_length_scale: float = 1.0      # 1.0 = normal; >1.0 mais longo, <1.0 mais curto
-        self.hip_glute_scale: float = 1.0       # 1.0 = normal; >1.0 mais relevo na bunda, <1.0 menos
-        self.hip_width_scale: float = 1.0       # 1.0 = normal; >1.0 mais largo, <1.0 mais estreito
-        self.waist_height_offset: float = float(waist_height_offset)  # Deslocamento vertical do cós da calça (+ sobe, - desce em metros)
-        # Deslocamento vertical da barra da camisa (+ sobe, - desce em metros; padrão masculino: -2cm / -0.02m)
-        if top_hem_offset is not None:
-            self.top_hem_offset: float = float(top_hem_offset)
-        else:
-            self.top_hem_offset: float = 0.0
-        self.waist_radius_offset: float = float(waist_radius_offset)  # Deslocamento radial do torso na cintura (+ alarga, - afunila em metros)
-        self.waist_chamfer: float = float(waist_chamfer)              # Largura do chanfro das quinas do torso em metros (0.0 = quadrado, 0.015 = 1.5cm padrão, até 0.05)
-        if head_z_offset is not None:
-            self.head_z_offset: float = float(head_z_offset)
-        else:
-            self.head_z_offset: float = 0.0
 
         # Ajustes de posição e escala manual do cabelo (+/- em metros e fator multiplicador)
         self.hair_offset_x: float = float(hair_offset_x) if hair_offset_x is not None else float(getattr(self.customization, "hair_offset_x", 0.0))
@@ -1203,7 +912,7 @@ class CharacterModel:
     @property
     def head_forward(self) -> float:
         """Forward shift of the head, neck and hair: the body's posture plus /postura."""
-        return BODY_HEAD_FORWARD[self.body] + self.head_z_offset
+        return BODY_HEAD_FORWARD[self.body]
 
     @property
     def body(self) -> str:
@@ -1218,146 +927,6 @@ class CharacterModel:
     def fitted_path(self, asset_id, suffix: str = "") -> str:
         """Cache of ``asset_id`` fitted to the current body."""
         return os.path.join(MODELS_DIR, f"character_native_{asset_id}{suffix}_{self.body}.obj")
-
-    def set_sleeve_width(self, scale: float) -> None:
-        """Ajusta a largura/espessura da ponta da manga em tempo real."""
-        self.sleeve_width_scale = max(0.4, min(2.5, float(scale)))
-        self.reload()
-
-    def set_sleeve_length(self, offset_m: float) -> None:
-        """Ajusta o comprimento da ponta da manga em metros em tempo real (+ desce, - sobe)."""
-        self.sleeve_length_offset = max(-0.25, min(0.25, float(offset_m)))
-        self.reload()
-
-    def set_sleeve_shift_x(self, offset_m: float) -> None:
-        """Ajusta o deslocamento horizontal lateral da ponta da manga (+ fora, - dentro em metros)."""
-        self.sleeve_shift_x = max(-0.25, min(0.25, float(offset_m)))
-        self.reload()
-
-    def set_sleeve_shift_y(self, offset_m: float) -> None:
-        """Ajusta o deslocamento horizontal profundidade da ponta da manga (+ frente, - trás em metros)."""
-        self.sleeve_shift_y = max(-0.25, min(0.25, float(offset_m)))
-        self.reload()
-
-    def set_sleeve_shift_z(self, offset_m: float) -> None:
-        """Ajusta o deslocamento vertical da ponta da manga (+ sobe, - desce em metros)."""
-        self.sleeve_shift_z = max(-0.25, min(0.25, float(offset_m)))
-        self.reload()
-
-    def set_sleeve_offset(
-        self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-    ) -> None:
-        """Ajusta múltiplos eixos de deslocamento da ponta da manga de uma só vez."""
-        if x is not None:
-            self.sleeve_shift_x = max(-0.25, min(0.25, float(x)))
-        if y is not None:
-            self.sleeve_shift_y = max(-0.25, min(0.25, float(y)))
-        if z is not None:
-            self.sleeve_shift_z = max(-0.25, min(0.25, float(z)))
-        self.reload()
-
-    def set_arm_width(self, scale: float) -> None:
-        """Ajusta a largura/espessura do braço e antebraço em tempo real."""
-        self.arm_width_scale = max(0.4, min(2.5, float(scale)))
-        self.reload()
-
-    def set_arm_length(self, scale: float) -> None:
-        """Ajusta o comprimento do braço em tempo real."""
-        self.arm_length_scale = max(0.5, min(1.8, float(scale)))
-        self.reload()
-
-    def reset_sleeve_adjustments(self) -> None:
-        """Restaura a largura, comprimento e deslocamento da manga para o padrão."""
-        self.sleeve_width_scale = 1.0
-        self.sleeve_length_offset = 0.0
-        self.sleeve_shift_x = 0.0
-        self.sleeve_shift_y = 0.0
-        self.sleeve_shift_z = 0.0
-        self.reload()
-
-    def reset_arm_adjustments(self) -> None:
-        """Restaura a largura e o comprimento do braço para o padrão."""
-        self.arm_width_scale = 1.0
-        self.arm_length_scale = 1.0
-        self.reload()
-
-    def set_quadril(self, glute_scale: float = 1.0, width_scale: Optional[float] = None) -> None:
-        """Ajusta o relevo da parte da bunda (glúteos) e a largura dos quadris em tempo real."""
-        self.hip_glute_scale = max(0.5, min(3.0, float(glute_scale)))
-        if width_scale is not None:
-            self.hip_width_scale = max(0.5, min(2.5, float(width_scale)))
-        self.reload()
-
-    def reset_quadril_adjustments(self) -> None:
-        """Restaura o relevo e largura do quadril para os valores padrão (1.0x)."""
-        self.hip_glute_scale = 1.0
-        self.hip_width_scale = 1.0
-        self.reload()
-
-    def set_waist_height(self, offset_m: float) -> None:
-        """Ajusta o deslocamento vertical da cintura/cós da calça em metros em tempo real (+ sobe, - desce)."""
-        self.waist_height_offset = max(-0.25, min(0.25, float(offset_m)))
-        self.reload()
-
-    def set_waist_z(self, target_z: float) -> None:
-        """Define a altura absoluta do cós da calça (ex: 1.00m meio do declive, 1.07m alta, 0.94m baixa)."""
-        base_z = 1.00
-        self.set_waist_height(float(target_z) - base_z)
-
-    def reset_waist_adjustments(self) -> None:
-        """Restaura a altura do cós da calça, o raio da cintura e o chanfro para o padrão."""
-        self.waist_height_offset = 0.0
-        self.waist_radius_offset = 0.0
-        self.waist_chamfer = 0.015
-        self.reload()
-
-    def set_waist_radius(self, offset_m: float) -> None:
-        """Ajusta o raio/afunilamento radial do torso na cintura em tempo real (+ alarga, - afunila em metros)."""
-        self.waist_radius_offset = max(-0.06, min(0.08, float(offset_m)))
-        self.reload()
-
-    def reset_waist_radius(self) -> None:
-        """Restaura o raio da cintura para o padrão (0.0m de deslocamento)."""
-        self.waist_radius_offset = 0.0
-        self.reload()
-
-    def set_waist_chamfer(self, amount: float) -> None:
-        """Ajusta a largura do chanfro das 4 quinas do torso em metros (0.0 = quadrado, 0.015 = 1.5cm padrão, até 0.05)."""
-        self.waist_chamfer = max(0.0, min(0.05, float(amount)))
-        self.reload()
-
-    def reset_waist_chamfer(self) -> None:
-        """Restaura o chanfro das quinas do torso para o padrão suave (0.015m / 1.5cm)."""
-        self.waist_chamfer = 0.015
-        self.reload()
-
-    def set_top_hem(self, offset_m: float) -> None:
-        """Ajusta o deslocamento vertical da barra da blusa em metros em tempo real (+ sobe, - desce)."""
-        self.top_hem_offset = max(-0.25, min(0.25, float(offset_m)))
-        self.reload()
-
-    def set_top_hem_z(self, target_z: float) -> None:
-        """Define a altura absoluta da barra da blusa (ex: 0.985m normal)."""
-        base_z = 0.985
-        self.set_top_hem(float(target_z) - base_z)
-
-    def reset_top_hem(self) -> None:
-        """Restaura a altura da barra da blusa para o padrão (0.0m)."""
-        self.top_hem_offset = 0.0
-        self.reload()
-
-    def set_head_z_offset(self, offset_m: float) -> None:
-        """Ajusta o deslocamento sagital da cabeça e pescoço no eixo Z (+ frente, - trás em metros)."""
-        self.head_z_offset = max(-0.10, min(0.10, float(offset_m)))
-        self.reload()
-
-    def reset_head_z_offset(self) -> None:
-        """Restaura o alinhamento postural da cabeça para o padrão (0.0)."""
-        self.head_z_offset = 0.0
-        self.reload()
 
     def set_hair_offset(
         self,
@@ -1466,17 +1035,6 @@ class CharacterModel:
         top_str = str(self.top_id).lower() if self.top_id is not None else "none"
         is_none_top = self.top_id is None or top_str in ("none", "0", "false", "sem", "naked")
 
-        def arm_tf(raw_v):
-            return transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
-
-        def hand_tf(raw_v):
-            return transform_arm_vertices(
-                raw_v,
-                self.arm_width_scale,
-                self.arm_length_scale,
-                hand_z_offset=self.sleeve_length_offset,
-                is_hand_only=True
-            )
 
         # 1. Sem camisa: carrega braços e antebraços completos do modelo limpo
         if is_none_top:
@@ -1523,17 +1081,13 @@ class CharacterModel:
             forearm_visible = not side_long
             hand_visible = True
 
-            def make_side_arm_tf(is_bare):
-                def side_arm_tf(raw_v):
-                    return transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
-                return side_arm_tf
 
             if upper_arm_visible:
                 arm_data = parse_clean_obj_groups(
                     clean_path,
                     [f"Export_braco_superior_{pt_side}"],
                     default_color=skin_color,
-                    vertex_transform=make_side_arm_tf(side_sleeveless)
+                    vertex_transform=None
                 )
                 if arm_data:
                     parts.append(CharacterPart(f"arm_{side}", TexturedMesh(arm_data[0], arm_data[1]), self.white_tex_id))
@@ -1544,7 +1098,7 @@ class CharacterModel:
                     clean_path,
                     [f"Export_antebraco_{pt_side}"],
                     default_color=skin_color,
-                    vertex_transform=make_side_arm_tf(side_sleeveless)
+                    vertex_transform=None
                 )
                 if ab_data:
                     v_arr, i_arr = ab_data
@@ -1557,7 +1111,7 @@ class CharacterModel:
                     clean_path,
                     [f"Export_mao_{hand_side}", f"Export_mao_{pt_side}"],
                     default_color=skin_color,
-                    vertex_transform=make_side_arm_tf(side_sleeveless)
+                    vertex_transform=None
                 )
                 if hand_data:
                     v_h, i_h = hand_data
@@ -1593,45 +1147,9 @@ class CharacterModel:
         faces = i_arr.reshape(-1, 3).copy()
 
         # Relevo de gluteos e largura do quadril se aplicavel no torso/pelve antes do corte
-        if self.hip_glute_scale != 1.0 or self.hip_width_scale != 1.0:
-            for i in range(len(v_mat)):
-                y = v_mat[i, 1]
-                z = v_mat[i, 2]
-                if y < 0.94:
-                    tz = float(np.exp(-((y - 0.81) / 0.085) ** 2))
-                    if self.hip_glute_scale != 1.0 and z < -0.01:
-                        td = min(1.0, abs(z) / 0.05)
-                        v_mat[i, 2] -= (self.hip_glute_scale - 1.0) * 0.055 * tz * td
-                    if self.hip_width_scale != 1.0:
-                        v_mat[i, 0] *= (1.0 + (self.hip_width_scale - 1.0) * tz * 0.45)
-
-        z_mid = float((np.min(v_mat[:, 2]) + np.max(v_mat[:, 2])) / 2.0)
-
-        # Chanfro geométrico real (Bevel estilo Blender Ctrl+B) das 4 quinas verticais do torso (sem comando no chat)
-        if self.waist_chamfer > 1e-4:
-            v_mat, faces = bevel_torso_corners(v_mat, faces, chamfer_m=self.waist_chamfer)
+        v_mat, faces = bevel_torso_corners(v_mat, faces, chamfer_m=TORSO_CHAMFER)
 
         # Ajuste radial do torso na cintura (sem comando no chat)
-        if abs(self.waist_radius_offset) > 1e-5:
-            r0 = 0.09
-            dr = self.waist_radius_offset
-            for i in range(len(v_mat)):
-                y = v_mat[i, 1]
-                if y >= 1.25 or y <= 0.78:
-                    continue
-                if 0.90 <= y <= 1.05:
-                    wy = 1.0
-                elif y > 1.05:
-                    t = (1.25 - y) / 0.20
-                    wy = float(t * t * (3.0 - 2.0 * t))
-                else:  # 0.78 < y < 0.90
-                    t = (y - 0.78) / 0.12
-                    wy = float(t * t * (3.0 - 2.0 * t))
-
-                s_rad = 1.0 + (dr / r0) * wy
-                v_mat[i, 0] *= s_rad
-                v_mat[i, 2] = z_mid + (v_mat[i, 2] - z_mid) * s_rad
-
         # Limite frontal adaptativo baseado na calça ativa para evitar conflito/vazamento no cós (Opção 1A)
         if waist_geo is not None and not is_none_bottom:
             f_limit = waist_geo["f_max_z"] - 0.003
@@ -1708,11 +1226,7 @@ class CharacterModel:
                   lambda mask=mask, path=path: close_wrapped_limbs(mask.astype(bool), self.body, path))
             for path, (_, mask) in zip(worn, masks)])
 
-        def hip_tf(raw_v):
-            return transform_hip_vertices(raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset)
-
-        def arm_tf(raw_v):
-            return transform_arm_vertices(raw_v, self.arm_width_scale, self.arm_length_scale, is_hand_only=False)
+        hip_tf = arm_tf = None
 
         groups = [("trunk_skin", ["Export_torso", "Export_pelve"], hip_tf),
                   ("legs_skin", ["Export_coxa_esquerda", "Export_coxa_direita", "Export_canela_esquerda",
@@ -1969,10 +1483,10 @@ class CharacterModel:
                 waist_geo = detect_bottom_waistband_geometry(bottom_obj_path)
 
         if waist_geo is not None:
-            eff_waist = waist_geo["c_waist"] + self.waist_height_offset
+            eff_waist = waist_geo["c_waist"]
             waist_tilt = waist_geo["tilt"]
         else:
-            eff_waist = 1.00 + self.waist_height_offset
+            eff_waist = 1.00
             waist_tilt = 0.18
 
         # Resolução antecipada do Top com geração automática v2
@@ -1988,7 +1502,7 @@ class CharacterModel:
                     print(f"[CharacterModel] Aviso: gerando top com cage: {e}")
             top_obj_path = self._top_over_pants(top_obj_path, is_none_bottom)
 
-        eff_hem = 0.985 + self.top_hem_offset
+        eff_hem = 0.985
         is_open_top = False
         top_layer = None
 
@@ -2021,28 +1535,12 @@ class CharacterModel:
                 _front_min = float(min(_front_zs)) if _front_zs else float(min(_hem_zs))
                 _det_min = float(min(_hem_zs))
                 if is_crop_name or _front_min > 1.01:
-                    eff_hem = _front_min + self.top_hem_offset
+                    eff_hem = _front_min
                 else:
-                    eff_hem = _det_min + self.top_hem_offset
+                    eff_hem = _det_min
 
         if not is_none_top and top_obj_path and os.path.exists(top_obj_path):
-                waist_for_tuck = eff_waist if (not is_none_bottom and self.waist_height_offset > 0.02) else None
-                def top_tf(raw_v):
-                    v1 = transform_sleeve_vertices(
-                        raw_v,
-                        self.sleeve_width_scale,
-                        self.sleeve_length_offset,
-                        self.sleeve_shift_x,
-                        self.sleeve_shift_y,
-                        self.sleeve_shift_z,
-                    )
-                    return transform_top_hem_vertices(
-                        v1,
-                        hem_offset=self.top_hem_offset,
-                        effective_waist_z=waist_for_tuck,
-                    )
-
-                top_data = parse_obj_as_mesh(top_obj_path, vertex_transform=top_tf)
+                top_data = parse_obj_as_mesh(top_obj_path)
                 top_layer = top_data
                 top_tex_path = find_clothing_texture(self.top_id)
                 top_tex_id = upload_texture_rgba(Image.open(top_tex_path)) if top_tex_path else self.white_tex_id
@@ -2063,15 +1561,7 @@ class CharacterModel:
 
         # 9. Bottom (Calça jeans + botas) ou Pernas se sem calça
         if not is_none_bottom and bottom_obj_path and os.path.exists(bottom_obj_path):
-            def hip_tf(raw_v):
-                return transform_hip_vertices(
-                    raw_v,
-                    self.hip_glute_scale,
-                    self.hip_width_scale,
-                    self.waist_height_offset,
-                )
-
-            bottom_data = parse_obj_as_mesh(bottom_obj_path, vertex_transform=hip_tf)
+            bottom_data = parse_obj_as_mesh(bottom_obj_path)
             if bottom_data and top_layer:
                 # Top and pants are fitted to the body separately; wrap the outer one over the other.
                 from src.clothing.layer_clearance import (body_cage_from_sidecars, fitted_asset_type,
@@ -2105,34 +1595,25 @@ class CharacterModel:
             # cover them (boots, tights, long hems), where the blocky feet would poke out.
             reaches_floor = bool(bottom_data) and float(bottom_data[0].reshape(-1, 11)[:, 1].min()) < 0.05
             feet_data = None if reaches_floor else parse_clean_obj_groups(
-                clean_obj, ["Export_pe_esquerdo", "Export_pe_direito"], default_color=skin_color, vertex_transform=hip_tf)
+                clean_obj, ["Export_pe_esquerdo", "Export_pe_direito"], default_color=skin_color)
             if feet_data:
                 self.parts.append(CharacterPart("feet_skin", TexturedMesh(feet_data[0], feet_data[1]), self.white_tex_id))
 
         else:
-            def hip_tf(raw_v):
-                return transform_hip_vertices(
-                    raw_v,
-                    self.hip_glute_scale,
-                    self.hip_width_scale,
-                    self.waist_height_offset,
-                )
-
             leg_groups = [
                 "Export_coxa_esquerda", "Export_coxa_direita",
                 "Export_canela_esquerda", "Export_canela_direita",
                 "Export_pe_esquerdo", "Export_pe_direito"
             ]
-            legs_data = parse_clean_obj_groups(clean_obj, leg_groups, default_color=skin_color, vertex_transform=hip_tf)
+            legs_data = parse_clean_obj_groups(clean_obj, leg_groups, default_color=skin_color)
             if legs_data:
                 mesh = TexturedMesh(legs_data[0], legs_data[1])
                 self.parts.append(CharacterPart("legs_skin", mesh, self.white_tex_id))
 
         # 9.0 Peça por cima do top (jaqueta sobre camisa): fica por fora de tudo, e o
         # que as peças de baixo tiverem furando é puxado para baixo dela.
-        outer_obj_path = self._add_outer_top(top_tf if "top_tf" in locals() else None)
-        shoe_paths = self._add_shoes(lambda raw_v: transform_hip_vertices(
-            raw_v, self.hip_glute_scale, self.hip_width_scale, self.waist_height_offset))
+        outer_obj_path = self._add_outer_top(None)
+        shoe_paths = self._add_shoes(None)
 
         # 9.1 HSR do Roblox: com a máscara de todas as peças vestidas, a pele inteira
         # é desenhada e só os triângulos cobertos pelas roupas são removidos.

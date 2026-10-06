@@ -148,13 +148,10 @@ def stretching(rows, posed, faces):
 
 def naked_samples(body):
     """Centres, areas and normals of the whole (subdivided) skin of a body, hands, head and feet aside."""
-    from src.clothing.character_model import parse_clean_obj_groups, transform_hip_vertices, transform_arm_vertices
+    from src.clothing.character_model import parse_clean_obj_groups
     clean_obj = os.path.join(MODELS_DIR, f"character_{body.value}_clean_apose_stage2.obj" if body.value == "female"
                              else "character_male_clean_apose.obj")
-    def hip_tf(raw_v):
-        return transform_hip_vertices(raw_v, 1.0, 1.0, 0.0)
-    def arm_tf(raw_v):
-        return transform_arm_vertices(raw_v, 1.0, 1.0, is_hand_only=False)
+    hip_tf = arm_tf = None
     groups = [("trunk_skin", ["Export_torso", "Export_pelve"], hip_tf),
               ("legs_skin", ["Export_coxa_esquerda", "Export_coxa_direita", "Export_canela_esquerda",
                              "Export_canela_direita", "Export_pe_esquerdo", "Export_pe_direito"], hip_tf)]
