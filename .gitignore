@@ -130,3 +130,14 @@ scripts/test_blender.py
 scripts/test_sharp_remesh.py
 scripts/test_smooth_dissolve.py
 
+
+# Saídas geradas (relatórios, bateria, imagens de estudo) e caches de roupa
+artifacts/
+assets/models/character_native_*_hsr.npz
+assets/models/character_native_*_parts.npy
+# Roupas baixadas pelo /skin vestir (as já versionadas continuam no git)
+assets/models/clothing/*.rbxm
+assets/models/clothing/*.png
+assets/models/clothing/hsr/
+assets/models/clothing/wrap_cages/
+tools/
