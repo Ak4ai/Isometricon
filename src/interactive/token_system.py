@@ -516,8 +516,7 @@ class PlayerToken:
         # The avatar walks the same cycle as the token moves, and rests when it stops.
         if self.animator is not None:
             self.animator.walking = self.is_moving
-            self.animator.walk_time = self.walk_time
-            self.animator.update(0.0)
+            self.animator.update(dt, walk_time=self.walk_time)
         # Atualiza a animação procedural modular
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)

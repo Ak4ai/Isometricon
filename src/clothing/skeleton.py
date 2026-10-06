@@ -170,6 +170,22 @@ def rotation_z(angle: float) -> np.ndarray:
     return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
 
 
+def partial_rotation(rotation: np.ndarray, amount: float) -> np.ndarray:
+    """The rotation turned only ``amount`` (0 to 1) of the way, about the same axis."""
+    angle = np.arccos(np.clip((np.trace(rotation) - 1.0) / 2.0, -1.0, 1.0))
+    if angle < 1e-9:
+        return np.eye(3)
+    axis = np.array([rotation[2, 1] - rotation[1, 2], rotation[0, 2] - rotation[2, 0], rotation[1, 0] - rotation[0, 1]])
+    norm = np.linalg.norm(axis)
+    if norm < 1e-9:  # half a turn: the axis is the rotation's own eigenvector
+        axis = np.linalg.eigh(rotation + np.eye(3))[1][:, -1]
+    else:
+        axis /= norm
+    k = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    theta = angle * amount
+    return np.eye(3) + np.sin(theta) * k + (1 - np.cos(theta)) * (k @ k)
+
+
 # Angle between each arm and the vertical in the rest pose (the bodies are exported in A-pose).
 REST_ARM_ANGLE = np.radians(5.0)
 

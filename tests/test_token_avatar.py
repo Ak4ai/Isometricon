@@ -32,6 +32,10 @@ def test_avatar_walks_while_the_token_moves_and_rests_when_it_stops():
     assert np.abs(cloth.read_vertices()[:, :3] - rest).max() > 1e-3  # the leg moved
     token.update(1 / 60, {}, forward, right, ground)
     assert token.animator.walking is False
+    eased = np.abs(cloth.read_vertices()[:, :3] - rest).max()
+    assert eased > 1e-4  # it does not snap back to rest
+    for _ in range(60):
+        token.update(1 / 60, {}, forward, right, ground)
     np.testing.assert_allclose(cloth.read_vertices()[:, :3], rest, atol=1e-6)
 
 
