@@ -146,9 +146,10 @@ class CharacterAnimator:
             bones.append(np.full(len(verts), self.skeleton.index(bone)))
         return np.vstack(points), np.concatenate(bones)
 
-    def _rest_arm_angle(self, cage_points, cage_bones, cloth_points=None):
+    def _rest_arm_angle(self, cage_points, cage_bones, cloth_points=None, sleeve_radius=0.0):
         """Rest angle of the arms that keeps the hands off this body's hips, and off the clothes
-        the arms do not carry (a wide coat, a ball gown)."""
+        the arms do not carry (a wide coat, a ball gown). The arm is as thick as what it wears
+        (``sleeve_radius``): a wide sleeve must clear the hips too."""
         names = np.array(self.skeleton.names)[cage_bones]
         trunk_and_legs = ~(np.char.find(names.astype(str), "Arm") >= 0) & ~(np.char.find(names.astype(str), "Hand") >= 0)
         arm_radius = []
@@ -160,10 +161,12 @@ class CharacterAnimator:
             arm_radius.append(np.linalg.norm(offset - along[:, None] * axis, axis=1))
         radius = float(np.median(np.concatenate(arm_radius)))
         alone = rest_arm_angle(self.skeleton, cage_points[trunk_and_legs], radius)
-        if cloth_points is None or not len(cloth_points):
+        beside = cage_points[trunk_and_legs]
+        if cloth_points is not None and len(cloth_points):
+            beside = np.vstack([beside, cloth_points])
+        elif sleeve_radius <= radius:
             return alone
-        dressed = rest_arm_angle(self.skeleton, np.vstack([cage_points[trunk_and_legs], cloth_points]), radius,
-                                 largest=FITTING_ARM_ANGLE)
+        dressed = rest_arm_angle(self.skeleton, beside, max(radius, sleeve_radius), largest=FITTING_ARM_ANGLE)
         if dressed >= FITTING_ARM_ANGLE:
             return alone  # a costume the arms are inside of: no opening clears it
         return max(alone, min(dressed, REST_ARM_LIMIT))
@@ -225,7 +228,17 @@ class CharacterAnimator:
         beside_arms = [rows[np.where(np.isin(indices, arms), weights, 0.0).sum(1) < 0.05, :3]
                        for part, rows, indices, weights in self._bindings if part.source_obj is not None]
         if beside_arms:
-            self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones, np.vstack(beside_arms)))
+            # How thick the forearms and hands are with what they wear: most of that cloth lies within it.
+            around = []
+            for side in "LR":
+                for bone in (self.skeleton.index("LowerArm_" + side), self.skeleton.index("Hand_" + side)):
+                    for part, rows, indices, weights in self._bindings:
+                        if part.source_obj is not None:
+                            worn = rows[np.where(indices == bone, weights, 0.0).sum(1) > 0.5, :3]
+                            if len(worn):
+                                around.append(self._around(bone, worn.astype(np.float64))[1])
+            sleeve = float(np.percentile(np.concatenate(around), 90)) if around else 0.0
+            self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones, np.vstack(beside_arms), sleeve))
         self._bound_key = self._key()
         self._shown = None
 
