@@ -17,7 +17,7 @@ import os
 
 import numpy as np
 
-from .skeleton import CAGE_PART_BONES, Skeleton, rest_arm_angle, rest_rotations, skin, walk_rotations
+from .skeleton import CAGE_PART_BONES, Skeleton, partial_rotation, rest_arm_angle, rest_rotations, skin, walk_rotations
 
 # Model parts that follow one bone as a whole.
 RIGID_PARTS = {"head": "Head", "hair_3d": "Head", "hair": "Head", "nose": "Head"}
@@ -55,6 +55,8 @@ REST_ARM_LIMIT = np.radians(30.0)
 FITTING_ARM_ANGLE = np.radians(45.0)
 # Bones that can move one cloth vertex.
 CLOTH_INFLUENCES = 4
+# How fast (1/s) the pose eases into the walk when starting and back to rest when stopping.
+STRIDE_EASE = 10.0
 # Walk cycle speed (radians of the cycle per second), as the world token at its default speed.
 WALK_SPEED = 11.0
 
@@ -130,6 +132,7 @@ class CharacterAnimator:
         self.model = model
         self.walking = walking
         self.walk_time = 0.0
+        self.stride = 0.0  # how far into the walk the pose is: 0 at rest, 1 walking
         self._bound_key = None
         self._bindings = []
         self._shown = None  # "rest" or "walk": what the GPU buffers hold
@@ -517,19 +520,29 @@ class CharacterAnimator:
     def _key(self):
         return tuple(id(p.mesh) for p in self.model.parts)
 
-    def update(self, dt: float) -> None:
-        """Advance the walk by ``dt`` seconds and pose the model (the rest pose when not walking)."""
+    def update(self, dt: float, walk_time=None) -> None:
+        """Advance the walk by ``dt`` seconds (or to ``walk_time``, when the caller keeps the
+        step) and pose the model. Starting and stopping ease in and out of the rest pose."""
         if self._bound_key != self._key():
             self._bind()  # the model was rebuilt (outfit, body or skin change)
-        if not self.walking and self._shown == "rest":
+        target = 1.0 if self.walking else 0.0
+        self.stride += (target - self.stride) * min(dt * STRIDE_EASE, 1.0)
+        if abs(self.stride - target) < 1e-3:
+            self.stride = target
+        if self.stride == 0.0 and self._shown == "rest":
             return
-        rotations, root = dict(self.rest), (0.0, 0.0, 0.0)
-        if self.walking:
+        if walk_time is not None:
+            self.walk_time = walk_time
+        elif self.walking:
             self.walk_time += dt * WALK_SPEED
+        rotations, root = dict(self.rest), (0.0, 0.0, 0.0)
+        if self.stride > 0.0:
             walk, root = walk_rotations(self.walk_time)
             for bone, rotation in walk.items():
+                rotation = partial_rotation(rotation, self.stride)
                 rotations[bone] = rotation @ rotations[bone] if bone in rotations else rotation
+            root = tuple(self.stride * np.asarray(root, dtype=np.float64))
         matrices = self.skeleton.pose(rotations, root)
         for part, rows, indices, weights in self._bindings:
             part.mesh.update_vertices(skin(rows, indices, weights, matrices))
-        self._shown = "walk" if self.walking else "rest"
+        self._shown = "walk" if self.stride > 0.0 else "rest"

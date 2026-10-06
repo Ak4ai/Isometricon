@@ -148,3 +148,12 @@ def test_wide_cloth_bends_around_the_knee_over_a_longer_stretch(skeleton):
     indices, weights = skeleton.weights(points, np.array([knee, knee, knee]))
     assert weights[0].max() == pytest.approx(1.0)  # tight cloth and skin: already the shin's
     assert 0.5 < weights[1, 0] < 1.0 and indices[1, 1] == thigh  # baggy cloth: still bending
+
+
+def test_partial_rotation_turns_part_of_the_way_about_the_same_axis():
+    from src.clothing.skeleton import partial_rotation, rotation_y
+    rotation = rotation_x(np.radians(40)) @ rotation_y(np.radians(25))
+    half = partial_rotation(rotation, 0.5)
+    np.testing.assert_allclose(half @ half, rotation, atol=1e-9)
+    np.testing.assert_allclose(partial_rotation(rotation, 0.0), np.eye(3), atol=1e-12)
+    np.testing.assert_allclose(partial_rotation(rotation, 1.0), rotation, atol=1e-9)
