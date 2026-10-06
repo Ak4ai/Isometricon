@@ -776,6 +776,26 @@ class ChatConsole:
         gl.glEnable(gl.GL_CULL_FACE)
         gl.glDisable(gl.GL_BLEND)
 
+    def _wrap_text(self, draw: Any, text: str, width: int) -> List[str]:
+        """The display lines of a message: its own lines, each broken at spaces to fit ``width``."""
+        def measure(piece: str) -> float:
+            try:
+                return draw.textlength(piece, font=self.font)
+            except AttributeError:
+                return len(piece) * 9
+        lines = []
+        for raw in text.split("\n"):
+            current = ""
+            for word in raw.split(" "):
+                candidate = f"{current} {word}" if current else word
+                if current and measure(candidate) > width:
+                    lines.append(current)
+                    current = "  " + word  # continuation lines are indented
+                else:
+                    current = candidate
+            lines.append(current)
+        return lines
+
     def _generate_hud_image(
         self,
         width: int,
@@ -791,13 +811,16 @@ class ChatConsole:
         box_w = min(740, width - 32)
         line_height = 20
         max_lines = 8
-        messages_to_show = visible_messages[-max_lines:]
+        # Each message takes as many lines as it has (and its long lines wrap): the newest lines show.
+        lines_to_show = [(line, msg.color) for msg in visible_messages
+                         for line in self._wrap_text(draw, msg.text, box_w)][-max_lines:]
+        messages_to_show = lines_to_show
 
         # Altura calculada da caixa
         hist_h = len(messages_to_show) * line_height + 10
         has_suggestions = self.is_open and bool(self.suggestions)
         sugg_h = 34 if has_suggestions else 0
-        input_h = 28 if self.is_open else 0
+        input_h = 28 if self.is_open else 22  # closed: the row of the "[T] Abrir Chat" hint
         total_h = hist_h + sugg_h + input_h + (8 if has_suggestions else 6)
         box_y = height - total_h - 16
 
@@ -812,10 +835,9 @@ class ChatConsole:
 
         # Desenha mensagens do histórico
         curr_y = box_y + 4
-        for msg in messages_to_show:
-            r, g, b = msg.color
-            draw.text((box_x + 1, curr_y + 1), msg.text, font=self.font, fill=(20, 20, 20, 220))
-            draw.text((box_x, curr_y), msg.text, font=self.font, fill=(r, g, b, 255))
+        for text, (r, g, b) in messages_to_show:
+            draw.text((box_x + 1, curr_y + 1), text, font=self.font, fill=(20, 20, 20, 220))
+            draw.text((box_x, curr_y), text, font=self.font, fill=(r, g, b, 255))
             curr_y += line_height
 
         # Painel de sugestões e autocomplete (quando aberto e com sugestões)
@@ -918,7 +940,7 @@ class ChatConsole:
                 draw.text((cursor_x, input_y + 6), "_", font=self.font, fill=(255, 255, 255, 255))
         else:
             hint_text = "[T] Abrir Chat / Comandos | [/] Digitar Comando"
-            draw.text((box_x, height - 22), hint_text, font=self.font, fill=(160, 160, 170, 160))
+            draw.text((box_x, box_y + hist_h + 2), hint_text, font=self.font, fill=(160, 160, 170, 160))
 
         # Badge animada de Loading / Importando em segundo plano (canto superior direito)
         if self.command_handler and self.command_handler.busy_status:
