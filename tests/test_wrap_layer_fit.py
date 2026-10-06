@@ -29,13 +29,13 @@ def test_reads_wrap_mesh_ids_and_asset_specific_origins():
     np.testing.assert_allclose(sweater["cage_origin"][1][1], -0.2269, atol=1e-3)
 
 
-def test_filemesh_v2_decodes_positions_uvs_and_faces():
+def test_filemesh_v2_decodes_positions_uvs_and_faces(tmp_path):
     positions = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
     header = b"version 2.00\n" + struct.pack("<HBBII", 12, 40, 12, 3, 1)
     vertices = b"".join(struct.pack("<8f", *p, 0, 0, 1, p[0], p[1]) + bytes(8)
                         for p in positions)
     payload = header + vertices + struct.pack("<3I", 0, 1, 2)
-    output = ROOT / "artifacts/clothing_audit/filemesh_v2_fixture.obj"
+    output = tmp_path / "filemesh_v2_fixture.obj"
     decode_roblox_mesh_to_obj(payload, str(output))
     content = output.read_text(encoding="utf-8")
     assert "v 1.000000000 0.000000000 0.000000000" in content
