@@ -337,13 +337,21 @@ def main() -> None:
         generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True)
         world_manager = WorldManager(generator=generator, render_distance=2, atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
-        player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0)
+        avatar = None
+        if "--token-antigo" not in sys.argv[1:]:
+            # The player is the dressed character of the viewer (--char), walking with the token.
+            # Body, hair and clothes take the same options (--male, --top, --bottom...).
+            from src.clothing.character_model import CharacterModel, parse_character_cli_args
+            char_customization, top_id, bottom_id, tool_id, _ = parse_character_cli_args(sys.argv[1:])
+            avatar = CharacterModel(customization=char_customization, top_id=top_id, bottom_id=bottom_id,
+                                    tool_id=tool_id, create_mesh=True, async_loading=True)
+        player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0, avatar=avatar)
         player_token.position[1] = float(start_surface_y) + 1.0
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
         meshes = []
-        character_model = None
+        character_model = avatar  # chat commands (/import, /corpo...) dress the player
         turntable_state = {"active": False, "yaw": 0.0}
     elif char_demo:
         from src.clothing.character_model import CharacterModel, parse_character_cli_args

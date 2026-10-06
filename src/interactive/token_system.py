@@ -422,6 +422,8 @@ class PlayerToken:
 
     def equip_roblox_clothing(self, asset_id: Union[int, str]) -> dict:
         """Equipa roupa do Roblox no token usando o motor nativo."""
+        if self.avatar is not None:
+            return {}  # the avatar is dressed through its own customization (/import)
         if self.modular_character is not None:
             return self.modular_character.equip_roblox_clothing(asset_id)
         return {}
@@ -432,8 +434,16 @@ class PlayerToken:
         start_z: float = 0.5,
         speed: float = 5.0,
         create_mesh: bool = True,
+        avatar: Any = None,
     ) -> None:
+        """``avatar`` is a dressed CharacterModel; when given it is the token's body, skinned
+        to the game rig and walked by a CharacterAnimator, instead of the old modular doll."""
         self.position = np.array([start_x, 10.0, start_z], dtype=np.float32)
+        self.avatar = avatar
+        self.animator = None
+        if avatar is not None:
+            from src.clothing.character_animation import CharacterAnimator
+            self.animator = CharacterAnimator(avatar, walking=False)
         self.yaw: float = 0.0
         self.speed: float = speed
         self.is_moving: bool = False
@@ -443,7 +453,10 @@ class PlayerToken:
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "assets", "models", "character_modular.json"
         )
-        if create_mesh and os.path.exists(json_path):
+        if avatar is not None:
+            self.modular_character = None
+            self.mesh = None
+        elif create_mesh and os.path.exists(json_path):
             self.modular_character: Optional[ModularCharacter] = ModularCharacter(json_path, create_mesh=True)
             self.mesh: Optional[TexturedMesh] = None
         else:
@@ -500,6 +513,11 @@ class PlayerToken:
         # Interpolação suave para subir/descer colinas e degraus
         self.position[1] += (target_y - self.position[1]) * min(dt * 18.0, 1.0)
 
+        # The avatar walks the same cycle as the token moves, and rests when it stops.
+        if self.animator is not None:
+            self.animator.walking = self.is_moving
+            self.animator.walk_time = self.walk_time
+            self.animator.update(0.0)
         # Atualiza a animação procedural modular
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
@@ -518,6 +536,9 @@ class PlayerToken:
     def draw(self, shader: Any = None, base_model: Optional[np.ndarray] = None) -> None:
         """Desenha a miniatura (modular se disponível, ou malha única)."""
         import OpenGL.GL as gl
+        if self.avatar is not None and shader is not None:
+            self.avatar.draw(shader, base_model if base_model is not None else self.get_model_matrix())
+            return
         gl.glDisable(gl.GL_CULL_FACE)
         if self.modular_character is not None and shader is not None:
             mat = base_model if base_model is not None else self.get_model_matrix()
@@ -528,6 +549,9 @@ class PlayerToken:
 
     def delete(self) -> None:
         """Libera os buffers OpenGL."""
+        if self.avatar is not None:
+            self.avatar.delete()
+            self.avatar = None
         if self.modular_character is not None:
             self.modular_character.delete()
             self.modular_character = None
