@@ -12,6 +12,7 @@ without looking at images:
                  length and at least 2 cm longer
   buraco         area (cm2) of skin that HSR removed although it can be seen from outside
                  (fitting pose): nothing drawn blocks a third of the directions around it
+                 and nothing drawn lies just beneath it (cloth that shows through)
 The measurements are stored raw. The verdict (ok, atenção, falha) comes from the limits in LIMITS,
 applied when the report is written, over the poses the game shows (GAME_POSES); the other poses
 stress the garment and are reported apart. Garments that cannot be worn are listed with the error.
@@ -56,6 +57,7 @@ LIMITS = {"pele_furando_cm2": (100.0, 400.0), "esticado_cm2": (600.0, 4000.0), "
 POKE_DEPTH, POKE_COVER = 0.04, 0.075  # cloth this deep under the skin pierces; cloth this far over it covers
 STRETCH_RATIO, STRETCH_GROWTH = 2.5, 0.02
 HOLE_RAYS, HOLE_OPEN, HOLE_REACH = 26, 0.3, 3.0
+HOLE_BEHIND = 0.03  # hidden skin with something drawn this close beneath it shows that, not a hole
 MARKS = {"pele_furando_cm2": (255, 40, 40), "esticado_cm2": (255, 220, 0), "buraco_cm2": (255, 0, 255)}
 LAYERED = [("camisa + bomber", 133331049150205, 72628400373948), ("regata + moletom", TANK, 7192553841),
            ("camisa + sobretudo", 133331049150205, 133273151439383)]
@@ -200,6 +202,7 @@ def holes(animator, samples):
         visible = np.linalg.norm(closest - centres, axis=1) < 4e-3
     hidden = np.flatnonzero(~visible)
     hidden = hidden[~any_hit(centres[hidden] + normals[hidden] * 2e-3, normals[hidden], HOLE_REACH, everything)]
+    hidden = hidden[~any_hit(centres[hidden] + normals[hidden] * 2e-3, -normals[hidden], HOLE_BEHIND, everything)]
     if not len(hidden):
         return 0.0, np.zeros((0, 3))
     directions = hemisphere(normals[hidden], HOLE_RAYS)
