@@ -27,30 +27,46 @@ python scripts/audit_animation_robustness.py --output artifacts/robustness --rep
 |---|---|---|---|
 | Esticado | área (cm²) de triângulos da peça testada com aresta > 2,5× e > 2 cm maior que no encaixe | 600 | 4000 |
 | Pele furando | área de pele desenhada com tecido logo abaixo (até 4 cm) e nada por cima (7,5 cm), menos o que já fura na pose de vestir | 100 | 400 |
-| Buraco | pele escondida pelo HSR que se vê de fora (≥ 30% das direções livres), na pose de vestir | 100 | 500 |
+| Buraco | pele escondida pelo HSR que se vê de fora (≥ 30% das direções livres) e sem nada desenhado até 3 cm abaixo dela, na pose de vestir | 100 | 500 |
 
 - Poses do jogo: descanso e quatro fases da caminhada. Extras: braços a 90°, braços à frente, sentar.
 - Os limites foram fixados olhando as miniaturas do catálogo inteiro: até 600 cm² de esticado nada aparece na
   distância do jogo (um suéter estica ~400 sob o braço); acima de 4000 a peça está visivelmente rasgada.
-- **Esticado** é a medida confiável. **Pele furando** e **buraco** não foram validadas por imagem: várias falhas
-  só por elas não mostram defeito claro na miniatura.
+- **Validação por imagem (06/10/2026)** com `scripts/inspect_flagged_regions.py relatorio.json [--names ...]`, que
+  aproxima a câmera de cada região marcada e mostra a vista com e sem marcação:
+  - **Buraco** marcava sobretudo pele escondida com o tecido logo abaixo (pés de meia-calça e fantasias, a gola
+    por dentro do capuz): ali se vê o tecido, não um buraco. Por isso a regra dos 3 cm. Ainda sobram falsos alarmes
+    no contorno (pele que sai da silhueta da peça, como no tornozelo da meia-calça) e no forro de capuzes largos;
+    o único buraco real confirmado é o pescoço do suéter com laço.
+  - **Pele furando** confere: na saia com fenda a perna atravessa o tecido ao andar.
+  - **Esticado** confere, mas a causa nas fantasias e na capa é outra (ver abaixo).
 
 ![Calibração do esticado](images/bateria/calibracao-esticado.png)
 
-## 📊 Última rodada completa (06/10/2026, cache v34)
+## 📊 Última rodada completa (06/10/2026, cache v34, regra nova de buraco)
 
-204 combinações (102 por corpo): **101 ok, 70 atenção, 33 falha**. Falhas por tecido rasgado: Baby Shark, Sully,
-Realistic White Pigeon, Squirrel Suit, Strawberry Onesie, White Cat Costume e Cloak (fantasias e capa). As outras
-falhas são só por buraco ou pele furando. Desde então foram corrigidos os Oversized Warmers (pele furando 465 → 0)
-e as luvas sem dedos e adesivos de corpo.
+204 combinações (102 por corpo): **117 ok, 70 atenção, 17 falha**.
 
-Evolução: 79 ok / 52 / 73 falha → depois dos pesos gerais das roupas 91 / 74 / 39 → 101 / 70 / 33.
+- Tecido rasgado: Sully, Baby Shark, Realistic White Pigeon, Squirrel Suit, Strawberry Onesie, White Cat Costume e
+  Cloak.
+- Buraco: suéter com laço (real, no pescoço); Goose, Dinosaur e terno Mafioso (masculino) ainda sem confirmação.
+- Pele furando: saia longa com fenda e Blue Fish Suit (masculino).
+
+Evolução: 79 ok / 52 / 73 falha → depois dos pesos gerais das roupas 91 / 74 / 39 → 101 / 70 / 33 → regra nova de
+buraco 117 / 70 / 17.
 
 ![Peças que saíram da falha](images/bateria/recuperadas.png)
 
 ## ⚠️ Pendências conhecidas
 
-- Fantasias de corpo inteiro e Cloak acima do limite de esticado.
+- **Fantasias de corpo inteiro e Cloak acima do limite de esticado.** O teste que decide se o tecido "envolve o
+  membro" não distingue uma manga (tecido em volta só do braço) de um saco ou capa que envolve braço e tronco juntos:
+  - Baby Shark: o tecido do lado do tubarão, 18–28 cm atrás do braço, não conta como manga e fica com o tronco; o
+    braço balança dentro do saco e a mão sai pela frente.
+  - Cloak: a capa em volta do antebraço conta como manga e abre como asa quando o braço balança.
+  - White Cat: a manga segue o braço e rasga a lateral do corpo da fantasia no quadril.
+  - Caminho provável: só é manga o tecido que tem parede entre o braço e o tronco; em sacos e capas o braço anda
+    por dentro (com menos balanço quando a peça é de corpo inteiro).
 - Calça de moletom com tênis embutido em atenção (~630 cm²).
 - Baggy jeans com o cós ~9 cm longe do corpo e sobretudo com ponta no quadril: vêm do modelo da peça e da
   proporção do nosso corpo (mais estreito que o Blocky); mudar exigiria mexer no encaixe de todas as roupas largas.
