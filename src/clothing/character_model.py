@@ -1057,13 +1057,13 @@ def is_valid_v2_obj(path: str) -> bool:
 
 # Outer top over the other garments: default pull of what still pokes through it (mm)
 # and hiding of fully covered triangles. Both the pull and the gap between the layers
-# can be changed per character (/jaqueta puxar, /jaqueta folga).
+# can be changed per character (/skin jaqueta puxar, /skin jaqueta folga).
 LAYER_PULL_MM = 15.0
 # 5 mm between the layers clears most lapel collisions (trench coat, lab coat) with no visible change.
 LAYER_GAP_MM = 5.0
 CULL_COVERED = True
 DEFAULT_HAIR_ID = "116773763268018"
-# Head (with neck and hair) moved forward (m) on each body, under the /postura adjustment.
+# Head (with neck and hair) moved forward (m) on each body, plus head_z_offset.
 # Relative to the top of its torso the female head sits 2.5 cm further back than the male one.
 BODY_HEAD_FORWARD = {"female": 0.025, "male": 0.0}
 
@@ -1607,11 +1607,11 @@ class CharacterModel:
 
         z_mid = float((np.min(v_mat[:, 2]) + np.max(v_mat[:, 2])) / 2.0)
 
-        # Chanfro geométrico real (Bevel estilo Blender Ctrl+B) das 4 quinas verticais do torso (comando /cintura chanfro)
+        # Chanfro geométrico real (Bevel estilo Blender Ctrl+B) das 4 quinas verticais do torso (sem comando no chat)
         if self.waist_chamfer > 1e-4:
             v_mat, faces = bevel_torso_corners(v_mat, faces, chamfer_m=self.waist_chamfer)
 
-        # Ajuste radial do torso na cintura (comando /cintura radius)
+        # Ajuste radial do torso na cintura (sem comando no chat)
         if abs(self.waist_radius_offset) > 1e-5:
             r0 = 0.09
             dr = self.waist_radius_offset
