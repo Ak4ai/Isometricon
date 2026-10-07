@@ -20,6 +20,7 @@ from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, OUTFIT
 from src.clothing.customization import (
     AvatarCustomization,
     BodyType,
+    EyebrowStyle,
     EyeStyle,
     HairColor,
     HairStyle,
@@ -55,6 +56,8 @@ HAIR_COLORS = {"castanho": HairColor.BRUNETTE, "loiro": HairColor.BLONDE, "preto
 SKIN_TONES = {"palida": "pale", "clara": "fair", "bronzeada": "tan", "morena": "dark", "negra": "ebony"}
 HEADS = {"arredondada": HeadType.ROUNDED, "quadrada": HeadType.BLOCKY, "rounded": HeadType.ROUNDED, "blocky": HeadType.BLOCKY}
 BODIES = {"feminino": BodyType.FEMALE, "masculino": BodyType.MALE, "female": BodyType.FEMALE, "male": BodyType.MALE}
+EYEBROWS = {"padrao": EyebrowStyle.STANDARD, "grossa": EyebrowStyle.THICK, "decidida": EyebrowStyle.DETERMINED,
+            "sem": EyebrowStyle.NONE}
 NONE_WORDS = ("none", "nenhum", "sem", "tirar", "0")
 
 
@@ -606,6 +609,47 @@ class SkinCommandHandler:
         character_save.apply(self.character_model, data)
         return True, "[Skin] Personagem salvo carregado.", GREEN
 
+    def adjust(self, args: List[str]) -> Result:
+        """/skin ajuste <nome> <-100..100> | reset: proporções do corpo e do rosto."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing.body_shape import ADJUSTMENTS, FACE
+        custom = self.character_model.customization
+        current = dict(getattr(custom, "body_adjust", None) or {})
+        usage = f"Uso: /skin ajuste <{'|'.join(ADJUSTMENTS)}> <-100 a 100> | reset"
+        if not args:
+            shown = ", ".join(f"{k} {round(v * 100):+d}" for k, v in current.items() if v) or "nenhum"
+            return True, f"[Ajuste] {shown}\n{usage}", GOLD
+        name = args[0].lower()
+        if name == "reset":
+            face = any(current.get(k) for k in FACE)
+            custom.body_adjust = {}
+            if face:
+                self.character_model.reload()
+            return True, "[Ajuste] Proporções de volta ao padrão.", GREEN
+        if name not in ADJUSTMENTS or len(args) < 2:
+            return False, f"[Erro] {usage}", RED
+        try:
+            value = max(-100.0, min(100.0, float(args[1].replace("%", "").replace(",", "."))))
+        except ValueError:
+            return False, f"[Erro] Valor inválido: '{args[1]}'. {usage}", RED
+        changed = round(value) != round(current.get(name, 0.0) * 100)
+        current[name] = value / 100.0
+        custom.body_adjust = {k: v for k, v in current.items() if v}
+        if name in FACE and changed:
+            self.character_model.reload()  # the face is a texture: it is drawn again
+        return True, f"[Ajuste] {ADJUSTMENTS[name]}: {round(value):+d}.", GREEN
+
+    def eyebrows(self, args: List[str]) -> Result:
+        missing = self._need_model()
+        if missing:
+            return missing
+        if not args or args[0].lower() not in EYEBROWS:
+            return False, f"[Erro] Uso: /skin sobrancelha <{'|'.join(EYEBROWS)}>", RED
+        self._change(lambda c: setattr(c, "eyebrow_style", EYEBROWS[args[0].lower()]))
+        return True, f"[Sobrancelha] {args[0].lower()}.", GREEN
+
     def interface(self, args: List[str]) -> Result:
         missing = self._need_model()
         if missing:
@@ -659,6 +703,12 @@ SKIN_COMMANDS: List[Command] = [
             list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"], "Aparência"),
     Command(("boca", "mouth"), "/skin boca <estilo>", "estilo da boca", SkinCommandHandler.mouth,
             ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem"], "Aparência"),
+    Command(("sobrancelha", "eyebrows"), "/skin sobrancelha <padrao|grossa|decidida|sem>", "estilo das sobrancelhas",
+            SkinCommandHandler.eyebrows, list(EYEBROWS), "Aparência"),
+    Command(("ajuste", "adjust"), "/skin ajuste <nome> <-100 a 100> | reset", "proporções do corpo e do rosto",
+            SkinCommandHandler.adjust, ["altura", "cabeca", "ombros", "peito", "quadril", "bunda", "bracos", "maos",
+                                        "pernas", "pes", "olhos_tamanho", "olhos_altura", "olhos_distancia",
+                                        "sobrancelha_altura", "reset"], "Aparência"),
     Command(("cabeca", "head"), "/skin cabeca <arredondada|quadrada>", "formato da cabeça", SkinCommandHandler.head,
             ["arredondada", "quadrada"], "Aparência"),
     Command(("cabelo", "hair"), "/skin cabelo <id|cor|careca|raspado|padrao> | posicao ... | escala ... | reset",

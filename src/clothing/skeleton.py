@@ -134,24 +134,41 @@ class Skeleton:
             weights[rows] = np.stack([t, 1 - t], axis=1)
         return indices, weights
 
-    def pose(self, rotations: dict, root_offset=(0.0, 0.0, 0.0)) -> np.ndarray:
+    def pose(self, rotations: dict, root_offset=(0.0, 0.0, 0.0), scales=None, height: float = 1.0) -> np.ndarray:
         """(B, 4, 4) skinning matrices: each bone turned about its joint by ``rotations[name]``
-        (3x3, in the mesh axes), children carried by their parents."""
+        (3x3, in the mesh axes), children carried by their parents.
+
+        ``scales`` (bone index -> 3x3) changes the body's proportions: what a bone carries is
+        scaled about its joint, and its children move to where their joints end up without
+        being scaled themselves. ``height`` scales the whole character from the ground."""
+        scales = scales or {}
+        frames = np.zeros((len(self.names), 4, 4))  # each bone's own frame, without its scale
         matrices = np.zeros((len(self.names), 4, 4))
         for bone in range(len(self.names)):  # parents come first
+            pivot = self.heads[bone]
             local = np.eye(4)
             rotation = rotations.get(self.names[bone])
             if rotation is not None:
-                pivot = self.heads[bone]
                 local[:3, :3] = rotation
                 local[:3, 3] = pivot - rotation @ pivot
             parent = self.parents[bone]
             if parent < 0:
                 root = np.eye(4)
+                root[:3, :3] *= height
                 root[:3, 3] = root_offset
-                matrices[bone] = root @ local
+                frames[bone] = root @ local
             else:
-                matrices[bone] = matrices[parent] @ local
+                carried = np.eye(4)
+                if parent in scales:  # the joint moves with what the parent's scale does to it
+                    offset = pivot - self.heads[parent]
+                    carried[:3, 3] = scales[parent] @ offset - offset
+                frames[bone] = frames[parent] @ carried @ local
+            matrices[bone] = frames[bone]
+            if bone in scales:
+                scale = np.eye(4)
+                scale[:3, :3] = scales[bone]
+                scale[:3, 3] = pivot - scales[bone] @ pivot
+                matrices[bone] = frames[bone] @ scale
         return matrices
 
 

@@ -17,6 +17,7 @@ import os
 
 import numpy as np
 
+from . import body_shape
 from .skeleton import CAGE_PART_BONES, Skeleton, partial_rotation, rest_arm_angle, rest_rotations, skin, walk_rotations
 
 # Model parts that follow one bone as a whole.
@@ -157,6 +158,8 @@ class CharacterAnimator:
         self._bound_key = None
         self._bindings = []
         self._shown = None  # "rest" or "walk": what the GPU buffers hold
+        self._shape, self._warped, self._scales, self._height = None, False, {}, 1.0  # body adjustments in use
+        self._bound_rows = []
 
     def _body_cage(self):
         from .character_model import MODELS_DIR
@@ -267,6 +270,8 @@ class CharacterAnimator:
             self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones, np.vstack(beside_arms), sleeve))
         self.arm_swing = 1.0
         self.arm_swing = self._arm_swing()
+        self._bound_rows = [rows for _, rows, _, _ in self._bindings]  # as fitted, before any body adjustment
+        self._shape, self._warped = None, False  # taken again from the model on the next update
         self._bound_key = self._key()
         self._shown = None
 
@@ -610,14 +615,41 @@ class CharacterAnimator:
         self.stride += (target - self.stride) * min(dt * STRIDE_EASE, 1.0)
         if abs(self.stride - target) < 1e-3:
             self.stride = target
+        shape = tuple(sorted((getattr(getattr(self.model, "customization", None), "body_adjust", None) or {}).items()))
+        if shape != self._shape:
+            self._reshape(shape)
         if self.stride == 0.0 and self._shown == "rest":
             return
         if walk_time is not None:
             self.walk_time = walk_time
         elif self.walking:
             self.walk_time += dt * WALK_SPEED
-        self.show(self.skeleton.pose(*self.walk_pose(self.walk_time, self.stride)))
+        self.show(self.pose(*self.walk_pose(self.walk_time, self.stride)))
         self._shown = "walk" if self.stride > 0.0 else "rest"
+
+    def pose(self, rotations, root=(0.0, 0.0, 0.0)):
+        """Skinning matrices of a pose, with the body's proportions (``body_shape``)."""
+        return self.skeleton.pose(rotations, root, scales=self._scales, height=self._height)
+
+    def _reshape(self, shape) -> None:
+        """Take the model's body adjustments: the scale of each bone, the height, and the
+        fitting pose warped where an adjustment has no bone (chest, buttocks). Skin, cloth and
+        hair are warped alike, from the vertices they were bound with."""
+        adjust = dict(shape)
+        self._shape = shape
+        self._scales, self._height = body_shape.bone_scales(self.skeleton, adjust), body_shape.height(adjust)
+        warped = body_shape.warps(adjust)
+        if warped or self._warped:
+            surface = self._cage_binding[0]
+            for k, (part, _, indices, weights) in enumerate(self._bindings):
+                rows = self._bound_rows[k].copy()
+                if warped:
+                    rows[:, :3] = body_shape.warp(rows[:, :3], self.skeleton, adjust, surface)
+                self._bindings[k] = (part, rows, indices, weights)
+                if getattr(part.mesh, "skinned", False):
+                    part.mesh.update_vertices(rows)  # the bind pose the vertex shader starts from
+            self._warped = warped
+        self._shown = None
 
     def show(self, matrices) -> None:
         """Pose the model with one matrix per bone. Meshes that take bones and weights stay in

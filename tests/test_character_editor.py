@@ -67,15 +67,18 @@ def test_a_click_on_an_option_runs_its_chat_command():
 def test_tabs_change_section_and_the_wheel_scrolls_only_over_the_panel():
     editor, _ = make_editor()
     titles = [section.title for section in editor.sections]
-    assert titles[:3] == ["Corpo", "Rosto", "Cabelo"] and "Superior" in titles and "Inferior" in titles
+    assert titles[:4] == ["Corpo", "Ajustes", "Rosto", "Cabelo"] and "Superior" in titles and "Inferior" in titles
     rect = next(rect for rect, kind, payload in editor.layout(*SIZE) if kind == "tab" and payload == titles.index("Rosto"))
     click(editor, *centre(rect))
     assert editor.active == titles.index("Rosto")
     labels = [payload.label for _, kind, payload in editor.layout(*SIZE) if kind == "option"]
     assert "Azul" in labels and "Sorriso" in labels
     assert editor.handle_scroll(PANEL_WIDTH + 50, -1.0) is False  # over the character: the camera zooms
-    assert editor.handle_scroll(50, -1.0) is True                 # over the panel: nothing to scroll, but used
-    assert editor.scroll == 0
+    assert editor.handle_scroll(50, -1.0) is True                 # over the panel: the grid scrolls
+    assert editor.scroll > 0
+    editor.select_section(0)
+    editor.layout(*SIZE)
+    assert editor.handle_scroll(50, -1.0) is True and editor.scroll == 0  # a short section has nothing to scroll
 
 
 def test_a_long_grid_scrolls_and_stops_at_its_end():
@@ -185,3 +188,41 @@ def test_escape_leaves_the_field_before_it_closes_the_editor():
     assert editor.handle_key(ESCAPE, PRESS) and editor.is_open and not editor.typing and editor.entry == ""
     assert sent == []
     assert editor.handle_key(ESCAPE, PRESS) and editor.is_open is False
+
+
+def slider_rect(editor, section, label):
+    """The whole tile of a slider, scrolling the grid down until it is all in view."""
+    editor.select_section([s.title for s in editor.sections].index(section))
+    for _ in range(60):
+        for rect, kind, payload in editor.layout(*SIZE):
+            if kind == "option" and payload.label == label and rect[3] - rect[1] >= 46:
+                return rect
+        editor.handle_scroll(50, -1.0)
+    raise AssertionError(f"no slider {label!r} in {section!r}")
+
+
+def test_dragging_a_body_slider_sends_the_adjustment_as_it_moves():
+    editor, sent = make_editor()
+    x0, y0, x1, y1 = slider_rect(editor, "Ajustes", "Altura")
+    y = (y0 + y1) / 2
+    editor.handle_mouse_button(x1 - 10, y, LEFT, PRESS)        # the right end of the track
+    assert sent[-1] == "/skin ajuste altura 100"
+    editor.handle_cursor(x0 + 10, y)                           # dragged to the left end
+    assert sent[-1] == "/skin ajuste altura -100"
+    editor.handle_cursor((x0 + x1) / 2 + 2, y)                 # near the middle: back to 0
+    assert sent[-1] == "/skin ajuste altura 0"
+    editor.handle_mouse_button((x0 + x1) / 2, y, LEFT, RELEASE)
+    before = len(sent)
+    editor.handle_cursor(x1, y)                                # let go: the mouse no longer moves it
+    assert len(sent) == before
+
+
+def test_a_face_slider_is_applied_when_it_is_let_go():
+    editor, sent = make_editor()
+    x0, y0, x1, y1 = slider_rect(editor, "Rosto", "Tamanho dos olhos")
+    y = (y0 + y1) / 2
+    editor.handle_mouse_button(x1 - 10, y, LEFT, PRESS)
+    editor.handle_cursor(x1 - 40, y)
+    assert sent == []                                          # the face texture is not redrawn at every move
+    editor.handle_mouse_button(x1 - 40, y, LEFT, RELEASE)
+    assert len(sent) == 1 and sent[0].startswith("/skin ajuste olhos_tamanho ")
