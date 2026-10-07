@@ -136,6 +136,7 @@ class SkinCommandHandler:
         self.turntable_state = turntable_state
         self.chat_console = None
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
+        self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
         self.import_status: str = ""
         self.import_asset_id: Optional[Any] = None
@@ -583,6 +584,28 @@ class SkinCommandHandler:
         self._apply_look(**preset)
         return True, f"[Preset] {value}.", GREEN
 
+    def save(self, args: Optional[List[str]] = None) -> Result:
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing import character_save
+        try:
+            path = character_save.save(self.character_model, self.save_path or character_save.SAVE_PATH)
+        except OSError as exc:
+            return False, f"[Skin] Não foi possível salvar o personagem: {exc}", RED
+        return True, f"[Skin] Personagem salvo em {os.path.relpath(path, PROJECT_ROOT)}.", GREEN
+
+    def load(self, args: List[str]) -> Result:
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing import character_save
+        data = character_save.load(self.save_path or character_save.SAVE_PATH)
+        if data is None:
+            return False, "[Skin] Não há personagem salvo.", RED
+        character_save.apply(self.character_model, data)
+        return True, "[Skin] Personagem salvo carregado.", GREEN
+
     def interface(self, args: List[str]) -> Result:
         missing = self._need_model()
         if missing:
@@ -662,6 +685,10 @@ SKIN_COMMANDS: List[Command] = [
     Command(("reset",), "/skin reset", "volta ao padrão", SkinCommandHandler.reset, [], "Personagem"),
     Command(("interface", "editor", "criar"), "/skin interface", "abre a tela de criação de personagem",
             SkinCommandHandler.interface, [], "Personagem"),
+    Command(("salvar", "save"), "/skin salvar", "grava o personagem para a próxima vez", SkinCommandHandler.save, [],
+            "Personagem"),
+    Command(("carregar", "load"), "/skin carregar", "volta ao personagem gravado", SkinCommandHandler.load, [],
+            "Personagem"),
 ]
 
 ROOT_COMMANDS: List[Command] = [

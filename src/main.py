@@ -331,6 +331,12 @@ def main() -> None:
         "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
     }
 
+    # O personagem gravado (saves/personagem.json) volta, a menos que a linha de comando escolha outro.
+    from src.clothing import character_save
+    saved_character = character_save.load() if character_save.wanted(sys.argv[1:]) else None
+    if saved_character is not None:
+        print("[Skin] Personagem salvo carregado (use --novo para começar do padrão).")
+
     if terrain_demo:
         print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
         atlas = TextureAtlas()
@@ -343,8 +349,10 @@ def main() -> None:
             # Body, hair and clothes take the same options (--male, --top, --bottom...).
             from src.clothing.character_model import CharacterModel, parse_character_cli_args
             char_customization, top_id, bottom_id, tool_id, _ = parse_character_cli_args(sys.argv[1:])
-            avatar = CharacterModel(customization=char_customization, top_id=top_id, bottom_id=bottom_id,
-                                    tool_id=tool_id, create_mesh=True, async_loading=True)
+            worn = dict(customization=char_customization, top_id=top_id, bottom_id=bottom_id, tool_id=tool_id)
+            if saved_character is not None:
+                worn = character_save.model_arguments(saved_character)  # the character of the last time
+            avatar = CharacterModel(create_mesh=True, async_loading=True, **worn)
         player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0, avatar=avatar)
         player_token.position[1] = float(start_surface_y) + 1.0
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
@@ -368,11 +376,12 @@ def main() -> None:
         print("-" * 68)
         print("⌨️  [Q/E] Girar 90° | [Espaço] Turntable ON/OFF | [C] Wireframe Cage ON/OFF | [W] Andar ON/OFF | [Mouse Wheel] Zoom | [Shift+Drag/MMB] Pan | [R] Reset Câmera\n")
 
+        worn = dict(customization=char_customization, top_id=top_id, bottom_id=bottom_id, tool_id=tool_id)
+        if saved_character is not None:
+            worn = character_save.model_arguments(saved_character)  # the character of the last time
+            char_customization = worn["customization"]
         character_model = CharacterModel(
-            customization=char_customization,
-            top_id=top_id,
-            bottom_id=bottom_id,
-            tool_id=tool_id,
+            **worn,
             create_mesh=True,
             # Clothes are fitted and the model assembled off the main thread, so the window
             # stays responsive (a screenshot run waits for the finished model instead).
@@ -425,6 +434,7 @@ def main() -> None:
     # Tela de criação de personagem (/skin interface, ou --editor para já abrir nela).
     from src.interactive.character_editor import CharacterEditor
     character_editor = CharacterEditor(skin_command_handler, turntable_state, create_gl=True)
+    character_editor.autosave = max_frames is None  # an automated run (--frames) leaves the save alone
     editor_camera = {"saved": None}
     editor_arg = next((a for a in sys.argv[1:] if a == "--editor" or a.startswith("--editor=")), None)
     if editor_arg is not None and character_model is not None:
