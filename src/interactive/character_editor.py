@@ -315,9 +315,25 @@ class CharacterEditor:
             hits.append(((6, y, TAB_WIDTH - 6, y + TAB_HEIGHT), "tab", index))
         left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
         top, bottom = PAD, height - FOOTER_HEIGHT
-        y = top
+        for kind, (x0, y0, x1, y1), payload in self._tiles():
+            y0, y1 = y0 + top - self.scroll, y1 + top - self.scroll
+            if kind == "option" and y1 > top and y0 < bottom:
+                hits.append(((x0, max(y0, top), x1, min(y1, bottom)), "option", payload))
+        half = (right - left - GAP) // 2
+        hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
+        hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
+        self._hits = hits
+        return hits
+
+    def _tiles(self) -> List[Tuple[str, Rect, Any]]:
+        """A grade inteira, sem rolagem, com y a partir do seu topo: ('title', área, texto) e
+        ('option', área, Option). Também mede a altura do conteúdo."""
+        left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
+        tiles: List[Tuple[str, Rect, Any]] = []
+        y = 0
         for group in self.groups():
-            y += 26  # the title of the group
+            tiles.append(("title", (left, y, right, y + 26), group.title))
+            y += 26
             kind = group.options[0].kind if group.options else "text"
             if kind == "card":
                 columns, (w, h) = 3, CARD
@@ -326,17 +342,11 @@ class CharacterEditor:
             else:
                 columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
             for k, option in enumerate(group.options):
-                x = left + (k % columns) * (w + GAP)
-                oy = y + (k // columns) * (h + GAP) - self.scroll
-                if oy + h > top and oy < bottom:
-                    hits.append(((x, max(oy, top), x + w, min(oy + h, bottom)), "option", option))
+                x, oy = left + (k % columns) * (w + GAP), y + (k // columns) * (h + GAP)
+                tiles.append(("option", (x, oy, x + w, oy + h), option))
             y += -(-len(group.options) // columns) * (h + GAP) + 6
-        self._content_height = y - top
-        half = (right - left - GAP) // 2
-        hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
-        hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
-        self._hits = hits
-        return hits
+        self._content_height = y
+        return tiles
 
     def _max_scroll(self) -> int:
         return max(0, self._content_height - (self._size[1] - FOOTER_HEIGHT - PAD))
@@ -467,18 +477,44 @@ class CharacterEditor:
         title, text, small = self._font(15), self._font(14), self._font(11)
         left, top, bottom = TAB_WIDTH + PAD, PAD, height - FOOTER_HEIGHT
 
-        # títulos dos grupos (rolam com a grade)
-        y = top
-        for group in self.groups():
-            if top <= y - self.scroll < bottom - 18:
-                draw.text((left, y - self.scroll + 4), group.title.upper(), font=small, fill=MUTED)
-            kind = group.options[0].kind if group.options else "text"
-            columns, h = (3, CARD[1]) if kind == "card" else (SWATCHES_PER_ROW, SWATCH) if kind == "swatch" else (2, TEXT_TILE)
-            y += 26 + -(-len(group.options) // columns) * (h + GAP) + 6
+        # A grade é desenhada inteira e só a parte visível é copiada: um quadro cortado pela
+        # borda aparece pela metade, não vazio.
+        tiles = self._tiles()
+        view = max(bottom - top, 1)
+        grid = Image.new("RGBA", (PANEL_WIDTH, max(self._content_height, view)), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(grid)
+        for kind, rect, payload in tiles:
+            x0, y0, x1, y1 = rect
+            if y1 < self.scroll or y0 > self.scroll + view:
+                continue
+            if kind == "title":
+                pen.text((x0, y0 + 4), payload.upper(), font=small, fill=MUTED)
+                continue
+            draw_rect = (x0, y0, x1 - 1, y1 - 1)
+            pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE)
+            if payload.kind == "swatch":
+                pen.rounded_rectangle((x0 + 4, y0 + 4, x1 - 5, y1 - 5), 5, fill=payload.color + (255,))
+            elif payload.kind == "card":
+                picture = self._picture(payload.image, (CARD[0] - 8, 72)) if payload.image else None
+                if picture is not None:
+                    grid.paste(picture, (x0 + 4, y0 + 4), picture)
+                else:
+                    pen.line((x0 + 30, y0 + 26, x1 - 30, y0 + 54), fill=MUTED, width=2)
+                    pen.line((x1 - 30, y0 + 26, x0 + 30, y0 + 54), fill=MUTED, width=2)
+                for k, line in enumerate(self._fit_text(pen, payload.label, small, CARD[0] - 8, 2)):
+                    pen.text(((x0 + x1) // 2, y0 + 80 + k * 13), line, font=small, fill=TEXT, anchor="ma")
+            else:
+                pen.text(((x0 + x1) // 2, (y0 + y1) // 2), self._fit_text(pen, payload.label, text, x1 - x0 - 10, 1)[0],
+                         font=text, fill=TEXT, anchor="mm")
+            if self.model is not None and payload.selected(self.model):
+                pen.rounded_rectangle(draw_rect, 6, outline=ACCENT, width=2)
+        panel.alpha_composite(grid.crop((0, self.scroll, PANEL_WIDTH, self.scroll + view)), (0, top))
 
         for rect, kind, payload in hits:
             x0, y0, x1, y1 = rect
             hovered = self.hover == (kind, id(payload) if kind == "option" else payload)
+            if kind == "option":
+                continue
             if kind == "tab":
                 active = payload == self.active
                 if active or hovered:
@@ -487,26 +523,6 @@ class CharacterEditor:
                     draw.rectangle((x0, y0 + 8, x0 + 3, y1 - 8), fill=ACCENT)
                 draw.text((x0 + 14, (y0 + y1) // 2), self.sections[payload].title, font=title,
                           fill=TEXT if active else MUTED, anchor="lm")
-            elif kind == "option":
-                selected = self.model is not None and payload.selected(self.model)
-                full = (y1 - y0) >= (CARD[1] if payload.kind == "card" else SWATCH if payload.kind == "swatch" else TEXT_TILE)
-                draw.rounded_rectangle(rect, 6, fill=TILE_HOVER if hovered else TILE)
-                if payload.kind == "swatch":
-                    draw.rounded_rectangle((x0 + 4, y0 + 4, x1 - 4, y1 - 4), 5, fill=payload.color + (255,))
-                elif payload.kind == "card" and full:
-                    picture = self._picture(payload.image, (CARD[0] - 8, 72)) if payload.image else None
-                    if picture is not None:
-                        panel.paste(picture, (x0 + 4, y0 + 4), picture)
-                    else:
-                        draw.line((x0 + 30, y0 + 26, x1 - 30, y0 + 54), fill=MUTED, width=2)
-                        draw.line((x1 - 30, y0 + 26, x0 + 30, y0 + 54), fill=MUTED, width=2)
-                    for k, line in enumerate(self._fit_text(draw, payload.label, small, CARD[0] - 8, 2)):
-                        draw.text(((x0 + x1) // 2, y0 + 80 + k * 13), line, font=small, fill=TEXT, anchor="ma")
-                elif payload.kind == "text" and full:
-                    draw.text(((x0 + x1) // 2, (y0 + y1) // 2), self._fit_text(draw, payload.label, text, x1 - x0 - 10, 1)[0],
-                              font=text, fill=TEXT, anchor="mm")
-                if selected:
-                    draw.rounded_rectangle(rect, 6, outline=ACCENT, width=2)
             else:
                 label = ("Girar: ligado" if self.turntable.get("active") else "Girar: parado") if payload == "spin" else "Concluir"
                 fill = ACCENT if payload == "done" else (TILE_HOVER if hovered else TILE)
