@@ -159,8 +159,7 @@ def inspect(shader, result, samples, count):
         if entry is None or not len(entry[1]):
             continue
         matrices, points, pose = entry
-        for part, rows, indices, weights in animator._bindings:
-            part.mesh.update_vertices(skin(rows, indices, weights, matrices))
+        animator.show(matrices)
         for k, (centre, members) in enumerate(regions(points, count)):
             plain, spots, share = best_view(shader, model, centre, members)
             title = f"{kind} {k + 1}: {len(members)} pts, {share:.0%} à vista, pose {pose}"

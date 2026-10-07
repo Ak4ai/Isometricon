@@ -141,6 +141,9 @@ class TexturedMesh:
         self.vbo: int = 0
         self.ebo: Optional[int] = None
         self._pending = None  # (vertices, indices) not sent to the GPU yet
+        self.skin_vbo: int = 0
+        self._skin = None  # (bones, weights) per vertex, when the vertex shader poses the mesh
+        self._skin_sent = False
 
         self.index_count = 0
         self.vertex_count = 0
@@ -214,6 +217,41 @@ class TexturedMesh:
             v_data, i_data = self._pending
             self._pending = None
             self._upload(v_data, i_data)
+        if self._skin is not None and not self._skin_sent:
+            self._upload_skin()
+
+    @property
+    def skinned(self) -> bool:
+        """Whether the mesh carries bones and weights for the vertex shader to pose it."""
+        return self._skin is not None
+
+    def set_skin(self, bones: np.ndarray, weights: np.ndarray) -> None:
+        """Give each vertex up to four bones and their weights (attributes 4 and 5). The
+        buffer keeps the bind pose and the vertex shader poses it from ``u_Bones``. They go
+        to the GPU on the next draw, on the thread that owns the context."""
+        bones, weights = np.asarray(bones), np.asarray(weights)
+        packed = np.zeros((len(bones), 8), dtype=np.float32)
+        packed[:, :bones.shape[1]] = bones
+        packed[:, 4:4 + weights.shape[1]] = weights
+        self._skin = packed
+        self._skin_sent = False
+
+    def _upload_skin(self) -> None:
+        if not self.skin_vbo:
+            self.skin_vbo = gl.glGenBuffers(1)
+        gl.glBindVertexArray(self.vao)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.skin_vbo)
+        gl.glBufferData(gl.GL_ARRAY_BUFFER, self._skin.nbytes, self._skin, gl.GL_STATIC_DRAW)
+        stride = 8 * ctypes.sizeof(ctypes.c_float)
+        # Attr 4: aBones (vec4, bone numbers) -> offset 0
+        gl.glEnableVertexAttribArray(4)
+        gl.glVertexAttribPointer(4, 4, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(0))
+        # Attr 5: aWeights (vec4) -> offset 16 bytes
+        gl.glEnableVertexAttribArray(5)
+        gl.glVertexAttribPointer(5, 4, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(4 * 4))
+        gl.glBindVertexArray(0)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
+        self._skin_sent = True
 
     def draw(self) -> None:
         """Desenha a malha indexada na GPU."""
@@ -268,6 +306,10 @@ class TexturedMesh:
         if hasattr(self, "ebo") and self.ebo:
             gl.glDeleteBuffers(1, [self.ebo])
             self.ebo = None
+        if getattr(self, "skin_vbo", 0):
+            gl.glDeleteBuffers(1, [self.skin_vbo])
+            self.skin_vbo = 0
+        self._skin = None
 
     def __del__(self) -> None:
         try:

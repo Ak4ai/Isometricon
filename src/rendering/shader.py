@@ -90,6 +90,13 @@ class Shader:
         if loc != -1:
             gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, np.ascontiguousarray(matrix, dtype=np.float32))
 
+    def set_mat4_array(self, name: str, matrices: np.ndarray) -> None:
+        """Envia um vetor de matrizes 4x4 float32 (N, 4, 4) para o shader."""
+        loc = self.get_uniform_location(name)
+        if loc != -1:
+            data = np.ascontiguousarray(matrices, dtype=np.float32)
+            gl.glUniformMatrix4fv(loc, len(data), gl.GL_TRUE, data)
+
     def set_mat3(self, name: str, matrix: np.ndarray) -> None:
         """Envia uma matriz 3x3 float32 para o shader."""
         loc = self.get_uniform_location(name)
