@@ -42,7 +42,7 @@ from src.clothing.character_model import CLOTHING_DIR, MODELS_DIR, CharacterMode
 from src.clothing.customization import AvatarCustomization, BodyType
 from src.clothing.hsr import closest_on_surface, subdivide
 from src.clothing.layer_clearance import _farthest_hits, fitted_asset_type
-from src.clothing.skeleton import rest_rotations, rotation_x, skin, walk_rotations
+from src.clothing.skeleton import rest_rotations, rotation_x, skin
 from src.clothing.wear_engine import RobloxWearEngine, body_parts_path
 from src.rendering.shader import Shader
 
@@ -73,11 +73,7 @@ def poses(animator):
     rest = animator.rest
     yield "descanso", dict(rest), (0, 0, 0)
     for k, phase in enumerate(np.linspace(0, 2 * math.pi, 4, endpoint=False)):
-        walk, root = walk_rotations(phase)
-        rotations = dict(rest)
-        for bone, rotation in walk.items():
-            rotations[bone] = rotation @ rotations[bone] if bone in rotations else rotation
-        yield f"andar {k + 1}", rotations, root
+        yield (f"andar {k + 1}", *animator.walk_pose(phase))
     yield "braços 90° lado", rest_rotations(animator.skeleton, math.pi / 2), (0, 0, 0)
     forward = dict(rest)
     for side in "LR":
@@ -268,7 +264,8 @@ def audit(shader, label, body, samples, tested=(), **ids):
     result = {"roupa": label, "corpo": body.value, "ids": {k: str(v) for k, v in ids.items()},
               "encaixe_pela_cage": all(os.path.exists(body_parts_path(part.source_obj)) for part, *_ in cloth),
               "area_da_peca_cm2": round(tested_area * 1e4), "buraco_cm2": round(hole * 1e4, 1),
-              "fura_na_pose_de_vestir_cm2": round(base_poke * 1e4, 1), "poses": {}}
+              "fura_na_pose_de_vestir_cm2": round(base_poke * 1e4, 1),
+              "balanco_dos_bracos": animator.arm_swing, "poses": {}}
     kept = {}
     for name, rotations, root in poses(animator):
         matrices = animator.skeleton.pose(rotations, root)
