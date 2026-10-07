@@ -135,6 +135,7 @@ class SkinCommandHandler:
         self.character_model = character_model
         self.turntable_state = turntable_state
         self.chat_console = None
+        self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.is_importing: bool = False
         self.import_status: str = ""
         self.import_asset_id: Optional[Any] = None
@@ -582,6 +583,13 @@ class SkinCommandHandler:
         self._apply_look(**preset)
         return True, f"[Preset] {value}.", GREEN
 
+    def interface(self, args: List[str]) -> Result:
+        missing = self._need_model()
+        if missing:
+            return missing
+        self.editor_requested = True
+        return True, "[Skin] Tela de criação de personagem aberta (Esc fecha).", GREEN
+
     def reset(self, args: List[str]) -> Result:
         self._apply_look(**PRESETS["padrao"])
         return True, "[Skin] Personagem de volta ao padrão (o corpo escolhido fica).", GREEN
@@ -652,6 +660,8 @@ SKIN_COMMANDS: List[Command] = [
     Command(("roupas", "outfit"), "/skin roupas", "mostra o que está vestido", SkinCommandHandler.outfit, [], "Roupas"),
     Command(("preset",), "/skin preset <nome>", "aparência pronta", SkinCommandHandler.preset, list(PRESETS), "Personagem"),
     Command(("reset",), "/skin reset", "volta ao padrão", SkinCommandHandler.reset, [], "Personagem"),
+    Command(("interface", "editor", "criar"), "/skin interface", "abre a tela de criação de personagem",
+            SkinCommandHandler.interface, [], "Personagem"),
 ]
 
 ROOT_COMMANDS: List[Command] = [

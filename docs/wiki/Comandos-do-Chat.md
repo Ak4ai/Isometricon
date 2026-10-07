@@ -21,6 +21,7 @@ execução, o autocompletar e a ajuda.
 | `/skin tirar <top\|calca\|jaqueta\|sapato\|cabelo\|arma\|tudo>` | remove (tudo mantém o cabelo) |
 | `/skin roupas` | lista o que está vestido |
 | `/skin preset <padrao\|gato_loiro\|cavaleiro\|rosa\|classico>` · `/skin reset` | aparência pronta (mantém o corpo) |
+| `/skin interface` | abre a [[tela de criação de personagem\|Criacao-de-Personagem]] |
 | `/ajuda [comando]` | lista por grupo, ou uso e apelidos de um comando |
 | `/girar [on\|off]` | rotação automática (só no visualizador `--char`) |
 

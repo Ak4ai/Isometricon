@@ -1,0 +1,544 @@
+"""Tela de criação de personagem: seções à esquerda, opções em grade e o personagem girando ao lado.
+
+Abre com ``/skin interface`` (no terreno ou no visualizador ``--char``). Cada opção da grade
+executa o mesmo comando do chat (``/skin olhos azul``, ``/skin top <id>``...), então a tela e o
+chat nunca divergem. As roupas vêm dos itens baixados em ``assets/models/clothing``, separadas
+pelo tipo do asset do Roblox.
+
+A disposição e os cliques não dependem de OpenGL (``create_gl=False`` nos testes); o painel é
+uma imagem desenhada com PIL e enviada como textura só quando muda.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import glob
+import os
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
+from src.clothing.customization import HairStyle
+from src.clothing.layer_clearance import fitted_asset_type
+from src.interactive.skin_commands import (
+    BODIES,
+    CLOTHING_DIR,
+    EYE_COLORS,
+    EYE_STYLES,
+    HAIR_COLORS,
+    HEADS,
+    MOUTHS,
+    PRESETS,
+    SKIN_TONES,
+    SkinCommandHandler,
+)
+
+Rect = Tuple[int, int, int, int]  # x0, y0, x1, y1
+
+PANEL_WIDTH = 408
+TAB_WIDTH = 104
+TAB_HEIGHT = 46
+FOOTER_HEIGHT = 96
+PAD = 12
+CARD = (88, 112)   # a garment: picture and two lines of name
+TEXT_TILE = 34     # height of a named option (two to a row)
+SWATCH = 32        # a colour (seven to a row)
+GAP = 8
+SWATCHES_PER_ROW = 7
+SCROLL_STEP = 60
+DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged
+SPIN_DEGREES = 30.0  # and this much each second on its own
+
+BACKGROUND = (22, 24, 30, 240)
+TAB_STRIP = (15, 16, 20, 245)
+TILE = (44, 47, 57, 255)
+TILE_HOVER = (62, 66, 80, 255)
+ACCENT = (255, 200, 60, 255)
+TEXT = (232, 234, 240, 255)
+MUTED = (150, 155, 168, 255)
+
+# Roblox asset types of the garments of each section.
+KIND_OF_TYPE = {64: "top", 65: "top", 68: "top", 67: "jacket", 66: "bottom", 69: "bottom", 72: "dress",
+                70: "shoe", 71: "shoe", 41: "hair", 19: "tool"}
+HAIR_WORDS = ("hair", "cabelo", "wig", "ponytail", "pigtails", "braids")
+LEFT_WORDS = ("left", "esquerdo")
+RIGHT_WORDS = ("right", "direito")
+SHOE_WORDS = ("shoe", "boots", "sneakers", "cal_ado", "calcado")
+
+EYE_RGB = {"azul": (70, 130, 235), "verde": (70, 190, 110), "castanho": (120, 80, 50), "roxo": (150, 90, 220),
+           "vermelho": (220, 60, 60), "dourado": (230, 185, 60), "ciano": (70, 215, 225)}
+HAIR_RGB = {"castanho": (105, 70, 45), "loiro": (235, 205, 120), "preto": (30, 30, 34), "rosa": (245, 160, 195),
+            "prata": (215, 218, 225), "ruivo": (170, 75, 40), "ciano": (80, 210, 225)}
+PORTUGUESE_EYE_STYLES = ("anime", "piscando", "classico", "sem")
+PORTUGUESE_MOUTHS = ("anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem")
+
+
+@dataclass
+class Option:
+    """Uma opção da grade: o que mostra e o comando do chat que aplica."""
+    label: str
+    command: str
+    color: Optional[Tuple[int, int, int]] = None  # a colour swatch
+    image: Optional[str] = None                   # a picture file (a garment)
+    selected: Callable[[Any], bool] = lambda model: False
+
+    @property
+    def kind(self) -> str:
+        return "card" if self.image is not None or self.command.startswith(CARD_COMMANDS) else \
+            "swatch" if self.color is not None else "text"
+
+
+CARD_COMMANDS = ("/skin top ", "/skin calca ", "/skin jaqueta ", "/skin sapato ", "/skin vestir ")
+
+
+@dataclass
+class Group:
+    title: str
+    options: List[Option]
+
+
+@dataclass
+class Section:
+    title: str
+    groups: Callable[[], List[Group]]
+
+
+@dataclass
+class CatalogItem:
+    asset_id: str  # one id, or "left,right" for a pair of shoes
+    name: str
+    kind: str
+    image: Optional[str] = None
+
+
+def _same(a: Any, b: Any) -> bool:
+    return a is not None and b is not None and str(a) == str(b)
+
+
+def _value(thing: Any) -> str:
+    return str(getattr(thing, "value", thing)).lower()
+
+
+def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> Dict[str, List[CatalogItem]]:
+    """Os itens baixados, por lugar onde se vestem (top, jacket, bottom, dress, shoes, hair, other).
+
+    O tipo vem do item já encaixado em qualquer corpo (cabeçalho do OBJ); sem ele, do nome.
+    Os dois pés de um calçado viram um item só.
+    """
+    found: Dict[str, List[CatalogItem]] = {k: [] for k in ("top", "jacket", "bottom", "dress", "shoes", "hair", "tool", "other")}
+    halves: Dict[str, Dict[str, CatalogItem]] = {}
+    for path in sorted(glob.glob(os.path.join(clothing_dir, "*.rbxm"))):
+        base = os.path.basename(path)
+        match = re.search(r"_(\d{6,})\.rbxm$", base)
+        if not match:
+            continue
+        asset_id, stem = match.group(1), base[:match.start()]
+        lower = stem.lower()
+        asset_type = next((t for t in (fitted_asset_type(os.path.join(models_dir, f"character_native_{asset_id}_{body}.obj"))
+                                       for body in ("female", "male")) if t is not None), None)
+        kind = KIND_OF_TYPE.get(asset_type)
+        if kind is None:
+            is_side = any(w in lower for w in LEFT_WORDS + RIGHT_WORDS)
+            kind = ("hair" if any(w in lower for w in HAIR_WORDS)
+                    else "shoe" if is_side and any(w in lower for w in SHOE_WORDS) else "other")
+        thumb = os.path.join(clothing_dir, "thumbs", f"{asset_id}.png")
+        texture = path[:-len(".rbxm")] + ".png"
+        image = thumb if os.path.exists(thumb) else texture if os.path.exists(texture) else None
+        item = CatalogItem(asset_id, re.sub(r"[_\s]+", " ", stem).strip(" -"), kind, image)
+        if kind != "shoe":
+            found[kind].append(item)
+            continue
+        side = "left" if any(w in lower for w in LEFT_WORDS) else "right"
+        pair = re.sub(r"[^a-z0-9]+", " ", re.sub("|".join(LEFT_WORDS + RIGHT_WORDS), "", lower)).strip()
+        pair = re.sub(r"\b(shoe|accessory|acess rio de cal ado|cla|cl)\b", "", pair).strip()
+        halves.setdefault(pair, {})[side] = item
+    for pair in halves.values():
+        if "left" in pair and "right" in pair:
+            left, right = pair["left"], pair["right"]
+            name = re.sub(r"(?i)\s*-?\s*(left|right)\s*(shoe)?\s*(accessory)?", "", left.name).strip(" -") or left.name
+            found["shoes"].append(CatalogItem(f"{left.asset_id},{right.asset_id}", name, "shoes", left.image))
+    return found
+
+
+class CharacterEditor:
+    """Estado, disposição e desenho da tela de criação de personagem."""
+
+    def __init__(self, handler: SkinCommandHandler, turntable_state: Optional[Dict[str, Any]] = None,
+                 create_gl: bool = True) -> None:
+        self.handler = handler
+        self.turntable = turntable_state if turntable_state is not None else {"active": True, "yaw": 0.0}
+        self.create_gl = create_gl
+        self.is_open = False
+        self.active = 0
+        self.scroll = 0
+        self.hover: Optional[Tuple[str, Any]] = None
+        self.message = ""
+        self.dirty = True
+        self._dragging = False
+        self._drag_x = 0.0
+        self._was_spinning = True
+        self._hits: List[Tuple[Rect, str, Any]] = []
+        self._content_height = 0
+        self._size = (0, 0)
+        self._busy = ""
+        self._selected_key: Any = None
+        self._images: Dict[Tuple[str, Tuple[int, int]], Any] = {}
+        self._catalog: Dict[str, List[CatalogItem]] = {}
+        self._groups: Optional[List[Group]] = None
+        self._quad = None
+        self.sections = self._make_sections()
+
+    # ------------------------------------------------------------------ o que há para escolher
+    @property
+    def model(self) -> Any:
+        return self.handler.character_model
+
+    def _custom(self) -> Any:
+        return getattr(self.model, "customization", None)
+
+    def _garments(self, kind: str, command: str, slot: str) -> List[Option]:
+        options = [Option("Nenhum", f"/skin {command} none", selected=lambda m, s=slot: not getattr(m, s, None))]
+        for item in self._catalog.get(kind, []):
+            options.append(Option(item.name, f"/skin {command} {item.asset_id}", image=item.image or "",
+                                  selected=lambda m, s=slot, i=item.asset_id: _same(getattr(m, s, None), i)))
+        return options
+
+    def _make_sections(self) -> List[Section]:
+        custom = self._custom
+        tone_rgb = lambda name: tuple(int(round(c * 255)) for c in SKIN_PRESETS[SKIN_TONES[name]])
+
+        def body() -> List[Group]:
+            return [
+                Group("Corpo", [Option(n.capitalize(), f"/skin corpo {n}", selected=lambda m, v=BODIES[n]: _value(getattr(m, "body", "")) == _value(v))
+                                for n in ("feminino", "masculino")]),
+                Group("Tom de pele", [Option(n.capitalize(), f"/skin pele {n}", color=tone_rgb(n),
+                                             selected=lambda m, n=n: custom() is not None and all(
+                                                 abs(a - b) < 0.02 for a, b in zip(custom().skin_color_rgb, SKIN_PRESETS[SKIN_TONES[n]])))
+                                      for n in SKIN_TONES]),
+                Group("Cabeça", [Option(n.capitalize(), f"/skin cabeca {n}", selected=lambda m, v=HEADS[n]: custom() is not None and _value(custom().head_type) == _value(v))
+                                 for n in ("arredondada", "quadrada")]),
+            ]
+
+        def face() -> List[Group]:
+            return [
+                Group("Olhos", [Option(n.capitalize(), f"/skin olhos {n}", selected=lambda m, v=EYE_STYLES[n]: custom() is not None and custom().resolved_eye_style == _value(v))
+                                for n in PORTUGUESE_EYE_STYLES]),
+                Group("Cor dos olhos", [Option(n.capitalize(), f"/skin olhos {n}", color=EYE_RGB[n],
+                                               selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(custom().iris_color) == _value(v))
+                                        for n in EYE_COLORS]),
+                Group("Boca", [Option(n.capitalize(), f"/skin boca {n}", selected=lambda m, v=MOUTHS[n]: custom() is not None and _value(custom().mouth_style) == _value(v))
+                               for n in PORTUGUESE_MOUTHS]),
+            ]
+
+        def hair() -> List[Group]:
+            style = lambda: _value(custom().hair_style) if custom() is not None else ""
+            hair_id = lambda m: getattr(m, "hair_id", None)
+            styles = [
+                Option("Padrão", "/skin cabelo padrao", selected=lambda m: style() == HairStyle.ANIME_LONG.value and (not hair_id(m) or _same(hair_id(m), DEFAULT_HAIR_ID))),
+                Option("Raspado", "/skin cabelo raspado", selected=lambda m: style() == HairStyle.BUZZ_CUT.value),
+                Option("Careca", "/skin cabelo careca", selected=lambda m: style() in (HairStyle.BALD.value, HairStyle.NONE.value)),
+            ]
+            worn = [Option(item.name, f"/skin cabelo {item.asset_id}", image=item.image or "",
+                           selected=lambda m, i=item.asset_id: _same(hair_id(m), i) and style() == HairStyle.ANIME_LONG.value)
+                    for item in self._catalog.get("hair", []) if not _same(item.asset_id, DEFAULT_HAIR_ID)]
+            groups = [Group("Estilo", styles),
+                      Group("Cor", [Option(n.capitalize(), f"/skin cabelo {n}", color=HAIR_RGB[n],
+                                           selected=lambda m, v=HAIR_COLORS[n]: custom() is not None and _value(custom().hair_color) == _value(v))
+                                    for n in HAIR_COLORS])]
+            return groups + ([Group("Cabelos do Roblox", worn)] if worn else [])
+
+        def looks() -> List[Group]:
+            return [Group("Aparências prontas", [Option(n.replace("_", " ").capitalize(), f"/skin preset {n}") for n in PRESETS]),
+                    Group("Recomeçar", [Option("Padrão", "/skin reset"), Option("Tirar roupas", "/skin tirar tudo")])]
+
+        return [
+            Section("Corpo", body),
+            Section("Rosto", face),
+            Section("Cabelo", hair),
+            Section("Superior", lambda: [Group("Roupa de cima", self._garments("top", "top", "top_id"))]),
+            Section("Jaqueta", lambda: [Group("Por cima da roupa", self._garments("jacket", "jaqueta", "outer_top_id"))]),
+            Section("Inferior", lambda: [Group("Roupa de baixo", self._garments("bottom", "calca", "bottom_id"))]),
+            Section("Vestidos", lambda: [Group("Vestidos e saias", [
+                Option(i.name, f"/skin vestir {i.asset_id}", image=i.image or "",
+                       selected=lambda m, a=i.asset_id: _same(getattr(m, "top_id", None), a) or _same(getattr(m, "bottom_id", None), a))
+                for i in self._catalog.get("dress", [])])]),
+            Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
+            Section("Prontos", looks),
+        ]
+
+    def groups(self) -> List[Group]:
+        if self._groups is None:
+            self._groups = self.sections[self.active].groups()
+        return self._groups
+
+    # ------------------------------------------------------------------ abrir, fechar, girar
+    def open(self) -> None:
+        self._catalog = catalog()
+        self._groups = None
+        self.is_open = True
+        self.message = "Arraste o personagem para girar. Esc fecha."
+        self._was_spinning = True
+        self.turntable["active"] = True
+        self.dirty = True
+
+    def close(self) -> None:
+        self.is_open = False
+        self._dragging = False
+        self.hover = None
+
+    def select_section(self, index: int) -> None:
+        if 0 <= index < len(self.sections) and index != self.active:
+            self.active, self.scroll, self._groups, self.dirty = index, 0, None, True
+
+    def update(self, dt: float) -> None:
+        """Gira o personagem e nota o que mudou por fora (comando do chat, roupa que terminou de encaixar)."""
+        if not self.is_open:
+            return
+        if self.turntable.get("active") and not self._dragging:
+            self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + dt * SPIN_DEGREES) % 360.0
+        busy = self.handler.busy_status or ""
+        selected = tuple(option.selected(self.model) for group in self.groups() for option in group.options) \
+            if self.model is not None else ()
+        if busy != self._busy or selected != self._selected_key:
+            self._busy, self._selected_key, self.dirty = busy, selected, True
+
+    # ------------------------------------------------------------------ disposição
+    def scene_rect(self, width: int, height: int) -> Rect:
+        """Onde o personagem é desenhado: a janela menos o painel."""
+        return (min(PANEL_WIDTH, width), 0, width, height)
+
+    def layout(self, width: int, height: int) -> List[Tuple[Rect, str, Any]]:
+        """As áreas clicáveis, em pixels da janela: ('tab', índice), ('option', Option), ('button', nome)."""
+        self._size = (width, height)
+        hits: List[Tuple[Rect, str, Any]] = []
+        for index in range(len(self.sections)):
+            y = PAD + index * (TAB_HEIGHT + 4)
+            hits.append(((6, y, TAB_WIDTH - 6, y + TAB_HEIGHT), "tab", index))
+        left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
+        top, bottom = PAD, height - FOOTER_HEIGHT
+        y = top
+        for group in self.groups():
+            y += 26  # the title of the group
+            kind = group.options[0].kind if group.options else "text"
+            if kind == "card":
+                columns, (w, h) = 3, CARD
+            elif kind == "swatch":
+                columns, (w, h) = SWATCHES_PER_ROW, (SWATCH, SWATCH)
+            else:
+                columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
+            for k, option in enumerate(group.options):
+                x = left + (k % columns) * (w + GAP)
+                oy = y + (k // columns) * (h + GAP) - self.scroll
+                if oy + h > top and oy < bottom:
+                    hits.append(((x, max(oy, top), x + w, min(oy + h, bottom)), "option", option))
+            y += -(-len(group.options) // columns) * (h + GAP) + 6
+        self._content_height = y - top
+        half = (right - left - GAP) // 2
+        hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
+        hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
+        self._hits = hits
+        return hits
+
+    def _max_scroll(self) -> int:
+        return max(0, self._content_height - (self._size[1] - FOOTER_HEIGHT - PAD))
+
+    def hit(self, x: float, y: float) -> Optional[Tuple[Rect, str, Any]]:
+        for rect, kind, payload in self._hits:
+            if rect[0] <= x < rect[2] and rect[1] <= y < rect[3]:
+                return rect, kind, payload
+        return None
+
+    # ------------------------------------------------------------------ entrada
+    def over_panel(self, x: float) -> bool:
+        return x < PANEL_WIDTH
+
+    def handle_mouse_button(self, x: float, y: float, button: int, action: int, shift: bool = False) -> bool:
+        """Clique esquerdo: escolhe no painel, ou começa a girar o personagem. True se o evento foi usado."""
+        if not self.is_open or button != 0:
+            return False
+        if action == 0:  # release
+            if self._dragging:
+                self._dragging = False
+                self.turntable["active"] = self._was_spinning
+                return True
+            return self.over_panel(x)
+        if not self.over_panel(x):
+            if shift:
+                return False  # Shift + arrastar continua sendo o pan da câmera
+            self._dragging, self._drag_x = True, x
+            self._was_spinning = bool(self.turntable.get("active"))
+            return True
+        found = self.hit(x, y)
+        if found is None:
+            return True
+        _, kind, payload = found
+        if kind == "tab":
+            self.select_section(payload)
+        elif kind == "option":
+            self.choose(payload)
+        elif payload == "spin":
+            self.turntable["active"] = self._was_spinning = not self.turntable.get("active")
+            self.dirty = True
+        elif payload == "done":
+            self.close()
+        return True
+
+    def choose(self, option: Option) -> None:
+        _, feedback, _ = self.handler.execute(option.command)
+        self.message = feedback.split("\n")[0] if feedback else ""
+        self.dirty = True
+
+    def handle_cursor(self, x: float, y: float) -> None:
+        if not self.is_open:
+            return
+        if self._dragging:
+            self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + (x - self._drag_x) * DRAG_DEGREES) % 360.0
+            self._drag_x = x
+            return
+        found = self.hit(x, y)
+        hover = (found[1], id(found[2]) if found[1] == "option" else found[2]) if found else None
+        if hover != self.hover:
+            self.hover, self.dirty = hover, True
+
+    def handle_scroll(self, x: float, y_offset: float) -> bool:
+        """A roda do mouse sobre o painel rola a grade; fora dele continua sendo o zoom."""
+        if not self.is_open or not self.over_panel(x):
+            return False
+        scroll = int(min(max(self.scroll - y_offset * SCROLL_STEP, 0), self._max_scroll()))
+        if scroll != self.scroll:
+            self.scroll, self.dirty = scroll, True
+        return True
+
+    def handle_key(self, key: int, action: int) -> bool:
+        """Esc fecha; Espaço liga ou desliga o giro."""
+        if not self.is_open or action != 1:
+            return False
+        if key == 256:  # GLFW_KEY_ESCAPE
+            self.close()
+            return True
+        if key == 32:   # GLFW_KEY_SPACE
+            self.turntable["active"] = self._was_spinning = not self.turntable.get("active")
+            self.dirty = True
+            return True
+        return False
+
+    # ------------------------------------------------------------------ desenho
+    def _font(self, size: int) -> Any:
+        from PIL import ImageFont
+        for name in ("segoeui.ttf", "C:/Windows/Fonts/segoeui.ttf", "arial.ttf", "DejaVuSans.ttf"):
+            try:
+                return ImageFont.truetype(name, size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def _picture(self, path: str, size: Tuple[int, int]) -> Any:
+        """A imagem de um item, cortada ao centro e reduzida ao tamanho do quadro (com cache)."""
+        from PIL import Image, ImageOps
+        key = (path, size)
+        if key not in self._images:
+            try:
+                self._images[key] = ImageOps.fit(Image.open(path).convert("RGBA"), size, Image.LANCZOS)
+            except Exception:
+                self._images[key] = None
+        return self._images[key]
+
+    def _fit_text(self, draw: Any, text: str, font: Any, width: int, lines: int) -> List[str]:
+        words, out, line = text.split(), [], ""
+        for word in words:
+            trial = (line + " " + word).strip()
+            if draw.textlength(trial, font=font) <= width or not line:
+                line = trial
+            else:
+                out.append(line)
+                line = word
+        out.append(line)
+        out = out[:lines]
+        while out and draw.textlength(out[-1], font=font) > width and len(out[-1]) > 1:
+            out[-1] = out[-1][:-2] + "…"
+        return out
+
+    def image(self, width: int, height: int) -> Any:
+        """O painel inteiro (PANEL_WIDTH x altura da janela) como imagem RGBA."""
+        from PIL import Image, ImageDraw
+        hits = self.layout(width, height)
+        panel = Image.new("RGBA", (PANEL_WIDTH, height), BACKGROUND)
+        draw = ImageDraw.Draw(panel)
+        draw.rectangle((0, 0, TAB_WIDTH, height), fill=TAB_STRIP)
+        title, text, small = self._font(15), self._font(14), self._font(11)
+        left, top, bottom = TAB_WIDTH + PAD, PAD, height - FOOTER_HEIGHT
+
+        # títulos dos grupos (rolam com a grade)
+        y = top
+        for group in self.groups():
+            if top <= y - self.scroll < bottom - 18:
+                draw.text((left, y - self.scroll + 4), group.title.upper(), font=small, fill=MUTED)
+            kind = group.options[0].kind if group.options else "text"
+            columns, h = (3, CARD[1]) if kind == "card" else (SWATCHES_PER_ROW, SWATCH) if kind == "swatch" else (2, TEXT_TILE)
+            y += 26 + -(-len(group.options) // columns) * (h + GAP) + 6
+
+        for rect, kind, payload in hits:
+            x0, y0, x1, y1 = rect
+            hovered = self.hover == (kind, id(payload) if kind == "option" else payload)
+            if kind == "tab":
+                active = payload == self.active
+                if active or hovered:
+                    draw.rounded_rectangle(rect, 6, fill=TILE_HOVER if active else TILE)
+                if active:
+                    draw.rectangle((x0, y0 + 8, x0 + 3, y1 - 8), fill=ACCENT)
+                draw.text((x0 + 14, (y0 + y1) // 2), self.sections[payload].title, font=title,
+                          fill=TEXT if active else MUTED, anchor="lm")
+            elif kind == "option":
+                selected = self.model is not None and payload.selected(self.model)
+                full = (y1 - y0) >= (CARD[1] if payload.kind == "card" else SWATCH if payload.kind == "swatch" else TEXT_TILE)
+                draw.rounded_rectangle(rect, 6, fill=TILE_HOVER if hovered else TILE)
+                if payload.kind == "swatch":
+                    draw.rounded_rectangle((x0 + 4, y0 + 4, x1 - 4, y1 - 4), 5, fill=payload.color + (255,))
+                elif payload.kind == "card" and full:
+                    picture = self._picture(payload.image, (CARD[0] - 8, 72)) if payload.image else None
+                    if picture is not None:
+                        panel.paste(picture, (x0 + 4, y0 + 4), picture)
+                    else:
+                        draw.line((x0 + 30, y0 + 26, x1 - 30, y0 + 54), fill=MUTED, width=2)
+                        draw.line((x1 - 30, y0 + 26, x0 + 30, y0 + 54), fill=MUTED, width=2)
+                    for k, line in enumerate(self._fit_text(draw, payload.label, small, CARD[0] - 8, 2)):
+                        draw.text(((x0 + x1) // 2, y0 + 80 + k * 13), line, font=small, fill=TEXT, anchor="ma")
+                elif payload.kind == "text" and full:
+                    draw.text(((x0 + x1) // 2, (y0 + y1) // 2), self._fit_text(draw, payload.label, text, x1 - x0 - 10, 1)[0],
+                              font=text, fill=TEXT, anchor="mm")
+                if selected:
+                    draw.rounded_rectangle(rect, 6, outline=ACCENT, width=2)
+            else:
+                label = ("Girar: ligado" if self.turntable.get("active") else "Girar: parado") if payload == "spin" else "Concluir"
+                fill = ACCENT if payload == "done" else (TILE_HOVER if hovered else TILE)
+                draw.rounded_rectangle(rect, 6, fill=fill)
+                draw.text(((x0 + x1) // 2, (y0 + y1) // 2), label, font=text,
+                          fill=(20, 20, 24, 255) if payload == "done" else TEXT, anchor="mm")
+
+        # rodapé: o que está acontecendo
+        draw.rectangle((TAB_WIDTH, bottom, PANEL_WIDTH, bottom + 1), fill=TILE)
+        status = self._busy or self.message
+        for k, line in enumerate(self._fit_text(draw, status, small, PANEL_WIDTH - TAB_WIDTH - 2 * PAD, 2)):
+            draw.text((left, bottom + 10 + k * 15), line, font=small, fill=ACCENT if self._busy else MUTED)
+        if self._max_scroll() > 0:  # barra de rolagem
+            track = bottom - top
+            size = max(24, int(track * track / max(self._content_height, 1)))
+            at = top + int((track - size) * self.scroll / self._max_scroll())
+            draw.rounded_rectangle((PANEL_WIDTH - 6, at, PANEL_WIDTH - 3, at + size), 2, fill=TILE_HOVER)
+        return panel
+
+    def render(self, width: int, height: int) -> None:
+        """Desenha o painel sobre a cena (a textura só é refeita quando algo mudou)."""
+        if not self.is_open or not self.create_gl:
+            return
+        from src.rendering.hud_quad import HudQuad
+        if self._quad is None:
+            self._quad = HudQuad()
+        if self.dirty or self._size != (width, height):
+            self._quad.set_image(self.image(width, height))
+            self.dirty = False
+        self._quad.draw(0, 0, width, height)
+
+    def delete(self) -> None:
+        if self._quad is not None:
+            self._quad.delete()
+            self._quad = None
