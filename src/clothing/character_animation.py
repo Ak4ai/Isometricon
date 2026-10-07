@@ -58,9 +58,10 @@ SMALL_PIECE = 30
 REST_ARM_LIMIT = np.radians(30.0)
 FITTING_ARM_ANGLE = np.radians(45.0)
 # Shares of the walk's arm swing tried, most first, and the cloth (m2) the arms may tear beyond
-# what the legs tear (600 cm2, where the robustness battery starts to pay attention). A cloth
+# what the legs tear (1500 cm2: an ordinary top stretches up to ~1200 under a swinging arm
+# without showing; costumes and capes tear several thousand). A cloth
 # triangle is torn when an edge grows past TEAR_RATIO and by more than TEAR_GROWTH (m).
-ARM_SWINGS, ARM_SWING_TEAR = (1.0, 0.6, 0.35), 0.06
+ARM_SWINGS, ARM_SWING_TEAR = (1.0, 0.6, 0.35), 0.15
 TEAR_RATIO, TEAR_GROWTH = 2.5, 0.02
 # Bones that can move one cloth vertex.
 CLOTH_INFLUENCES = 4
