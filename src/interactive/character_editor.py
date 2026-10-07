@@ -45,7 +45,9 @@ SWATCH = 32        # a colour (seven to a row)
 GAP = 8
 SWATCHES_PER_ROW = 7
 SCROLL_STEP = 60
-DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged
+DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged sideways
+TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
+TILT_LIMITS = (-20.0, 80.0)  # from a little below the character to almost straight above
 SPIN_DEGREES = 30.0  # and this much each second on its own
 
 BACKGROUND = (22, 24, 30, 240)
@@ -175,6 +177,7 @@ class CharacterEditor:
         self.dirty = True
         self._dragging = False
         self._drag_x = 0.0
+        self._drag_y = 0.0
         self._was_spinning = True
         self._hits: List[Tuple[Rect, str, Any]] = []
         self._content_height = 0
@@ -275,7 +278,7 @@ class CharacterEditor:
         self._catalog = catalog()
         self._groups = None
         self.is_open = True
-        self.message = "Arraste o personagem para girar. Esc fecha."
+        self.message = "Arraste para girar e inclinar a vista. Esc fecha."
         self._was_spinning = True
         self.turntable["active"] = True
         self.dirty = True
@@ -374,7 +377,7 @@ class CharacterEditor:
         if not self.over_panel(x):
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
-            self._dragging, self._drag_x = True, x
+            self._dragging, self._drag_x, self._drag_y = True, x, y
             self._was_spinning = bool(self.turntable.get("active"))
             return True
         found = self.hit(x, y)
@@ -402,7 +405,10 @@ class CharacterEditor:
             return
         if self._dragging:
             self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + (x - self._drag_x) * DRAG_DEGREES) % 360.0
-            self._drag_x = x
+            if "pitch" in self.turntable:  # the camera's tilt, in degrees (the main loop applies it)
+                tilt = self.turntable["pitch"] + (y - self._drag_y) * TILT_DEGREES
+                self.turntable["pitch"] = min(max(tilt, TILT_LIMITS[0]), TILT_LIMITS[1])
+            self._drag_x, self._drag_y = x, y
             return
         found = self.hit(x, y)
         hover = (found[1], id(found[2]) if found[1] == "option" else found[2]) if found else None

@@ -17,7 +17,8 @@ divergem.
 | Clique numa aba | troca a seção |
 | Clique numa opção | aplica (o quadro da opção em uso fica contornado) |
 | Roda do mouse sobre o painel | rola a grade |
-| Arrastar o personagem | gira (o giro automático pausa enquanto segura) |
+| Arrastar para os lados | gira o personagem (o giro automático pausa enquanto segura) |
+| Arrastar para cima ou para baixo | inclina a câmera, de um pouco abaixo do personagem até quase de cima |
 | **Espaço** ou botão **Girar** | liga ou desliga o giro automático |
 | Roda do mouse sobre o personagem | zoom |
 | **Shift + arrastar** ou botão do meio | move a câmera |
