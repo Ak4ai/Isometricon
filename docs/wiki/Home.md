@@ -19,6 +19,7 @@ O projeto é dividido em **dois subprojetos complementares** desenvolvidos no me
 | [[Animação e Esqueleto\|Animacao-e-Esqueleto]] | Rig do jogo, pesos das roupas, descanso e caminhada. |
 | [[Bateria de Robustez\|Bateria-de-Robustez]] | Como medir o catálogo inteiro e os resultados. |
 | [[Comandos do Chat\|Comandos-do-Chat]] | Todos os comandos /skin. |
+| [[Criação de Personagem\|Criacao-de-Personagem]] | Tela com seções e grade de opções (`/skin interface`). |
 
 ---
 

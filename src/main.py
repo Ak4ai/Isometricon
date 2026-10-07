@@ -421,6 +421,18 @@ def main() -> None:
                     chat_console.add_message(feedback, color)
     if open_chat:
         chat_console.open(chat_text or "")
+
+    # Tela de criação de personagem (/skin interface, ou --editor para já abrir nela).
+    from src.interactive.character_editor import CharacterEditor
+    character_editor = CharacterEditor(skin_command_handler, turntable_state, create_gl=True)
+    editor_camera = {"saved": None}
+    editor_arg = next((a for a in sys.argv[1:] if a == "--editor" or a.startswith("--editor=")), None)
+    if editor_arg is not None and character_model is not None:
+        skin_command_handler.editor_requested = True
+        wanted = editor_arg.partition("=")[2].lower()  # --editor=cabelo abre nessa seção
+        for index, section in enumerate(character_editor.sections):
+            if wanted and section.title.lower().startswith(wanted):
+                character_editor.select_section(index)
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
     textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
@@ -512,9 +524,12 @@ def main() -> None:
             print(f"[Input] Erro ao processar tecla no console de chat: {e}")
             return True
 
+        if character_editor.handle_key(key, action):
+            return True
+
         keys_pressed[key] = (action != glfw.RELEASE)
-        
-        if terrain_demo and key == glfw.KEY_R and action == glfw.PRESS:
+
+        if terrain_demo and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
             new_seed = random.randint(1, 999_999)
             active_seed["value"] = new_seed
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
@@ -568,8 +583,13 @@ def main() -> None:
                 chat_console.handle_mouse_click(cx, cy)
             return
         
+        if character_editor.is_open:
+            cx, cy = window.get_cursor_pos()
+            if character_editor.handle_mouse_button(cx, cy, button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
+                return
+
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
-        is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(glfw.KEY_LEFT_SHIFT)) 
+        is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(glfw.KEY_LEFT_SHIFT))
 
         if action == glfw.PRESS:
             if is_middle or is_left_with_shift:
@@ -580,7 +600,7 @@ def main() -> None:
 
                 pan_state["last_x"] = x
                 pan_state["last_y"] = y
-            elif terrain_demo and button == glfw.MOUSE_BUTTON_LEFT:
+            elif terrain_demo and not character_editor.is_open and button == glfw.MOUSE_BUTTON_LEFT:
                 picking_state["click_pending"] = True
 
         elif action == glfw.RELEASE:
@@ -594,6 +614,7 @@ def main() -> None:
         """Move o ponto focal enquanto o botão central estiver pressionado."""
         if chat_console.is_open:
             return
+        character_editor.handle_cursor(x, y)
         if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
             if not window.is_key_pressed(glfw.KEY_LEFT_SHIFT):
                 pan_state["active"] = False
@@ -614,8 +635,14 @@ def main() -> None:
         pan_state["last_y"] = y
 
     # Registrar callbacks na janela.
+    def handle_scroll(x_offset: float, y_offset: float) -> None:
+        """A roda do mouse rola a grade da tela de criação; fora dela, é o zoom da câmera."""
+        if character_editor.handle_scroll(window.get_cursor_pos()[0], y_offset):
+            return
+        camera.handle_scroll(x_offset, y_offset)
+
     window.add_scroll_callback(
-        camera.handle_scroll
+        handle_scroll
     )
 
     window.add_key_callback(
@@ -683,7 +710,30 @@ def main() -> None:
         camera.update(dt)
         chat_console.update(dt)
 
-        if terrain_demo:
+        # Abrir e fechar a tela de criação: a câmera enquadra o personagem e volta ao sair.
+        if skin_command_handler.editor_requested:
+            skin_command_handler.editor_requested = False
+            character_editor.open()
+        editing = character_editor.is_open and character_model is not None
+        if editing and editor_camera["saved"] is None:
+            editor_camera["saved"] = (camera.target.copy(), camera.ortho_size)
+            camera.target = vec3(0.0, 0.95, 0.0)
+            camera.ortho_size = 1.18
+            keys_pressed.clear()
+        elif not editing and editor_camera["saved"] is not None:
+            camera.target, camera.ortho_size = editor_camera["saved"]
+            editor_camera["saved"] = None
+            if not char_demo:
+                turntable_state["active"], turntable_state["yaw"] = False, 0.0
+
+        if editing:
+            character_editor.update(dt)
+            if terrain_demo and player_token.animator is not None:
+                player_token.animator.walking = False
+                player_token.animator.update(dt)
+            elif char_demo:
+                character_animator.update(dt)
+        elif terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
             player_token.update(
                 dt,
@@ -767,8 +817,10 @@ def main() -> None:
         # --------------------------------------------------------------
         # Matrizes da câmera
         # --------------------------------------------------------------
+        scene_x, _, scene_right, _ = character_editor.scene_rect(window.width, window.height) if editing \
+            else (0, 0, window.width, window.height)
         projection = camera.get_projection_matrix(
-            window.width,
+            max(scene_right - scene_x, 1),
             window.height,
         )
         view = camera.get_view_matrix()
@@ -776,7 +828,7 @@ def main() -> None:
 
         # O hover fica suspenso durante o drag para não disputar o gesto de pan.
         # Como os eventos são processados acima, ele retorna no frame do release.
-        if terrain_demo and not pan_state["active"]:
+        if terrain_demo and not editing and not pan_state["active"]:
             mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
             mouse_ray = screen_to_world_ray(
                 mouse_x,
@@ -822,7 +874,24 @@ def main() -> None:
         gl.glBindTexture(gl.GL_TEXTURE_2D, current_texture["id"])
         shader.set_int("u_TextureAtlas", 0)    
 
-        if terrain_demo:
+        if editing:
+            # Só o personagem, ao lado do painel, com a luz e o fundo do visualizador.
+            fb_w, fb_h = glfw.get_framebuffer_size(window._window)
+            scale = fb_w / max(window.width, 1)
+            gl.glClearColor(0.12, 0.13, 0.16, 1.0)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            gl.glViewport(int(scene_x * scale), 0, int((scene_right - scene_x) * scale), fb_h)
+            shader.set_vec3("u_LightDir", 0.5, 1.2, 0.8)
+            shader.set_vec3("u_LightColor", 0.70, 0.70, 0.70)
+            shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
+            character_model.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
+            gl.glViewport(0, 0, fb_w, fb_h)
+            if not char_demo:
+                shader.set_vec3("u_LightDir", 0.5, 1.0, 0.7)
+                shader.set_vec3("u_LightColor", 0.9, 0.9, 0.9)
+                shader.set_vec3("u_AmbientColor", 0.35, 0.35, 0.35)
+                gl.glClearColor(0.08, 0.10, 0.13, 1.0)
+        elif terrain_demo:
             # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
@@ -884,6 +953,7 @@ def main() -> None:
         # --------------------------------------------------------------
         # Renderizar interface 2D do Console de Chat (HUD estilo Minecraft)
         # --------------------------------------------------------------
+        character_editor.render(window.width, window.height)
         chat_console.render(window.width, window.height)
 
         # --------------------------------------------------------------

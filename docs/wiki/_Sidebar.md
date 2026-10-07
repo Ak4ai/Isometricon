@@ -18,6 +18,7 @@
 * [[🦴 Animação e Esqueleto|Animacao-e-Esqueleto]]
 * [[🧪 Bateria de Robustez|Bateria-de-Robustez]]
 * [[💬 Comandos do Chat|Comandos-do-Chat]]
+* [[🧑‍🎨 Criação de Personagem|Criacao-de-Personagem]]
 * [[🧪 Histórico de Experimentos|Historico-de-Experimentos]]
 * [[📌 Pendências e Roadmap|Pendencias]]
 
