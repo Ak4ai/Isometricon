@@ -43,6 +43,10 @@ FAR_CLOTH = (0.20, 0.40)
 WRAP_SLICE, WRAP_GAP = 0.08, np.radians(120)
 # How far (m) along the garment trunk cloth counts as part of a patch of limb cloth.
 WRAP_REACH = 0.15
+# A sleeve has a wall between the arm and the torso: cloth within this angle of the way to the
+# torso, nearer the arm than this share of the way. A cape or a whole-body costume wraps the arm
+# together with the torso and has none.
+SLEEVE_WALL_CONE, SLEEVE_WALL_SHARE = np.radians(60), 0.5
 # A connected piece of a garment with at least this share of its vertices on one limb is all on it.
 LIMB_PIECE = 0.6
 # A connected piece of a garment with no more vertices than this moves as one.
@@ -53,6 +57,11 @@ SMALL_PIECE = 30
 # and those ask for the fitting pose itself.
 REST_ARM_LIMIT = np.radians(30.0)
 FITTING_ARM_ANGLE = np.radians(45.0)
+# Shares of the walk's arm swing tried, most first, and the cloth (m2) the arms may tear beyond
+# what the legs tear (600 cm2, where the robustness battery starts to pay attention). A cloth
+# triangle is torn when an edge grows past TEAR_RATIO and by more than TEAR_GROWTH (m).
+ARM_SWINGS, ARM_SWING_TEAR = (1.0, 0.6, 0.35), 0.06
+TEAR_RATIO, TEAR_GROWTH = 2.5, 0.02
 # Bones that can move one cloth vertex.
 CLOTH_INFLUENCES = 4
 # How fast (1/s) the pose eases into the walk when starting and back to rest when stopping.
@@ -109,6 +118,17 @@ def _spread(bone_of, stray, edges):
                 took = True
         if not took:
             break
+
+
+def _torn_area(rows, posed, faces):
+    """Area (m2) of the cloth triangles a pose tears: an edge grown past TEAR_RATIO and by TEAR_GROWTH."""
+    torn = np.zeros(len(faces), dtype=bool)
+    for i, j in ((0, 1), (1, 2), (2, 0)):
+        before = np.linalg.norm(rows[faces[:, i], :3] - rows[faces[:, j], :3], axis=1)
+        after = np.linalg.norm(posed[faces[:, i], :3] - posed[faces[:, j], :3], axis=1)
+        torn |= (before > 1e-5) & (after > TEAR_RATIO * before) & (after - before > TEAR_GROWTH)
+    a, b, c = (posed[faces[torn, k], :3].astype(np.float64) for k in range(3))
+    return float(0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1).sum())
 
 
 def _within(position, edges, seeds, limit):
@@ -242,8 +262,46 @@ class CharacterAnimator:
                                 around.append(self._around(bone, worn.astype(np.float64))[1])
             sleeve = float(np.percentile(np.concatenate(around), 90)) if around else 0.0
             self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones, np.vstack(beside_arms), sleeve))
+        self.arm_swing = 1.0
+        self.arm_swing = self._arm_swing()
         self._bound_key = self._key()
         self._shown = None
+
+    def walk_pose(self, walk_time, stride=1.0):
+        """(rotations, root) of the walk at ``walk_time``, ``stride`` of the way from the rest pose."""
+        rotations, root = dict(self.rest), (0.0, 0.0, 0.0)
+        if stride > 0.0:
+            walk, root = walk_rotations(walk_time)
+            for bone, rotation in walk.items():
+                swing = self.arm_swing if bone.startswith(("UpperArm_", "LowerArm_")) else 1.0
+                rotation = partial_rotation(rotation, stride * swing)
+                rotations[bone] = rotation @ rotations[bone] if bone in rotations else rotation
+            root = tuple(stride * np.asarray(root, dtype=np.float64))
+        return rotations, root
+
+    def _arm_swing(self):
+        """How much of the walk's arm swing the clothes allow: the most (of ARM_SWINGS) that
+        tears no more than ARM_SWING_TEAR of cloth beyond what the legs alone tear. An arm
+        inside a costume or under a cape, swinging fully, drags the cloth that stays with
+        the trunk (or comes out through it)."""
+        cloth = [(rows, indices, weights, part.mesh.read_indices().reshape(-1, 3))
+                 for part, rows, indices, weights in self._bindings if part.source_obj is not None]
+        if not cloth:
+            return 1.0
+
+        def torn(amount):
+            self.arm_swing = amount
+            area = 0.0
+            for phase in (0.0, np.pi):
+                matrices = self.skeleton.pose(*self.walk_pose(phase))
+                area = max(area, sum(_torn_area(rows, skin(rows, i, w, matrices), f) for rows, i, w, f in cloth))
+            return area
+
+        legs_alone = torn(0.0)
+        for amount in ARM_SWINGS:
+            if torn(amount) - legs_alone <= ARM_SWING_TEAR:
+                return amount
+        return ARM_SWINGS[-1]
 
     def _subtree(self, bone):
         """Indices of a bone and every bone it carries."""
@@ -343,9 +401,15 @@ class CharacterAnimator:
         """Mask of the cloth that wraps the limb it is labelled with (a sleeve, a trouser leg,
         however wide), as opposed to cloth that only lies or hangs near it (the side of a coat
         next to the arm, a cape behind the legs). Each connected patch of a stretch of limb
-        wraps it when most of its slices leave no wide gap around the bone."""
+        wraps it when most of its slices leave no wide gap around the bone, and, on an arm,
+        have a wall between the arm and the torso (a sleeve, not a cape over arm and torso)."""
         wraps = np.zeros(len(position), dtype=bool)
         trunk = ~np.isin(bone_of, [b for _, labels in self._stretches() for b in labels])
+        arms = {self.skeleton.index(f"{name}_{side}") for name in ("UpperArm", "LowerArm") for side in "LR"}
+        torso = self.skeleton.index("Torso")
+        torso_head = self.skeleton.heads[torso]
+        torso_axis = self.skeleton.tails[torso] - torso_head
+        torso_axis = torso_axis / np.linalg.norm(torso_axis)
         for bone, labels in self._stretches():
             mine = np.isin(bone_of, labels)
             if not mine.any():
@@ -359,14 +423,28 @@ class CharacterAnimator:
                 allowed = inside | trunk
                 joined = edges[allowed[edges[:, 0]] & allowed[edges[:, 1]]]
                 ring = np.flatnonzero(_within(position, joined, inside, WRAP_REACH))
-                along, _, angle = self._around(bone, position[ring])
+                along, radial, angle = self._around(bone, position[ring])
                 slices = np.floor(along / WRAP_SLICE).astype(int)
                 closed = []
                 for k in np.unique(slices[inside[ring]]):
-                    turns = np.sort(angle[slices == k])
-                    closed.append(np.diff(np.concatenate([turns, turns[:1] + 2 * np.pi])).max() < WRAP_GAP)
+                    here = slices == k
+                    turns = np.sort(angle[here])
+                    wrapped = np.diff(np.concatenate([turns, turns[:1] + 2 * np.pi])).max() < WRAP_GAP
+                    if wrapped and bone in arms:
+                        wrapped = self._has_wall(bone, (k + 0.5) * WRAP_SLICE, radial[here], angle[here],
+                                                 torso_head, torso_axis)
+                    closed.append(wrapped)
                 wraps[inside] = np.mean(closed) > 0.5
         return wraps
+
+    def _has_wall(self, bone, along, radial, angle, torso_head, torso_axis):
+        """Whether cloth around a point of an arm bone (``along`` it) lies between the arm and the torso."""
+        head, tail = self.skeleton.heads[bone], self.skeleton.tails[bone]
+        point = head + along * (tail - head) / np.linalg.norm(tail - head)
+        on_torso = torso_head + ((point - torso_head) @ torso_axis) * torso_axis
+        _, gap, towards = self._around(bone, on_torso[None])
+        off = np.abs(np.angle(np.exp(1j * (angle - towards[0]))))
+        return bool(((off < SLEEVE_WALL_CONE) & (radial < SLEEVE_WALL_SHARE * gap[0])).any())
 
     def _carried(self, position, bone_of, wraps, chain_bones):
         """How much of each vertex a limb carries (0 to 1), for the cloth labelled with its bones:
@@ -535,14 +613,7 @@ class CharacterAnimator:
             self.walk_time = walk_time
         elif self.walking:
             self.walk_time += dt * WALK_SPEED
-        rotations, root = dict(self.rest), (0.0, 0.0, 0.0)
-        if self.stride > 0.0:
-            walk, root = walk_rotations(self.walk_time)
-            for bone, rotation in walk.items():
-                rotation = partial_rotation(rotation, self.stride)
-                rotations[bone] = rotation @ rotations[bone] if bone in rotations else rotation
-            root = tuple(self.stride * np.asarray(root, dtype=np.float64))
-        matrices = self.skeleton.pose(rotations, root)
+        matrices = self.skeleton.pose(*self.walk_pose(self.walk_time, self.stride))
         for part, rows, indices, weights in self._bindings:
             part.mesh.update_vertices(skin(rows, indices, weights, matrices))
         self._shown = "walk" if self.stride > 0.0 else "rest"

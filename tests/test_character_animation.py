@@ -94,3 +94,31 @@ def test_a_skirt_is_not_split_between_the_legs(body):
     assert np.abs(dense[edges[:, 0]] - dense[edges[:, 1]]).max() < 0.5
     side = points[:, 0] > 0.2  # the cloth beside the left leg goes with it
     assert dense[side & (points[:, 1] < hip[1] - 0.3), skeleton.index("UpperLeg_L")].min() > 0.5
+
+
+
+@pytest.mark.parametrize('body', ['female', 'male'])
+def test_arms_swing_less_only_when_the_clothes_tear(body):
+    skin_mesh = MemoryMesh([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]])
+    model = SimpleNamespace(body=body, parts=[SimpleNamespace(name='trunk_skin', mesh=skin_mesh,
+                                                              transform=None, source_obj=None)])
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    assert animator.arm_swing == 1.0  # nothing worn, nothing to tear
+
+    def swing(amount):
+        animator.arm_swing = amount
+        upper = animator.walk_pose(0.0)[0]['UpperArm_L'] @ np.linalg.inv(animator.rest['UpperArm_L'])
+        return np.arccos(np.clip((np.trace(upper[:3, :3]) - 1) / 2, -1.0, 1.0))
+
+    assert 0.0 < swing(0.35) < swing(1.0)
+
+
+def test_torn_area_counts_only_triangles_stretched_well_past_their_size():
+    from src.clothing.character_animation import _torn_area
+    rows = np.array([[0, 0, 0], [0.1, 0, 0], [0, 0.1, 0]], dtype=np.float64)
+    faces = np.array([[0, 1, 2]])
+    assert _torn_area(rows, rows, faces) == 0.0
+    assert _torn_area(rows, rows * [2.0, 1.0, 1.0], faces) == 0.0  # twice as long: not torn
+    torn = rows * [4.0, 1.0, 1.0]
+    assert _torn_area(rows, torn, faces) == pytest.approx(0.5 * 0.4 * 0.1)
