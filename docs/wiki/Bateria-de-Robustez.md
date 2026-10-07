@@ -43,30 +43,33 @@ python scripts/audit_animation_robustness.py --output artifacts/robustness --rep
 
 ![Calibração do esticado](images/bateria/calibracao-esticado.png)
 
-## 📊 Última rodada completa (06/10/2026, cache v34, regra nova de buraco)
+## 📊 Última rodada completa (07/10/2026, cache v37)
 
-204 combinações (102 por corpo): **117 ok, 70 atenção, 17 falha**.
+204 combinações (102 por corpo): **117 ok, 74 atenção, 13 falha**. Contra a rodada anterior (117 / 70 / 17), nenhuma
+peça piorou em nenhuma medida, em nenhum dos corpos; 20 melhoraram.
 
-- Tecido rasgado: Sully, Baby Shark, Realistic White Pigeon, Squirrel Suit, Strawberry Onesie, White Cat Costume e
-  Cloak.
-- Buraco: suéter com laço (real, no pescoço); Goose, Dinosaur e terno Mafioso (masculino) ainda sem confirmação.
+- Tecido rasgado: Sully, Realistic White Pigeon e Strawberry Onesie (masculino).
+- Buraco: suéter com laço (real, no pescoço), Baby Shark, Goose, Dinosaur e terno Mafioso (sem confirmação por imagem).
 - Pele furando: saia longa com fenda e Blue Fish Suit (masculino).
+- Saíram da falha: Cloak e White Cat nos dois corpos, Squirrel (masculino).
 
-Evolução: 79 ok / 52 / 73 falha → depois dos pesos gerais das roupas 91 / 74 / 39 → 101 / 70 / 33 → regra nova de
-buraco 117 / 70 / 17.
+O relatório guarda, por peça, o balanço dos braços que o animador escolheu (`balanco_dos_bracos`): 184 de 204 andam
+com balanço cheio; só fantasias, a Cloak e suéteres muito largos reduzem.
+
+Evolução: 79 ok / 52 / 73 falha → pesos gerais das roupas 91 / 74 / 39 → 101 / 70 / 33 → regra nova de buraco
+117 / 70 / 17 → manga × capa e balanço dos braços 117 / 74 / 13.
+
+**Como comparar duas rodadas:** uma mudança só entra se nenhuma peça piorar. Compare `relatorio.json` das duas
+rodadas peça por peça (esticado, pele furando, buraco e o que já fura na pose de vestir), não só a contagem.
 
 ![Peças que saíram da falha](images/bateria/recuperadas.png)
 
 ## ⚠️ Pendências conhecidas
 
-- **Fantasias de corpo inteiro e Cloak acima do limite de esticado.** O teste que decide se o tecido "envolve o
-  membro" não distingue uma manga (tecido em volta só do braço) de um saco ou capa que envolve braço e tronco juntos:
-  - Baby Shark: o tecido do lado do tubarão, 18–28 cm atrás do braço, não conta como manga e fica com o tronco; o
-    braço balança dentro do saco e a mão sai pela frente.
-  - Cloak: a capa em volta do antebraço conta como manga e abre como asa quando o braço balança.
-  - White Cat: a manga segue o braço e rasga a lateral do corpo da fantasia no quadril.
-  - Caminho provável: só é manga o tecido que tem parede entre o braço e o tronco; em sacos e capas o braço anda
-    por dentro (com menos balanço quando a peça é de corpo inteiro).
+- **Fantasias de corpo inteiro ainda rasgam** (Sully, Pigeon, Strawberry no masculino): o braço fica dentro de um
+  saco sem manga. O balanço reduzido tirou Cloak e White Cat da falha; nas que sobram o rasgo vem também das pernas.
+- **Long Dress (vestido rosa listrado) com frestas entre os gomos da saia**, já parado: vem do encaixe, não da
+  animação (ver [[Histórico de Experimentos|Historico-de-Experimentos]]).
 - Calça de moletom com tênis embutido em atenção (~630 cm²).
 - Baggy jeans com o cós ~9 cm longe do corpo e sobretudo com ponta no quadril: vêm do modelo da peça e da
   proporção do nosso corpo (mais estreito que o Blocky); mudar exigiria mexer no encaixe de todas as roupas largas.
