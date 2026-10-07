@@ -116,6 +116,21 @@ def test_dragging_beside_the_panel_turns_the_character_and_pauses_the_spin():
     assert not editor.handle_mouse_button(800, 300, LEFT, PRESS, shift=True)  # Shift + drag stays the camera pan
 
 
+def test_dragging_up_and_down_tilts_the_camera_within_its_limits():
+    editor, _ = make_editor()
+    editor.turntable["pitch"] = 30.0
+    editor.handle_mouse_button(800, 300, LEFT, PRESS)
+    editor.handle_cursor(800, 400)
+    assert editor.turntable["pitch"] > 30.0 and editor.turntable["yaw"] == 0.0  # straight down: tilt only
+    editor.handle_cursor(800, 5000)
+    assert editor.turntable["pitch"] == 80.0
+    editor.handle_cursor(800, -5000)
+    assert editor.turntable["pitch"] == -20.0
+    editor.handle_mouse_button(800, -5000, LEFT, RELEASE)
+    editor.handle_cursor(800, 300)
+    assert editor.turntable["pitch"] == -20.0  # not held: moving the mouse changes nothing
+
+
 def test_escape_and_the_done_button_close_the_editor_and_space_toggles_the_spin():
     editor, _ = make_editor()
     assert editor.handle_key(SPACE, PRESS) and editor.turntable["active"] is False

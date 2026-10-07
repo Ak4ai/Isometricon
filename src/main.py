@@ -716,18 +716,21 @@ def main() -> None:
             character_editor.open()
         editing = character_editor.is_open and character_model is not None
         if editing and editor_camera["saved"] is None:
-            editor_camera["saved"] = (camera.target.copy(), camera.ortho_size)
+            editor_camera["saved"] = (camera.target.copy(), camera.ortho_size, camera.pitch)
+            turntable_state["pitch"] = math.degrees(camera.pitch)  # o arraste vertical inclina a câmera
             camera.target = vec3(0.0, 0.95, 0.0)
             camera.ortho_size = 1.18
             keys_pressed.clear()
         elif not editing and editor_camera["saved"] is not None:
-            camera.target, camera.ortho_size = editor_camera["saved"]
+            camera.target, camera.ortho_size, camera.pitch = editor_camera["saved"]
+            turntable_state.pop("pitch", None)
             editor_camera["saved"] = None
             if not char_demo:
                 turntable_state["active"], turntable_state["yaw"] = False, 0.0
 
         if editing:
             character_editor.update(dt)
+            camera.pitch = math.radians(turntable_state["pitch"])
             if terrain_demo and player_token.animator is not None:
                 player_token.animator.walking = False
                 player_token.animator.update(dt)
