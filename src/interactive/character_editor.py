@@ -169,6 +169,7 @@ class CharacterEditor:
         self.handler = handler
         self.turntable = turntable_state if turntable_state is not None else {"active": True, "yaw": 0.0}
         self.create_gl = create_gl
+        self.autosave = True  # closing the editor saves the character
         self.is_open = False
         self.active = 0
         self.scroll = 0
@@ -284,6 +285,9 @@ class CharacterEditor:
         self.dirty = True
 
     def close(self) -> None:
+        """Fecha a tela e grava o personagem (o que foi montado nela não se perde ao sair do jogo)."""
+        if self.is_open and self.autosave and self.model is not None and hasattr(self.handler, "save"):
+            self.handler.save()
         self.is_open = False
         self._dragging = False
         self.hover = None
