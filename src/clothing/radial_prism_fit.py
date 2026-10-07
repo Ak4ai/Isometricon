@@ -29,12 +29,6 @@ from .wrap_layer_fit import _local_map
 # Residual (garment point to its prism) beyond which a vertex counts as hanging.
 # Asset units are studs; 1 stud = 28 cm at Roblox avatar scale, so this is 3 cm.
 HANGING_RESIDUAL = 3.0 / 28.0
-# Hanging cloth follows the rotation and size of the cloth it hangs from when that is at least
-# this many vertices around, within this factor of the cage's own scale.
-HANGING_ANCHORS, HANGING_SCALE_LIMIT = 12, 1.25
-# How far (5 cm) from its anchor hanging cloth keeps the anchor's own offset, in a garment with
-# at least this many hanging vertices (a ball gown's skirt, a cape).
-HANGING_FADE, HANGING_BULK = 5.0 / 28.0, 200
 
 
 def closest_prism_binding(point, inner, outer, faces, lower, upper):
@@ -174,27 +168,6 @@ def _global_map(reference, target):
     return matrix
 
 
-def _hanging_map(points, fitted, anchors, cage_map):
-    """Map (row vectors) that carries the hanging cloth of a garment: a rotation and one scale.
-
-    The cage map stretches the axes unequally (the reference body and ours differ in
-    proportion), and a ball gown's skirt hanging far from its cage became an ellipse whose
-    gores parted. Fitted to where the cloth hangs from (the waist of the skirt), the skirt
-    keeps its authored round shape, sized and turned as its waist was fitted.
-    """
-    anchors = np.unique(anchors)
-    source, target = points[anchors], fitted[anchors]
-    source, target = source - source.mean(0), target - target.mean(0)
-    u, s, vt = np.linalg.svd(cage_map)
-    rotation, scale = u @ vt, float(np.prod(s) ** (1 / 3))
-    if len(anchors) >= HANGING_ANCHORS and np.linalg.matrix_rank(source, tol=1e-3) == 3:
-        u, s, vt = np.linalg.svd(source.T @ target)
-        if np.linalg.det(u @ vt) > 0:
-            rotation = u @ vt
-            scale = float(np.clip(s.sum() / (source ** 2).sum(), scale / HANGING_SCALE_LIMIT, scale * HANGING_SCALE_LIMIT))
-    return rotation * scale
-
-
 def _anchors(bound, faces, points):
     """For every vertex, the bound vertex it hangs from.
 
@@ -318,12 +291,7 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
     if hanging.any():
         faces = np.asarray(faces)
         anchor = _anchors(~hanging, faces, points)
-        # A skirt or cape hanging far from its cage keeps its authored shape; a bow or a string
-        # (a few vertices) keeps following the cage map and its own anchor.
-        bulk = hanging.sum() >= HANGING_BULK
         global_map = _global_map(inner, target_inner)
-        if bulk:
-            global_map = _hanging_map(points, result, anchor[hanging & (anchor >= 0)], global_map)
         # A hanging vertex keeps its authored shape (global map) plus an offset.
         # The offset is interpolated harmonically from the bound vertices along the
         # garment, so neighbours hanging from different anchors do not tear apart.
@@ -331,13 +299,6 @@ def fit_radial_prism(garment: np.ndarray, faces: np.ndarray, trace: dict) -> tup
         movable = np.flatnonzero(hanging & (anchor >= 0))
         offset[movable] = offset[anchor[movable]]
         offset = _harmonic_fill(offset, faces, hanging & (anchor >= 0), ~hanging)
-        # Away from where it hangs, the cloth moves as one: each anchor's own offset fades
-        # into their mean, so panels hanging side by side from different anchors (the
-        # gores of a skirt) keep touching instead of parting at their seams.
-        if bulk:
-            common = offset[np.unique(anchor[movable])].mean(0)
-            fade = np.exp(-np.linalg.norm(points[movable] - points[anchor[movable]], axis=1) / HANGING_FADE)[:, None]
-            offset[movable] = common + fade * (offset[movable] - common)
         result[movable] = points[movable] @ global_map + offset[movable]
     return result, {"hanging_vertices": int(hanging.sum()), "rebound_to_limb": rebound,
                     "residual_p99": float(np.quantile(residual_length, .99))}
