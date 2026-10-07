@@ -39,7 +39,9 @@ manual: são calculados a partir da cage em que cada vértice foi encaixado e da
    - peça com ≥ 60% dos vértices num membro (manga costurada à parte de um casaco) é toda desse membro;
    - numa peça que chega ao tronco, tecido de um osso precisa encostar em tecido do osso pai, descendo do tronco
      (manga = mão, antebraço, braço, tronco); o resto recebe o osso do tecido em volta.
-3. **Só confia no rótulo onde o tecido envolve o membro** (`_wrapping`): manga, perna de calça. Tecido que só
+3. **Só confia no rótulo onde o tecido envolve o membro** (`_wrapping`): manga, perna de calça. No braço, além
+   de dar a volta, o tecido precisa ter uma **parede entre o braço e o tronco** (`_has_wall`): uma capa ou fantasia
+   dá a volta no braço junto com o tronco e não é manga. Tecido que só
    fica perto (lateral de um casaco ao lado da mão) passa para a parte do corpo ao lado, nunca antebraço ou mão.
    O rótulo de braço é mantido (manga curta cobre o ombro sem dar a volta). Peças só de membros mantêm o rótulo.
 4. **Mistura harmônica sobre a malha da roupa** em ombros e quadris: o rótulo vale onde é certo (bem dentro do
@@ -63,6 +65,17 @@ manual: são calculados a partir da cage em que cada vértice foi encaixado e da
   Cada centímetro de largura a mais pede em média meio grau a mais (baggy jeans: 21° no feminino, 17° no masculino).
 
 ![Braços desviando da roupa](images/animacao/bracos-desviam-da-roupa.png)
+
+## 🤚 Balanço dos braços conforme a roupa
+
+- Ao vestir, o animador posa a caminhada e mede quanto tecido os braços rasgam além do que as pernas rasgam
+  (`_arm_swing`, `_torn_area`: triângulo com aresta > 2,5× e > 2 cm maior que no encaixe).
+- Escolhe o maior balanço entre 100%, 60% e 35% que rasga no máximo **1500 cm²**. Roupa comum estica até ~1200 cm²
+  embaixo do braço sem aparecer e fica com balanço cheio; capa e fantasias, onde o braço anda dentro do tecido,
+  reduzem.
+- Jogo e bateria montam a pose pela mesma função (`walk_pose`), então a bateria mede o que o jogo mostra.
+- Tentado e descartado: detectar "braço dentro de um saco" pela forma (tecido fechando em volta do antebraço). Cada
+  ajuste acertava uma peça e errava outra (adesivos, terno, Cloak); medir o rasgo não tem esse problema.
 
 ## 🚶 Caminhada no mundo
 

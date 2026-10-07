@@ -10,9 +10,11 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
 
 ### 1. Roupas que ainda esticam ou furam ao animar
 - **Situação Atual:** O personagem do mundo anda vestido (ver [[Animação e Esqueleto|Animacao-e-Esqueleto]]); a bateria
-  dá 117 ok, 70 atenção e 17 falha (ver [[Bateria de Robustez|Bateria-de-Robustez]]).
-- **Pendência:** fantasias de corpo inteiro e Cloak acima do limite de esticado (manga × saco/capa, ver a
-  bateria); calça de moletom com tênis em atenção; falsos alarmes de buraco no contorno da silhueta; cós da baggy jeans e ponta do sobretudo no
+  dá 117 ok, 74 atenção e 13 falha (ver [[Bateria de Robustez|Bateria-de-Robustez]]).
+- **Pendência:** fantasias de corpo inteiro que ainda rasgam (Sully, Pigeon, Strawberry); frestas entre os gomos
+  da saia do Long Dress (o encaixe do tecido pendurado estica a saia 20% de frente para trás; a correção testada
+  piorava capas e fantasias e foi revertida); calça de moletom com tênis em atenção; falsos alarmes de buraco no
+  contorno da silhueta; cós da baggy jeans e ponta do sobretudo no
   quadril (modelo da peça e proporção do corpo).
 - **Desempenho:** skinning na CPU custa ~8 ms por quadro; vários personagens pediriam skinning na GPU.
 
