@@ -155,3 +155,33 @@ def test_skin_interface_asks_the_main_loop_to_open_the_editor():
     ok, feedback, _ = handler.execute("/skin interface")
     assert ok and handler.editor_requested is True
     assert SkinCommandHandler(character_model=None).execute("/skin interface")[0] is False
+
+
+def test_the_field_takes_the_keyboard_and_enter_wears_the_item():
+    editor, sent = make_editor()
+    editor.clipboard = lambda: " https://www.roblox.com/catalog/123456/Some-Shirt \n"
+    rect = next(rect for rect, kind, _ in editor.layout(*SIZE) if kind == "field")
+    assert editor.handle_char(ord("a")) is False            # not typing yet: the key is the game's
+    click(editor, *centre(rect))
+    assert editor.typing
+    for letter in "12x":
+        assert editor.handle_char(ord(letter))
+    assert editor.handle_key(259, PRESS)                     # Backspace
+    assert editor.entry == "12"
+    assert editor.handle_key(SPACE, PRESS) and editor.turntable["active"] is True  # typed keys do not act on the game
+    editor.handle_key(259, PRESS), editor.handle_key(259, PRESS)
+    assert editor.handle_key(86, PRESS, mods=2)              # Ctrl+V
+    assert editor.entry == "https://www.roblox.com/catalog/123456/Some-Shirt"
+    assert editor.handle_key(257, PRESS)                     # Enter
+    assert sent == ["/skin vestir https://www.roblox.com/catalog/123456/Some-Shirt"]
+    assert editor.typing is False and editor.entry == ""
+
+
+def test_escape_leaves_the_field_before_it_closes_the_editor():
+    editor, sent = make_editor()
+    rect = next(rect for rect, kind, _ in editor.layout(*SIZE) if kind == "field")
+    click(editor, *centre(rect))
+    editor.handle_char(ord("9"))
+    assert editor.handle_key(ESCAPE, PRESS) and editor.is_open and not editor.typing and editor.entry == ""
+    assert sent == []
+    assert editor.handle_key(ESCAPE, PRESS) and editor.is_open is False

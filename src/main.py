@@ -435,6 +435,7 @@ def main() -> None:
     from src.interactive.character_editor import CharacterEditor
     character_editor = CharacterEditor(skin_command_handler, turntable_state, create_gl=True)
     character_editor.autosave = max_frames is None  # an automated run (--frames) leaves the save alone
+    character_editor.clipboard = chat_console._get_clipboard_string
     editor_camera = {"saved": None}
     editor_arg = next((a for a in sys.argv[1:] if a == "--editor" or a.startswith("--editor=")), None)
     if editor_arg is not None and character_model is not None:
@@ -528,13 +529,15 @@ def main() -> None:
 
         # Intercepta eventos de teclado para o console de chat estilo Minecraft
         try:
+            if character_editor.typing and character_editor.handle_key(key, action, mods):
+                return True  # o campo de adicionar item da tela de criação tem o teclado
             if chat_console.handle_key(key, action, mods):
                 return True
         except Exception as e:
             print(f"[Input] Erro ao processar tecla no console de chat: {e}")
             return True
 
-        if character_editor.handle_key(key, action):
+        if character_editor.handle_key(key, action, mods):
             return True
 
         keys_pressed[key] = (action != glfw.RELEASE)
@@ -659,8 +662,12 @@ def main() -> None:
         handle_camera_key
     )
 
+    def handle_char(codepoint: int) -> None:
+        if not character_editor.handle_char(codepoint):
+            chat_console.handle_char(codepoint)
+
     window.add_char_callback(
-        chat_console.handle_char
+        handle_char
     )
 
     window.add_mouse_button_callback(

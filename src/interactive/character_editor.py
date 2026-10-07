@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 import glob
 import os
 import re
+import subprocess
+import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
@@ -37,7 +39,7 @@ Rect = Tuple[int, int, int, int]  # x0, y0, x1, y1
 PANEL_WIDTH = 408
 TAB_WIDTH = 104
 TAB_HEIGHT = 46
-FOOTER_HEIGHT = 96
+FOOTER_HEIGHT = 136
 PAD = 12
 CARD = (88, 112)   # a garment: picture and two lines of name
 TEXT_TILE = 34     # height of a named option (two to a row)
@@ -59,6 +61,7 @@ TEXT = (232, 234, 240, 255)
 MUTED = (150, 155, 168, 255)
 
 # Roblox asset types of the garments of each section.
+PICTURED = ("top", "jacket", "bottom", "dress", "shoes", "hair")  # kinds the thumbnail script draws
 KIND_OF_TYPE = {64: "top", 65: "top", 68: "top", 67: "jacket", 66: "bottom", 69: "bottom", 72: "dress",
                 70: "shoe", 71: "shoe", 41: "hair", 19: "tool"}
 HAIR_WORDS = ("hair", "cabelo", "wig", "ponytail", "pigtails", "braids")
@@ -170,6 +173,12 @@ class CharacterEditor:
         self.turntable = turntable_state if turntable_state is not None else {"active": True, "yaw": 0.0}
         self.create_gl = create_gl
         self.autosave = True  # closing the editor saves the character
+        self.typing = False   # the field that adds a Roblox item has the keyboard
+        self.entry = ""
+        self.clipboard: Callable[[], str] = lambda: ""
+        self.make_thumbnails = create_gl  # pictures of new items are rendered by a process of their own
+        self._thumbnails: Any = None
+        self._pictured: set = set()
         self.is_open = False
         self.active = 0
         self.scroll = 0
@@ -276,8 +285,7 @@ class CharacterEditor:
 
     # ------------------------------------------------------------------ abrir, fechar, girar
     def open(self) -> None:
-        self._catalog = catalog()
-        self._groups = None
+        self.refresh_catalog()
         self.is_open = True
         self.message = "Arraste para girar e inclinar a vista. Esc fecha."
         self._was_spinning = True
@@ -292,6 +300,24 @@ class CharacterEditor:
         self._dragging = False
         self.hover = None
 
+    def refresh_catalog(self) -> None:
+        """Relê os itens baixados e pede as miniaturas dos que ainda não têm."""
+        self._catalog = catalog()
+        self._groups = None
+        self.dirty = True
+        thumbs = os.path.join(CLOTHING_DIR, "thumbs")
+        missing = {item.asset_id for kind, items in self._catalog.items() if kind in PICTURED for item in items
+                   if item.image is None or os.path.dirname(item.image) != thumbs} - self._pictured
+        if missing and self.make_thumbnails and self._thumbnails is None:
+            self._pictured |= missing  # asked for once: an item that cannot be drawn is not asked for again
+            script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                  "scripts", "render_catalog_thumbnails.py")
+            try:
+                self._thumbnails = subprocess.Popen([sys.executable, script], stdout=subprocess.DEVNULL,
+                                                    stderr=subprocess.DEVNULL)
+            except OSError:
+                self._thumbnails = None
+
     def select_section(self, index: int) -> None:
         if 0 <= index < len(self.sections) and index != self.active:
             self.active, self.scroll, self._groups, self.dirty = index, 0, None, True
@@ -303,6 +329,12 @@ class CharacterEditor:
         if self.turntable.get("active") and not self._dragging:
             self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + dt * SPIN_DEGREES) % 360.0
         busy = self.handler.busy_status or ""
+        if self._busy and not busy:
+            self.refresh_catalog()  # an item has just arrived
+        if self._thumbnails is not None and self._thumbnails.poll() is not None:
+            self._thumbnails = None
+            self._images.clear()
+            self.refresh_catalog()
         selected = tuple(option.selected(self.model) for group in self.groups() for option in group.options) \
             if self.model is not None else ()
         if busy != self._busy or selected != self._selected_key:
@@ -327,6 +359,7 @@ class CharacterEditor:
             if kind == "option" and y1 > top and y0 < bottom:
                 hits.append(((x0, max(y0, top), x1, min(y1, bottom)), "option", payload))
         half = (right - left - GAP) // 2
+        hits.append(((left, height - 86, right, height - 54), "field", "add"))
         hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
         hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
         self._hits = hits
@@ -379,16 +412,23 @@ class CharacterEditor:
                 return True
             return self.over_panel(x)
         if not self.over_panel(x):
+            if self.typing:
+                self.typing, self.dirty = False, True
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
             self._dragging, self._drag_x, self._drag_y = True, x, y
             self._was_spinning = bool(self.turntable.get("active"))
             return True
         found = self.hit(x, y)
+        typing = found is not None and found[1] == "field"
+        if typing != self.typing:
+            self.typing, self.dirty = typing, True
         if found is None:
             return True
         _, kind, payload = found
-        if kind == "tab":
+        if kind == "field":
+            pass
+        elif kind == "tab":
             self.select_section(payload)
         elif kind == "option":
             self.choose(payload)
@@ -428,9 +468,39 @@ class CharacterEditor:
             self.scroll, self.dirty = scroll, True
         return True
 
-    def handle_key(self, key: int, action: int) -> bool:
-        """Esc fecha; Espaço liga ou desliga o giro."""
-        if not self.is_open or action != 1:
+    def handle_char(self, codepoint: int) -> bool:
+        """Um caractere digitado: vai para o campo de adicionar item, se ele tem o teclado."""
+        if not (self.is_open and self.typing):
+            return False
+        if codepoint >= 32:
+            self.entry, self.dirty = (self.entry + chr(codepoint))[:200], True
+        return True
+
+    def submit(self) -> None:
+        """Baixa e veste o item do campo (id ou link do catálogo do Roblox)."""
+        text = self.entry.strip()
+        self.entry, self.typing, self.dirty = "", False, True
+        if text:
+            self.choose(Option(text, f"/skin vestir {text}"))
+
+    def handle_key(self, key: int, action: int, mods: int = 0) -> bool:
+        """Esc fecha; Espaço liga ou desliga o giro. Com o campo de adicionar item em uso, o
+        teclado é dele: Enter envia, Esc desiste, Ctrl+V cola."""
+        if not self.is_open:
+            return False
+        if self.typing:
+            if action in (1, 2):  # press or repeat
+                if key in (257, 335):   # Enter
+                    self.submit()
+                elif key == 256:        # Esc
+                    self.entry, self.typing = "", False
+                elif key == 259:        # Backspace
+                    self.entry = self.entry[:-1]
+                elif key == 86 and mods & 2:  # Ctrl+V
+                    self.entry = (self.entry + (self.clipboard() or "").strip().replace("\n", " "))[:200]
+                self.dirty = True
+            return True
+        if action != 1:
             return False
         if key == 256:  # GLFW_KEY_ESCAPE
             self.close()
@@ -524,6 +594,14 @@ class CharacterEditor:
             x0, y0, x1, y1 = rect
             hovered = self.hover == (kind, id(payload) if kind == "option" else payload)
             if kind == "option":
+                continue
+            if kind == "field":
+                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if self.typing else TILE_HOVER)
+                shown = self.entry + ("|" if self.typing else "")
+                while shown and draw.textlength(shown, font=small) > x1 - x0 - 16:
+                    shown = shown[1:]
+                draw.text((x0 + 8, (y0 + y1) // 2), shown or "Adicionar do Roblox: cole o id ou o link",
+                          font=small, fill=TEXT if shown else MUTED, anchor="lm")
                 continue
             if kind == "tab":
                 active = payload == self.active
