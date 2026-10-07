@@ -18,12 +18,14 @@ import subprocess
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from src.clothing.body_shape import BODY, FACE
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
 from src.interactive.skin_commands import (
     BODIES,
     CLOTHING_DIR,
+    EYEBROWS,
     EYE_COLORS,
     EYE_STYLES,
     HAIR_COLORS,
@@ -46,6 +48,8 @@ TEXT_TILE = 34     # height of a named option (two to a row)
 SWATCH = 32        # a colour (seven to a row)
 GAP = 8
 SWATCHES_PER_ROW = 7
+SLIDER_TILE = 46   # height of an adjustment: its name, its value and the track
+SLIDER_SNAP = 5    # this close to the middle, a slider goes back to 0
 SCROLL_STEP = 60
 DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged sideways
 TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
@@ -85,9 +89,12 @@ class Option:
     color: Optional[Tuple[int, int, int]] = None  # a colour swatch
     image: Optional[str] = None                   # a picture file (a garment)
     selected: Callable[[Any], bool] = lambda model: False
+    slider: Optional[str] = None                  # an adjustment of body_shape, set from -100 to 100
 
     @property
     def kind(self) -> str:
+        if self.slider is not None:
+            return "slider"
         return "card" if self.image is not None or self.command.startswith(CARD_COMMANDS) else \
             "swatch" if self.color is not None else "text"
 
@@ -188,6 +195,8 @@ class CharacterEditor:
         self._dragging = False
         self._drag_x = 0.0
         self._drag_y = 0.0
+        self._slider: Optional[Tuple[Option, int, int]] = None  # the adjustment being dragged and its track
+        self._slider_value = 0
         self._was_spinning = True
         self._hits: List[Tuple[Rect, str, Any]] = []
         self._content_height = 0
@@ -240,7 +249,15 @@ class CharacterEditor:
                                         for n in EYE_COLORS]),
                 Group("Boca", [Option(n.capitalize(), f"/skin boca {n}", selected=lambda m, v=MOUTHS[n]: custom() is not None and _value(custom().mouth_style) == _value(v))
                                for n in PORTUGUESE_MOUTHS]),
+                Group("Sobrancelhas", [Option(n.capitalize(), f"/skin sobrancelha {n}",
+                                              selected=lambda m, v=EYEBROWS[n]: custom() is not None and custom().resolved_eyebrow_style == _value(v))
+                                       for n in EYEBROWS]),
+                Group("Ajustes do rosto", [Option(label, "", slider=name) for name, label in FACE.items()]),
             ]
+
+        def shape() -> List[Group]:
+            return [Group("Proporções do corpo", [Option(label, "", slider=name) for name, label in BODY.items()]),
+                    Group("Recomeçar", [Option("Voltar ao padrão", "/skin ajuste reset")])]
 
         def hair() -> List[Group]:
             style = lambda: _value(custom().hair_style) if custom() is not None else ""
@@ -265,6 +282,7 @@ class CharacterEditor:
 
         return [
             Section("Corpo", body),
+            Section("Ajustes", shape),
             Section("Rosto", face),
             Section("Cabelo", hair),
             Section("Superior", lambda: [Group("Roupa de cima", self._garments("top", "top", "top_id"))]),
@@ -335,8 +353,8 @@ class CharacterEditor:
             self._thumbnails = None
             self._images.clear()
             self.refresh_catalog()
-        selected = tuple(option.selected(self.model) for group in self.groups() for option in group.options) \
-            if self.model is not None else ()
+        selected = tuple(self.slider_value(option) if option.slider else option.selected(self.model)
+                         for group in self.groups() for option in group.options) if self.model is not None else ()
         if busy != self._busy or selected != self._selected_key:
             self._busy, self._selected_key, self.dirty = busy, selected, True
 
@@ -379,6 +397,8 @@ class CharacterEditor:
                 columns, (w, h) = 3, CARD
             elif kind == "swatch":
                 columns, (w, h) = SWATCHES_PER_ROW, (SWATCH, SWATCH)
+            elif kind == "slider":
+                columns, (w, h) = 1, (right - left, SLIDER_TILE)
             else:
                 columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
             for k, option in enumerate(group.options):
@@ -406,6 +426,10 @@ class CharacterEditor:
         if not self.is_open or button != 0:
             return False
         if action == 0:  # release
+            if self._slider is not None:
+                option, self._slider = self._slider[0], None
+                self.set_slider(option, self._slider_value)  # the face is drawn again only now
+                return True
             if self._dragging:
                 self._dragging = False
                 self.turntable["active"] = self._was_spinning
@@ -430,6 +454,10 @@ class CharacterEditor:
             pass
         elif kind == "tab":
             self.select_section(payload)
+        elif kind == "option" and payload.slider is not None:
+            x0, x1 = TAB_WIDTH + PAD + 10, PANEL_WIDTH - PAD - 10
+            self._slider = (payload, x0, x1)
+            self._drag_slider(x)
         elif kind == "option":
             self.choose(payload)
         elif payload == "spin":
@@ -439,6 +467,24 @@ class CharacterEditor:
             self.close()
         return True
 
+    def slider_value(self, option: Option) -> int:
+        """O valor de um ajuste, de -100 a 100 (o que está sendo arrastado, enquanto é arrastado)."""
+        if self._slider is not None and self._slider[0] is option:
+            return self._slider_value
+        adjust = getattr(self._custom(), "body_adjust", None) or {}
+        return int(round(float(adjust.get(option.slider, 0.0)) * 100))
+
+    def set_slider(self, option: Option, value: int) -> None:
+        self.choose(Option(option.label, f"/skin ajuste {option.slider} {int(value)}"))
+
+    def _drag_slider(self, x: float) -> None:
+        option, x0, x1 = self._slider
+        value = int(round((min(max(x, x0), x1) - x0) / (x1 - x0) * 200 - 100))
+        value = 0 if abs(value) <= SLIDER_SNAP else value
+        self._slider_value, self.dirty = value, True
+        if option.slider not in FACE:  # the body follows the mouse; the face waits for the release
+            self.set_slider(option, value)
+
     def choose(self, option: Option) -> None:
         _, feedback, _ = self.handler.execute(option.command)
         self.message = feedback.split("\n")[0] if feedback else ""
@@ -446,6 +492,9 @@ class CharacterEditor:
 
     def handle_cursor(self, x: float, y: float) -> None:
         if not self.is_open:
+            return
+        if self._slider is not None:
+            self._drag_slider(x)
             return
         if self._dragging:
             self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + (x - self._drag_x) * DRAG_DEGREES) % 360.0
@@ -572,6 +621,18 @@ class CharacterEditor:
                 continue
             draw_rect = (x0, y0, x1 - 1, y1 - 1)
             pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE)
+            if payload.kind == "slider":
+                value = self.slider_value(payload) if self.model is not None else 0
+                pen.text((x0 + 10, y0 + 13), payload.label, font=small, fill=TEXT, anchor="lm")
+                pen.text((x1 - 10, y0 + 13), f"{value:+d}" if value else "0", font=small,
+                         fill=ACCENT if value else MUTED, anchor="rm")
+                t0, t1, ty = x0 + 10, x1 - 10, y0 + 31
+                knob = t0 + (value + 100) / 200 * (t1 - t0)
+                pen.line((t0, ty, t1, ty), fill=(14, 15, 19, 255), width=4)
+                pen.line(((t0 + t1) / 2, ty, knob, ty), fill=ACCENT, width=4)
+                pen.line(((t0 + t1) / 2, ty - 5, (t0 + t1) / 2, ty + 5), fill=MUTED, width=1)
+                pen.ellipse((knob - 7, ty - 7, knob + 7, ty + 7), fill=TEXT)
+                continue
             if payload.kind == "swatch":
                 pen.rounded_rectangle((x0 + 4, y0 + 4, x1 - 5, y1 - 5), 5, fill=payload.color + (255,))
             elif payload.kind == "card":

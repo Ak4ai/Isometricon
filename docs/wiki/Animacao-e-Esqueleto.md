@@ -77,6 +77,12 @@ manual: são calculados a partir da cage em que cada vértice foi encaixado e da
 - Tentado e descartado: detectar "braço dentro de um saco" pela forma (tecido fechando em volta do antebraço). Cada
   ajuste acertava uma peça e errava outra (adesivos, terno, Cloak); medir o rasgo não tem esse problema.
 
+## 📐 Proporções do corpo
+
+`Skeleton.pose` aceita uma escala por osso e a altura do personagem (`body_shape.bone_scales`, `height`), que o
+animador lê de `customization.body_adjust` a cada quadro. Peito e bunda deformam a pose de vestir de todas as
+malhas (`_reshape`). Ver [[Criação de Personagem|Criacao-de-Personagem]].
+
 ## 🚶 Caminhada no mundo
 
 - O token do mundo (`PlayerToken`) usa o mesmo `CharacterModel` vestido e um `CharacterAnimator`; o passo
