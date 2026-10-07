@@ -248,6 +248,8 @@ class CharacterAnimator:
                 else:
                     indices, weights = self.skeleton.weights(rows[:, :3], bones)
             self._bindings.append((part, rows, indices, weights))
+            if hasattr(part.mesh, "set_skin"):
+                part.mesh.set_skin(indices, weights)
         arms = [b for side in "LR" for b in self._subtree(self.skeleton.index("UpperArm_" + side))]
         beside_arms = [rows[np.where(np.isin(indices, arms), weights, 0.0).sum(1) < 0.05, :3]
                        for part, rows, indices, weights in self._bindings if part.source_obj is not None]
@@ -614,7 +616,14 @@ class CharacterAnimator:
             self.walk_time = walk_time
         elif self.walking:
             self.walk_time += dt * WALK_SPEED
-        matrices = self.skeleton.pose(*self.walk_pose(self.walk_time, self.stride))
-        for part, rows, indices, weights in self._bindings:
-            part.mesh.update_vertices(skin(rows, indices, weights, matrices))
+        self.show(self.skeleton.pose(*self.walk_pose(self.walk_time, self.stride)))
         self._shown = "walk" if self.stride > 0.0 else "rest"
+
+    def show(self, matrices) -> None:
+        """Pose the model with one matrix per bone. Meshes that take bones and weights stay in
+        their bind pose and the vertex shader poses them (``CharacterModel.draw`` sends the
+        matrices); the others are posed here and written to their buffers."""
+        self.model.bones = np.asarray(matrices, dtype=np.float32)
+        for part, rows, indices, weights in self._bindings:
+            if not getattr(part.mesh, "skinned", False):
+                part.mesh.update_vertices(skin(rows, indices, weights, matrices))

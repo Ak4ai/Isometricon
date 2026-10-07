@@ -285,8 +285,7 @@ def audit(shader, label, body, samples, tested=(), **ids):
     worst = max(GAME_POSES, key=lambda n: max(result["poses"][n][k] / LIMITS[k][1] for k in ("pele_furando_cm2", "esticado_cm2")))
     result["pior_pose"] = worst
     matrices, poke_points, stretch_points = kept[worst]
-    for part, rows, indices, weights in animator._bindings:
-        part.mesh.update_vertices(skin(rows, indices, weights, matrices))
+    animator.show(matrices)
     thumbnail, depth = render(shader, model)
     mark(thumbnail, depth, stretch_points, MARKS["esticado_cm2"])
     mark(thumbnail, depth, poke_points, MARKS["pele_furando_cm2"])

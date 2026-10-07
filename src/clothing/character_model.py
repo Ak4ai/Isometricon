@@ -1673,12 +1673,19 @@ class CharacterModel:
         import OpenGL.GL as gl
 
         gl.glDisable(gl.GL_CULL_FACE)
+        # An animator leaves the meshes in their bind pose and the pose in ``bones``: the
+        # vertex shader moves each vertex by its bones.
+        bones = getattr(self, "bones", None)
+        if bones is not None:
+            shader.set_mat4_array("u_Bones", bones)
         for part in self.parts:
             part_model = base_model if part.transform is None else base_model @ part.transform
             shader.set_mat4("u_Model", part_model)
+            shader.set_bool("u_Skinned", bones is not None and getattr(part.mesh, "skinned", False))
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, part.texture_id)
             part.mesh.draw()
+        shader.set_bool("u_Skinned", False)
 
         # Renderização da Cage em modo Wireframe (Depuração Visual)
         if self.show_cage and self.cage_debug_mesh is not None:

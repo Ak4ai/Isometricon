@@ -16,7 +16,7 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
   piorava capas e fantasias e foi revertida); calça de moletom com tênis em atenção; falsos alarmes de buraco no
   contorno da silhueta; cós da baggy jeans e ponta do sobretudo no
   quadril (modelo da peça e proporção do corpo).
-- **Desempenho:** skinning na CPU custa ~8 ms por quadro; vários personagens pediriam skinning na GPU.
+- **Desempenho:** resolvido em 07/10/2026 com skinning na GPU (~0,3 ms por quadro por personagem). O que falta para vários personagens na tela é o jogo criar e posicionar os outros tokens vestidos.
 
 ### 2. Cache com Validação de Hash/Versão da Cage
 - **Situação Atual:** Os caches binários (`character_native_<id>_<corpo>.obj`, `*.hsr.npz`) são gravados com base no ID da roupa.

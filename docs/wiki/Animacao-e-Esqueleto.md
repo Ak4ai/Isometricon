@@ -3,7 +3,7 @@
 ## 📌 Resumo
 
 O personagem é vestido em A-pose (a pose das cages) e mostrado no jogo na **pose de descanso**, de onde anda.
-Corpo, cabelo e roupas são deformados pelo mesmo esqueleto de 16 ossos com *linear blend skinning* em numpy
+Corpo, cabelo e roupas são deformados pelo mesmo esqueleto de 16 ossos com *linear blend skinning*, feito no vertex shader; os pesos são calculados em numpy
 (`src/clothing/skeleton.py` e `src/clothing/character_animation.py`). Os pesos das roupas não vêm de pintura
 manual: são calculados a partir da cage em que cada vértice foi encaixado e da própria malha da roupa.
 
@@ -83,7 +83,13 @@ manual: são calculados a partir da cage em que cada vértice foi encaixado e da
   segue a velocidade do token. `--token-antigo` volta ao boneco modular antigo.
 - Começar e parar de andar têm transição suave (~0,2 s): cada articulação gira só parte do caminho
   (`partial_rotation`).
-- Custo: ~8 ms por quadro andando (CPU, numpy); parado, zero. Mais de um personagem na tela pediria skinning na GPU.
+- **Skinning na GPU:** as malhas ficam na pose de vestir e levam, por vértice, até 4 ossos e seus pesos
+  (`TexturedMesh.set_skin`, atributos 4 e 5). O animador calcula só as 16 matrizes dos ossos (`show`) e
+  `CharacterModel.draw` as envia ao `world_textured.vert` (`u_Bones`, `u_Skinned`), que posa cada vértice.
+- Custo por quadro andando: ~0,3 ms (antes ~10 ms na CPU, reenviando todos os vértices). Imagens idênticas às do
+  caminho antigo, pixel a pixel, em três roupas.
+- O caminho na CPU (`skin` + `update_vertices`) continua para malhas sem `set_skin` (os testes) e para medir, na
+  bateria e no próprio animador, o tecido esticado.
 
 ![Andando para três direções](images/animacao/andando-direcoes.png)
 ![Transição ao parar](images/animacao/transicao-andar-parar.png)
