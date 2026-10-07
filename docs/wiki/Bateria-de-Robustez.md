@@ -49,8 +49,10 @@ python scripts/audit_animation_robustness.py --output artifacts/robustness --rep
 peça piorou em nenhuma medida, em nenhum dos corpos; 20 melhoraram.
 
 - Tecido rasgado: Sully, Realistic White Pigeon e Strawberry Onesie (masculino).
-- Buraco: suéter com laço (real, no pescoço), Baby Shark, Goose, Dinosaur e terno Mafioso (sem confirmação por imagem).
-- Pele furando: saia longa com fenda e Blue Fish Suit (masculino).
+- Buraco: suéter com laço (real, no pescoço). Baby Shark, Goose, Dinosaur e terno Mafioso são falso alarme,
+  conferido por imagem: forro do capuz, pele escondida fora da silhueta no ombro e a abertura da própria fantasia.
+- Pele furando: saia longa com fenda e Blue Fish Suit masculino (real: o braço atravessa a lateral da fantasia).
+- Ou seja, das 13 falhas, 8 são defeitos reais, em 5 peças.
 - Saíram da falha: Cloak e White Cat nos dois corpos, Squirrel (masculino).
 
 O relatório guarda, por peça, o balanço dos braços que o animador escolheu (`balanco_dos_bracos`): 184 de 204 andam
