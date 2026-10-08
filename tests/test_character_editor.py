@@ -253,3 +253,14 @@ def test_makeup_and_extra_garments_are_chosen_from_their_sections():
     assert commands["Blush"] == "/skin maquiagem blush alternar" and commands["Sem maquiagem"] == "/skin maquiagem sem"
     editor.select_section(0)
     assert "Vitiligo (quantidade)" in [o.label for g in editor.groups() for o in g.options]
+
+
+def test_the_face_sections_ask_the_camera_for_the_face():
+    editor, _ = make_editor()
+    titles = [s.title for s in editor.sections]
+    focus = {}
+    for index, title in enumerate(titles):
+        editor.select_section(index)
+        focus[title] = editor.focus
+    assert focus["Rosto"] == focus["Maquiagem"] == "face"
+    assert {t for t, f in focus.items() if f == "face"} == {"Rosto", "Maquiagem"}   # every other section shows the body

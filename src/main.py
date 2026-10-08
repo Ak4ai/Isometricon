@@ -436,7 +436,8 @@ def main() -> None:
     character_editor = CharacterEditor(skin_command_handler, turntable_state, create_gl=True)
     character_editor.autosave = max_frames is None  # an automated run (--frames) leaves the save alone
     character_editor.clipboard = chat_console._get_clipboard_string
-    editor_camera = {"saved": None}
+    editor_camera = {"saved": None, "focus": "body"}
+    EDITOR_FACE_HEIGHT, EDITOR_FACE_ZOOM = 1.65, 0.30  # altura do rosto sem esqueleto ainda; meia altura enquadrada
     editor_arg = next((a for a in sys.argv[1:] if a == "--editor" or a.startswith("--editor=")), None)
     if editor_arg is not None and character_model is not None:
         skin_command_handler.editor_requested = True
@@ -742,17 +743,42 @@ def main() -> None:
             camera.target, camera.ortho_size, camera.pitch = editor_camera["saved"]
             turntable_state.pop("pitch", None)
             editor_camera["saved"] = None
+            editor_camera["focus"] = "body"
+            editor_camera.pop("body", None)
             if not char_demo:
                 turntable_state["active"], turntable_state["yaw"] = False, 0.0
 
         if editing:
             character_editor.update(dt)
-            camera.pitch = math.radians(turntable_state["pitch"])
-            if terrain_demo and player_token.animator is not None:
-                player_token.animator.walking = False
-                player_token.animator.update(dt)
+            editor_animator = character_animator if char_demo else getattr(player_token, "animator", None)
+            if terrain_demo and editor_animator is not None:
+                editor_animator.walking = False
+                editor_animator.update(dt)
             elif char_demo:
                 character_animator.update(dt)
+            # Nas seções do rosto a câmera vai para o rosto: na altura da cabeça, de perto, na
+            # horizontal e com o personagem parado de frente para ela. Ao sair, volta ao que era.
+            if character_editor.focus != editor_camera.get("focus", "body"):
+                editor_camera["focus"] = character_editor.focus
+                if character_editor.focus == "face":
+                    editor_camera["body"] = (camera.target.copy(), camera.ortho_size, turntable_state["pitch"],
+                                             turntable_state["active"], turntable_state["yaw"])
+                    face_height = EDITOR_FACE_HEIGHT
+                    bones = getattr(character_model, "bones", None)
+                    skeleton = getattr(editor_animator, "skeleton", None)
+                    if bones is not None and skeleton is not None:  # the head as posed, with the body's adjustments
+                        head = skeleton.index("Head")
+                        middle = np.append((skeleton.heads[head] + skeleton.tails[head]) / 2.0, 1.0)
+                        face_height = float((np.asarray(bones[head], dtype=np.float64) @ middle)[1])
+                    camera.target = vec3(0.0, face_height, 0.0)
+                    camera.ortho_size = EDITOR_FACE_ZOOM
+                    turntable_state["pitch"] = 0.0
+                    turntable_state["active"] = False
+                    turntable_state["yaw"] = (camera.yaw_degrees - camera.current_rotation) % 360.0
+                elif "body" in editor_camera:
+                    (camera.target, camera.ortho_size, turntable_state["pitch"], turntable_state["active"],
+                     turntable_state["yaw"]) = editor_camera.pop("body")
+            camera.pitch = math.radians(turntable_state["pitch"])
         elif terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
             player_token.update(
