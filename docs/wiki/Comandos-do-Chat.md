@@ -21,8 +21,11 @@ execução, o autocompletar e a ajuda.
 | `/skin tirar <top\|calca\|jaqueta\|sapato\|cabelo\|arma\|tudo>` | remove (tudo mantém o cabelo) |
 | `/skin roupas` | lista o que está vestido |
 | `/skin preset <padrao\|gato_loiro\|cavaleiro\|rosa\|classico>` · `/skin reset` | aparência pronta (mantém o corpo) |
+| `/skin olho <direito\|esquerdo> <cor>` | cor de um olho só (`/skin olhos <cor>` volta os dois à mesma) |
+| `/skin maquiagem <batom\|sombra> <cor\|sem>` · `<blush\|sardas> <sim\|nao>` · `sem` | maquiagem; cores: vermelho, rosa, nude, vinho, roxo, azul, verde, dourado, marrom, preto |
+| `/skin extra <nome\|id\|none>` | veste ou tira uma peça a mais, junto com as outras |
 | `/skin sobrancelha <padrao\|grossa\|decidida\|sem>` | estilo das sobrancelhas |
-| `/skin nariz <sim\|nao\|formato>` | nariz 3D e seu formato: padrao, projetado, ponta_larga, narinas_largas, aquilino, arrebitado, fino, largo, botao, longo, botao_largo, botao_arrebitado, narinas_grandes, achatado, batata, aberto, bloco (ajustes em `/skin ajuste`: `nariz_tamanho`, `nariz_altura`, `nariz_projecao`, `nariz_largura`, `nariz_ponte_largura`, `nariz_ponte_altura`, `nariz_ponta_largura`, `nariz_base_largura`, `nariz_base_altura`, `nariz_narinas_altura`, `nariz_ponta_cor`, `nariz_sombra`) |
+| `/skin nariz <sim\|nao\|formato>` | nariz 3D e seu formato: padrao, projetado, ponta_larga, narinas_largas, aquilino, arrebitado, fino, largo, botao, longo, botao_largo, botao_arrebitado, narinas_grandes, achatado, batata, aberto, bloco (ajustes em `/skin ajuste`: `nariz_tamanho`, `nariz_altura`, `nariz_projecao`, `nariz_largura`, `nariz_ponte_largura`, `nariz_ponte_altura`, `nariz_ponta_largura`, `nariz_base_largura`, `nariz_base_altura`, `nariz_narinas_altura`, `nariz_ponta_cor`, `nariz_sombra`; pele: `vitiligo`, `vitiligo_forma`) |
 | `/skin ajuste <nome> <-100 a 100>` · `reset` | proporções: altura, cabeca, pescoco, ombros, peito, cintura, pelve, quadril, bunda, bracos, bracos_comprimento, maos, pernas, pernas_comprimento, pes, folga, olhos_tamanho, olhos_altura, olhos_distancia, sobrancelha_altura |
 | `/skin salvar` · `/skin carregar` | grava o personagem em `saves/personagem.json`, ou volta ao gravado |
 | `/skin interface` | abre a [[tela de criação de personagem\|Criacao-de-Personagem]] |

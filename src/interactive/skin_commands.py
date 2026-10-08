@@ -269,10 +269,70 @@ class SkinCommandHandler:
 
         def apply(c):
             c.iris_color = color
+            c.iris_color_other = None  # os dois olhos da mesma cor
             if c.resolved_eye_style in ("classic", "blank"):
                 c.eye_style = EyeStyle.ANIME  # a cor só aparece nos olhos anime
         self._change(apply, face=True)
         return True, f"[Skin] Olhos: cor {value}.", GREEN
+
+    def eye(self, args: List[str]) -> Result:
+        """/skin olho <direito|esquerdo> <cor>: a cor de um olho só (olhos de cores diferentes)."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        side = args[0].lower() if args else ""
+        color = EYE_COLORS.get(args[1].lower()) if len(args) > 1 else None
+        if side not in ("direito", "esquerdo") or color is None:
+            return False, f"[Erro] Uso: /skin olho <direito|esquerdo> <{'|'.join(EYE_COLORS)}>", RED
+
+        def apply(c):
+            if c.iris_color_other is None:
+                c.iris_color_other = c.iris_color if c.iris_color is not None else c.resolved_iris_color
+            if c.iris_color is None:
+                c.iris_color = c.resolved_iris_color
+            setattr(c, "iris_color" if side == "direito" else "iris_color_other", color)
+            if c.resolved_eye_style in ("classic", "blank"):
+                c.eye_style = EyeStyle.ANIME
+        self._change(apply, face=True)
+        return True, f"[Skin] Olho {side}: {args[1].lower()}.", GREEN
+
+    def makeup(self, args: List[str]) -> Result:
+        """/skin maquiagem <batom|sombra> <cor|sem> | <blush|sardas> <sim|nao> | sem"""
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing.customization import MAKEUP_COLORS, FaceDetail
+        usage = f"Uso: /skin maquiagem <batom|sombra> <{'|'.join(MAKEUP_COLORS)}|sem> | <blush|sardas> <sim|nao> | sem"
+        what = args[0].lower() if args else ""
+        value = args[1].lower() if len(args) > 1 else ""
+        details = {(False, False): FaceDetail.NONE, (True, False): FaceDetail.BLUSH, (False, True): FaceDetail.FRECKLES,
+                   (True, True): FaceDetail.BLUSH_AND_FRECKLES}
+        if what == "sem":
+            def clear(c):
+                c.makeup, c.face_detail = {}, FaceDetail.NONE
+            self._change(clear, face=True)
+            return True, "[Maquiagem] Sem maquiagem.", GREEN
+        if what in ("batom", "sombra") and (value in MAKEUP_COLORS or value in NONE_WORDS):
+            def paint(c):
+                worn = dict(c.makeup or {})
+                worn.pop(what, None)
+                if value in MAKEUP_COLORS:
+                    worn[what] = value
+                c.makeup = worn
+            self._change(paint, face=True)
+            return True, f"[Maquiagem] {what.capitalize()}: {value if value in MAKEUP_COLORS else 'sem'}.", GREEN
+        if what in ("blush", "sardas") and value in ("sim", "nao", "não", "on", "off", "alternar"):
+            def mark(c):
+                now = c.resolved_face_detail
+                blush, freckles = "blush" in now, "freckles" in now
+                if what == "blush":
+                    blush = not blush if value == "alternar" else value in ("sim", "on")
+                else:
+                    freckles = not freckles if value == "alternar" else value in ("sim", "on")
+                c.face_detail = details[(blush, freckles)]
+            self._change(mark, face=True)
+            return True, f"[Maquiagem] {what.capitalize()}: {value}.", GREEN
+        return False, f"[Erro] {usage}", RED
 
     def mouth(self, args: List[str]) -> Result:
         value = args[0].lower() if args else ""
@@ -419,6 +479,32 @@ class SkinCommandHandler:
         m.update_customization(outer_top_id=asset_id)
         return True, f"[Jaqueta] {item_name(asset_id)} por cima do top (a primeira vez leva alguns segundos).", GREEN
 
+    def extra(self, args: List[str]) -> Result:
+        """/skin extra <nome|id|none>: veste (ou tira) uma peça a mais, junto com as outras."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        model = self.character_model
+        worn = [str(i) for i in getattr(model, "extra_ids", [])]
+        if not args:
+            return True, (f"[Extra] vestidas: {', '.join(item_name(i) for i in worn) or 'nenhuma'}\n"
+                          "Uso: /skin extra <nome|id> (veste ou tira) | none (tira todas)"), GOLD
+        value = args[0].lower()
+        if value in NONE_WORDS:
+            model.extra_ids = []
+            model.reload()
+            return True, "[Extra] Peças extras removidas.", GREEN
+        asset_id = catalog_names().get(value) or (int(value) if value.isdigit() else None)
+        if asset_id is None:
+            return False, f"[Erro] Peça '{value}' não encontrada. Use um nome da lista ou o id do Roblox.", RED
+        if str(asset_id) in worn:
+            model.extra_ids = [i for i in model.extra_ids if str(i) != str(asset_id)]
+            model.reload()
+            return True, f"[Extra] {item_name(asset_id)} removida.", GREEN
+        model.extra_ids = list(getattr(model, "extra_ids", [])) + [asset_id]
+        model.reload()
+        return True, f"[Extra] {item_name(asset_id)} vestida junto com as outras.", GREEN
+
     def shoes(self, args: List[str]) -> Result:
         missing = self._need_model()
         if missing:
@@ -460,6 +546,7 @@ class SkinCommandHandler:
         if value == "tudo":
             m = self.character_model
             m.top_id = m.bottom_id = m.outer_top_id = m.shoes_id = None
+            m.extra_ids = []
             m.update_customization(tool_id=0)
             m.reload()
             return True, "[Tirar] Roupas, sapatos e arma removidos (o cabelo fica).", GREEN
@@ -736,6 +823,11 @@ SKIN_COMMANDS: List[Command] = [
     Command(("pele", "tone"), "/skin pele <tom>", "tom de pele", SkinCommandHandler.tone, list(SKIN_TONES), "Aparência"),
     Command(("olhos", "eyes"), "/skin olhos <cor|estilo>", "cor ou estilo dos olhos", SkinCommandHandler.eyes,
             list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"], "Aparência"),
+    Command(("olho", "eye"), "/skin olho <direito|esquerdo> <cor>", "cor de um olho só", SkinCommandHandler.eye,
+            {"direito": list(EYE_COLORS), "esquerdo": list(EYE_COLORS)}, "Aparência"),
+    Command(("maquiagem", "makeup"), "/skin maquiagem <batom|sombra> <cor|sem> | <blush|sardas> <sim|nao> | sem",
+            "batom, sombra, blush e sardas", SkinCommandHandler.makeup, ["batom", "sombra", "blush", "sardas", "sem"],
+            "Aparência"),
     Command(("boca", "mouth"), "/skin boca <estilo>", "estilo da boca", SkinCommandHandler.mouth,
             ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem"], "Aparência"),
     Command(("nariz", "nose"), "/skin nariz <sim|nao|formato>", "nariz 3D e seu formato (ajustes em /skin ajuste nariz_...)",
@@ -759,6 +851,8 @@ SKIN_COMMANDS: List[Command] = [
             lambda: sorted({k for k in BOTTOM_PRESETS if not k.isdigit()} | {"none"}), "Roupas"),
     Command(("jaqueta", "jacket"), "/skin jaqueta <id|none> | folga <mm> | puxar <mm>", "peça por cima do top",
             SkinCommandHandler.jacket, {"folga": ["3", "6", "10"], "puxar": ["10", "15", "20"], "none": []}, "Roupas"),
+    Command(("extra", "mais"), "/skin extra <nome|id|none>", "peça a mais, junto com as outras (polainas com saia)",
+            SkinCommandHandler.extra, lambda: ["none"] + sorted(catalog_names()), "Roupas"),
     Command(("sapato", "shoes"), "/skin sapato <pacote|esquerdo,direito|none>", "calçado", SkinCommandHandler.shoes,
             ["none"], "Roupas"),
     Command(("arma", "tool"), "/skin arma <katana|id|none>", "item na mão", SkinCommandHandler.tool,

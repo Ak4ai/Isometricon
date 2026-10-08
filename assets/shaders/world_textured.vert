@@ -22,11 +22,13 @@ out vec3 v_FragPos;
 out vec3 v_Normal;
 out vec2 v_TexCoord;
 out vec3 v_Color;
+out vec3 v_BindPos;        // where the vertex is on the unposed body (patterns that stay on the skin)
 
 void main()
 {
     vec4 localPos = vec4(aPos, 1.0);
     vec3 localNormal = aNormal;
+    v_BindPos = aPos;
     if (u_Skinned)
     {
         mat4 pose = aWeights.x * u_Bones[int(aBones.x)] + aWeights.y * u_Bones[int(aBones.y)]

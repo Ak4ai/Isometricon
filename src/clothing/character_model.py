@@ -800,6 +800,8 @@ LAYER_PULL_MM = 15.0
 LAYER_GAP_MM = 5.0
 CULL_COVERED = True
 DEFAULT_HAIR_ID = "116773763268018"
+# Parts of the model that are skin (the head's texture has more than skin; the shader tells them apart).
+SKIN_PART_NAMES = ("head", "nose", "neck", "trunk_skin", "legs_skin", "feet_skin", "arm_", "forearm_", "hand_")
 # Head (with neck and hair) moved forward (m) on each body, plus head_z_offset.
 # Relative to the top of its torso the female head sits 2.5 cm further back than the male one.
 BODY_HEAD_FORWARD = {"female": 0.025, "male": 0.0}
@@ -835,6 +837,7 @@ class CharacterModel:
         outer_top_id: Optional[Union[int, str]] = None,
         shoes_id: Optional[Union[int, str, tuple]] = None,
         async_loading: bool = False,
+        extra_ids: Optional[List[Union[int, str]]] = None,
     ) -> None:
         # With ``async_loading`` every (re)build runs on a background thread and the result is
         # swapped in by ``poll()`` on the main thread, so fitting clothes never freezes the UI.
@@ -855,6 +858,9 @@ class CharacterModel:
         self.outer_top_gap_mm = LAYER_GAP_MM  # extra room between the layers: refits the outer top
         # Layered shoes: a bundle id, "left,right" asset ids or one asset id.
         self.shoes_id = shoes_id
+        # Garments worn together with the others, each fitted to the body by itself (leg warmers
+        # with a skirt, a belt, arm warmers): no layer is fitted over another.
+        self.extra_ids: List[Union[int, str]] = list(extra_ids or [])
         self.outer_top_pull_mm = LAYER_PULL_MM  # pull of what still pokes through it: runtime only
         self.tool_id = tool_id
         self.hair_id = hair_id
@@ -1281,6 +1287,34 @@ class CharacterModel:
                 return top_obj_path
         return path if is_valid_v2_obj(path) else top_obj_path
 
+    def _add_extras(self, vertex_transform):
+        """Wear the extra garments, each fitted to the body with its own cages; returns their fitted OBJ paths."""
+        if not self.extra_ids:
+            return []
+        from src.clothing.wear_engine import RobloxWearEngine
+        from src.rendering.mesh import TexturedMesh
+        engine = None
+        paths = []
+        for asset_id in self.extra_ids:
+            path = self.fitted_path(asset_id)
+            if not is_valid_v2_obj(path):
+                try:
+                    engine = engine or RobloxWearEngine(body_type=self.body)
+                    engine.wear(asset_id, output_obj=path)
+                except Exception as e:
+                    print(f"[CharacterModel] Aviso: peça extra {asset_id}: {e}")
+                    continue
+            data = parse_obj_as_mesh(path, vertex_transform=vertex_transform)
+            if not data:
+                continue
+            texture_path = find_clothing_texture(asset_id)
+            texture_id = upload_texture_rgba(Image.open(texture_path)) if texture_path else self.white_tex_id
+            if texture_id != self.white_tex_id:
+                self.textures.append(texture_id)
+            self.parts.append(CharacterPart(f"extra_{asset_id}", TexturedMesh(data[0], data[1]), texture_id, source_obj=path))
+            paths.append(path)
+        return paths
+
     def _add_shoes(self, vertex_transform):
         """Wear the layered shoes (each foot fitted with its own cages); returns their fitted OBJ paths."""
         self._hide_feet = False
@@ -1622,11 +1656,12 @@ class CharacterModel:
         # que as peças de baixo tiverem furando é puxado para baixo dela.
         outer_obj_path = self._add_outer_top(None)
         shoe_paths = self._add_shoes(None)
+        extra_paths = self._add_extras(None)
 
         # 9.1 HSR do Roblox: com a máscara de todas as peças vestidas, a pele inteira
         # é desenhada e só os triângulos cobertos pelas roupas são removidos.
         self._apply_hsr_skin(clean_obj, skin_color, top_obj_path, bottom_obj_path,
-                             is_none_top, is_none_bottom, extra_obj_paths=(outer_obj_path, *shoe_paths))
+                             is_none_top, is_none_bottom, extra_obj_paths=(outer_obj_path, *shoe_paths, *extra_paths))
 
         # 9. Tool / Katana / Acessório opcional
         if self.tool_id is not None:
@@ -1686,14 +1721,22 @@ class CharacterModel:
         bones = getattr(self, "bones", None)
         if bones is not None:
             shader.set_mat4_array("u_Bones", bones)
+        # Vitiligo is drawn by the shader, on the parts that are skin.
+        adjust = getattr(self.customization, "body_adjust", None) or {}
+        vitiligo = max(0.0, min(1.0, float(adjust.get("vitiligo", 0.0) or 0.0)))
+        if vitiligo > 0.0:
+            shader.set_float("u_VitiligoSeed", float(adjust.get("vitiligo_forma", 0.0) or 0.0))
+            shader.set_vec3("u_SkinTone", *[float(c) for c in self.customization.skin_color_rgb[:3]])
         for part in self.parts:
             part_model = base_model if part.transform is None else base_model @ part.transform
             shader.set_mat4("u_Model", part_model)
             shader.set_bool("u_Skinned", bones is not None and getattr(part.mesh, "skinned", False))
+            shader.set_float("u_Vitiligo", vitiligo if part.name.startswith(SKIN_PART_NAMES) else 0.0)
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, part.texture_id)
             part.mesh.draw()
         shader.set_bool("u_Skinned", False)
+        shader.set_float("u_Vitiligo", 0.0)
 
         # Renderização da Cage em modo Wireframe (Depuração Visual)
         if self.show_cage and self.cage_debug_mesh is not None:
@@ -1760,7 +1803,7 @@ class CharacterModel:
 
     def _needs_fitting(self) -> bool:
         """Whether the top or the pants still have no fitted cache for this body (the slow case)."""
-        ids = [i for i in (self.top_id, self.bottom_id) if i is not None and str(i).lower() not in
+        ids = [i for i in (self.top_id, self.bottom_id, *self.extra_ids) if i is not None and str(i).lower() not in
                ("none", "0", "false", "sem", "naked")]
         return any(not is_valid_v2_obj(self.fitted_path(i)) for i in ids)
 

@@ -42,7 +42,9 @@ NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_altura": "Posição do nariz
         "nariz_base_altura": "Altura da base", "nariz_narinas_altura": "Posição das narinas (altura)",
         "nariz_ponta_cor": "Cor da ponta (rosada)",
         "nariz_sombra": "Sombra do nariz"}
-ADJUSTMENTS = {**BODY, **FACE, **NOSE}
+# Drawn by the shader over the skin (CharacterModel.draw): 0 to 1 of the skin, and which pattern.
+SKIN = {"vitiligo": "Vitiligo (quantidade)", "vitiligo_forma": "Vitiligo (desenho das manchas)"}
+ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
 REDRAWS_FACE = set(FACE) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
 

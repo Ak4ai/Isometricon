@@ -295,3 +295,42 @@ def test_skin_nariz_shows_and_hides_the_nose():
     assert handler.execute("/skin nariz bloco")[0] and len(reloads) == 3                 # the old mesh: rebuilt
     assert handler.execute("/skin nariz nao")[0] and handler.execute("/skin nariz fino")[0]
     assert model.customization.should_render_3d_nose and len(reloads) == 5               # a style puts the nose back
+
+
+def test_each_eye_takes_its_own_colour_and_makeup_changes_only_what_it_names():
+    from src.clothing.customization import HeadAtlasBuilder, IrisColor
+    builder = HeadAtlasBuilder()
+    def atlas(**fields):
+        return np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    same = atlas(iris_color=IrisColor.BLUE)
+    odd = atlas(iris_color=IrisColor.BLUE, iris_color_other=IrisColor.GREEN)
+    changed = np.nonzero((same != odd).any(axis=2))
+    assert len(changed[0]) > 50
+    eyes = np.nonzero((same != atlas(iris_color=IrisColor.GREEN)).any(axis=2))[1]    # the columns of both irises
+    middle = (eyes.min() + eyes.max()) // 2
+    assert changed[1].min() > middle                         # only one eye changed: the other half of the layer
+    lips = np.nonzero((same != atlas(iris_color=IrisColor.BLUE, makeup={"batom": "roxo"})).any(axis=2))
+    assert len(lips[0]) > 20 and lips[0].min() > changed[0].max()      # lipstick: below the eyes, and nothing else
+    lids = np.nonzero((same != atlas(iris_color=IrisColor.BLUE, makeup={"sombra": "azul"})).any(axis=2))
+    assert len(lids[0]) > 50 and lids[0].max() < lips[0].min()         # eye shadow: around the eyes, above the mouth
+    np.testing.assert_array_equal(same, atlas(iris_color=IrisColor.BLUE, makeup={"batom": "cor_que_nao_existe"}))
+
+
+def test_skin_olho_and_maquiagem_set_what_the_face_is_drawn_with():
+    from src.clothing.customization import IrisColor
+    model = SimpleNamespace(customization=AvatarCustomization(iris_color=IrisColor.BLUE), reload=lambda: None)
+    handler = SkinCommandHandler(character_model=model)
+    custom = model.customization
+    assert handler.execute("/skin olho esquerdo verde")[0]
+    assert (custom.iris_color, custom.iris_color_other) == (IrisColor.BLUE, IrisColor.GREEN)
+    assert handler.execute("/skin olho direito castanho")[0] and custom.iris_color is IrisColor.BROWN
+    assert handler.execute("/skin olhos roxo")[0] and custom.iris_color_other is None    # both the same again
+    assert handler.execute("/skin olho meio azul")[0] is False
+    assert handler.execute("/skin maquiagem batom vermelho")[0] and handler.execute("/skin maquiagem sombra roxo")[0]
+    assert custom.makeup == {"batom": "vermelho", "sombra": "roxo"}
+    assert handler.execute("/skin maquiagem batom sem")[0] and custom.makeup == {"sombra": "roxo"}
+    assert handler.execute("/skin maquiagem blush alternar")[0] and custom.resolved_face_detail == "blush"
+    assert handler.execute("/skin maquiagem sardas sim")[0] and custom.resolved_face_detail == "blush_and_freckles"
+    assert handler.execute("/skin maquiagem blush alternar")[0] and custom.resolved_face_detail == "freckles"
+    assert handler.execute("/skin maquiagem batom fluorescente")[0] is False
+    assert handler.execute("/skin maquiagem sem")[0] and custom.makeup == {} and custom.resolved_face_detail == "none"
