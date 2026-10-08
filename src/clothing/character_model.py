@@ -1463,8 +1463,10 @@ class CharacterModel:
                 # The nose, in the style chosen, on this head's face; it takes the head's texture
                 # (where its shadow is painted) and turns with the head.
                 from .nose import styled_rows
-                self.built_nose_style = getattr(self.customization, "nose_style", "padrao")  # the style of this mesh
-                nose_rows, nose_triangles = styled_rows(v_h, self.built_nose_style)
+                # The style of this mesh, and whether it is in one plain colour (the computed shadow).
+                self.built_nose_style = (getattr(self.customization, "nose_style", "padrao"),
+                                         getattr(self.customization, "nose_shadow", "legado") == "calculada")
+                nose_rows, nose_triangles = styled_rows(v_h, self.built_nose_style[0], plain=self.built_nose_style[1])
                 self.parts.append(CharacterPart("nose", TexturedMesh(nose_rows.flatten(), nose_triangles.flatten()),
                                                 head_tex_id))
 

@@ -430,3 +430,43 @@ def test_the_computed_nose_shadow_follows_the_nose_in_use():
     assert not plain[:, 160:].any() and not plain[:120].any()                        # and it stays by the nose
     wider = dark(atlas(nose_shadow="calculada", body_adjust={"nariz_base_largura": 1.0}))
     assert (wider != plain).any()                                                    # the adjustments of the nose move it too
+
+
+def test_the_block_noses_take_the_adjustments_of_the_parts():
+    from src.clothing import nose
+    plain, _ = nose.model_rows("bloco")
+    lower = plain[:, 1] < (plain[:, 1].min() + plain[:, 1].max()) / 2
+    front = plain[:, 2] > nose.BLOCK_FRONT
+    width = lambda rows, mask: np.ptp(rows[mask, 0])
+    rows = lambda **adjust: nose.model_rows("bloco", adjust)[0]
+    tip, base, bridge = rows(nariz_ponta_largura=1.0), rows(nariz_base_largura=1.0), rows(nariz_ponte_largura=1.0)
+    assert width(tip, lower & front) > width(plain, lower & front) * 1.4 and width(tip, ~lower) == width(plain, ~lower)
+    assert width(base, lower & ~front) > width(plain, lower & ~front) * 1.4 and width(base, lower & front) == width(plain, lower & front)
+    assert width(bridge, ~lower) > width(plain, ~lower) * 1.4 and width(bridge, lower) == width(plain, lower)
+    assert rows(nariz_ponte_altura=1.0)[~lower, 2].max() > plain[~lower, 2].max() + 0.004
+    assert rows(nariz_base_altura=1.0)[lower, 1].max() > plain[lower, 1].max() + 0.004
+    assert all(len(rows(**{name: 1.0})) == len(plain) for name in nose.PARAMETRIC)   # reshaped in place, the same vertices
+    winged = lambda **adjust: nose.model_rows("bloco_narinas", adjust)[0][len(plain):]
+    assert winged(nariz_narinas_altura=1.0)[:, 1].min() > winged()[:, 1].min() + 0.005
+    assert np.ptp(winged(nariz_base_largura=1.0)[:, 0]) > np.ptp(winged()[:, 0])
+    assert np.ptp(winged(nariz_ponta_largura=1.0)[:, 0]) > np.ptp(winged()[:, 0])    # the wings stay against the wider tip
+
+
+def test_the_computed_nose_shadow_fades_up_the_nose_and_stays_off_it():
+    from src.clothing import nose
+    from src.clothing.customization import HeadAtlasBuilder
+    builder = HeadAtlasBuilder()
+    atlas = lambda **fields: np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    shade = (atlas(body_adjust={"nariz_sombra": -1.0}) - atlas(nose_shadow="calculada")).sum(axis=2)
+    rows8, _ = nose.model_rows("padrao")
+    flat = nose.face_pixels(rows8[:, :3])
+    top, bottom = int(flat[:, 1].min()), int(flat[:, 1].max())
+    assert shade[top - 4:top + 6].max() <= 3                                         # nothing at the top of the bridge
+    quarter = (bottom - top) // 4
+    assert shade[top:top + quarter].max() < shade[bottom - quarter:bottom + 4].max()   # and it grows down the nose
+    middle = int(round(flat[:, 0].mean()))
+    assert shade[bottom - 12:bottom - 3, middle - 2:middle + 3].max() == 0             # none under the nose itself
+    u, v = int(nose.PLAIN_UV[0] * 512), int(nose.PLAIN_UV[1] * 512)
+    assert shade[v - 1:v + 2, u - 1:u + 2].max() == 0                                  # nor where the nose takes its colour
+    plain = nose.styled_rows(np.zeros((3, 11)), "batata", plain=True)[0]
+    assert np.allclose(plain[:, 6:8], nose.PLAIN_UV) and not np.allclose(nose.styled_rows(np.zeros((3, 11)), "batata")[0][:, 6:8], nose.PLAIN_UV)

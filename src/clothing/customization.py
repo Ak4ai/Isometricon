@@ -435,9 +435,10 @@ EYE_SHADOW, EYE_SHADOW_REACH = 0.55, (0.36, 0.30)
 NOSE_SHADOW_BOX, NOSE_SHADOW, NOSE_SHADOW_TONE = (117, 143, 139, 198), 0.14, 0.55
 NOSE_SHADOW_GROWTH = (0.5, 0.6, 12.0)
 # The shadow computed from the nose: how much stronger than the legacy one where the nose casts
-# it, the share of that around the nose's outline and on the nose itself, how far the shadow falls
-# to the side and down (pixels for each pixel the nose stands out), and pixels of the rim around it.
-NOSE_CAST, NOSE_CONTACT, NOSE_OWN, NOSE_CAST_FALL, NOSE_RIM = 2.6, 0.55, 0.35, (-0.85, 0.70), 2
+# it, the share of that around the nose's outline, how far the shadow falls to the side and down
+# (pixels for each pixel the nose stands out), pixels of the rim around it, and the share of the
+# nose's height, from its top, over which the shadow fades in (none at the top of the bridge).
+NOSE_CAST, NOSE_CONTACT, NOSE_CAST_FALL, NOSE_RIM, NOSE_FADE = 2.6, 0.55, (-0.85, 0.70), 2, 0.75
 NOSE_SHADOWS = ("legado", "calculada")
 
 
@@ -559,7 +560,15 @@ class LayeredHeadCompositor:
             strength = min(shadow * NOSE_CAST, 1.0)
             level = np.maximum(np.array(cast, dtype=np.float64), np.array(rim, dtype=np.float64) * NOSE_CONTACT)
             level = np.array(Image.fromarray(level.astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2 * unit)), dtype=np.float64)
-            level[np.array(outline) > 0] = 255.0 * NOSE_OWN  # the nose itself (it takes its colour here): even
+            # It fades up the nose, to nothing at the top of the bridge.
+            top, bottom = float(flat[:, 1].min()) * unit, float(flat[:, 1].max()) * unit
+            rise = np.clip((np.arange(canvas.height) - top) / max((bottom - top) * NOSE_FADE, 1.0), 0.0, 1.0)
+            level *= (rise * rise * (3.0 - 2.0 * rise))[:, None]
+            # None of it on the nose itself: under the nose (but for its edge, where the mesh may
+            # not reach) and at the point of skin the nose takes its colour from.
+            level[np.array(outline.filter(ImageFilter.MinFilter(3))) > 0] = 0.0
+            px, py = int(round(noses.PLAIN_UV[0] * canvas.width)), int(round(noses.PLAIN_UV[1] * canvas.height))
+            level[py - 2:py + 3, px - 2:px + 3] = 0.0
             mask = Image.fromarray((level * strength).astype(np.uint8))
             dark = Image.new("RGBA", canvas.size, tuple(int(c * NOSE_SHADOW_TONE) for c in cust.skin_rgb_255) + (255,))
             dark.putalpha(mask)

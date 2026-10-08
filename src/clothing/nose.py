@@ -147,6 +147,9 @@ STYLE_NAMES = tuple(NOSE_STYLES) + BLOCKS
 # The flat front of the face on the 512 px head atlas: the column of x = 0 and pixels per metre
 # across, the row of the top of that face, its height above the bottom of the head, pixels per metre down.
 FACE_PIXELS = (128.25, 1092.5, 35.0, 0.2735, 801.0)
+# With the computed shadow the whole nose takes its colour from this one point of the atlas, under
+# the nose itself, which that shadow leaves clear (the patch between the eyes is in the shadow).
+PLAIN_UV = (128.0 / 512.0, 186.0 / 512.0)
 
 
 def _smooth(low: float, high: float, t: float) -> float:
@@ -269,16 +272,42 @@ def tip_colours(rows: np.ndarray, adjust: Optional[Mapping[str, float]]) -> np.n
     return 1.0 + weight * (np.array(TIP_PINK if much > 0 else TIP_DARK) - 1.0)
 
 
-def _block_wings() -> np.ndarray:
-    """Rows (N, 8), three to a triangle, of the wings of the nostrils beside the tip of the old
-    block nose: the blocks of the "batata" nose, against the sides of the block."""
+BLOCK_FRONT = 0.1305  # a vertex of the block further out than this is on its front, not on the face
+
+
+def _block(adjust: Optional[Mapping[str, float]]) -> np.ndarray:
+    """The old block nose with the adjustments of its parts: the block has two levels, the tip
+    box and the top of the bridge. The front of the tip takes the width of the tip, its back
+    (on the face) the width of the base, the top the width and the height of the bridge, and the
+    tip box grows taller with the height of the base."""
+    rows = ROWS.copy()
+    if not parametric(adjust):
+        return rows
+    tip, bridge = 1.0 + PART_WIDTH * _amount(adjust, "nariz_ponta_largura"), 1.0 + PART_WIDTH * _amount(adjust, "nariz_ponte_largura")
+    base, tall = 1.0 + PART_WIDTH * _amount(adjust, "nariz_base_largura"), _amount(adjust, "nariz_base_altura")
+    centre = (ROWS[:, 0].min() + ROWS[:, 0].max()) / 2
+    lower, front = ROWS[:, 1] < (ROWS[:, 1].min() + ROWS[:, 1].max()) / 2, ROWS[:, 2] > BLOCK_FRONT
+    rows[:, 0] = centre + (ROWS[:, 0] - centre) * np.where(lower, np.where(front, tip, base), bridge)
+    rows[lower, 1] = NOSE_BOTTOM + (ROWS[lower, 1] - NOSE_BOTTOM) * (1.0 + BASE_HEIGHT * tall)
+    top = ~lower & front
+    rows[top, 2] = np.maximum(ROWS[top, 2] + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura"), FACE_FRONT + 0.0005)
+    return rows
+
+
+def _block_wings(block: np.ndarray, adjust: Optional[Mapping[str, float]] = None) -> np.ndarray:
+    """Rows (N, 8), three to a triangle, of the wings of the nostrils beside the tip of the block
+    nose given: the blocks of the "batata" nose, against the sides of the tip, with the width and
+    the height of the base and the place of the nostrils."""
     wing = NOSE_STYLES["batata"]
-    low, high = float(ROWS[:, 0].min()), float(ROWS[:, 0].max())
-    y0, y1, back = NOSE_BOTTOM, NOSE_BOTTOM + wing.wing_height, FACE_FRONT - EMBED
+    tip = block[block[:, 1] < (block[:, 1].min() + block[:, 1].max()) / 2]
+    low, high = float(tip[:, 0].min()), float(tip[:, 0].max())
+    width = wing.wing_width * (1.0 + PART_WIDTH * _amount(adjust, "nariz_base_largura"))
+    y0 = NOSE_BOTTOM + WING_LIFT * _amount(adjust, "nariz_narinas_altura")
+    y1, back = y0 + wing.wing_height * (1.0 + BASE_HEIGHT * _amount(adjust, "nariz_base_altura")), FACE_FRONT - EMBED
     z0, z1 = FACE_FRONT + wing.wing_depth, FACE_FRONT + wing.wing_depth * 0.7
     rows = []
     for side, edge in ((-1.0, low), (1.0, high)):
-        x0, x1 = edge - side * 0.001, edge + side * wing.wing_width
+        x0, x1 = edge - side * 0.001, edge + side * width
         centre = np.array([(x0 + x1) / 2, (y0 + y1) / 2, (back + z0) / 2])
         for corners in (([x0, y0, z0], [x1, y0, z1], [x1, y1, z1], [x0, y1, z0]),        # front
                         ([x1, y0, back], [x1, y0, z1], [x1, y1, z1], [x1, y1, back]),    # outer side
@@ -299,20 +328,25 @@ def model_rows(style: str = "padrao", adjust: Optional[Mapping[str, float]] = No
     """(rows of 8 floats, triangles) of the nose of a style where the old head had it (HEAD_BOTTOM,
     FACE_FRONT), with the adjustments of its parts. An unknown style is the default one."""
     if style == BLOCK:
-        return ROWS.copy(), TRIANGLES.copy()
+        return _block(adjust), TRIANGLES.copy()
     if style == BLOCK_WINGS:
-        wings = _block_wings()
-        extra = np.arange(len(wings), dtype=np.uint32).reshape(-1, 3) + len(ROWS)
-        return np.concatenate([ROWS, wings]), np.concatenate([TRIANGLES, extra])
+        block = _block(adjust)
+        wings = _block_wings(block, adjust)
+        extra = np.arange(len(wings), dtype=np.uint32).reshape(-1, 3) + len(block)
+        return np.concatenate([block, wings]), np.concatenate([TRIANGLES, extra])
     rows8 = build(adjusted(NOSE_STYLES.get(style, BASE), adjust))
     rows8[:, 1] += NOSE_BOTTOM   # where the old nose ended, above the mouth
     rows8[:, 2] += FACE_FRONT - EMBED
     return rows8, np.arange(len(rows8), dtype=np.uint32).reshape(-1, 3)
 
 
-def styled_rows(head_rows: np.ndarray, style: str = "padrao", adjust: Optional[Mapping[str, float]] = None):
-    """(vertex rows, triangles) of the nose of a style on a head, with the adjustments of its parts."""
+def styled_rows(head_rows: np.ndarray, style: str = "padrao", adjust: Optional[Mapping[str, float]] = None,
+                plain: bool = False):
+    """(vertex rows, triangles) of the nose of a style on a head, with the adjustments of its parts.
+    ``plain``: the whole nose in the colour of one clear point of the skin (PLAIN_UV)."""
     rows8, triangles = model_rows(style, adjust)
+    if plain:
+        rows8[:, 6:8] = PLAIN_UV
     return _place(rows8, head_rows), triangles
 
 
