@@ -225,9 +225,12 @@ class CharacterEditor:
         # The skin brush: what it does (None: off), its radius, whether it paints both sides, the
         # points taken by the stroke being made, and what the main loop gives it each frame: a
         # function from the cursor to the points under it, and the points to show on the character.
-        self.hsr_edit = False  # the edit mode of the skin under the clothes: painted skin, clear clothes, the brush
-        self.brush_on = False  # in that mode, the left button paints (off: it turns the character, as elsewhere)
-        self.clear_clothes = True  # and the skin is shown whole and painted, under see-through clothes (off: as in the game)
+        # The skin under the clothes is edited with two things, each on its own: the brush (the left
+        # button paints, and the points it takes are shown) and the transparency (the skin whole and
+        # painted by its state, under see-through clothes). With either, the legend and undo are there.
+        self.brush_on = False
+        self.clear_clothes = False
+        self._brush_used = False  # the first time the brush is turned on, the transparency comes with it
         self.arms_out = False      # the character stands with the arms at 90 degrees while in the fine adjustment
         self._history_quad = None
         self._legend_quad = None
@@ -375,7 +378,6 @@ class CharacterEditor:
                     Option("Espelhar os lados", "/skin hsr espelhar sim", selected=mirrored),
                     Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),
                 Group("Edição da pele sob a roupa (HSR)", [
-                    Option("Editar pele", "@hsr", selected=lambda m: self.hsr_edit, check=True),
                     Option("Ativar pincel", "@pintar", selected=lambda m: self.brush_on, check=True),
                     Option("Transparência", "@transparente", selected=lambda m: self.clear_clothes, check=True),
                     Option("Braços a 90°", "@bracos", selected=lambda m: self.arms_out, check=True)]),
@@ -431,8 +433,12 @@ class CharacterEditor:
 
     @property
     def brushing(self) -> bool:
-        """O modo de edição da pele está ligado, com um pincel: o arraste no personagem pinta."""
-        return self.hsr_editing and self.brush_on and self.brush is not None
+        """O pincel está ligado e a tela na seção dele: o arraste no personagem pinta."""
+        return self.in_fine and self.brush_on and self.brush is not None
+
+    @property
+    def in_fine(self) -> bool:
+        return self.is_open and self.sections[self.active].title == FINE_SECTION
 
     def history_rects(self, width: int, height: int) -> Dict[str, Rect]:
         """As setas de desfazer e refazer, no canto de cima à direita (só no modo de edição da pele)."""
@@ -450,8 +456,8 @@ class CharacterEditor:
 
     @property
     def hsr_editing(self) -> bool:
-        """O modo de edição da pele está ligado e a tela está na seção dele."""
-        return self.is_open and self.hsr_edit and self.sections[self.active].title == FINE_SECTION
+        """A pele sob a roupa está sendo editada: o pincel ou a transparência ligados, na seção deles."""
+        return self.in_fine and (self.brush_on or self.clear_clothes)
 
     @property
     def arms_raised(self) -> bool:
@@ -461,7 +467,7 @@ class CharacterEditor:
     def _sync_edit(self) -> None:
         """Põe o modelo no modo de edição da pele, ou tira (ao sair da seção ou fechar a tela)."""
         model = self.model
-        wanted = self.hsr_editing and self.clear_clothes  # without it the character is edited as the game shows it
+        wanted = self.in_fine and self.clear_clothes  # without it the character is shown as in the game
         if model is None or bool(getattr(model, "hsr_edit", False)) == wanted:
             return
         model.hsr_edit = wanted
@@ -717,16 +723,13 @@ class CharacterEditor:
                 self.arms_out = not self.arms_out
             if name == "pintar":
                 self.brush_on = not self.brush_on
-                if self.brush_on and not self.hsr_edit:
-                    name = "hsr"  # the brush paints in the edit mode: turned on with it
-            if name == "hsr":
-                self.hsr_edit = not self.hsr_edit
-                self.brush_on = self.hsr_edit and (self.brush_on or option.command == "@hsr")  # on with the mode, off with it
-                if self.hsr_edit:
+                if self.brush_on:
                     self.turntable["active"] = self._was_spinning = False  # a still character to paint on
                     self.message = ("Esquerdo pinta, Ctrl inverte, direito gira o personagem."
                                     if getattr(self.model, "hsr_cage", None) is not None
-                                    else "Vista uma roupa: a edição corrige a pele sob ela.")
+                                    else "Vista uma roupa: o pincel corrige a pele sob ela.")
+                    if not self._brush_used:  # what is painted is seen under the clothes; unticked after, it stays so
+                        self._brush_used, self.clear_clothes = True, True
                 self._sync_edit()
             elif name == "pincel":
                 self.brush = value or BRUSHES[0][0]
@@ -803,7 +806,7 @@ class CharacterEditor:
                     self.entry = (self.entry + (self.clipboard() or "").strip().replace("\n", " "))[:200]
                 self.dirty = True
             return True
-        if key == 90 and mods & 2 and action in (1, 2) and self.hsr_editing:  # Ctrl+Z undoes, Ctrl+Shift+Z redoes
+        if key == 90 and mods & 2 and action in (1, 2) and self.in_fine:  # Ctrl+Z undoes, Ctrl+Shift+Z redoes
             self.choose(Option("", f"/skin hsr {'refazer' if mods & 1 else 'desfazer'}"))
             return True
         if action != 1:

@@ -118,18 +118,16 @@ peça não é simétrica), e a pele atravessa o tecido em dentes. A seção corr
   o que o espelha do outro (`hsr.mirror_index`, pontos a até 5 mm do espelho). Só iguala os dois lados: não esconde
   o que o cálculo deixou visível nos dois. É uma escolha do personagem, desligada por padrão, e não muda o encaixe
   nem as máscaras gravadas das roupas.
-- **À mão, no modo de edição** (a caixa "Editar pele"): o personagem passa a ser mostrado para a edição. A pele
-  aparece inteira, sem recorte, pintada pelo que a máscara diz em cada lugar (`hsr.edit_colours`, cores de vértice
-  misturadas sobre a cage): cinza-azulado a pele à mostra, laranja a escondida pelas roupas, vermelho a escondida à
-  mão, verde a mostrada à mão. As roupas ficam transparentes por cima (`EDIT_CLOTH_ALPHA`, o uniforme `u_Alpha` do
-  shader), e os pontos da cage, que são o que se pinta, aparecem como pontos nas mesmas cores (amarelo os do traço
-  em curso). O modo vale só na seção: ao trocar de seção ou fechar a tela o personagem volta ao normal.
-- **Ativar pincel** (a caixa ao lado): com ela marcada o botão esquerdo pinta; desmarcada, ele gira o personagem
-  como nas outras seções, com as cores ainda à vista. Marcar "Editar pele" já liga o pincel, e marcar o pincel liga
-  o modo.
-- **Transparência** (outra caixa, marcada de início): é ela que mostra a pele inteira e pintada sob as roupas
-  transparentes. Desmarcada, o personagem é editado como o jogo o mostra, com as roupas opacas e a pele recortada,
-  e só os pontos e o pincel aparecem por cima: dá para ver o resultado de cada traço na hora.
+- **À mão**, com duas caixas, cada uma por si (havia uma terceira, "Editar pele", que só liberava as outras e saiu):
+  - **Ativar pincel:** o botão esquerdo pinta, e os pontos da cage, que são o que se pinta, aparecem sobre o
+    personagem nas cores da legenda (amarelo os do traço em curso). Desmarcada, o botão esquerdo gira o personagem
+    como nas outras seções. Na primeira vez que é marcada, a transparência vem junto.
+  - **Transparência:** a pele aparece inteira, sem recorte, pintada pelo que a máscara diz em cada lugar
+    (`hsr.edit_colours`, cores de vértice misturadas sobre a cage), sob as roupas transparentes (`EDIT_CLOTH_ALPHA`, o
+    uniforme `u_Alpha` do shader). Sozinha, serve para olhar a máscara. Desmarcada, o personagem é mostrado como no
+    jogo, com as roupas opacas e a pele recortada, e dá para pintar vendo o resultado de cada traço.
+  - Com qualquer uma das duas ligada aparecem a legenda e as setas de desfazer, e o botão direito gira e inclina o
+    personagem. Tudo isso vale só na seção: ao trocar de seção ou fechar a tela o personagem volta ao normal.
 - **Braços a 90°** (outra caixa): o personagem fica com os braços abertos para os lados enquanto a tela está nesta
   seção (`CharacterAnimator.arms_out`), para ver e pintar as axilas e a lateral do tronco, que os braços cobrem em
   descanso. Os pontos acompanham a pose. Vale com ou sem o modo de edição.

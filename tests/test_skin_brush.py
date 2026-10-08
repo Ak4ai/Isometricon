@@ -115,8 +115,8 @@ def test_the_brush_paints_by_dragging_and_the_right_button_turns():
     assert not editor.brushing and not editor.handle_mouse_button(700, 300, RIGHT, PRESS)    # out of the edit mode the right button is the game's
     editor.choose(option(editor, "Espelhar os lados"))
     assert sent == ["/skin hsr espelhar sim"]
-    assert option(editor, "Editar pele").check
-    editor.choose(option(editor, "Editar pele"))
+    assert option(editor, "Ativar pincel").check
+    editor.choose(option(editor, "Ativar pincel"))
     assert editor.brushing and editor.brush == "esconder" and editor.model.hsr_edit is True
     assert editor.turntable["active"] is False and sent == ["/skin hsr espelhar sim"]         # no command for that
     editor.choose(option(editor, "Grande"))
@@ -149,8 +149,10 @@ def test_the_brush_paints_by_dragging_and_the_right_button_turns():
     editor.handle_mouse_button(700, 300, LEFT, RELEASE)
     assert sent[-1] == "/skin hsr esconder 2,5"
     sent.append("/skin hsr mostrar 2,5")
-    editor.choose(option(editor, "Editar pele"))
-    assert editor.model.hsr_edit is False
+    editor.choose(option(editor, "Ativar pincel"))
+    assert editor.model.hsr_edit is True and editor.hsr_editing                              # the transparency is a check of its own
+    editor.choose(option(editor, "Transparência"))
+    assert editor.model.hsr_edit is False and not editor.hsr_editing
     assert not editor.brushing and editor.handle_mouse_button(700, 300, LEFT, PRESS)         # the drag turns again
     editor.handle_cursor(760, 300)
     editor.handle_mouse_button(760, 300, LEFT, RELEASE)
@@ -160,7 +162,7 @@ def test_the_brush_paints_by_dragging_and_the_right_button_turns():
 
 def test_the_brush_only_works_in_its_own_section():
     editor, sent = make_editor()
-    editor.choose(option(editor, "Editar pele"))
+    editor.choose(option(editor, "Ativar pincel"))
     assert editor.model.hsr_edit is True
     editor.select_section(0)
     assert not editor.brushing and editor.model.hsr_edit is False                            # the character as it is, elsewhere
@@ -234,22 +236,29 @@ def test_the_edited_skin_is_painted_by_what_each_point_is():
     assert not np.allclose(painted[1], colours[1]) and np.allclose(painted[0], colours[0])  # blended between the two; untouched elsewhere
 
 
-def test_the_brush_has_its_own_check_and_comes_on_with_the_edit_mode():
+def test_the_brush_and_the_transparency_are_the_two_modes_each_on_its_own():
     editor, _ = make_editor()
-    assert option(editor, "Ativar pincel").check and not editor.brush_on
-    editor.choose(option(editor, "Ativar pincel"))                                          # the brush alone: the mode comes with it
-    assert editor.hsr_edit and editor.brush_on and editor.brushing
-    editor.choose(option(editor, "Ativar pincel"))                                          # off: the mode stays, the drag turns
-    assert editor.hsr_edit and not editor.brushing and editor.model.hsr_edit is True
+    labels = [o.label for group in editor.groups() for o in group.options]
+    assert "Editar pele" not in labels                                                      # no check that only allowed the others
+    assert option(editor, "Ativar pincel").check and not editor.brush_on and not editor.clear_clothes
+    assert not editor.hsr_editing and editor.history_rects(*SIZE) == {}
+    editor.choose(option(editor, "Transparência"))                                          # the transparency alone: to look
+    assert editor.model.hsr_edit is True and editor.hsr_editing and not editor.brushing
+    assert editor.history_rects(*SIZE) and editor.handle_mouse_button(700, 300, RIGHT, PRESS)
+    editor.handle_mouse_button(700, 300, RIGHT, RELEASE)
     yaw = editor.turntable["yaw"]
-    editor.handle_mouse_button(700, 300, LEFT, PRESS)
+    editor.handle_mouse_button(700, 300, LEFT, PRESS)                                       # the left button still turns
     editor.handle_cursor(760, 300)
     editor.handle_mouse_button(760, 300, LEFT, RELEASE)
     assert editor.turntable["yaw"] != yaw
-    editor.choose(option(editor, "Editar pele"))
-    assert not editor.hsr_edit and not editor.brush_on
-    editor.choose(option(editor, "Editar pele"))
-    assert editor.brushing                                                                  # the mode brings the brush
+    editor.choose(option(editor, "Transparência"))
+    assert editor.model.hsr_edit is False and not editor.hsr_editing
+    editor.choose(option(editor, "Ativar pincel"))                                          # the brush, the first time: with the transparency
+    assert editor.brushing and editor.clear_clothes and editor.model.hsr_edit is True
+    editor.choose(option(editor, "Transparência"))                                          # taken off, it stays off
+    editor.choose(option(editor, "Ativar pincel"))
+    editor.choose(option(editor, "Ativar pincel"))
+    assert editor.brushing and not editor.clear_clothes and editor.model.hsr_edit is False and editor.hsr_editing
 
 
 def test_changes_of_the_skin_are_undone_and_redone():
@@ -274,11 +283,14 @@ def test_changes_of_the_skin_are_undone_and_redone():
 def test_undo_and_redo_by_keys_and_by_the_arrows_at_the_top_right():
     editor, sent = make_editor()
     CTRL, SHIFT, Z = 2, 1, 90
-    assert editor.history_rects(*SIZE) == {} and not editor.handle_key(Z, PRESS, CTRL)       # only in the edit mode
-    editor.choose(option(editor, "Editar pele"))
+    assert editor.history_rects(*SIZE) == {}                                                 # the arrows come with the brush or the transparency
+    editor.choose(option(editor, "Ativar pincel"))
     assert editor.handle_key(Z, PRESS, CTRL) and sent[-1] == "/skin hsr desfazer"
     assert editor.handle_key(Z, PRESS, CTRL | SHIFT) and sent[-1] == "/skin hsr refazer"
     assert not editor.handle_key(Z, PRESS, 0)
+    editor.select_section(0)
+    assert not editor.handle_key(Z, PRESS, CTRL)                                             # the keys are this section's
+    editor.select_section([s.title for s in editor.sections].index(FINE_SECTION))
     rects = editor.history_rects(*SIZE)
     undo, redo = rects["desfazer"], rects["refazer"]
     assert redo[2] <= SIZE[0] and redo[2] > SIZE[0] - 20 and undo[1] < 20 and undo[2] <= redo[0]   # the top right corner, undo on the left
@@ -298,7 +310,7 @@ def test_undo_and_redo_by_keys_and_by_the_arrows_at_the_top_right():
 def test_transparency_and_the_arms_at_ninety_degrees_are_checks_of_their_own():
     editor, _ = make_editor()
     assert option(editor, "Transparência").check and option(editor, "Braços a 90°").check
-    editor.choose(option(editor, "Editar pele"))
+    editor.choose(option(editor, "Ativar pincel"))
     assert editor.model.hsr_edit is True and editor.brushing                                 # painted skin, clear clothes
     editor.choose(option(editor, "Transparência"))
     assert editor.model.hsr_edit is False and editor.hsr_editing and editor.brushing        # as in the game, still painting
