@@ -50,6 +50,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 | Vestidos | vestidos e saias (o comando decide se é de cima ou de baixo) | `/skin vestir <id>` |
 | Extras | qualquer peça a mais, junto com as outras (polainas com saia, cinto, adesivos); clicar veste ou tira | `/skin extra <id>` |
 | Sapatos | os dois pés como um item | `/skin sapato <esquerdo,direito>` |
+| Ajuste fino | a pele sob a roupa: espelhar os dois lados, ou pintar com o pincel onde ela some ou aparece | `/skin hsr` |
 | Prontos | aparências prontas, voltar ao padrão, tirar roupas | `/skin preset`, `/skin reset`, `/skin tirar tudo` |
 
 As roupas são os itens baixados em `assets/models/clothing`. A seção de cada um vem do tipo do asset do Roblox,
@@ -95,6 +96,31 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 (como os sapatos) e incluída no recorte da pele. Serve para o que não disputa espaço com as outras: polainas com
 saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
 jaqueta é encaixada por cima de outra roupa.
+
+## 🖌️ Ajuste fino: a pele sob a roupa
+
+A pele escondida sob cada roupa é uma marca por ponto da cage do corpo (ver
+`src/clothing/hsr.py`). O cálculo automático erra em algumas peças: a manga curta do "Dark Brown Tied Crop Top" fica
+rente ao braço, dois pontos de um braço ficam visíveis enquanto os espelhados do outro ficam escondidos (a malha da
+peça não é simétrica), e a pele atravessa o tecido em dentes. A seção corrige isso de dois jeitos, separados:
+
+- **Automático, por espelhamento** (`/skin hsr espelhar <sim|nao>`): um ponto escondido de um lado do corpo esconde
+  o que o espelha do outro (`hsr.mirror_index`, pontos a até 5 mm do espelho). Só iguala os dois lados: não esconde
+  o que o cálculo deixou visível nos dois. É uma escolha do personagem, desligada por padrão, e não muda o encaixe
+  nem as máscaras gravadas das roupas.
+- **À mão, com o pincel:** ligado o pincel (Esconder pele, Mostrar pele ou Apagar pintura), os pontos da cage
+  aparecem sobre o personagem: cinza a pele à mostra, laranja a escondida pelas roupas, vermelho a escondida à mão,
+  verde a mostrada à mão, amarelo os do traço em curso. Arrastar com o botão esquerdo pinta os pontos sob o círculo,
+  só os do lado de cá do corpo e na frente (`skin_brush.BrushView.pick`); o botão direito gira o personagem. Há três
+  tamanhos e a simetria (pinta também o ponto espelhado). Soltar o botão manda um comando só
+  (`/skin hsr <esconder|mostrar|apagar> <pontos>`), e a pele é recortada de novo sem reconstruir o personagem
+  (`CharacterModel.refresh_skin`). "Apagar tudo" é `/skin hsr limpar`.
+
+O que é pintado vence o automático (`hsr.adjusted_hidden`) e fica em `AvatarCustomization` (`hsr_mirror`,
+`hsr_hide`, `hsr_show`), salvo com o personagem. Vale para o personagem, não para a peça: trocar de roupa mantém a
+pintura, que pode não servir à roupa nova. Os pontos são mostrados posados com os ossos do personagem
+(`CharacterAnimator.posed`); as deformações sem osso (peito, cintura) não entram, e com elas os pontos ficam um pouco
+fora do lugar. `--pincel=<esconder|mostrar|apagar>` abre o jogo com o pincel ligado (capturas de tela).
 
 ## 📐 Ajustes de proporção
 

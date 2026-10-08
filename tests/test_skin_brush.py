@@ -1,0 +1,160 @@
+"""A pele escondida sob a roupa, corrigida: espelhada automaticamente ou pintada com o pincel."""
+from types import SimpleNamespace
+
+import numpy as np
+
+from src.clothing import character_save
+from src.clothing.customization import AvatarCustomization
+from src.clothing.hsr import adjusted_hidden, mirror_index
+from src.interactive import skin_brush
+from src.interactive.character_editor import BRUSH_SIZES, FINE_SECTION, PANEL_WIDTH, CharacterEditor
+from src.interactive.skin_commands import SkinCommandHandler
+
+SIZE = (1280, 720)
+LEFT, RIGHT, PRESS, RELEASE = 0, 1, 1, 0
+# A cage of six points: two pairs that mirror each other, one in the middle, one with no mirror.
+CAGE = np.array([[0.2, 1.0, 0.1], [-0.2, 1.0, 0.1], [0.3, 1.2, 0.0], [-0.3, 1.2, 0.0], [0.0, 1.5, 0.1], [0.4, 0.5, 0.0]])
+
+
+def test_mirroring_hides_the_point_across_the_body_and_painting_wins():
+    assert mirror_index(CAGE).tolist() == [1, 0, 3, 2, 4, -1]
+    hidden = np.array([True, False, False, False, False, True])
+    assert adjusted_hidden(hidden, CAGE).tolist() == hidden.tolist()                       # nothing asked: as it was
+    assert adjusted_hidden(hidden, CAGE, mirror=True).tolist() == [True, True, False, False, False, True]
+    painted = adjusted_hidden(hidden, CAGE, mirror=True, hide=(2, 99), show=(1,))
+    assert painted.tolist() == [True, False, True, False, False, True]                     # by hand, over the mirror; 99 is no point
+    assert hidden.tolist() == [True, False, False, False, False, True]                     # the mask given is not changed
+
+
+def make_model(**fields):
+    calls = []
+    model = SimpleNamespace(customization=AvatarCustomization(**fields), body="female", reload=lambda: calls.append("reload"),
+                            refresh_skin=lambda: calls.append("skin") or True)
+    return model, calls
+
+
+def test_the_command_mirrors_paints_and_clears():
+    model, calls = make_model()
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert handler.execute("/skin hsr espelhar sim")[0] and custom.hsr_mirror is True and calls == ["skin"]   # only the skin is cut again
+    assert handler.execute("/skin hsr esconder 4,2,9")[0] and custom.hsr_hide == (2, 4, 9)
+    assert handler.execute("/skin hsr mostrar 9, 11")[0] and custom.hsr_hide == (2, 4) and custom.hsr_show == (9, 11)
+    assert handler.execute("/skin hsr apagar 2,11")[0] and custom.hsr_hide == (4,) and custom.hsr_show == (9,)
+    assert not handler.execute("/skin hsr esconder x")[0] and not handler.execute("/skin hsr esconder -1")[0]
+    assert not handler.execute("/skin hsr pintar 3")[0] and custom.hsr_hide == (4,)
+    assert handler.execute("/skin hsr limpar")[0] and custom.hsr_hide == () and custom.hsr_show == () and custom.hsr_mirror is True
+    model.refresh_skin = lambda: False                                                      # no mask to cut by: rebuilt
+    assert handler.execute("/skin hsr espelhar nao")[0] and custom.hsr_mirror is False and calls[-1] == "reload"
+
+
+def test_the_corrections_are_saved_with_the_character(tmp_path):
+    model = SimpleNamespace(customization=AvatarCustomization(hsr_mirror=True, hsr_hide=(3, 7), hsr_show=(12,)))
+    path = str(tmp_path / "personagem.json")
+    character_save.save(model, path)
+    loaded = character_save.customization_from(character_save.load(path))
+    assert loaded.hsr_mirror is True and tuple(loaded.hsr_hide) == (3, 7) and tuple(loaded.hsr_show) == (12,)
+
+
+def view(rect=(400, 0, 1200, 800), pose=None):
+    """The cage seen from the front, one metre a hundred pixels: x to the right, y up, the camera at +z."""
+    look = np.identity(4)
+    look[2, 3] = -5.0
+    projection = np.diag([1 / 4.0, 1 / 4.0, -0.1, 1.0])  # an orthographic 8 m by 8 m
+    faces = np.array([[0, 2, 4], [1, 4, 3], [0, 4, 1]])
+    return skin_brush.BrushView(CAGE, faces, np.identity(4), look, projection, rect, pose=pose)
+
+
+def test_the_brush_takes_the_points_under_it_on_the_near_side():
+    seen = view()
+    np.testing.assert_allclose(seen.xy[0], [400 + 400 + 20, 400 - 100])                    # x = 0.2, y = 1.0
+    seen.facing = np.array([True, True, True, True, True, False])
+    assert seen.pick(820, 300, 6) == [0]
+    assert seen.pick(820, 300, 6, mirror=True) == [0, 1]                                    # and the one across the body
+    assert seen.pick(800, 300, 30) == [0, 1]                                                # a larger brush
+    assert seen.pick(100, 100, 6) == []                                                     # nothing under it
+    assert seen.pick(840, 350, 6) == []                                                     # the point there is on the far side
+    seen.depth = np.array([-5.0, -5.5, -5.0, -5.0, -5.0, -5.0])
+    assert seen.pick(800, 300, 30) == [0]                                                   # half a metre behind: not painted through
+    moved = view(pose=lambda points, normals: (np.asarray(points) + [1.0, 0.0, 0.0], normals))
+    np.testing.assert_allclose(moved.xy[:, 0], seen.xy[:, 0] + 100)                         # the cage as the body is posed
+
+
+def test_each_point_is_shown_as_what_it_is():
+    kinds = skin_brush.states([True, False, False, True, False, False], (2, 77), (3,))
+    assert kinds.tolist() == [skin_brush.HIDDEN, skin_brush.SHOWN, skin_brush.PAINTED_HIDDEN, skin_brush.PAINTED_SHOWN,
+                              skin_brush.SHOWN, skin_brush.SHOWN]
+    seen = view()
+    facing = np.array([True, True, True, True, True, False])
+    image = np.array(skin_brush.overlay((800, 800), (400, 0), seen.xy, facing, kinds, stroke=(1,)))
+    at = lambda index: tuple(image[int(round(seen.xy[index, 1])), int(round(seen.xy[index, 0] - 400))])
+    assert at(0) == skin_brush.COLOURS[skin_brush.HIDDEN] and at(2) == skin_brush.COLOURS[skin_brush.PAINTED_HIDDEN]
+    assert at(3) == skin_brush.COLOURS[skin_brush.PAINTED_SHOWN] and at(1) == skin_brush.STROKE
+    assert at(5)[3] == 0                                                                    # the far side is not drawn
+    assert image[0, 0, 3] == 0 and skin_brush.ring(22).size == (50, 50)
+
+
+def make_editor():
+    sent = []
+    model = SimpleNamespace(body="female", customization=AvatarCustomization(), hsr_cage=(CAGE, None, None))
+    handler = SimpleNamespace(character_model=model, busy_status="",
+                              execute=lambda command: (sent.append(command), (True, "feito", (0, 0, 0)))[1])
+    editor = CharacterEditor(handler, {"active": True, "yaw": 0.0, "pitch": 20.0}, create_gl=False)
+    editor.open()
+    editor.select_section([s.title for s in editor.sections].index(FINE_SECTION))
+    editor.layout(*SIZE)
+    return editor, sent
+
+
+def option(editor, label):
+    return next(o for group in editor.groups() for o in group.options if o.label == label)
+
+
+def test_the_brush_paints_by_dragging_and_the_right_button_turns():
+    editor, sent = make_editor()
+    assert max(rect[3] for rect, kind, _ in editor.layout(*SIZE) if kind == "tab") <= SIZE[1]   # every tab fits the window
+    assert not editor.brushing
+    editor.choose(option(editor, "Espelhar os lados"))
+    assert sent == ["/skin hsr espelhar sim"]
+    editor.choose(option(editor, "Esconder pele"))
+    assert editor.brushing and editor.turntable["active"] is False and sent == ["/skin hsr espelhar sim"]   # no command for that
+    editor.choose(option(editor, "Grande"))
+    editor.choose(option(editor, "Os dois lados"))
+    assert editor.brush_size == BRUSH_SIZES[2][1] and editor.brush_mirror
+    asked = []
+    under = {(700, 300): [5, 2], (720, 310): [2, 8]}
+    editor.picker = lambda x, y, radius, mirror: (asked.append((radius, mirror)), under.get((x, y), []))[1]
+    x = PANEL_WIDTH + 292
+    assert x == 700
+    assert editor.handle_mouse_button(700, 300, LEFT, PRESS)
+    editor.handle_cursor(720, 310)
+    editor.handle_cursor(900, 500)                                                          # over nothing
+    yaw = editor.turntable["yaw"]
+    assert editor.handle_mouse_button(900, 500, LEFT, RELEASE)
+    assert sent[-1] == "/skin hsr esconder 2,5,8" and editor.turntable["yaw"] == yaw         # one command for the stroke; nothing turned
+    assert asked[0] == (BRUSH_SIZES[2][1], True)
+    assert editor.handle_mouse_button(900, 500, LEFT, PRESS) and editor.handle_mouse_button(900, 500, LEFT, RELEASE)
+    assert sent[-1] == "/skin hsr esconder 2,5,8"                                            # an empty stroke sends nothing
+    assert editor.handle_mouse_button(700, 300, RIGHT, PRESS)                                # the right button turns the character
+    editor.handle_cursor(760, 300)
+    assert editor.turntable["yaw"] != yaw and editor.handle_mouse_button(760, 300, RIGHT, RELEASE)
+    editor.choose(option(editor, "Mostrar pele"))
+    editor.handle_mouse_button(700, 300, LEFT, PRESS)
+    editor.handle_mouse_button(700, 300, LEFT, RELEASE)
+    assert sent[-1] == "/skin hsr mostrar 2,5"
+    editor.choose(option(editor, "Desligado"))
+    assert not editor.brushing and editor.handle_mouse_button(700, 300, LEFT, PRESS)         # the drag turns again
+    editor.handle_cursor(760, 300)
+    editor.handle_mouse_button(760, 300, LEFT, RELEASE)
+    assert sent[-1] == "/skin hsr mostrar 2,5"
+    assert not editor.handle_mouse_button(700, 300, RIGHT, PRESS)                            # and the right button is the game's
+
+
+def test_the_brush_only_works_in_its_own_section():
+    editor, sent = make_editor()
+    editor.choose(option(editor, "Esconder pele"))
+    editor.select_section(0)
+    assert not editor.brushing
+    editor.picker = lambda *args: [1]
+    editor.handle_mouse_button(700, 300, LEFT, PRESS)
+    editor.handle_mouse_button(700, 300, LEFT, RELEASE)
+    assert sent == []

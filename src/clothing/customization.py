@@ -179,6 +179,11 @@ class AvatarCustomization:
     iris_color_other: Optional[Union[IrisColor, str, Tuple[int, int, int]]] = None
     # Maquiagem: "batom" e "sombra", cada um com o nome de uma cor de MAKEUP_COLORS.
     makeup: Dict[str, str] = field(default_factory=dict)
+    # Pele escondida sob a roupa, corrigida: espelhada entre os dois lados do corpo, e os pontos da
+    # cage do corpo pintados à mão para esconder ou mostrar (ver hsr.adjusted_hidden).
+    hsr_mirror: bool = False
+    hsr_hide: Tuple[int, ...] = ()
+    hsr_show: Tuple[int, ...] = ()
     # Ajustes de proporção, de -1 a 1 (ver body_shape.ADJUSTMENTS): corpo e rosto.
     body_adjust: Dict[str, float] = field(default_factory=dict)
 

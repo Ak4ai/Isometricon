@@ -17,6 +17,8 @@ import re
 import subprocess
 import sys
 import time
+
+import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, NOSE, REDRAWS_FACE, SHADING, SKIN
@@ -44,7 +46,7 @@ Rect = Tuple[int, int, int, int]  # x0, y0, x1, y1
 
 PANEL_WIDTH = 408
 TAB_WIDTH = 104
-TAB_HEIGHT = 46
+TAB_HEIGHT = 42
 FOOTER_HEIGHT = 136
 PAD = 12
 CARD = (88, 112)   # a garment: picture and two lines of name
@@ -60,7 +62,10 @@ DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged side
 TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
 TILT_LIMITS = (-20.0, 80.0)  # from a little below the character to almost straight above
 SPIN_DEGREES = 30.0  # and this much each second on its own
-FACE_SECTIONS = ("Olhos", "Rosto", "Nariz", "Maquiagem")  # sections worked on with the camera close to the face
+FACE_SECTIONS = ("Olhos", "Rosto", "Nariz", "Maquiagem")
+FINE_SECTION = "Ajuste fino"  # where the skin brush works
+BRUSHES = (("esconder", "Esconder pele"), ("mostrar", "Mostrar pele"), ("apagar", "Apagar pintura"))
+BRUSH_SIZES = (("Pequeno", 10), ("Médio", 22), ("Grande", 40))  # radius, in pixels of the window  # sections worked on with the camera close to the face
 
 BACKGROUND = (22, 24, 30, 240)
 TAB_STRIP = (15, 16, 20, 245)
@@ -214,6 +219,20 @@ class CharacterEditor:
         self._catalog: Dict[str, List[CatalogItem]] = {}
         self._groups: Optional[List[Group]] = None
         self._quad = None
+        # The skin brush: what it does (None: off), its radius, whether it paints both sides, the
+        # points taken by the stroke being made, and what the main loop gives it each frame: a
+        # function from the cursor to the points under it, and the points to show on the character.
+        self.brush: Optional[str] = None
+        self.brush_size = BRUSH_SIZES[1][1]
+        self.brush_mirror = False
+        self.picker: Optional[Callable[..., Any]] = None
+        self.overlay: Any = None
+        self.cursor = (0.0, 0.0)
+        self._stroke: Optional[set] = None
+        self._overlay_quad = None
+        self._overlay_key: Any = None
+        self._ring_quad = None
+        self._ring_size = 0
         self.sections = self._make_sections()
 
     # ------------------------------------------------------------------ o que há para escolher
@@ -334,6 +353,22 @@ class CharacterEditor:
                                 Option("Sem maquiagem", "/skin maquiagem sem")]),
             ]
 
+        def fine() -> List[Group]:
+            mirrored = lambda m: custom() is not None and bool(getattr(custom(), "hsr_mirror", False))
+            painted = lambda: len(getattr(custom(), "hsr_hide", ()) or ()) + len(getattr(custom(), "hsr_show", ()) or ()) if custom() is not None else 0
+            return [
+                Group("Pele sob a roupa: automático", [
+                    Option("Espelhar os lados", "/skin hsr espelhar sim", selected=mirrored),
+                    Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),
+                Group("Pincel de pele (arraste no personagem)", [Option("Desligado", "@pincel", selected=lambda m: self.brush is None)] + [
+                    Option(label, f"@pincel {name}", selected=lambda m, name=name: self.brush == name) for name, label in BRUSHES]),
+                Group("Tamanho do pincel", [Option(label, f"@tamanho {size}", selected=lambda m, size=size: self.brush_size == size)
+                                            for label, size in BRUSH_SIZES]),
+                Group("Simetria do pincel", [Option("Um lado", "@simetria nao", selected=lambda m: not self.brush_mirror),
+                                             Option("Os dois lados", "@simetria sim", selected=lambda m: self.brush_mirror)]),
+                Group("Pintura", [Option("Apagar tudo", "/skin hsr limpar", selected=lambda m: False)]),
+            ]
+
         def extras() -> List[Group]:
             worn = lambda m: [str(i) for i in getattr(m, "extra_ids", None) or []]
             groups = [Group("Tirar", [Option("Nenhuma peça extra", "/skin extra none", selected=lambda m: not worn(m))])]
@@ -366,6 +401,7 @@ class CharacterEditor:
                 for i in self._catalog.get("dress", [])])]),
             Section("Extras", extras),
             Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
+            Section(FINE_SECTION, fine),
             Section("Prontos", looks),
         ]
 
@@ -373,6 +409,15 @@ class CharacterEditor:
     def focus(self) -> str:
         """O que a câmera deve enquadrar na seção aberta: "face" (o rosto, de frente) ou "body"."""
         return "face" if self.sections[self.active].title in FACE_SECTIONS else "body"
+
+    @property
+    def brushing(self) -> bool:
+        """O pincel de pele está ligado e na seção dele: o arraste no personagem pinta."""
+        return self.is_open and self.brush is not None and self.sections[self.active].title == FINE_SECTION
+
+    def _paint(self, x: float, y: float) -> None:
+        if self._stroke is not None and self.picker is not None:
+            self._stroke.update(self.picker(x, y, self.brush_size, self.brush_mirror))
 
     def groups(self) -> List[Group]:
         if self._groups is None:
@@ -501,9 +546,25 @@ class CharacterEditor:
 
     def handle_mouse_button(self, x: float, y: float, button: int, action: int, shift: bool = False) -> bool:
         """Clique esquerdo: escolhe no painel, ou começa a girar o personagem. True se o evento foi usado."""
-        if not self.is_open or button != 0:
+        if not self.is_open:
+            return False
+        if button == 1 and self.brushing and not self.over_panel(x) and action != 0:
+            # With the brush on, the left button paints: the right one turns the character.
+            self._dragging, self._drag_x, self._drag_y = True, x, y
+            self._was_spinning = bool(self.turntable.get("active"))
+            return True
+        if button == 1 and action == 0 and self._dragging:
+            self._dragging = False
+            self.turntable["active"] = self._was_spinning
+            return True
+        if button != 0:
             return False
         if action == 0:  # release
+            if self._stroke is not None:
+                points, self._stroke = sorted(self._stroke), None
+                if points:
+                    self.choose(Option("", f"/skin hsr {self.brush} {','.join(str(p) for p in points)}"))
+                return True
             if self._slider is not None:
                 option, self._slider = self._slider[0], None
                 self.set_slider(option, self._slider_value)  # the face is drawn again only now
@@ -518,6 +579,10 @@ class CharacterEditor:
                 self.typing, self.dirty = False, True
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
+            if self.brushing:
+                self._stroke = set()
+                self._paint(x, y)
+                return True
             self._dragging, self._drag_x, self._drag_y = True, x, y
             self._was_spinning = bool(self.turntable.get("active"))
             return True
@@ -569,12 +634,31 @@ class CharacterEditor:
             self.set_slider(option, value)
 
     def choose(self, option: Option) -> None:
+        if option.command.startswith("@"):  # the brush's own settings: nothing of the character changes
+            name, _, value = option.command[1:].partition(" ")
+            if name == "pincel":
+                self.brush = value or None
+                if self.brush is not None:
+                    self.turntable["active"] = self._was_spinning = False  # a still character to paint on
+                    self.message = ("Arraste sobre o personagem para pintar. Botão direito gira."
+                                    if getattr(self.model, "hsr_cage", None) is not None
+                                    else "Vista uma roupa: o pincel corrige a pele sob ela.")
+            elif name == "tamanho":
+                self.brush_size = int(value)
+            elif name == "simetria":
+                self.brush_mirror = value == "sim"
+            self.dirty = True
+            return
         _, feedback, _ = self.handler.execute(option.command)
         self.message = feedback.split("\n")[0] if feedback else ""
         self.dirty = True
 
     def handle_cursor(self, x: float, y: float) -> None:
         if not self.is_open:
+            return
+        self.cursor = (x, y)
+        if self._stroke is not None:
+            self._paint(x, y)
             return
         if self._slider is not None:
             self._drag_slider(x)
@@ -785,8 +869,36 @@ class CharacterEditor:
             self._quad.set_image(self.image(width, height))
             self.dirty = False
         self._quad.draw(0, 0, width, height)
+        self._draw_brush(width, height)
+
+    def _draw_brush(self, width: int, height: int) -> None:
+        """Os pontos da cage sobre o personagem (o que cada um é) e o cursor do pincel."""
+        if not self.brushing or self.overlay is None:
+            return
+        from src.interactive import skin_brush
+        from src.rendering.hud_quad import HudQuad
+        xy, facing, kinds = self.overlay
+        x0, y0, x1, y1 = self.scene_rect(width, height)
+        key = (x0, y0, x1, y1, np.round(xy).astype(np.int32).tobytes(), facing.tobytes(), kinds.tobytes(),
+               tuple(sorted(self._stroke)) if self._stroke else ())
+        if self._overlay_quad is None:
+            self._overlay_quad, self._ring_quad = HudQuad(), HudQuad()
+        if key != self._overlay_key:
+            self._overlay_quad.set_image(skin_brush.overlay((x1 - x0, y1 - y0), (x0, y0), xy, facing, kinds, self._stroke or ()))
+            self._overlay_key = key
+        self._overlay_quad.draw(x0, y0, width, height)
+        if self._ring_size != self.brush_size:
+            self._ring_quad.set_image(skin_brush.ring(self.brush_size))
+            self._ring_size = self.brush_size
+        if not self.over_panel(self.cursor[0]):
+            half = self._ring_quad.size[0] / 2
+            self._ring_quad.draw(self.cursor[0] - half, self.cursor[1] - half, width, height)
 
     def delete(self) -> None:
+        for name in ("_overlay_quad", "_ring_quad"):
+            if getattr(self, name) is not None:
+                getattr(self, name).delete()
+                setattr(self, name, None)
         if self._quad is not None:
             self._quad.delete()
             self._quad = None

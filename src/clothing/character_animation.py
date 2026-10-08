@@ -160,6 +160,7 @@ class CharacterAnimator:
         self._shown = None  # "rest" or "walk": what the GPU buffers hold
         self._shape, self._warped, self._scales, self._height = None, False, {}, 1.0  # body adjustments in use
         self._lift, self._cloth_normals, self._bound_nose_style = 0.0, {}, None
+        self._posed = None  # the bones of the last points given to posed()
         self._bound_rows = []
 
     def _body_cage(self):
@@ -216,7 +217,23 @@ class CharacterAnimator:
         nearest = cage_bones[_nearest(rows[:, :3].astype(np.float64), cage_points)]
         return self.skeleton.reconcile_fitted_bones(bones, nearest)
 
+    def posed(self, points, normals):
+        """Points given in the fitting pose, and their normals, as the body is posed now: each
+        follows the bones of the part of the body cage nearest it (None before the first pose)."""
+        bones = getattr(self.model, "bones", None)
+        if bones is None or getattr(self, "_cage_binding", None) is None:
+            return None
+        found = self._posed
+        if found is None or found[0] is not points:
+            cage_points, cage_bones = self._cage_binding
+            where = np.asarray(points, dtype=np.float64)
+            self._posed = found = (points,) + tuple(self.skeleton.weights(where, cage_bones[_nearest(where, cage_points)]))
+        rows = skin(np.column_stack((np.asarray(points, dtype=np.float64), np.asarray(normals, dtype=np.float64))),
+                    found[1], found[2], np.asarray(bones, dtype=np.float64))
+        return rows[:, :3], rows[:, 3:6]
+
     def _bind(self):
+        self._posed = None
         self.skeleton = Skeleton.load(self.model.body)
         cage_points, cage_bones = self._body_cage()
         self._cage_binding = cage_points, cage_bones

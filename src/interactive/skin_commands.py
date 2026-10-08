@@ -501,6 +501,46 @@ class SkinCommandHandler:
         m.update_customization(outer_top_id=asset_id)
         return True, f"[Jaqueta] {item_name(asset_id)} por cima do top (a primeira vez leva alguns segundos).", GREEN
 
+    def hsr(self, args: List[str]) -> Result:
+        """/skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar: a pele sob a roupa."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        model = self.character_model
+        custom = model.customization
+        usage = "Uso: /skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar"
+        mirror = bool(getattr(custom, "hsr_mirror", False))
+        hide, show = set(getattr(custom, "hsr_hide", ()) or ()), set(getattr(custom, "hsr_show", ()) or ())
+        what = args[0].lower() if args else ""
+        if not what:
+            return True, (f"[Pele] Espelhar: {'sim' if mirror else 'não'}; pintados para esconder: {len(hide)}, "
+                          f"para mostrar: {len(show)}.\n{usage}"), GOLD
+        if what in ("espelhar", "mirror") and len(args) > 1 and args[1].lower() in ("sim", "nao", "não", "on", "off", "alternar"):
+            mirror = not mirror if args[1].lower() == "alternar" else args[1].lower() in ("sim", "on")
+            feedback = f"[Pele] Espelhar os dois lados: {'sim' if mirror else 'não'}."
+        elif what in ("limpar", "clear"):
+            hide, show = set(), set()
+            feedback = "[Pele] Pintura apagada."
+        elif what in ("esconder", "mostrar", "apagar") and len(args) > 1:
+            try:
+                points = {int(v) for v in ",".join(args[1:]).replace(";", ",").split(",") if v.strip()}
+            except ValueError:
+                return False, f"[Erro] {usage}", RED
+            if not points or min(points) < 0:
+                return False, f"[Erro] {usage}", RED
+            hide, show = hide - points, show - points
+            if what == "esconder":
+                hide |= points
+            elif what == "mostrar":
+                show |= points
+            feedback = f"[Pele] {len(points)} ponto(s): {what}."
+        else:
+            return False, f"[Erro] {usage}", RED
+        custom.hsr_mirror, custom.hsr_hide, custom.hsr_show = mirror, tuple(sorted(hide)), tuple(sorted(show))
+        if not getattr(model, "refresh_skin", lambda: False)():
+            model.reload()
+        return True, feedback, GREEN
+
     def extra(self, args: List[str]) -> Result:
         """/skin extra <nome|id|none>: veste (ou tira) uma peça a mais, junto com as outras."""
         missing = self._need_model()
@@ -885,6 +925,9 @@ SKIN_COMMANDS: List[Command] = [
             lambda: sorted({k for k in BOTTOM_PRESETS if not k.isdigit()} | {"none"}), "Roupas"),
     Command(("jaqueta", "jacket"), "/skin jaqueta <id|none> | folga <mm> | puxar <mm>", "peça por cima do top",
             SkinCommandHandler.jacket, {"folga": ["3", "6", "10"], "puxar": ["10", "15", "20"], "none": []}, "Roupas"),
+    Command(("hsr", "ocultar"), "/skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar",
+            "pele escondida sob a roupa: espelhar os dois lados, ou corrigir à mão (o pincel da tela de criação)",
+            SkinCommandHandler.hsr, {"espelhar": ["sim", "nao"], "esconder": [], "mostrar": [], "apagar": [], "limpar": []}, "Roupas"),
     Command(("extra", "mais"), "/skin extra <nome|id|none>", "peça a mais, junto com as outras (polainas com saia)",
             SkinCommandHandler.extra, lambda: ["none"] + sorted(catalog_names()), "Roupas"),
     Command(("sapato", "shoes"), "/skin sapato <pacote|esquerdo,direito|none>", "calçado", SkinCommandHandler.shoes,
