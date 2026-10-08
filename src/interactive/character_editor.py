@@ -19,7 +19,7 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, NOSE, REDRAWS_FACE, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
@@ -324,6 +324,10 @@ class CharacterEditor:
                                        selected=lambda m, n=n: worn("batom") == n) for n in MAKEUP_COLORS]),
                 Group("Sombra dos olhos", [Option(n.capitalize(), f"/skin maquiagem sombra {n}", color=MAKEUP_COLORS[n],
                                                   selected=lambda m, n=n: worn("sombra") == n) for n in MAKEUP_COLORS]),
+                Group("Contorno", [Option("Sem contorno", "/skin maquiagem contorno sem", selected=lambda m: not worn("contorno")),
+                                   Option("Suave", "/skin maquiagem contorno suave", selected=lambda m: worn("contorno") == "suave"),
+                                   Option("Marcado", "/skin maquiagem contorno marcado", selected=lambda m: worn("contorno") == "marcado")]),
+                Group("Sombras do rosto", [Option(label, "", slider=name) for name, label in SHADING.items()]),
                 Group("Rosto", [Option("Blush", "/skin maquiagem blush alternar", selected=lambda m: detail("blush")),
                                 Option("Sardas", "/skin maquiagem sardas alternar", selected=lambda m: detail("freckles"))]),
                 Group("Tirar", [Option("Sem batom", "/skin maquiagem batom sem"), Option("Sem sombra", "/skin maquiagem sombra sem"),

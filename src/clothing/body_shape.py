@@ -49,9 +49,12 @@ NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_altura": "Posição do nariz
         "nariz_sombra": "Sombra do nariz"}
 # Drawn by the shader over the skin (CharacterModel.draw): 0 to 1 of the skin, and which pattern.
 SKIN = {"vitiligo": "Vitiligo (quantidade)", "vitiligo_forma": "Vitiligo (desenho das manchas)"}
-ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN}
+# The shading of the chin and the jaw: the facets under and beside the face are lit apart from it
+# and take a darker tone of the head's texture. Down to none of it (a flat face), up to stronger.
+SHADING = {"rosto_sombra": "Sombras do queixo e do maxilar"}
+ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
-REDRAWS_FACE = set(FACE) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
+REDRAWS_FACE = set(FACE) | set(SHADING) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
 # With the shadow computed from the nose (customization.nose_shadow), every adjustment of the nose redraws it.
 REDRAWS_SHADOW = set(NOSE)
 
@@ -220,6 +223,36 @@ def nose_shape(points: np.ndarray, adjust: Optional[Mapping[str, float]]) -> np.
     scale = size * np.array([1.0 + NOSE_WIDTH * amount(adjust, "nariz_largura"), 1.0,
                              1.0 + NOSE_DEPTH * amount(adjust, "nariz_projecao")])
     return anchor + (points - anchor) * scale + np.array([0.0, NOSE_LIFT * amount(adjust, "nariz_altura"), 0.0])
+
+
+FACET_FRONT = 0.3      # a facet of the head whose normal points this much forwards is seen with the face
+FACE_FLAT = 0.9        # and one pointing this much forwards is the flat front of the face itself
+CHIN_HEIGHT = 0.066    # metres from the bottom of the head up to where that flat front starts
+FACET_SHADE = 0.30     # how much darker the chin and the jaw are drawn at the strongest shading
+
+
+def face_shading(rows: np.ndarray, adjust: Optional[Mapping[str, float]]) -> np.ndarray:
+    """As linhas de vértice da cabeça com as sombras do queixo e do maxilar ajustadas. Elas vêm das
+    facetas abaixo do rosto, viradas para baixo e para os lados: para menos, essas facetas recebem
+    a luz como a frente do rosto (a normal delas vira a da frente); para mais, escurecem (cor do
+    vértice). A frente do rosto fica como está."""
+    much = amount(adjust, "rosto_sombra")
+    if not much:
+        return rows
+    rows = np.array(rows, dtype=np.float32, copy=True)
+    normals = rows[:, 3:6].astype(np.float64)
+    low = rows[:, 1] < rows[:, 1].min() + CHIN_HEIGHT
+    chin = low & (normals[:, 2] > FACET_FRONT)
+    front = ~low & (normals[:, 2] > FACE_FLAT)
+    if not chin.any() or not front.any():
+        return rows
+    if much < 0:
+        lit = normals[front].mean(axis=0)
+        turned = normals[chin] + (lit / max(np.linalg.norm(lit), 1e-9) - normals[chin]) * -much
+        rows[chin, 3:6] = turned / np.maximum(np.linalg.norm(turned, axis=1, keepdims=True), 1e-9)
+    else:
+        rows[chin, 8:11] *= 1.0 - FACET_SHADE * much
+    return rows
 
 
 def smooth_normals(rows: np.ndarray) -> np.ndarray:

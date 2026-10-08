@@ -487,3 +487,51 @@ def test_the_tip_comes_out_on_its_own_without_the_nostrils():
     np.testing.assert_allclose(far[block:], plain[block:], atol=1e-9)              # its wings as they were
     top = plain[:block, 1] > plain[:block, 1].max() - 0.001
     np.testing.assert_allclose(far[:block][top], plain[:block][top], atol=1e-9)    # and the top of the bridge
+
+
+def test_the_shading_of_the_chin_is_turned_down_or_up_without_touching_the_face():
+    rows = np.zeros((6, 11), dtype=np.float32)
+    rows[:, 8:11] = 1.0
+    rows[:, 1] = [0.00, 0.02, 0.02, 0.20, 0.25, 0.25]                                # two levels: the chin, the face
+    rows[:, 3:6] = [[0, -0.7, 0.71], [0.6, -0.3, 0.74], [0, 0, -1], [0, 0.1, 0.995], [0.1, 0.1, 0.99], [1, 0, 0]]
+    assert body_shape.face_shading(rows, {}) is rows
+    flat = body_shape.face_shading(rows, {"rosto_sombra": -1.0})
+    lit = rows[3:5, 3:6].mean(axis=0) / np.linalg.norm(rows[3:5, 3:6].mean(axis=0))
+    np.testing.assert_allclose(flat[:2, 3:6], [lit, lit], atol=1e-6)                 # the chin lit as the front of the face
+    np.testing.assert_array_equal(flat[2:], rows[2:])                                # the back of the chin and the face as they were
+    half = body_shape.face_shading(rows, {"rosto_sombra": -0.5})
+    assert rows[0, 4] < half[0, 4] < flat[0, 4]
+    dark = body_shape.face_shading(rows, {"rosto_sombra": 1.0})
+    assert (dark[:2, 8:11] < 0.8).all() and (dark[2:, 8:11] == 1.0).all() and (dark[:, 3:6] == rows[:, 3:6]).all()
+    assert "rosto_sombra" in body_shape.ADJUSTMENTS and "rosto_sombra" in body_shape.REDRAWS_FACE
+
+
+def test_contour_makeup_and_the_chin_band_are_drawn_on_the_face():
+    from src.clothing.customization import CHIN_BAND, HeadAtlasBuilder
+    builder = HeadAtlasBuilder()
+    atlas = lambda **fields: np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    plain = atlas()
+    soft, strong = atlas(makeup={"contorno": "suave"}), atlas(makeup={"contorno": "marcado"})
+    darker = lambda image: (plain - image).sum(axis=2)
+    assert darker(soft).max() > 10 and darker(strong).max() > darker(soft).max()      # shade, stronger when marked
+    assert darker(strong).min() < 0                                                   # and light on the cheekbones
+    left, right = darker(strong)[150:240, 10:110].sum(), darker(strong)[150:240, 147:247].sum()
+    assert abs(left - right) < 0.1 * abs(left)                                        # on both sides of the face
+    assert (strong[125:185, 40:80] == plain[125:185, 40:80]).mean() > 0.5             # under the eyes, which are drawn over it
+    y0, y1, x0, x1 = CHIN_BAND
+    skin = np.array(AvatarCustomization().skin_rgb_255)
+    assert (plain[y0:y1, x0:x1] != skin).any()                                        # the band is a darker skin
+    none = atlas(body_adjust={"rosto_sombra": -1.0})
+    assert np.abs(none[y0 + 2:y1 - 12, x0 + 20:x1 - 20] - skin).max() <= 1            # down to the skin itself
+    more = atlas(body_adjust={"rosto_sombra": 1.0})
+    assert (more[y0 + 2:y1 - 12, x0 + 20:x1 - 20] < plain[y0 + 2:y1 - 12, x0 + 20:x1 - 20]).all()
+    assert (none[:y0] == plain[:y0]).all() and (more[:y0] == plain[:y0]).all()        # nothing else changes
+
+
+def test_contour_is_chosen_by_command():
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: None, refresh_face=lambda: True)
+    handler = SkinCommandHandler(character_model=model)
+    assert handler.execute("/skin maquiagem contorno marcado")[0] and model.customization.makeup == {"contorno": "marcado"}
+    assert handler.execute("/skin maquiagem batom rosa")[0] and model.customization.makeup == {"contorno": "marcado", "batom": "rosa"}
+    assert handler.execute("/skin maquiagem contorno sem")[0] and model.customization.makeup == {"batom": "rosa"}
+    assert not handler.execute("/skin maquiagem contorno forte")[0]

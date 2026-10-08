@@ -42,7 +42,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
 | Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos | `/skin boca`, `/skin sobrancelha`, `/skin ajuste` |
 | Nariz | com ou sem, o formato e os ajustes de cada parte, a cor da ponta e a sombra | `/skin nariz`, `/skin ajuste` |
-| Maquiagem | batom e sombra dos olhos (dez cores cada), blush, sardas | `/skin maquiagem` |
+| Maquiagem | batom e sombra dos olhos (dez cores cada), contorno (suave ou marcado), sombras do queixo e do maxilar, blush, sardas | `/skin maquiagem`, `/skin ajuste rosto_sombra` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
 | Superior | camisetas, camisas e suéteres | `/skin top <id>` |
 | Jaqueta | peça por cima da roupa | `/skin jaqueta <id>` |
@@ -71,6 +71,14 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   com o globo onde estava (`_ball_middle`), não com o desenho inteiro centrado.
 - **Uma cor para cada olho:** em Olhos, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
   personagem) pintam um só (`/skin olho <direito|esquerdo> <cor>`, `customization.iris_color_other`).
+- **Contorno** (`/skin maquiagem contorno <suave|marcado|sem>`): sombra esfumada sob as maçãs do rosto, nas têmporas
+  e no maxilar, e uma faixa de luz sobre as maçãs, pintadas na textura do rosto nos dois lados (`CONTOUR_SHADE`,
+  `CONTOUR_SHINE`, em `customization.py`).
+- **Sombras do queixo e do maxilar** (controle `rosto_sombra`): as sombras de baixo do rosto vêm de duas coisas, as
+  facetas da cabeça abaixo do rosto, que recebem a luz de outro ângulo, e uma faixa de pele mais escura na textura
+  que elas usam. Para menos, as normais dessas facetas viram a da frente do rosto (`body_shape.face_shading`) e a
+  faixa clareia até a cor da pele (`CHIN_BAND`): em -100 o rosto fica liso. Para mais, as facetas escurecem pela cor
+  do vértice e a faixa escurece. A frente do rosto não muda.
 - **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra
   é uma mancha suave de cor sobre cada pálpebra, por baixo do desenho do olho. Blush e sardas são as camadas de
   detalhe do rosto que já existiam. Tudo é refeito na textura da cabeça, sem recarregar o personagem.
