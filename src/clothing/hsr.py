@@ -299,6 +299,49 @@ def close_wrapped_limbs(hidden: np.ndarray, body: str, fitted_obj_path) -> np.nd
     return result
 
 
+EDGE_SHOWN = 0.010   # metres past a garment's moved edge, under the cloth, where the skin is still drawn
+EDGE_HIDDEN = 0.015  # and metres short of it where the skin is not hidden yet: no gap at the edge, no hole
+
+
+def cage_point_parts(body: str, count: int):
+    """Name of the body part of each body-cage point (in the order of the masks), or None when
+    the cage of this body is not the one the mask was made with."""
+    from .wear_engine import BODY_CAGES, load_r15_cages
+    from .wrap_layer_fit import _unique_uv_positions, body_uv_parts
+    models = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                          "assets", "models")
+    cages = load_r15_cages(os.path.join(models, BODY_CAGES[body]))
+    body_uv, _ = _unique_uv_positions(cages)
+    return np.array(body_uv_parts(cages)) if len(body_uv) == count else None
+
+
+def move_mask_edge(hidden: np.ndarray, cage_points: np.ndarray, parts, edge: float, shift: float,
+                   lower: bool = True) -> np.ndarray:
+    """A garment's mask after one of its edges, at the height ``edge``, was moved ``shift`` metres up.
+
+    ``lower``: its lower edge (a hem); otherwise its upper one (a waist). The skin the edge
+    uncovers is shown again, and the skin it now covers is hidden; the arms are left alone (a
+    top's sleeves do not move with its hem).
+    """
+    hidden = np.array(hidden, dtype=bool, copy=True)
+    if not shift:
+        return hidden
+    y = np.asarray(cage_points, dtype=np.float64)[:, 1]
+    body = np.ones(len(hidden), dtype=bool) if parts is None else \
+        np.array(["Arm" not in str(name) and "Hand" not in str(name) for name in parts])
+    moved = edge + shift
+    if lower:
+        if shift > 0:
+            hidden[body & (y < moved + EDGE_SHOWN)] = False
+        else:
+            hidden[body & (y >= moved + EDGE_HIDDEN) & (y < edge)] = True
+    elif shift < 0:
+        hidden[body & (y > moved - EDGE_SHOWN)] = False
+    else:
+        hidden[body & (y <= moved - EDGE_HIDDEN) & (y > edge)] = True
+    return hidden
+
+
 MIRROR_REACH = 0.005  # metres within which a cage point is the mirror of another, across the middle of the body
 
 

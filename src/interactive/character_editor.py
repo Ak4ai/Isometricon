@@ -21,7 +21,7 @@ import time
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, GARMENTS, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
@@ -357,6 +357,7 @@ class CharacterEditor:
             mirrored = lambda m: custom() is not None and bool(getattr(custom(), "hsr_mirror", False))
             painted = lambda: len(getattr(custom(), "hsr_hide", ()) or ()) + len(getattr(custom(), "hsr_show", ()) or ()) if custom() is not None else 0
             return [
+                Group("Bordas das roupas", [Option(label, "", slider=name) for name, label in GARMENTS.items()]),
                 Group("Pele sob a roupa: automático", [
                     Option("Espelhar os lados", "/skin hsr espelhar sim", selected=mirrored),
                     Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),

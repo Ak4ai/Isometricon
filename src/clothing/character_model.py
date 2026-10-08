@@ -876,6 +876,7 @@ class CharacterModel:
         self.hair_scale_z: float = float(hair_scale_z) if hair_scale_z is not None else float(getattr(self.customization, "hair_scale_z", 1.0))
 
         self.parts: List[CharacterPart] = []
+        self._edges: Dict[str, Any] = {}  # where the hem and the waist of the top and the pants are (garment_edges)
         self.textures: List[int] = []
         self.white_tex_id: Optional[int] = None
         self.show_cage: bool = False
@@ -1231,10 +1232,22 @@ class CharacterModel:
         if any(len(hidden) != len(cage_points) for _, hidden in masks):
             return False
         from src.clothing.hsr import close_wrapped_limbs
-        hidden = np.logical_or.reduce([
-            _memo("limbs", (mask, self.body, path, os.path.getmtime(path)),
-                  lambda mask=mask, path=path: close_wrapped_limbs(mask.astype(bool), self.body, path))
-            for path, (_, mask) in zip(worn, masks)])
+        each = [_memo("limbs", (mask, self.body, path, os.path.getmtime(path)),
+                      lambda mask=mask, path=path: close_wrapped_limbs(mask.astype(bool), self.body, path))
+                for path, (_, mask) in zip(worn, masks)]
+        # The edges of the top and of the pants moved by hand: the skin they uncover or cover.
+        from src.clothing import body_shape
+        from src.clothing.hsr import cage_point_parts, move_mask_edge
+        adjust = getattr(self.customization, "resolved_body_adjust", None) or {}
+        slots = [slot for slot, none in (("top", is_none_top), ("bottom", is_none_bottom)) if not none]
+        edges = self.garment_edges()
+        for name, (slot, which, lower) in body_shape.GARMENT_EDGES.items():
+            shift = body_shape.garment_shift(adjust, name)
+            if shift and slot in slots and slot in edges:
+                k = slots.index(slot)
+                each[k] = move_mask_edge(each[k], cage_points, _memo("cage_parts", (self.body, len(cage_points)),
+                                         lambda: cage_point_parts(self.body, len(cage_points))), edges[slot][which], shift, lower)
+        hidden = np.logical_or.reduce(each)
 
         # What the garments hide, then the character's corrections: mirrored, and painted by hand.
         from src.clothing.hsr import adjusted_hidden
@@ -1792,6 +1805,29 @@ class CharacterModel:
         self.delete()
         if self.create_mesh:
             self._build()
+
+    def garment_edges(self) -> Dict[str, Tuple[float, float]]:
+        """Lowest and highest point (y, in the fitting pose) of the top and of the pants worn,
+        their sleeves aside: where the hem and the waist are, for the adjustments that move them."""
+        from src.clothing.wear_engine import body_parts_path
+        found = {}
+        for part in self.parts:
+            if part.name not in ("top", "bottom") or not part.source_obj or not os.path.exists(part.source_obj):
+                continue
+            key = (part.source_obj, os.path.getmtime(part.source_obj))
+            if self._edges.get(part.name, (None,))[0] != key:
+                with open(part.source_obj, encoding="utf-8", errors="ignore") as fp:
+                    heights = np.array([float(line.split()[3]) for line in fp if line.startswith("v ")])  # up, in the file
+                labels = body_parts_path(part.source_obj)
+                if len(heights) and os.path.exists(labels):
+                    names = np.load(labels)
+                    body = np.array(["Arm" not in str(n) and "Hand" not in str(n) for n in names])
+                    if len(names) == len(heights) and body.any():
+                        heights = heights[body]
+                self._edges[part.name] = (key, (float(heights.min()), float(heights.max())) if len(heights) else None)
+            if self._edges[part.name][1] is not None:
+                found[part.name] = self._edges[part.name][1]
+        return found
 
     def refresh_skin(self) -> bool:
         """Cut the skin again by the masks of what is worn and the character's corrections of

@@ -52,7 +52,16 @@ SKIN = {"vitiligo": "Vitiligo (quantidade)", "vitiligo_forma": "Vitiligo (desenh
 # The shading of the chin and the jaw: the facets under and beside the face are lit apart from it
 # and take a darker tone of the head's texture. Down to none of it (a flat face), up to stronger.
 SHADING = {"rosto_sombra": "Sombras do queixo e do maxilar"}
-ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING}
+# The edges of the clothes, moved up or down the body: the cloth near the edge stretches or
+# gathers, and the skin under it is hidden or shown to match (CharacterModel._apply_hsr_skin).
+GARMENTS = {"blusa_barra": "Barra da blusa (altura)", "calca_cintura": "Cintura da calça (altura)",
+            "calca_barra": "Barra da calça (altura)"}
+# The part of the model each one moves, which of its edges (0 the lowest, 1 the highest) and
+# whether that is its lower edge.
+GARMENT_EDGES = {"blusa_barra": ("top", 0, True), "calca_cintura": ("bottom", 1, False), "calca_barra": ("bottom", 0, True)}
+GARMENT_REACH = 0.08   # metres an edge moves at 1
+EDGE_FALLOFF = 0.20    # metres of cloth from the edge that stretch with it
+ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS}
 # What an adjustment is on a body when it was never set: the female face has no shading under it.
 DEFAULTS = {"female": {"rosto_sombra": -1.0}}
 
@@ -230,6 +239,27 @@ def nose_shape(points: np.ndarray, adjust: Optional[Mapping[str, float]]) -> np.
     scale = size * np.array([1.0 + NOSE_WIDTH * amount(adjust, "nariz_largura"), 1.0,
                              1.0 + NOSE_DEPTH * amount(adjust, "nariz_projecao")])
     return anchor + (points - anchor) * scale + np.array([0.0, NOSE_LIFT * amount(adjust, "nariz_altura"), 0.0])
+
+
+def garment_shift(adjust: Optional[Mapping[str, float]], name: str) -> float:
+    """Metres an edge of a garment is moved up (negative: down)."""
+    return GARMENT_REACH * amount(adjust, name)
+
+
+def move_edge(points: np.ndarray, edge: float, shift: float, lower: bool = True,
+              keep: Optional[np.ndarray] = None) -> np.ndarray:
+    """Os pontos de uma roupa com uma borda levada ``shift`` metros para cima: a borda (na altura
+    ``edge``) vai inteira, e o tecido acompanha cada vez menos até EDGE_FALLOFF dela. ``lower``: é
+    a borda de baixo (a barra); senão a de cima (a cintura). ``keep``: os pontos que se movem (as
+    mangas de uma blusa ficam onde estão)."""
+    points = np.array(points, dtype=np.float64, copy=True)
+    y = points[:, 1]
+    t = np.clip(((edge + EDGE_FALLOFF - y) if lower else (y - (edge - EDGE_FALLOFF))) / EDGE_FALLOFF, 0.0, 1.0)
+    weight = t * t * (3.0 - 2.0 * t)
+    if keep is not None:
+        weight = np.where(keep, weight, 0.0)
+    points[:, 1] = y + shift * weight
+    return points
 
 
 FACET_FRONT = 0.3      # a facet of the head whose normal points this much forwards is seen with the face
