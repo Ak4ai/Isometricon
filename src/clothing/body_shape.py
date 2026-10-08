@@ -1,26 +1,38 @@
-"""Ajustes de proporção do corpo: altura, cabeça, ombros, peito, quadril, bunda, braços, pernas, mãos e pés.
+"""Ajustes de proporção do corpo: altura, cabeça, pescoço, tronco, braços, pernas, mãos, pés e a folga das roupas.
 
 Cada ajuste é um número de -1 a 1 (0 = o corpo como foi modelado), guardado em
-``AvatarCustomization.body_adjust``. Nenhum deles mexe só no corpo ou só na roupa (o que
-desfaria o encaixe pela cage): todos agem do mesmo jeito sobre pele, roupa e cabelo.
+``AvatarCustomization.body_adjust``. Nenhum deles mexe só no corpo (o que desfaria o encaixe
+pela cage): os de corpo agem do mesmo jeito sobre pele, roupa e cabelo.
 
 - A maioria é uma **escala por osso**, aplicada com o esqueleto (``Skeleton.pose``): tudo o que
-  o osso carrega cresce junto, e os ossos filhos acompanham sem crescer.
-- Peito e bunda não têm osso: são uma **deformação do espaço** na pose de vestir (``warp``),
-  uma função da posição, igual para a pele e para o tecido que está por cima dela.
+  o osso carrega muda junto, e os ossos filhos acompanham sem mudar. Com as pernas mais longas
+  o corpo sobe (``ground_lift``), para os pés continuarem no chão.
+- Peito, bunda e cintura não têm osso: são uma **deformação do espaço** na pose de vestir
+  (``warp``), uma função da posição, igual para a pele e para o tecido que está por cima dela.
+- A **folga** é a única que age só nas roupas: afasta o tecido ao longo da própria superfície
+  (``clearance``), sem mudar onde ele foi encaixado.
 
 Os ajustes do rosto (olhos, sobrancelhas) ficam no mesmo dicionário, mas agem na textura da
 cabeça (``customization.LayeredHeadCompositor``).
 """
 from __future__ import annotations
 
-from typing import Dict, Mapping, Optional
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 
-# name -> label, in the order the editor shows them.
-BODY = {"altura": "Altura", "cabeca": "Cabeça", "ombros": "Ombros", "peito": "Peito", "quadril": "Quadril",
-        "bunda": "Bunda", "bracos": "Braços", "maos": "Mãos", "pernas": "Pernas", "pes": "Pés"}
+# The adjustments of the body by group, as the editor shows them: (name, label).
+BODY_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
+    ("Geral", [("altura", "Altura"), ("cabeca", "Cabeça"), ("pescoco", "Pescoço")]),
+    ("Tronco", [("ombros", "Ombros"), ("peito", "Peito"), ("cintura", "Cintura"), ("pelve", "Pelve"),
+                ("quadril", "Quadril"), ("bunda", "Bunda")]),
+    ("Braços e mãos", [("bracos_comprimento", "Comprimento dos braços"), ("bracos", "Grossura dos braços"),
+                       ("maos", "Mãos")]),
+    ("Pernas e pés", [("pernas_comprimento", "Comprimento das pernas"), ("pernas", "Grossura das pernas"),
+                      ("pes", "Pés")]),
+    ("Roupas", [("folga", "Folga das roupas")]),
+]
+BODY = {name: label for _, group in BODY_GROUPS for name, label in group}
 FACE = {"olhos_tamanho": "Tamanho dos olhos", "olhos_altura": "Altura dos olhos",
         "olhos_distancia": "Distância entre os olhos", "sobrancelha_altura": "Altura das sobrancelhas"}
 ADJUSTMENTS = {**BODY, **FACE}
@@ -28,18 +40,28 @@ ADJUSTMENTS = {**BODY, **FACE}
 # How much each adjustment changes at 1 (and the opposite at -1).
 HEIGHT = 0.15          # of the whole character
 HEAD = 0.25
+NECK = 0.45            # length
 SHOULDERS = 0.20       # width of the torso
-HIPS = (0.20, 0.10)    # width and depth of the pelvis
+HIPS = 0.20            # width of the pelvis
+PELVIS = 0.15          # size of the pelvis, sideways and front to back
 ARMS = 0.35            # thickness, across the bone
 LEGS = 0.30
+ARM_LENGTH = 0.15
+LEG_LENGTH = 0.15
 HANDS = 0.30
 FEET = 0.30            # length and width (not height: the foot stays on the ground)
 BULGE = 0.05           # metres the chest or the buttocks come out
-# Where the chest and the buttocks are: (how far up the torso, half the distance between the two
-# sides, how wide the bulge is), in metres.
+WAIST = 0.22           # share the waist narrows or widens by
+CLEARANCE = (0.003, 0.02)  # metres the clothes can come closer to the body, and move off it
+# Where the chest and the buttocks are: (how far up the torso, or metres above the hip joints;
+# half the distance between the two sides; how wide the bulge is), in metres.
 CHEST = (0.62, 0.075, 0.095)
 BUTTOCKS = (0.03, 0.075, 0.11)
-DEPTH_FADE = 0.05  # metres past the body's middle plane over which a bulge takes hold
+DEPTH_FADE = 0.05      # metres past the body's middle plane over which a bulge takes hold
+# The waist: how far up the torso, how tall the band is, and the distances from the body's axis
+# within which everything follows it and past which nothing does (the hands hang beside it).
+WAIST_BAND = (0.18, 0.09)
+WAIST_REACH = (0.24, 0.36)
 
 
 def amount(adjust: Optional[Mapping[str, float]], name: str) -> float:
@@ -55,10 +77,23 @@ def height(adjust: Optional[Mapping[str, float]]) -> float:
     return 1.0 + HEIGHT * amount(adjust, "altura")
 
 
+def clearance(adjust: Optional[Mapping[str, float]]) -> float:
+    """Metros que as roupas se afastam do corpo (negativo: aproximam, e bem menos: uma roupa justa
+    fica a poucos milímetros da pele, e mais perto que isso a pele a atravessa)."""
+    much = amount(adjust, "folga")
+    return much * (CLEARANCE[1] if much > 0 else CLEARANCE[0])
+
+
 def _across(axis: np.ndarray, factor: float) -> np.ndarray:
     """Scale by ``factor`` across an axis, leaving its length."""
     a = axis / np.linalg.norm(axis)
     return np.eye(3) + (factor - 1.0) * (np.eye(3) - np.outer(a, a))
+
+
+def _along(axis: np.ndarray, factor: float) -> np.ndarray:
+    """Scale by ``factor`` along an axis, leaving its thickness."""
+    a = axis / np.linalg.norm(axis)
+    return np.eye(3) + (factor - 1.0) * np.outer(a, a)
 
 
 def bone_scales(skeleton, adjust: Optional[Mapping[str, float]]) -> Dict[int, np.ndarray]:
@@ -69,39 +104,73 @@ def bone_scales(skeleton, adjust: Optional[Mapping[str, float]]) -> Dict[int, np
         if not np.allclose(matrix, np.eye(3)):
             scales[skeleton.index(name)] = matrix
 
+    def axis(name: str) -> np.ndarray:
+        index = skeleton.index(name)
+        return skeleton.tails[index] - skeleton.heads[index]
+
     put("Head", np.eye(3) * (1.0 + HEAD * amount(adjust, "cabeca")))
+    put("Neck", _along(axis("Neck"), 1.0 + NECK * amount(adjust, "pescoco")))
     put("Torso", np.diag([1.0 + SHOULDERS * amount(adjust, "ombros"), 1.0, 1.0]))
-    hips = amount(adjust, "quadril")
-    put("Pelvis", np.diag([1.0 + HIPS[0] * hips, 1.0, 1.0 + HIPS[1] * hips]))
+    pelvis = 1.0 + PELVIS * amount(adjust, "pelve")
+    put("Pelvis", np.diag([pelvis * (1.0 + HIPS * amount(adjust, "quadril")), 1.0, pelvis]))
     feet = 1.0 + FEET * amount(adjust, "pes")
     for side in "LR":
-        for bone, name, most in (("UpperArm", "bracos", ARMS), ("LowerArm", "bracos", ARMS),
-                                 ("UpperLeg", "pernas", LEGS), ("LowerLeg", "pernas", LEGS)):
-            index = skeleton.index(f"{bone}_{side}")
-            put(f"{bone}_{side}", _across(skeleton.tails[index] - skeleton.heads[index], 1.0 + most * amount(adjust, name)))
+        for bone, thick, most, long, longest in (("UpperArm", "bracos", ARMS, "bracos_comprimento", ARM_LENGTH),
+                                                 ("LowerArm", "bracos", ARMS, "bracos_comprimento", ARM_LENGTH),
+                                                 ("UpperLeg", "pernas", LEGS, "pernas_comprimento", LEG_LENGTH),
+                                                 ("LowerLeg", "pernas", LEGS, "pernas_comprimento", LEG_LENGTH)):
+            name = f"{bone}_{side}"
+            put(name, _across(axis(name), 1.0 + most * amount(adjust, thick))
+                @ _along(axis(name), 1.0 + longest * amount(adjust, long)))
         put(f"Hand_{side}", np.eye(3) * (1.0 + HANDS * amount(adjust, "maos")))
         put(f"Foot_{side}", np.diag([feet, 1.0, feet]))
     return scales
 
 
+def ground_lift(skeleton, scales: Mapping[int, np.ndarray]) -> float:
+    """Metros que o corpo sobe para os pés continuarem no chão quando as pernas mudam de comprimento."""
+    lifts = []
+    for side in "LR":
+        upper, lower, foot = (skeleton.index(f"{bone}_{side}") for bone in ("UpperLeg", "LowerLeg", "Foot"))
+        dropped = 0.0
+        for bone, child in ((upper, lower), (lower, foot)):
+            if bone in scales:
+                offset = skeleton.heads[child] - skeleton.heads[bone]
+                dropped += float((scales[bone] @ offset - offset)[1])
+        lifts.append(-dropped)
+    return float(np.mean(lifts))
+
+
 def warps(adjust: Optional[Mapping[str, float]]) -> bool:
-    """Se algum ajuste deforma a pose de vestir (peito, bunda)."""
-    return bool(amount(adjust, "peito") or amount(adjust, "bunda"))
+    """Se algum ajuste deforma a pose de vestir (peito, bunda, cintura)."""
+    return bool(amount(adjust, "peito") or amount(adjust, "bunda") or amount(adjust, "cintura"))
 
 
-def warp(points: np.ndarray, skeleton, adjust: Optional[Mapping[str, float]], surface: np.ndarray) -> np.ndarray:
-    """``points`` (N, 3) com o peito e a bunda ajustados.
+def warp(points: np.ndarray, skeleton, adjust: Optional[Mapping[str, float]], surface: Optional[np.ndarray] = None) -> np.ndarray:
+    """``points`` (N, 3) com o peito, a bunda e a cintura ajustados.
 
-    Cada lado é um volume suave: o que está diante do peito vai para a frente (o que está atrás
-    do quadril, para trás), menos quanto mais longe do centro do volume, e nada do outro lado
-    do corpo se mexe. ``surface`` (pontos da cage) fica para ajustes que precisem da superfície.
+    Peito e bunda: cada lado é um volume suave; o que está diante do peito vai para a frente (o
+    que está atrás do quadril, para trás), menos quanto mais longe do centro do volume, e nada
+    do outro lado do corpo se mexe. Cintura: uma faixa em volta do eixo do corpo encolhe ou
+    alarga, e o que está longe do tronco (as mãos ao lado) fica onde está. ``surface`` (pontos
+    da cage) fica para ajustes que precisem da superfície.
     """
-    out = np.asarray(points, dtype=np.float64).copy()
+    points = np.asarray(points, dtype=np.float64)
+    out = points.copy()
     torso, pelvis = skeleton.index("Torso"), skeleton.index("Pelvis")
     low, high = sorted((skeleton.heads[torso][1], skeleton.tails[torso][1]))
+    middle = skeleton.heads[torso]
+
+    waist = amount(adjust, "cintura")
+    if waist:
+        band = np.exp(-((points[:, 1] - (low + WAIST_BAND[0] * (high - low))) / WAIST_BAND[1]) ** 2)
+        offset = points[:, [0, 2]] - middle[[0, 2]]
+        t = np.clip((WAIST_REACH[1] - np.linalg.norm(offset, axis=1)) / (WAIST_REACH[1] - WAIST_REACH[0]), 0.0, 1.0)
+        factor = 1.0 + WAIST * waist * band * t * t * (3 - 2 * t)
+        out[:, [0, 2]] = middle[[0, 2]] + offset * factor[:, None]
+
     places = (("peito", low + CHEST[0] * (high - low), CHEST[1], CHEST[2], 1.0),
               ("bunda", skeleton.heads[pelvis][1] + BUTTOCKS[0], BUTTOCKS[1], BUTTOCKS[2], -1.0))
-    middle = skeleton.heads[torso]
     for name, y, half, radius, towards in places:
         much = amount(adjust, name)
         if not much:
@@ -115,3 +184,16 @@ def warp(points: np.ndarray, skeleton, adjust: Optional[Mapping[str, float]], su
             this_side = np.clip(towards * (points[:, 2] - middle[2]) / DEPTH_FADE, 0.0, 1.0)
             out[:, 2] += towards * much * BULGE * np.exp(-(distance / radius) ** 2) * this_side * this_side * (3 - 2 * this_side)
     return out
+
+
+def smooth_normals(rows: np.ndarray) -> np.ndarray:
+    """Normal de cada vértice, igual para os vértices na mesma posição (costuras de textura), para
+    o tecido se afastar inteiro sem abrir nessas costuras."""
+    positions = np.round(rows[:, :3].astype(np.float64), 5)
+    _, inverse = np.unique(positions, axis=0, return_inverse=True)
+    inverse = inverse.ravel()
+    total = np.zeros((int(inverse.max()) + 1 if len(inverse) else 0, 3))
+    np.add.at(total, inverse, rows[:, 3:6].astype(np.float64))
+    normals = total[inverse]
+    length = np.linalg.norm(normals, axis=1, keepdims=True)
+    return normals / np.where(length > 1e-9, length, 1.0)

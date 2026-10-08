@@ -16,9 +16,10 @@ import os
 import re
 import subprocess
 import sys
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY, FACE
+from src.clothing.body_shape import BODY_GROUPS, FACE
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
@@ -50,6 +51,7 @@ GAP = 8
 SWATCHES_PER_ROW = 7
 SLIDER_TILE = 46   # height of an adjustment: its name, its value and the track
 SLIDER_SNAP = 5    # this close to the middle, a slider goes back to 0
+FACE_REDRAW = 0.06 # seconds between two redraws of the face while one of its sliders is dragged
 SCROLL_STEP = 60
 DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged sideways
 TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
@@ -197,6 +199,7 @@ class CharacterEditor:
         self._drag_y = 0.0
         self._slider: Optional[Tuple[Option, int, int]] = None  # the adjustment being dragged and its track
         self._slider_value = 0
+        self._slider_sent = 0.0
         self._was_spinning = True
         self._hits: List[Tuple[Rect, str, Any]] = []
         self._content_height = 0
@@ -256,8 +259,8 @@ class CharacterEditor:
             ]
 
         def shape() -> List[Group]:
-            return [Group("Proporções do corpo", [Option(label, "", slider=name) for name, label in BODY.items()]),
-                    Group("Recomeçar", [Option("Voltar ao padrão", "/skin ajuste reset")])]
+            return [Group(title, [Option(label, "", slider=name) for name, label in group])
+                    for title, group in BODY_GROUPS] + [Group("Recomeçar", [Option("Voltar ao padrão", "/skin ajuste reset")])]
 
         def hair() -> List[Group]:
             style = lambda: _value(custom().hair_style) if custom() is not None else ""
@@ -482,7 +485,11 @@ class CharacterEditor:
         value = int(round((min(max(x, x0), x1) - x0) / (x1 - x0) * 200 - 100))
         value = 0 if abs(value) <= SLIDER_SNAP else value
         self._slider_value, self.dirty = value, True
-        if option.slider not in FACE:  # the body follows the mouse; the face waits for the release
+        # The body follows the mouse. The face is a texture drawn again at each change: it
+        # follows a few times a second, and takes the last value when the slider is let go.
+        now = time.monotonic()
+        if option.slider not in FACE or now - self._slider_sent >= FACE_REDRAW:
+            self._slider_sent = now
             self.set_slider(option, value)
 
     def choose(self, option: Option) -> None:

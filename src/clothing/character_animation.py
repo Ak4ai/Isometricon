@@ -159,6 +159,7 @@ class CharacterAnimator:
         self._bindings = []
         self._shown = None  # "rest" or "walk": what the GPU buffers hold
         self._shape, self._warped, self._scales, self._height = None, False, {}, 1.0  # body adjustments in use
+        self._lift, self._cloth_normals = 0.0, {}
         self._bound_rows = []
 
     def _body_cage(self):
@@ -272,6 +273,7 @@ class CharacterAnimator:
         self.arm_swing = self._arm_swing()
         self._bound_rows = [rows for _, rows, _, _ in self._bindings]  # as fitted, before any body adjustment
         self._shape, self._warped = None, False  # taken again from the model on the next update
+        self._cloth_normals = {}
         self._bound_key = self._key()
         self._shown = None
 
@@ -629,6 +631,7 @@ class CharacterAnimator:
 
     def pose(self, rotations, root=(0.0, 0.0, 0.0)):
         """Skinning matrices of a pose, with the body's proportions (``body_shape``)."""
+        root = (root[0], root[1] + self._lift * self._height, root[2])  # longer legs raise the body
         return self.skeleton.pose(rotations, root, scales=self._scales, height=self._height)
 
     def _reshape(self, shape) -> None:
@@ -638,13 +641,21 @@ class CharacterAnimator:
         adjust = dict(shape)
         self._shape = shape
         self._scales, self._height = body_shape.bone_scales(self.skeleton, adjust), body_shape.height(adjust)
-        warped = body_shape.warps(adjust)
+        self._lift = body_shape.ground_lift(self.skeleton, self._scales)
+        bulges, loose = body_shape.warps(adjust), body_shape.clearance(adjust)
+        warped = bulges or bool(loose)
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
                 rows = self._bound_rows[k].copy()
-                if warped:
+                if bulges:
                     rows[:, :3] = body_shape.warp(rows[:, :3], self.skeleton, adjust, surface)
+                if loose and part.source_obj is not None and "hair" not in part.name:
+                    # The clothes move off the body along their own surface (the same normal at
+                    # the vertices of a texture seam, so the cloth does not open there).
+                    if k not in self._cloth_normals:
+                        self._cloth_normals[k] = body_shape.smooth_normals(self._bound_rows[k])
+                    rows[:, :3] += loose * self._cloth_normals[k]
                 self._bindings[k] = (part, rows, indices, weights)
                 if getattr(part.mesh, "skinned", False):
                     part.mesh.update_vertices(rows)  # the bind pose the vertex shader starts from

@@ -16,6 +16,7 @@ import re
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from src.clothing.body_shape import ADJUSTMENTS
 from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, OUTFIT_PRESETS, SKIN_PRESETS, CharacterModel
 from src.clothing.customization import (
     AvatarCustomization,
@@ -190,10 +191,19 @@ class SkinCommandHandler:
     def _need_model(self) -> Optional[Result]:
         return None if self.character_model is not None else (False, "[Skin] Personagem não disponível.", RED)
 
-    def _change(self, apply: Callable[[AvatarCustomization], None]) -> None:
-        if self.character_model is not None:
-            apply(self.character_model.customization)
-            self.character_model.reload()
+    def _change(self, apply: Callable[[AvatarCustomization], None], face: bool = False) -> None:
+        """Aplica uma mudança de aparência. ``face``: a mudança é só no desenho do rosto, e a
+        textura da cabeça é refeita no lugar (sem reconstruir o personagem) quando a geometria
+        não muda com ela (o nariz 3D depende do estilo dos olhos)."""
+        model = self.character_model
+        if model is None:
+            return
+        nose = getattr(model.customization, "should_render_3d_nose", None)
+        apply(model.customization)
+        if face and nose == getattr(model.customization, "should_render_3d_nose", None) \
+                and getattr(model, "refresh_face", lambda: False)():
+            return
+        model.reload()
 
     # ------------------------------------------------------------------ /skin
     def skin(self, args: List[str]) -> Result:
@@ -250,7 +260,7 @@ class SkinCommandHandler:
     def eyes(self, args: List[str]) -> Result:
         value = args[0].lower() if args else ""
         if value in EYE_STYLES:
-            self._change(lambda c: setattr(c, "eye_style", EYE_STYLES[value]))
+            self._change(lambda c: setattr(c, "eye_style", EYE_STYLES[value]), face=True)
             return True, f"[Skin] Olhos: estilo {value}.", GREEN
         color = EYE_COLORS.get(value) or _english(IrisColor).get(value)
         if color is None:
@@ -260,14 +270,14 @@ class SkinCommandHandler:
             c.iris_color = color
             if c.resolved_eye_style in ("classic", "blank"):
                 c.eye_style = EyeStyle.ANIME  # a cor só aparece nos olhos anime
-        self._change(apply)
+        self._change(apply, face=True)
         return True, f"[Skin] Olhos: cor {value}.", GREEN
 
     def mouth(self, args: List[str]) -> Result:
         value = args[0].lower() if args else ""
         if value not in MOUTHS:
             return False, "Uso: /skin boca <anime|sorriso|aberta|piscando|neutra|classica|gato|beicinho|sem>", GOLD
-        self._change(lambda c: setattr(c, "mouth_style", MOUTHS[value]))
+        self._change(lambda c: setattr(c, "mouth_style", MOUTHS[value]), face=True)
         return True, f"[Skin] Boca: {value}.", GREEN
 
     def head(self, args: List[str]) -> Result:
@@ -624,9 +634,10 @@ class SkinCommandHandler:
         name = args[0].lower()
         if name == "reset":
             face = any(current.get(k) for k in FACE)
-            custom.body_adjust = {}
             if face:
-                self.character_model.reload()
+                self._change(lambda c: setattr(c, "body_adjust", {}), face=True)
+            else:
+                custom.body_adjust = {}
             return True, "[Ajuste] Proporções de volta ao padrão.", GREEN
         if name not in ADJUSTMENTS or len(args) < 2:
             return False, f"[Erro] {usage}", RED
@@ -636,9 +647,11 @@ class SkinCommandHandler:
             return False, f"[Erro] Valor inválido: '{args[1]}'. {usage}", RED
         changed = round(value) != round(current.get(name, 0.0) * 100)
         current[name] = value / 100.0
-        custom.body_adjust = {k: v for k, v in current.items() if v}
+        adjusted = {k: v for k, v in current.items() if v}
         if name in FACE and changed:
-            self.character_model.reload()  # the face is a texture: it is drawn again
+            self._change(lambda c: setattr(c, "body_adjust", adjusted), face=True)  # the face is drawn again
+        else:
+            custom.body_adjust = adjusted
         return True, f"[Ajuste] {ADJUSTMENTS[name]}: {round(value):+d}.", GREEN
 
     def eyebrows(self, args: List[str]) -> Result:
@@ -647,7 +660,7 @@ class SkinCommandHandler:
             return missing
         if not args or args[0].lower() not in EYEBROWS:
             return False, f"[Erro] Uso: /skin sobrancelha <{'|'.join(EYEBROWS)}>", RED
-        self._change(lambda c: setattr(c, "eyebrow_style", EYEBROWS[args[0].lower()]))
+        self._change(lambda c: setattr(c, "eyebrow_style", EYEBROWS[args[0].lower()]), face=True)
         return True, f"[Sobrancelha] {args[0].lower()}.", GREEN
 
     def interface(self, args: List[str]) -> Result:
@@ -706,9 +719,7 @@ SKIN_COMMANDS: List[Command] = [
     Command(("sobrancelha", "eyebrows"), "/skin sobrancelha <padrao|grossa|decidida|sem>", "estilo das sobrancelhas",
             SkinCommandHandler.eyebrows, list(EYEBROWS), "Aparência"),
     Command(("ajuste", "adjust"), "/skin ajuste <nome> <-100 a 100> | reset", "proporções do corpo e do rosto",
-            SkinCommandHandler.adjust, ["altura", "cabeca", "ombros", "peito", "quadril", "bunda", "bracos", "maos",
-                                        "pernas", "pes", "olhos_tamanho", "olhos_altura", "olhos_distancia",
-                                        "sobrancelha_altura", "reset"], "Aparência"),
+            SkinCommandHandler.adjust, list(ADJUSTMENTS) + ["reset"], "Aparência"),
     Command(("cabeca", "head"), "/skin cabeca <arredondada|quadrada>", "formato da cabeça", SkinCommandHandler.head,
             ["arredondada", "quadrada"], "Aparência"),
     Command(("cabelo", "hair"), "/skin cabelo <id|cor|careca|raspado|padrao> | posicao ... | escala ... | reset",

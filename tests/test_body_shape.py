@@ -112,3 +112,53 @@ def test_the_adjustments_are_saved_with_the_character(tmp_path):
     path = str(tmp_path / "personagem.json")
     character_save.save(model, path)
     assert character_save.customization_from(character_save.load(path)).body_adjust == {"peito": 0.6, "olhos_altura": -0.3}
+
+
+def test_longer_legs_raise_the_body_so_the_feet_stay_on_the_ground(skeleton):
+    adjust = {"pernas_comprimento": 1.0}
+    scales = body_shape.bone_scales(skeleton, adjust)
+    lift = body_shape.ground_lift(skeleton, scales)
+    assert lift > 0.05 and body_shape.ground_lift(skeleton, {}) == 0.0
+    foot = skeleton.index("Foot_L")
+    rows = np.zeros((1, 11))
+    rows[0, :3] = skeleton.heads[foot]
+    matrices = skeleton.pose({}, (0.0, lift, 0.0), scales=scales)
+    ankle = skin(rows, np.array([[foot, foot]]), np.array([[1.0, 0.0]]), matrices)[0, :3]
+    assert ankle[1] == pytest.approx(skeleton.heads[foot][1], abs=0.01)   # the ankle is as high as before
+    hip = skeleton.index("UpperLeg_L")
+    rows[0, :3] = skeleton.heads[hip]
+    assert skin(rows, np.array([[hip, hip]]), np.array([[1.0, 0.0]]), matrices)[0, 1] > skeleton.heads[hip][1] + 0.05
+
+
+def test_longer_arms_and_neck_carry_the_hand_and_the_head_further(skeleton):
+    hand, head = skeleton.index("Hand_L"), skeleton.index("Head")
+    shoulder = skeleton.heads[skeleton.index("UpperArm_L")]
+    reach = np.linalg.norm(skeleton.heads[hand] - shoulder)
+    longer = posed(skeleton, skeleton.heads[hand], "Hand_L", {"bracos_comprimento": 1.0})
+    assert np.linalg.norm(longer - shoulder) == pytest.approx(reach * (1 + body_shape.ARM_LENGTH), rel=0.02)
+    assert posed(skeleton, skeleton.heads[head], "Head", {"pescoco": 1.0})[1] > skeleton.heads[head][1] + 0.03
+
+
+def test_the_waist_narrows_the_trunk_and_leaves_the_hands_beside_it(skeleton):
+    torso = skeleton.index("Torso")
+    low, high = sorted((skeleton.heads[torso][1], skeleton.tails[torso][1]))
+    y = low + body_shape.WAIST_BAND[0] * (high - low)
+    axis = skeleton.heads[torso]
+    points = np.array([[axis[0] + 0.15, y, axis[2]], [axis[0] + 0.16, y, axis[2]],   # skin and the cloth over it
+                       [axis[0] + 0.50, y, axis[2]], [axis[0] + 0.15, y + 0.6, axis[2]]])  # a hand, the shoulders
+    out = body_shape.warp(points, skeleton, {"cintura": -1.0})
+    assert out[0, 0] - axis[0] == pytest.approx(0.15 * (1 - body_shape.WAIST))
+    assert out[1, 0] > out[0, 0]                      # the cloth is still outside the skin
+    np.testing.assert_allclose(out[2:], points[2:], atol=1e-6)
+
+
+def test_clearance_moves_the_cloth_along_one_normal_at_each_seam():
+    rows = np.zeros((3, 11))
+    rows[:, :3] = [[0, 0, 0], [0, 0, 0], [1, 0, 0]]        # two vertices of a texture seam, and another
+    rows[:, 3:6] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    normals = body_shape.smooth_normals(rows)
+    np.testing.assert_allclose(normals[0], normals[1])
+    np.testing.assert_allclose(normals[0], np.array([1, 1, 0]) / np.sqrt(2))
+    np.testing.assert_allclose(normals[2], [0, 0, 1])
+    assert body_shape.clearance({"folga": 1.0}) == 0.02 and body_shape.clearance({}) == 0.0
+    assert body_shape.clearance({"folga": -1.0}) == -0.003  # closer to the body there is little room
