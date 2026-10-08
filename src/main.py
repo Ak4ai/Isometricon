@@ -445,6 +445,11 @@ def main() -> None:
         for index, section in enumerate(character_editor.sections):
             if wanted and section.title.lower().startswith(wanted):
                 character_editor.select_section(index)
+                break
+        brush_arg = next((a.partition("=")[2].lower() for a in sys.argv[1:] if a.startswith("--pincel=")), "")
+        if brush_arg in ("esconder", "mostrar", "apagar"):  # o pincel de pele já ligado (capturas de tela)
+            character_editor.brush = brush_arg
+            turntable_state["active"] = False
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
     textures_dir = os.path.join(PROJECT_ROOT, "assets", "textures", "blocks")
@@ -932,6 +937,19 @@ def main() -> None:
             shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
             character_model.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
             gl.glViewport(0, 0, fb_w, fb_h)
+            # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
+            character_editor.picker = character_editor.overlay = None
+            skin_cage = getattr(character_model, "hsr_cage", None)
+            if character_editor.brushing and skin_cage is not None:
+                from src.interactive import skin_brush
+                brush_view = skin_brush.BrushView(
+                    skin_cage[0], skin_cage[2], model @ mat4_rotate_y(math.radians(turntable_state["yaw"])), view,
+                    projection, (scene_x, 0, scene_right, window.height), pose=getattr(editor_animator, "posed", None))
+                brush_custom = character_model.customization
+                character_editor.picker = brush_view.pick
+                character_editor.overlay = (brush_view.xy, brush_view.facing, skin_brush.states(
+                    getattr(character_model, "hsr_hidden", skin_cage[1]), getattr(brush_custom, "hsr_hide", ()),
+                    getattr(brush_custom, "hsr_show", ())))
             if not char_demo:
                 shader.set_vec3("u_LightDir", 0.5, 1.0, 0.7)
                 shader.set_vec3("u_LightColor", 0.9, 0.9, 0.9)

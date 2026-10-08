@@ -299,6 +299,40 @@ def close_wrapped_limbs(hidden: np.ndarray, body: str, fitted_obj_path) -> np.nd
     return result
 
 
+MIRROR_REACH = 0.005  # metres within which a cage point is the mirror of another, across the middle of the body
+
+
+def mirror_index(cage_points: np.ndarray, reach: float = MIRROR_REACH) -> np.ndarray:
+    """For each body-cage point, the point that mirrors it on the other side of the body (-1 without one)."""
+    points = np.asarray(cage_points, dtype=np.float64)
+    mirrored = points * np.array([-1.0, 1.0, 1.0])
+    found = np.full(len(points), -1, dtype=np.int64)
+    for start in range(0, len(points), 256):
+        distance = ((mirrored[start:start + 256, None] - points[None]) ** 2).sum(-1)
+        nearest = distance.argmin(1)
+        found[start:start + 256] = np.where(distance[np.arange(len(nearest)), nearest] < reach * reach, nearest, -1)
+    return found
+
+
+def adjusted_hidden(hidden: np.ndarray, cage_points: np.ndarray, mirror: bool = False, hide=(), show=()) -> np.ndarray:
+    """The mask of hidden skin with the character's own corrections over what the garments give.
+
+    ``mirror``: a point hidden on one side of the body hides the one that mirrors it (the mask of
+    a garment whose mesh is not symmetric covers one arm and narrowly misses the other, and the
+    skin then comes through the cloth on that side only). ``hide`` and ``show``: points painted
+    by hand, which win over everything else.
+    """
+    hidden = np.array(hidden, dtype=bool, copy=True)
+    if mirror:
+        other = mirror_index(cage_points)
+        paired = other >= 0
+        hidden[paired] |= hidden[other[paired]].copy()
+    for indices, value in ((hide, True), (show, False)):
+        ids = [int(i) for i in (indices or ()) if 0 <= int(i) < len(hidden)]
+        hidden[ids] = value
+    return hidden
+
+
 def engine_to_body_mesh(points: np.ndarray) -> np.ndarray:
     """Engine (x, depth, up) -> body mesh / OpenGL space (x, up, -depth)."""
     points = np.asarray(points, dtype=np.float64)

@@ -1212,6 +1212,9 @@ class CharacterModel:
         from src.clothing.hsr import cull_hidden_triangles, sidecar_path, subdivide
         from src.rendering.mesh import TexturedMesh
 
+        self._hsr_call = (clean_obj, skin_color, top_obj_path, bottom_obj_path, is_none_top, is_none_bottom,
+                          tuple(extra_obj_paths))  # for refresh_skin
+        self.hsr_cage = None
         worn = [path for path, none in ((top_obj_path, is_none_top), (bottom_obj_path, is_none_bottom)) if not none]
         worn += [path for path in extra_obj_paths if path]
         if not worn:
@@ -1232,6 +1235,14 @@ class CharacterModel:
             _memo("limbs", (mask, self.body, path, os.path.getmtime(path)),
                   lambda mask=mask, path=path: close_wrapped_limbs(mask.astype(bool), self.body, path))
             for path, (_, mask) in zip(worn, masks)])
+
+        # What the garments hide, then the character's corrections: mirrored, and painted by hand.
+        from src.clothing.hsr import adjusted_hidden
+        custom = self.customization
+        self.hsr_cage = (cage_points, hidden.copy(), cage_faces)
+        hidden = adjusted_hidden(hidden, cage_points, bool(getattr(custom, "hsr_mirror", False)),
+                                 getattr(custom, "hsr_hide", ()), getattr(custom, "hsr_show", ()))
+        self.hsr_hidden = hidden
 
         hip_tf = arm_tf = None
 
@@ -1781,6 +1792,15 @@ class CharacterModel:
         self.delete()
         if self.create_mesh:
             self._build()
+
+    def refresh_skin(self) -> bool:
+        """Cut the skin again by the masks of what is worn and the character's corrections of
+        them, without rebuilding the model. False when that cannot be done now (nothing built
+        yet, a build running, or a garment without a mask): the caller reloads instead."""
+        call = getattr(self, "_hsr_call", None)
+        if call is None or not self.create_mesh or self.is_loading or getattr(self, "hsr_cage", None) is None:
+            return False
+        return bool(self._apply_hsr_skin(*call[:6], extra_obj_paths=call[6]))
 
     def refresh_face(self) -> bool:
         """Redraw only the head's texture (eyes, eyebrows, mouth) into the texture already on
