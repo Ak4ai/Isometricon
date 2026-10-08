@@ -254,6 +254,18 @@ class SkinCommandHandler:
         self._change(lambda c: setattr(c, "body_type", body))
         return True, f"[Skin] Corpo {'feminino' if body == BodyType.FEMALE else 'masculino'}.", GREEN
 
+    def race(self, args: List[str]) -> Result:
+        """/skin raca <nome>: um corpo pronto de raça, sobre o corpo feminino ou masculino em uso."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing import races
+        value = args[0].lower() if args else ""
+        if value not in races.RACES:
+            return False, f"Uso: /skin raca <{'|'.join(races.RACES)}>", GOLD
+        self._change(lambda c: races.apply(c, value))
+        return True, f"[Skin] Raça: {races.RACES[value].label}.", GREEN
+
     def tone(self, args: List[str]) -> Result:
         value = args[0].lower() if args else ""
         tone = SKIN_TONES.get(value, value)
@@ -966,6 +978,8 @@ SKIN_COMMANDS: List[Command] = [
             ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem"], "Aparência"),
     Command(("nariz", "nose"), "/skin nariz <sim|nao|formato|sombra legado|sombra calculada>", "nariz 3D, seu formato e o tipo de sombra (ajustes em /skin ajuste nariz_...)",
             SkinCommandHandler.nose, ["sim", "nao", "sombra"] + list(NOSE_STYLE_NAMES), "Aparência"),
+    Command(("raca", "raça", "race"), "/skin raca <nome>", "corpo pronto de uma raça: pele, orelhas, olhos, nariz e proporções",
+            SkinCommandHandler.race, lambda: list(__import__("src.clothing.races", fromlist=["RACES"]).RACES), "Aparência"),
     Command(("orelha", "orelhas", "ears"), "/skin orelha <sem|modelo>", "orelhas 3D (ajustes em /skin ajuste orelha_...)",
             SkinCommandHandler.ears, list(EAR_STYLE_NAMES), "Aparência"),
     Command(("sobrancelha", "eyebrows"), "/skin sobrancelha <padrao|grossa|decidida|sem>", "estilo das sobrancelhas",

@@ -81,7 +81,7 @@ def test_tabs_change_section_and_the_wheel_scrolls_only_over_the_panel():
     assert editor.handle_scroll(PANEL_WIDTH + 50, -1.0) is False  # over the character: the camera zooms
     assert editor.handle_scroll(50, -1.0) is True                 # over the panel: the grid scrolls
     assert editor.scroll > 0
-    editor.select_section(0)
+    editor.select_section(titles.index("Sapatos"))
     editor.layout(*SIZE)
     assert editor.handle_scroll(50, -1.0) is True and editor.scroll == 0  # a short section has nothing to scroll
 

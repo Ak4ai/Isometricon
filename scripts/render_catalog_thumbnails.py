@@ -5,7 +5,8 @@ python scripts/render_catalog_thumbnails.py [--only ID ...] [--force]
 Veste cada item de ``assets/models/clothing`` num corpo (o feminino, ou o masculino se só nele o
 item já foi encaixado), na pose de descanso, enquadra a peça e grava
 ``assets/models/clothing/thumbs/<id>.png`` (fundo transparente). Itens que já têm miniatura são
-pulados, então a execução pode ser interrompida e retomada.
+pulados, então a execução pode ser interrompida e retomada. Desenha também as raças (``races.RACES``)
+em cada corpo, em ``thumbs/racas/<raça>_<corpo>.png``.
 """
 from __future__ import annotations
 
@@ -95,6 +96,39 @@ def render(shader, item) -> Image.Image:
     return image.resize((SIZE[0] // 2, SIZE[1] // 2), Image.LANCZOS)
 
 
+RACE_FRAME = (1.47, 1.00)  # the middle (height from the ground) and the height framed: the same for every race, so their sizes compare
+
+
+def render_race(shader, name: str, body: str) -> Image.Image:
+    """A race on a body, in the clothes the character starts with, hair cut short to show the ears."""
+    from src.clothing import races
+    custom = AvatarCustomization(body_type=BodyType(body), hair_style=HairStyle.BUZZ_CUT)
+    races.apply(custom, name)
+    model = CharacterModel(customization=custom)
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0.0)
+    aspect = SIZE[0] / SIZE[1]
+    centre = np.array([0.0, RACE_FRAME[0], 0.0])
+    distance = RACE_FRAME[1] / (2 * math.tan(math.radians(FOV) / 2))
+    eye = centre + distance * np.array([math.sin(TURN), 0.08, math.cos(TURN)])
+    gl.glViewport(0, 0, *SIZE)
+    gl.glClearColor(0.0, 0.0, 0.0, 0.0)
+    gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+    shader.use()
+    shader.set_mat4("u_Projection", perspective(FOV, aspect, 0.05, 50.0))
+    shader.set_mat4("u_View", look_at(list(eye), list(centre), [0.0, 1.0, 0.0]))
+    shader.set_vec3("u_LightDir", 0.5, 1.2, 0.8)
+    shader.set_vec3("u_LightColor", 0.70, 0.70, 0.70)
+    shader.set_vec3("u_AmbientColor", 0.45, 0.45, 0.45)
+    shader.set_int("u_TextureAtlas", 0)
+    model.draw(shader, np.identity(4, dtype=np.float32))
+    gl.glFinish()
+    pixels = gl.glReadPixels(0, 0, SIZE[0], SIZE[1], gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
+    model.delete()
+    image = Image.frombytes("RGBA", SIZE, pixels).transpose(Image.FLIP_TOP_BOTTOM)
+    return image.resize((SIZE[0] // 2, SIZE[1] // 2), Image.LANCZOS)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--only", nargs="*", default=[])
@@ -129,6 +163,22 @@ def main() -> None:
         except Exception as exc:
             failed += 1
             print(f"[{index + 1}/{len(items)}] {item.name}: {type(exc).__name__}: {exc}", flush=True)
+    # The races, on each body: thumbs/racas/<race>_<body>.png
+    from src.clothing.races import RACES
+    races_out = out / "racas"
+    races_out.mkdir(parents=True, exist_ok=True)
+    for name in RACES:
+        for body in ("female", "male"):
+            path = races_out / f"{name}_{body}.png"
+            if (path.exists() and not args.force) or (args.only and name not in args.only):
+                continue
+            try:
+                render_race(shader, name, body).save(path)
+                done += 1
+                print(f"[raça] {name} ({body}): ok", flush=True)
+            except Exception as exc:
+                failed += 1
+                print(f"[raça] {name} ({body}): {type(exc).__name__}: {exc}", flush=True)
     glfw.destroy_window(window)
     glfw.terminate()
     print(f"[OK] {done} miniaturas novas, {failed} falharam -> {out}")

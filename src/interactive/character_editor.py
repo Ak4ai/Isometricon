@@ -22,6 +22,7 @@ import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.races import RACES
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
@@ -114,7 +115,8 @@ class Option:
             "swatch" if self.color is not None else "text"
 
 
-CARD_COMMANDS = ("/skin top ", "/skin calca ", "/skin jaqueta ", "/skin sapato ", "/skin vestir ", "/skin extra ")
+CARD_COMMANDS = ("/skin top ", "/skin calca ", "/skin jaqueta ", "/skin sapato ", "/skin vestir ", "/skin extra ", "/skin raca ")
+RACE_THUMBS = os.path.join(CLOTHING_DIR, "thumbs", "racas")  # <race>_<body>.png, by scripts/render_catalog_thumbnails.py
 
 
 @dataclass
@@ -274,6 +276,10 @@ class CharacterEditor:
             return [
                 Group("Corpo", [Option(n.capitalize(), f"/skin corpo {n}", selected=lambda m, v=BODIES[n]: _value(getattr(m, "body", "")) == _value(v))
                                 for n in ("feminino", "masculino")]),
+                Group("Raça (sobre o corpo escolhido)", [
+                    Option(race.label, f"/skin raca {name}", image=self._race_picture(name),
+                           selected=lambda m, name=name: custom() is not None and getattr(custom(), "race", "") == name)
+                    for name, race in RACES.items()]),
                 Group("Tom de pele", [Option(n.capitalize(), f"/skin pele {n}", color=tone_rgb(n),
                                              selected=lambda m, n=n: custom() is not None and all(
                                                  abs(a - b) < 0.02 for a, b in zip(custom().skin_color_rgb, SKIN_PRESETS[SKIN_TONES[n]])))
@@ -507,6 +513,12 @@ class CharacterEditor:
         self._stroke = None
         self._sync_edit()  # the game shows the character as it is, not as it is edited
 
+    def _race_picture(self, name: str) -> str:
+        """A miniatura de uma raça no corpo em uso, ou "" enquanto não foi desenhada."""
+        body = str(_value(getattr(self.model, "body", "female")) or "female").lower()
+        path = os.path.join(RACE_THUMBS, f"{name}_{body}.png")
+        return path if os.path.exists(path) else ""
+
     def refresh_catalog(self) -> None:
         """Relê os itens baixados e pede as miniaturas dos que ainda não têm."""
         self._catalog = catalog()
@@ -514,7 +526,10 @@ class CharacterEditor:
         self.dirty = True
         thumbs = os.path.join(CLOTHING_DIR, "thumbs")
         missing = {item.asset_id for kind, items in self._catalog.items() if kind in PICTURED for item in items
-                   if item.image is None or os.path.dirname(item.image) != thumbs} - self._pictured
+                   if item.image is None or os.path.dirname(item.image) != thumbs}
+        missing |= {f"raca:{name}:{body}" for name in RACES for body in ("female", "male")
+                    if not os.path.exists(os.path.join(RACE_THUMBS, f"{name}_{body}.png"))}
+        missing -= self._pictured
         if missing and self.make_thumbnails and self._thumbnails is None:
             self._pictured |= missing  # asked for once: an item that cannot be drawn is not asked for again
             script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
