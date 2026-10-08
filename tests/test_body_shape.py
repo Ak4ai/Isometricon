@@ -658,3 +658,49 @@ def test_ears_are_chosen_by_command_and_rebuilt_only_to_appear_or_go():
     assert handler.execute("/skin orelha morcego")[0] and custom.ear_style == "morcego" and len(reloads) == 1   # another model: moved in place
     assert not handler.execute("/skin orelha de_gato")[0] and custom.ear_style == "morcego"
     assert handler.execute("/skin orelha sem")[0] and custom.ear_style == "sem" and len(reloads) == 2
+
+
+def test_a_race_is_a_choice_of_what_the_customization_already_has():
+    from src.clothing import ears, nose, races
+    assert {"humano", "elfo", "anao", "demonio", "tritao", "marciano"} <= set(races.RACES) and len(races.RACES) >= 8
+    for name, race in races.RACES.items():
+        assert race.ears in ears.STYLE_NAMES and (race.nose is None or race.nose in nose.STYLE_NAMES), name
+        assert set(race.adjust) <= races.RACE_ADJUSTMENTS and all(-100 <= v <= 100 for v in race.adjust.values()), name
+        assert all(0 <= c <= 255 for c in race.skin), name
+    from src.clothing.customization import BodyType
+    custom = AvatarCustomization(body_type=BodyType.FEMALE, body_adjust={"peito": 0.4, "blusa_barra": 0.3, "blush_tamanho": 0.5},
+                                 makeup={"batom": "rosa"})
+    races.apply(custom, "anao")
+    assert custom.race == "anao" and custom.ear_style == "redonda" and custom.nose_style == "batata" and custom.has_3d_nose
+    assert custom.body_adjust["altura"] == -0.9 and custom.body_adjust["ombros"] == 0.7
+    assert "peito" in custom.body_adjust and custom.body_adjust["peito"] == 0.3            # the race's own, over what was there
+    assert custom.body_adjust["blusa_barra"] == 0.3 and custom.body_adjust["blush_tamanho"] == 0.5   # what no race decides stays
+    assert custom.makeup == {"batom": "rosa"} and custom.is_female                           # and the body chosen
+    races.apply(custom, "marciano")
+    assert custom.has_3d_nose is False and custom.ear_style == "sem" and "peito" not in custom.body_adjust
+    assert custom.body_adjust["cabeca"] == 0.85 and custom.body_adjust["blusa_barra"] == 0.3
+    races.apply(custom, "humano")
+    assert custom.has_3d_nose and custom.ear_style == "humana" and custom.body_adjust == {"blusa_barra": 0.3, "blush_tamanho": 0.5}
+    assert all(abs(a - b / 255.0) < 1e-9 for a, b in zip(custom.skin_color_rgb, races.RACES["humano"].skin))
+
+
+def test_a_race_is_chosen_by_command_and_from_cards_in_the_body_section(tmp_path, monkeypatch):
+    from src.interactive import character_editor
+    from src.interactive.character_editor import CharacterEditor
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), body="female", reload=lambda: reloads.append(1))
+    handler = SkinCommandHandler(character_model=model)
+    assert handler.execute("/skin raca elfo")[0] and model.customization.race == "elfo" and len(reloads) == 1
+    assert not handler.execute("/skin raca gnomo_do_pantano")[0] and model.customization.race == "elfo"
+    monkeypatch.setattr(character_editor, "RACE_THUMBS", str(tmp_path))
+    (tmp_path / "elfo_female.png").write_bytes(b"")
+    fake = SimpleNamespace(character_model=model, busy_status="", execute=lambda command: (True, "", (0, 0, 0)))
+    editor = CharacterEditor(fake, {"active": False, "yaw": 0.0}, create_gl=False)
+    editor.open()
+    group = next(g for g in editor.groups() if g.title.startswith("Raça"))
+    titles = [g.title for g in editor.groups()]
+    assert titles.index(group.title) == titles.index("Corpo") + 1                            # right under female and male
+    cards = {option.label: option for option in group.options}
+    assert cards["Elfo"].kind == "card" and cards["Elfo"].command == "/skin raca elfo" and cards["Elfo"].selected(model)
+    assert cards["Elfo"].image == str(tmp_path / "elfo_female.png") and cards["Anão"].image == ""   # drawn, and not yet
+    assert not cards["Anão"].selected(model) and {"Demônio", "Tritão", "Marciano", "Humano"} <= set(cards)

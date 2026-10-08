@@ -37,7 +37,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 
 | Seção | Opções | Comando |
 |---|---|---|
-| Corpo | feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
+| Corpo | raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
 | Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D (seis modelos) e seus ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin ajuste` |
@@ -106,6 +106,36 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 (como os sapatos) e incluída no recorte da pele. Serve para o que não disputa espaço com as outras: polainas com
 saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
 jaqueta é encaixada por cima de outra roupa.
+
+## 🧝 Raças
+
+Na seção Corpo, logo abaixo de feminino e masculino, há cartões com corpos prontos de raça (`/skin raca <nome>`).
+Uma raça não é outro modelo: é uma escolha do que a personalização já tem (`src/clothing/races.py`), aplicada ao
+corpo feminino ou masculino em uso. Depois de aplicada, tudo continua ajustável como antes.
+
+| Raça | Pele | Orelhas | O que muda no corpo |
+|---|---|---|---|
+| Humano | clara | humana | nada: as proporções padrão |
+| Elfo | pálida | elfo asa | alto e esguio, pescoço e pernas longos |
+| Anão | corada | redonda | baixo, largo, cabeça e mãos grandes, nariz batata |
+| Orc | verde-oliva | elfo, pequena | alto, ombros e braços enormes, nariz achatado |
+| Goblin | verde-amarelada | elfo, grande | pequeno, cabeça grande, nariz longo |
+| Demônio | vermelha | morcego | um pouco mais alto e largo, olhos dourados |
+| Vampiro | cinzenta | elfo asa, pequena | um pouco mais alto e fino, olhos vermelhos |
+| Tritão | verde-água | barbatana | mãos e pés grandes (o povo do mar, sereio ou tritão) |
+| Marciano | verde | sem | cabeça enorme em corpo fino, olhos grandes e afastados, sem nariz |
+| Fada | rosada | elfo asa | minúscula e delicada |
+
+- Cada raça dá a cor da pele, o modelo de orelha, a cor dos olhos, o formato do nariz (ou nenhum) e os ajustes de
+  proporção (`Race`). Escolher outra raça tira os ajustes que uma raça decide (`RACE_ADJUSTMENTS`: as proporções do
+  corpo, as orelhas, o tamanho e a posição dos olhos) e mantém o resto: maquiagem, bordas das roupas, detalhes do
+  nariz, cabelo, roupas e o corpo escolhido.
+- A raça escolhida fica em `AvatarCustomization.race`, só para marcar o cartão: mexer num ajuste depois não a desfaz.
+- **Cartões:** as miniaturas são desenhadas por `scripts/render_catalog_thumbnails.py` (o mesmo das roupas), cada
+  raça em cada corpo, com a roupa inicial e o cabelo raspado, todas com o mesmo enquadramento para os tamanhos se
+  compararem (`thumbs/racas/<raça>_<corpo>.png`, fora do git). A tela pede as que faltam ao abrir; até ficarem
+  prontas o cartão mostra um X. O cartão mostra a raça no corpo em uso.
+- Uma raça nova é uma entrada em `RACES`.
 
 ## 👂 Orelhas
 
