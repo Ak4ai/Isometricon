@@ -14,6 +14,7 @@ import numpy as np
 from src.clothing.hsr import _cage_vertex_normals, mirror_index
 
 FACING = 0.05        # how much a cage point's normal must turn to the camera for the point to be on this side
+SURFACE_SHARE = 0.2  # a cage point decides this much of the skin under the brush, at least, to be painted with it
 DEPTH_SLACK = 0.12   # metres behind the nearest point under the brush that are still painted (not the arm behind the torso)
 # What each point is: skin showing, skin hidden by the clothes, hidden by hand, shown by hand.
 SHOWN, HIDDEN, PAINTED_HIDDEN, PAINTED_SHOWN = 0, 1, 2, 3
@@ -46,7 +47,8 @@ class BrushView:
     distância da câmera e se está do lado de cá do corpo."""
 
     def __init__(self, cage_points: np.ndarray, cage_faces: Optional[np.ndarray], model: np.ndarray, view: np.ndarray,
-                 projection: np.ndarray, rect: Tuple[float, float, float, float], pose: Any = None) -> None:
+                 projection: np.ndarray, rect: Tuple[float, float, float, float], pose: Any = None,
+                 skin: Any = None) -> None:
         points = np.asarray(cage_points, dtype=np.float64)
         normals, self.mirror = _of_cage(cage_points, cage_faces)
         # The cage is in the fitting pose: ``pose`` (CharacterAnimator.posed) takes it to the pose shown.
@@ -54,21 +56,42 @@ class BrushView:
         if moved is not None:
             points, normals = moved
         seen = np.asarray(view, dtype=np.float64) @ np.asarray(model, dtype=np.float64)
-        eye = points @ seen[:3, :3].T + seen[:3, 3]
-        clip = np.column_stack((eye, np.ones(len(eye)))) @ np.asarray(projection, dtype=np.float64).T
-        ndc = clip[:, :2] / np.where(np.abs(clip[:, 3:4]) < 1e-12, 1e-12, clip[:, 3:4])
+        lens = np.asarray(projection, dtype=np.float64)
         x0, y0, x1, y1 = rect
-        self.xy = np.column_stack((x0 + (ndc[:, 0] * 0.5 + 0.5) * (x1 - x0), y0 + (0.5 - ndc[:, 1] * 0.5) * (y1 - y0)))
-        self.depth = eye[:, 2]  # the camera looks down -z: the larger, the nearer
+
+        def on_screen(where: np.ndarray):
+            eye = where @ seen[:3, :3].T + seen[:3, 3]
+            clip = np.column_stack((eye, np.ones(len(eye)))) @ lens.T
+            ndc = clip[:, :2] / np.where(np.abs(clip[:, 3:4]) < 1e-12, 1e-12, clip[:, 3:4])
+            return np.column_stack((x0 + (ndc[:, 0] * 0.5 + 0.5) * (x1 - x0), y0 + (0.5 - ndc[:, 1] * 0.5) * (y1 - y0))), eye[:, 2]
+
+        self.xy, self.depth = on_screen(points)  # depth: the camera looks down -z, so the larger, the nearer
         self.facing = (normals @ seen[:3, :3].T)[:, 2] > FACING
+        # The skin itself (CharacterModel.hsr_skin): where each of its vertices is on the screen and
+        # the cage points that decide it. A cage point may be out of sight (inside the armpit, on a
+        # facet turned away) and still decide the skin in front of the camera: the brush reaches it
+        # through the skin under it.
+        self.skin = None
+        if skin is not None and len(skin[0]):
+            where, corners, shares = skin
+            moved = pose(where, np.zeros((len(where), 3))) if pose is not None else None
+            self.skin = on_screen(np.asarray(moved[0] if moved is not None else where, dtype=np.float64)) + (corners, shares)
 
     def pick(self, x: float, y: float, radius: float, mirror: bool = False) -> List[int]:
         """Os pontos sob o pincel (um círculo de ``radius`` pixels em x, y), do lado de cá do corpo
         e na frente; com ``mirror``, também os que os espelham do outro lado."""
-        near = self.facing & (((self.xy - np.array([x, y])) ** 2).sum(axis=1) <= radius * radius)
-        if not near.any():
+        at = np.array([x, y])
+        near = self.facing & (((self.xy - at) ** 2).sum(axis=1) <= radius * radius)
+        picked = np.flatnonzero(near & (self.depth >= self.depth[near].max() - DEPTH_SLACK)) if near.any() \
+            else np.zeros(0, dtype=np.int64)
+        if self.skin is not None:
+            xy, depth, corners, shares = self.skin
+            under = ((xy - at) ** 2).sum(axis=1) <= radius * radius
+            if under.any():
+                under &= depth >= depth[under].max() - DEPTH_SLACK
+                picked = np.union1d(picked, corners[under][shares[under] > SURFACE_SHARE])
+        if not len(picked):
             return []
-        picked = np.flatnonzero(near & (self.depth >= self.depth[near].max() - DEPTH_SLACK))
         if mirror:
             other = self.mirror[picked]
             picked = np.union1d(picked, other[other >= 0])

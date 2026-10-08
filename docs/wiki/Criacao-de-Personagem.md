@@ -123,6 +123,11 @@ peça não é simétrica), e a pele atravessa o tecido em dentes. A seção corr
 - **Braços a 90°** (outra caixa): o personagem fica com os braços abertos para os lados enquanto a tela está nesta
   seção (`CharacterAnimator.arms_out`), para ver e pintar as axilas e a lateral do tronco, que os braços cobrem em
   descanso. Os pontos acompanham a pose. Vale com ou sem o modo de edição.
+- **O pincel pinta pelo que está sob ele:** além dos pontos da cage que aparecem no círculo, ele pega os pontos que
+  decidem a pele sob o círculo (`CharacterModel.hsr_skin`: para cada vértice da pele, os três pontos da cage que o
+  decidem e quanto cada um pesa; entra quem pesa mais de 20%, `skin_brush.SURFACE_SHARE`). Um ponto pode estar fora
+  de vista (dentro da axila, numa faceta virada para o outro lado) e ainda decidir a pele da frente: sem isso ficava
+  um trecho no meio dos pontos pintados que não pintava.
 - **Desfazer e refazer:** Ctrl+Z e Ctrl+Shift+Z, ou as duas setas no canto de cima à direita (apagadas quando não
   há o que desfazer ou refazer). Valem para as correções da pele (pintura, espelhamento, apagar tudo), até 100
   passos, só nesta sessão (`/skin hsr desfazer`, `/skin hsr refazer`, `SkinCommandHandler.hsr_history`).

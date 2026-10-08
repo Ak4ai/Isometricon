@@ -226,11 +226,13 @@ class CharacterAnimator:
         bones = getattr(self.model, "bones", None)
         if bones is None or getattr(self, "_cage_binding", None) is None:
             return None
-        found = self._posed
+        if self._posed is None or len(self._posed) > 4:
+            self._posed = {}
+        found = self._posed.get(id(points))
         if found is None or found[0] is not points:
             cage_points, cage_bones = self._cage_binding
             where = np.asarray(points, dtype=np.float64)
-            self._posed = found = (points,) + tuple(self.skeleton.weights(where, cage_bones[_nearest(where, cage_points)]))
+            found = self._posed[id(points)] = (points,) + tuple(self.skeleton.weights(where, cage_bones[_nearest(where, cage_points)]))
         rows = skin(np.column_stack((np.asarray(points, dtype=np.float64), np.asarray(normals, dtype=np.float64))),
                     found[1], found[2], np.asarray(bones, dtype=np.float64))
         return rows[:, :3], rows[:, 3:6]

@@ -1273,6 +1273,7 @@ class CharacterModel:
                        (f"hand_{side}", [f"Export_mao_{hand}", f"Export_mao_{pt_side}"], arm_tf)]
 
         new_parts = []
+        skin_under = []
         for name, prefixes, transform in groups:
             data = parse_clean_obj_groups(clean_obj, prefixes, default_color=skin_color, vertex_transform=transform)
             if not data:
@@ -1284,11 +1285,16 @@ class CharacterModel:
             if not name.startswith("hand_"):
                 rows, faces = subdivide(vertices.reshape(-1, 11), faces, levels=2)
                 vertices = rows.ravel()
-                if self.hsr_edit and cage_faces is not None and len(cage_faces):
-                    # Edited: nothing is cut, and each vertex is painted by what the mask says there.
+                nearest = None
+                if cage_faces is not None and len(cage_faces):
+                    # Where each skin vertex is on the cage: the three cage points that decide it and
+                    # how much each does. The skin brush paints by it (what is under the brush).
                     from src.clothing.hsr import closest_on_surface, edit_colours
                     nearest = _memo("hsr_nearest", (rows[:, :3], cage_points, cage_faces), lambda: closest_on_surface(
                         rows[:, :3], *(np.asarray(cage_points, dtype=np.float64)[cage_faces[:, k]] for k in range(3))))
+                    skin_under.append((rows[:, :3].astype(np.float64), np.asarray(cage_faces)[nearest[0]], nearest[1]))
+                if self.hsr_edit and nearest is not None:
+                    # Edited: nothing is cut, and each vertex is painted by what the mask says there.
                     rows = rows.copy()
                     rows[:, 8:11] = edit_colours(nearest, cage_faces, hidden, getattr(custom, "hsr_hide", ()),
                                                  getattr(custom, "hsr_show", ()))
@@ -1299,6 +1305,7 @@ class CharacterModel:
             if len(faces):
                 new_parts.append(CharacterPart(name, TexturedMesh(vertices.astype(np.float32), faces.astype(np.uint32).ravel()),
                                                self.white_tex_id))
+        self.hsr_skin = tuple(np.concatenate(each) for each in zip(*skin_under)) if skin_under else None
         for part in [p for p in self.parts if p.name in self.SKIN_PART_NAMES]:
             part.mesh.delete()
             self.parts.remove(part)
@@ -1916,7 +1923,7 @@ class CharacterModel:
                 self._hide_feet = getattr(builder, "_hide_feet", False)
                 # What the build found out about itself, which the corrections made without rebuilding
                 # go by: the mask of hidden skin, the edges of the clothes, the style of the nose's mesh.
-                for name in ("hsr_cage", "hsr_hidden", "_hsr_call", "_edges", "built_nose_style"):
+                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style"):
                     if hasattr(builder, name):
                         setattr(self, name, getattr(builder, name))
         if not self._dirty:

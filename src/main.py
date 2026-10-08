@@ -963,7 +963,8 @@ def main() -> None:
                 from src.interactive import skin_brush
                 brush_view = skin_brush.BrushView(
                     skin_cage[0], skin_cage[2], model @ mat4_rotate_y(math.radians(turntable_state["yaw"])), view,
-                    projection, (scene_x, 0, scene_right, window.height), pose=getattr(editor_animator, "posed", None))
+                    projection, (scene_x, 0, scene_right, window.height), pose=getattr(editor_animator, "posed", None),
+                    skin=getattr(character_model, "hsr_skin", None))
                 brush_custom = character_model.customization
                 character_editor.picker = brush_view.pick
                 character_editor.overlay = (brush_view.xy, brush_view.facing, skin_brush.states(

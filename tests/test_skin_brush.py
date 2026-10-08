@@ -325,3 +325,19 @@ def test_the_animator_stands_with_the_arms_out_when_asked():
     arm = skeleton.index("UpperArm_L")
     along = out["UpperArm_L"] @ (skeleton.tails[arm] - skeleton.heads[arm])
     assert abs(along[1]) < 0.02 * np.linalg.norm(along) + 1e-3                                # level: straight out to the side
+
+
+def test_the_brush_reaches_a_point_out_of_sight_through_the_skin_under_it():
+    look = np.identity(4)
+    look[2, 3] = -5.0
+    projection = np.diag([1 / 4.0, 1 / 4.0, -0.1, 1.0])
+    # Skin at x = 0.25, y = 1.1, decided by the cage points 0, 2 and 5; the last is on the far side of the cage.
+    skin = (np.array([[0.25, 1.1, 0.1], [0.25, 1.1, -0.6]]), np.array([[0, 2, 5], [1, 3, 4]]),
+            np.array([[0.3, 0.3, 0.4], [0.4, 0.3, 0.3]]))
+    seen = skin_brush.BrushView(CAGE, None, np.identity(4), look, projection, (400, 0, 1200, 800), skin=skin)
+    seen.facing = np.array([True, True, True, True, True, False])
+    assert seen.pick(825, 290, 4) == [0, 2, 5]                                              # through the skin: 5 too
+    assert seen.pick(825, 290, 4, mirror=True) == [0, 1, 2, 3, 5]
+    assert seen.pick(100, 100, 4) == []
+    weak = (skin[0], skin[1], np.array([[0.45, 0.45, 0.1], [0.4, 0.3, 0.3]]))               # a point that barely decides it is left
+    assert skin_brush.BrushView(CAGE, None, np.identity(4), look, projection, (400, 0, 1200, 800), skin=weak).pick(825, 290, 4) == [0, 2]
