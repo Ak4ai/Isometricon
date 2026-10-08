@@ -621,7 +621,7 @@ def head_box():
 
 def test_every_ear_model_has_the_same_triangles_and_its_own_shape():
     from src.clothing import ears
-    assert ears.STYLE_NAMES == ("sem", "humana", "redonda", "elfo", "elfo_asa", "morcego", "barbatana")
+    assert ears.STYLE_NAMES[:7] == ("sem", "humana", "redonda", "elfo", "elfo_asa", "morcego", "barbatana")
     assert ears.styled_rows(head_box(), "sem") is None and ears.styled_rows(head_box(), "de_gato") is None
     made = {name: ears.styled_rows(head_box(), name, skin=(0.9, 0.7, 0.6)) for name in ears.EAR_STYLES}
     shapes = {rows.shape for rows, _ in made.values()}
@@ -629,11 +629,14 @@ def test_every_ear_model_has_the_same_triangles_and_its_own_shape():
     for name, (rows, triangles) in made.items():
         assert triangles.max() == len(rows) - 1 and np.isfinite(rows).all()
         right, left = rows[:len(rows) // 2], rows[len(rows) // 2:]
-        np.testing.assert_allclose(left[:, 0], -right[:, 0], atol=1e-6)                 # one on each side, mirrored
-        np.testing.assert_allclose(left[:, 1:3], right[:, 1:3], atol=1e-6)
-        assert right[:, 0].max() > 0.1 and right[:, 0].min() < 0.1                      # out of the head, its root inside it
+        if ears.EAR_STYLES[name].other is None:
+            np.testing.assert_allclose(left[:, 0], -right[:, 0], atol=1e-6)             # one on each side, mirrored
+            np.testing.assert_allclose(left[:, 1:3], right[:, 1:3], atol=1e-6)
         np.testing.assert_allclose(np.linalg.norm(rows[:, 3:6], axis=1), 1.0, atol=1e-5)
-        assert (rows[:, 8:11] <= np.array([0.9, 0.7, 0.6]) + 1e-6).all() and rows[:, 8].max() > 0.89   # the skin's colour, darker in the hollow
+        if ears.EAR_STYLES[name].mount == "side" and ears.EAR_STYLES[name].other is None:
+            assert right[:, 0].max() > 0.1 and right[:, 0].min() < 0.1                  # out of the head, its root inside it
+        if ears.EAR_STYLES[name].coat == "skin":
+            assert (rows[:, 8:11] <= np.array([0.9, 0.7, 0.6]) + 1e-6).all() and rows[:, 8].max() > 0.89   # the skin's colour, darker in the hollow
     span = lambda name, axis: float(np.ptp(made[name][0][:len(made[name][0]) // 2, axis]))
     top = lambda name: float(made[name][0][:, 1].max())
     assert span("elfo", 0) > 2 * span("humana", 0)                                      # the elf's stands out to the side
@@ -704,3 +707,31 @@ def test_a_race_is_chosen_by_command_and_from_cards_in_the_body_section(tmp_path
     assert cards["Elfo"].kind == "card" and cards["Elfo"].command == "/skin raca elfo" and cards["Elfo"].selected(model)
     assert cards["Elfo"].image == str(tmp_path / "elfo_female.png") and cards["Anão"].image == ""   # drawn, and not yet
     assert not cards["Anão"].selected(model) and {"Demônio", "Tritão", "Marciano", "Humano"} <= set(cards)
+
+
+def test_animal_ears_stand_on_top_of_the_head_in_the_colour_of_the_hair():
+    from src.clothing import ears
+    wanted = {"gato", "cachorro", "cachorro_caido", "lobo", "raposa", "coelho", "coelho_uma_caida", "coelho_caidas", "dragao", "reptil"}
+    assert wanted <= set(ears.STYLE_NAMES)
+    hair, skin = (0.5, 0.3, 0.2), (0.9, 0.7, 0.6)
+    made = {name: ears.styled_rows(head_box(), name, skin=skin, hair=hair)[0] for name in wanted}
+    right = lambda name: made[name][:len(made[name]) // 2]
+    left = lambda name: made[name][len(made[name]) // 2:]
+    top = 1.8                                                                           # of head_box
+    for name in ("gato", "cachorro", "lobo", "raposa", "coelho"):
+        assert right(name)[:, 1].min() > top - 0.04 and right(name)[:, 1].max() > top + 0.05, name   # on top, standing up
+        assert abs(right(name)[:, 0]).max() < 0.2, name
+        colours = right(name)[:, 8:11]
+        assert np.allclose(colours.max(axis=0), np.maximum(hair, colours.max(axis=0))) and (colours[:, 0] >= 0.5 * 0.9).all(), name
+        assert colours[:, 0].max() > hair[0] + 0.1                                      # pink inside
+    assert right("coelho")[:, 1].max() > right("raposa")[:, 1].max() > right("lobo")[:, 1].max() > right("gato")[:, 1].max()
+    for name in ("cachorro_caido", "coelho_caidas"):
+        assert right(name)[:, 1].min() < top - 0.08 and right(name)[:, 1].max() < top + 0.02, name   # hanging down the side
+        assert right(name)[:, 0].min() > 0.05, name
+    one = made["coelho_uma_caida"]
+    assert right("coelho_uma_caida")[:, 1].max() > top + 0.1 and left("coelho_uma_caida")[:, 1].max() < top + 0.02   # one up, one down
+    assert one.shape == made["coelho"].shape
+    for name in ("dragao", "reptil"):
+        tones = np.unique(np.round(right(name)[:, 8], 3))
+        assert len(tones) >= 3 and right(name)[:, 8].max() <= skin[0] + 1e-6, name      # scales: lighter and darker, of the skin
+    assert np.ptp(right("dragao")[:, 0]) > 3 * np.ptp(right("reptil")[:, 0])

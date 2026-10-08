@@ -60,6 +60,20 @@ RACES: Dict[str, Race] = {
     "fada": Race("Fada", (250, 224, 226), "elfo_asa", IrisColor.PURPLE, "botao",
                  {"altura": -75, "cabeca": 15, "ombros": -35, "cintura": -30, "bracos": -30, "pernas": -25,
                   "orelha_tamanho": 20}),
+    # Beast folk: a person's body with the ears of the animal, in the colour of the hair.
+    "felino": Race("Felino", (244, 214, 196), "gato", IrisColor.GOLD, "botao",
+                   {"altura": -15, "cintura": -15, "olhos_tamanho": 25}),
+    "lupino": Race("Lupino", (214, 178, 150), "lobo", IrisColor.GOLD, "largo",
+                   {"altura": 25, "ombros": 45, "peito": 25, "bracos": 30, "maos": 25}),
+    "kitsune": Race("Kitsune", (248, 222, 204), "raposa", IrisColor.RED, "fino",
+                    {"cintura": -20, "pescoco": 10}),
+    "coelho": Race("Coelho", (250, 226, 214), "coelho", IrisColor.RED, "botao",
+                   {"altura": -30, "cabeca": 15, "pes": 40, "olhos_tamanho": 25}),
+    # Dragon kin and lizard folk: scaly ears, strong colours.
+    "draconato": Race("Draconato", (150, 70, 60), "dragao", IrisColor.GOLD, "achatado",
+                      {"altura": 35, "ombros": 50, "peito": 30, "pescoco": 20, "maos": 30, "pes": 30}),
+    "reptiliano": Race("Reptiliano", (110, 150, 96), "reptil", IrisColor.GOLD, None,
+                       {"pescoco": 35, "ombros": -10, "cintura": -10, "olhos_distancia": 30}),
 }
 RACE_NAMES = tuple(RACES)
 # The adjustments a race decides: choosing another race takes these back and keeps the rest

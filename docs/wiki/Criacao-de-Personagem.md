@@ -125,6 +125,12 @@ corpo feminino ou masculino em uso. Depois de aplicada, tudo continua ajustável
 | Tritão | verde-água | barbatana | mãos e pés grandes (o povo do mar, sereio ou tritão) |
 | Marciano | verde | sem | cabeça enorme em corpo fino, olhos grandes e afastados, sem nariz |
 | Fada | rosada | elfo asa | minúscula e delicada |
+| Felino | clara | gato | um pouco menor, olhos grandes e dourados |
+| Lupino | morena | lobo | alto, ombros e braços fortes |
+| Kitsune | clara | raposa | cintura fina, olhos vermelhos |
+| Coelho | clara | coelho | pequeno, pés grandes, olhos vermelhos |
+| Draconato | vermelho-escura | dragão | alto e largo, nariz achatado |
+| Reptiliano | verde | réptil | pescoço longo, olhos afastados, sem nariz |
 
 - Cada raça dá a cor da pele, o modelo de orelha, a cor dos olhos, o formato do nariz (ou nenhum) e os ajustes de
   proporção (`Race`). Escolher outra raça tira os ajustes que uma raça decide (`RACE_ADJUSTMENTS`: as proporções do
@@ -150,14 +156,28 @@ por padrão). São malhas 3D geradas em `src/clothing/ears.py`, uma de cada lado
 | `elfo_asa` | de elfo, em diagonal para trás e para cima, como uma asa |
 | `morcego` | grande, apontando para cima |
 | `barbatana` | três espinhos unidos, como uma nadadeira (povo do mar, sangue de dragão) |
+| `gato` | triângulo pequeno no alto da cabeça |
+| `cachorro` | em pé, mais alta, de ponta arredondada |
+| `cachorro_caido` | grande, deitada ao longo do lado da cabeça |
+| `lobo` | grande e pontuda, com um tufo na borda de fora |
+| `raposa` | maior ainda e larga, inclinada para fora |
+| `coelho` · `coelho_uma_caida` · `coelho_caidas` | duas longas em pé; uma em pé e uma caída; as duas caídas |
+| `dragao` | escamosa: um leque de espinhos para trás e para cima |
+| `reptil` | escamosa: um disco baixo, rente à cabeça |
 
 - Cada modelo é um contorno de dez pontos no plano da orelha (para trás, para cima), preso à cabeça pela borda da
   frente e aberto para fora por um ângulo (`EarShape.flare`: pouco numa humana, muito numa de elfo). A placa tem
   6 mm de espessura; a frente é mais escura no meio (a concha), e a cor é a da pele (cor de vértice, textura branca).
-- Ficam na altura dos olhos, nos lados da cabeça em uso (`ears.styled_rows` mede a cabeça), e giram com ela.
+- As de gente ficam na altura dos olhos, nos lados da cabeça em uso (`ears.styled_rows` mede a cabeça), e giram com
+  ela. **As de bicho ficam no alto da cabeça** (`EarShape.mount == "top"`): em pé, inclinadas para fora por `tilt`
+  (mais de 90 graus, caídas ao longo do lado da cabeça, com `turn` em 90 para ficarem deitadas nela), a `at` do meio
+  à borda. São da **cor do cabelo** (`coat="hair"`) e rosadas por dentro (`furry`). As escamosas são da cor da pele,
+  com os triângulos alternando claro e escuro (`scaly`). Um modelo pode ter a orelha do outro lado diferente
+  (`other`: o coelho de uma orelha caída).
 - Todos os modelos têm os mesmos triângulos: trocar de um para outro, ou mexer num ajuste, só move os vértices
   (`CharacterAnimator._styled_ears`). Só pôr ou tirar as orelhas reconstrói o personagem.
-- Ajustes (`body_shape.EARS`): tamanho, altura e abertura (o quanto abrem para fora).
+- Ajustes (`body_shape.EARS`): tamanho, altura e abertura (o quanto abrem para fora; nas do alto da cabeça, o quanto
+  se inclinam).
 - Não há nada que as esconda sob o cabelo: num cabelo cheio a orelha humana some dentro dele, e as longas saem
   por ele. Um modelo novo é uma entrada em `EAR_STYLES` com dez pontos.
 
