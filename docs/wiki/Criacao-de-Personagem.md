@@ -108,19 +108,24 @@ peça não é simétrica), e a pele atravessa o tecido em dentes. A seção corr
   o que o espelha do outro (`hsr.mirror_index`, pontos a até 5 mm do espelho). Só iguala os dois lados: não esconde
   o que o cálculo deixou visível nos dois. É uma escolha do personagem, desligada por padrão, e não muda o encaixe
   nem as máscaras gravadas das roupas.
-- **À mão, com o pincel:** ligado o pincel (Esconder pele, Mostrar pele ou Apagar pintura), os pontos da cage
-  aparecem sobre o personagem: cinza a pele à mostra, laranja a escondida pelas roupas, vermelho a escondida à mão,
-  verde a mostrada à mão, amarelo os do traço em curso. Arrastar com o botão esquerdo pinta os pontos sob o círculo,
-  só os do lado de cá do corpo e na frente (`skin_brush.BrushView.pick`); o botão direito gira o personagem. Há três
-  tamanhos e a simetria (pinta também o ponto espelhado). Soltar o botão manda um comando só
-  (`/skin hsr <esconder|mostrar|apagar> <pontos>`), e a pele é recortada de novo sem reconstruir o personagem
-  (`CharacterModel.refresh_skin`). "Apagar tudo" é `/skin hsr limpar`.
+- **À mão, no modo de edição** (a caixa "Editar pele"): o personagem passa a ser mostrado para a edição. A pele
+  aparece inteira, sem recorte, pintada pelo que a máscara diz em cada lugar (`hsr.edit_colours`, cores de vértice
+  misturadas sobre a cage): cinza-azulado a pele à mostra, laranja a escondida pelas roupas, vermelho a escondida à
+  mão, verde a mostrada à mão. As roupas ficam transparentes por cima (`EDIT_CLOTH_ALPHA`, o uniforme `u_Alpha` do
+  shader), e os pontos da cage, que são o que se pinta, aparecem como pontos nas mesmas cores (amarelo os do traço
+  em curso). O modo vale só na seção: ao trocar de seção ou fechar a tela o personagem volta ao normal.
+- **O pincel**, como no Blender: o botão esquerdo pinta os pontos sob o círculo, só os do lado de cá do corpo e na
+  frente (`skin_brush.BrushView.pick`); Ctrl faz o contrário do pincel escolhido (mostra com o de esconder, e
+  vice-versa); o botão direito gira e inclina o personagem. Os pincéis são Esconder pele, Mostrar pele e Apagar
+  pintura (devolve o ponto ao automático), em três tamanhos, com simetria opcional (pinta também o ponto espelhado).
+  Soltar o botão manda um comando só (`/skin hsr <esconder|mostrar|apagar> <pontos>`), e a pele é refeita sem
+  reconstruir o personagem (`CharacterModel.refresh_skin`). "Apagar tudo" é `/skin hsr limpar`.
 
 O que é pintado vence o automático (`hsr.adjusted_hidden`) e fica em `AvatarCustomization` (`hsr_mirror`,
 `hsr_hide`, `hsr_show`), salvo com o personagem. Vale para o personagem, não para a peça: trocar de roupa mantém a
 pintura, que pode não servir à roupa nova. Os pontos são mostrados posados com os ossos do personagem
 (`CharacterAnimator.posed`); as deformações sem osso (peito, cintura) não entram, e com elas os pontos ficam um pouco
-fora do lugar. `--pincel=<esconder|mostrar|apagar>` abre o jogo com o pincel ligado (capturas de tela).
+fora do lugar. `--pincel=<esconder|mostrar|apagar>` abre o jogo já no modo de edição (capturas de tela).
 
 ### Bordas das roupas
 

@@ -112,11 +112,13 @@ def option(editor, label):
 def test_the_brush_paints_by_dragging_and_the_right_button_turns():
     editor, sent = make_editor()
     assert max(rect[3] for rect, kind, _ in editor.layout(*SIZE) if kind == "tab") <= SIZE[1]   # every tab fits the window
-    assert not editor.brushing
+    assert not editor.brushing and not editor.handle_mouse_button(700, 300, RIGHT, PRESS)    # out of the edit mode the right button is the game's
     editor.choose(option(editor, "Espelhar os lados"))
     assert sent == ["/skin hsr espelhar sim"]
-    editor.choose(option(editor, "Esconder pele"))
-    assert editor.brushing and editor.turntable["active"] is False and sent == ["/skin hsr espelhar sim"]   # no command for that
+    assert option(editor, "Editar pele").check
+    editor.choose(option(editor, "Editar pele"))
+    assert editor.brushing and editor.brush == "esconder" and editor.model.hsr_edit is True
+    assert editor.turntable["active"] is False and sent == ["/skin hsr espelhar sim"]         # no command for that
     editor.choose(option(editor, "Grande"))
     editor.choose(option(editor, "Os dois lados"))
     assert editor.brush_size == BRUSH_SIZES[2][1] and editor.brush_mirror
@@ -141,7 +143,14 @@ def test_the_brush_paints_by_dragging_and_the_right_button_turns():
     editor.handle_mouse_button(700, 300, LEFT, PRESS)
     editor.handle_mouse_button(700, 300, LEFT, RELEASE)
     assert sent[-1] == "/skin hsr mostrar 2,5"
-    editor.choose(option(editor, "Desligado"))
+    editor.ctrl = True                                                                       # Ctrl: the opposite of the brush
+    editor.handle_mouse_button(700, 300, LEFT, PRESS)
+    editor.ctrl = False
+    editor.handle_mouse_button(700, 300, LEFT, RELEASE)
+    assert sent[-1] == "/skin hsr esconder 2,5"
+    sent.append("/skin hsr mostrar 2,5")
+    editor.choose(option(editor, "Editar pele"))
+    assert editor.model.hsr_edit is False
     assert not editor.brushing and editor.handle_mouse_button(700, 300, LEFT, PRESS)         # the drag turns again
     editor.handle_cursor(760, 300)
     editor.handle_mouse_button(760, 300, LEFT, RELEASE)
@@ -151,9 +160,16 @@ def test_the_brush_paints_by_dragging_and_the_right_button_turns():
 
 def test_the_brush_only_works_in_its_own_section():
     editor, sent = make_editor()
-    editor.choose(option(editor, "Esconder pele"))
+    editor.choose(option(editor, "Editar pele"))
+    assert editor.model.hsr_edit is True
     editor.select_section(0)
-    assert not editor.brushing
+    assert not editor.brushing and editor.model.hsr_edit is False                            # the character as it is, elsewhere
+    editor.select_section([s.title for s in editor.sections].index(FINE_SECTION))
+    assert editor.model.hsr_edit is True
+    editor.close()
+    assert editor.model.hsr_edit is False                                                    # and in the game
+    editor.open()
+    editor.select_section(0)
     editor.picker = lambda *args: [1]
     editor.handle_mouse_button(700, 300, LEFT, PRESS)
     editor.handle_mouse_button(700, 300, LEFT, RELEASE)
@@ -202,3 +218,17 @@ def test_moving_an_edge_cuts_the_skin_again():
     editor, _ = make_editor()
     labels = [o.label for group in editor.groups() for o in group.options]
     assert {"Barra da blusa (altura)", "Cintura da calça (altura)", "Barra da calça (altura)"} <= set(labels)
+
+
+def test_the_edited_skin_is_painted_by_what_each_point_is():
+    from src.clothing.hsr import EDIT_HIDDEN, EDIT_PAINTED_HIDDEN, EDIT_PAINTED_SHOWN, EDIT_SHOWN, edit_colours
+    faces = np.array([[0, 1, 2], [2, 3, 4]])
+    hidden = np.array([True, True, True, False, False])
+    nearest = (np.array([0, 1, 1, 1]), np.array([[1 / 3, 1 / 3, 1 / 3], [0.0, 0.5, 0.5], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]))
+    colours = edit_colours(nearest, faces, hidden)
+    np.testing.assert_allclose(colours[0], EDIT_HIDDEN)                                     # all of it hidden
+    np.testing.assert_allclose(colours[1], EDIT_SHOWN)                                      # between two points that show
+    painted = edit_colours(nearest, faces, hidden, painted_hidden=(4, 99), painted_shown=(3,))
+    np.testing.assert_allclose(painted[2], EDIT_PAINTED_HIDDEN)
+    np.testing.assert_allclose(painted[3], EDIT_PAINTED_SHOWN)
+    assert not np.allclose(painted[1], colours[1]) and np.allclose(painted[0], colours[0])  # blended between the two; untouched elsewhere

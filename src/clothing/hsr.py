@@ -299,6 +299,35 @@ def close_wrapped_limbs(hidden: np.ndarray, body: str, fitted_obj_path) -> np.nd
     return result
 
 
+# The skin while its mask is edited, painted by what each point of it is (as vertex colours):
+# showing, hidden by the clothes, hidden by hand, shown by hand.
+EDIT_SHOWN, EDIT_HIDDEN = (0.78, 0.80, 0.86), (1.00, 0.55, 0.20)
+EDIT_PAINTED_HIDDEN, EDIT_PAINTED_SHOWN = (1.00, 0.22, 0.22), (0.25, 0.90, 0.42)
+
+
+def edit_colours(nearest, cage_faces: np.ndarray, hidden: np.ndarray, painted_hidden=(), painted_shown=()) -> np.ndarray:
+    """Colour (N, 3) of each skin vertex in the edit mode, blended over the body-cage surface.
+
+    ``nearest``: what ``closest_on_surface`` gives for the vertices (triangle, barycentric
+    coordinates). The whole skin is drawn, hidden or not, so that all of it can be painted.
+    """
+    best, bary = nearest
+    corners = np.asarray(cage_faces)[best]
+
+    def blended(flags) -> np.ndarray:
+        return (bary * np.asarray(flags, dtype=np.float64)[corners]).sum(-1)[:, None]
+
+    def marked(indices) -> np.ndarray:
+        flags = np.zeros(len(hidden))
+        flags[[int(i) for i in (indices or ()) if 0 <= int(i) < len(hidden)]] = 1.0
+        return flags
+
+    colour = np.array(EDIT_SHOWN) + (np.array(EDIT_HIDDEN) - np.array(EDIT_SHOWN)) * blended(hidden)
+    for indices, tone in ((painted_hidden, EDIT_PAINTED_HIDDEN), (painted_shown, EDIT_PAINTED_SHOWN)):
+        colour = colour + (np.array(tone) - colour) * blended(marked(indices))
+    return colour
+
+
 EDGE_SHOWN = 0.010   # metres past a garment's moved edge, under the cloth, where the skin is still drawn
 EDGE_HIDDEN = 0.015  # and metres short of it where the skin is not hidden yet: no gap at the edge, no hole
 

@@ -817,6 +817,9 @@ class CharacterPart:
     source_obj: Optional[str] = None  # fitted garment OBJ, for the animation's bone binding
 
 
+EDIT_CLOTH_ALPHA = 0.28  # how solid the clothes are drawn while the skin under them is edited
+
+
 class CharacterModel:
     """Modelo modular completo do personagem 3D montado para visualização em tempo real."""
 
@@ -876,6 +879,7 @@ class CharacterModel:
         self.hair_scale_z: float = float(hair_scale_z) if hair_scale_z is not None else float(getattr(self.customization, "hair_scale_z", 1.0))
 
         self.parts: List[CharacterPart] = []
+        self.hsr_edit = False  # the skin's mask is being edited: all the skin, painted by its state, and clear clothes
         self._edges: Dict[str, Any] = {}  # where the hem and the waist of the top and the pants are (garment_edges)
         self.textures: List[int] = []
         self.white_tex_id: Optional[int] = None
@@ -1280,8 +1284,18 @@ class CharacterModel:
             if not name.startswith("hand_"):
                 rows, faces = subdivide(vertices.reshape(-1, 11), faces, levels=2)
                 vertices = rows.ravel()
-                faces = _memo("hsr", (rows[:, :3], faces, cage_points, hidden, cage_faces),
-                              lambda: cull_hidden_triangles(rows[:, :3], faces, cage_points, hidden, cage_faces))
+                if self.hsr_edit and cage_faces is not None and len(cage_faces):
+                    # Edited: nothing is cut, and each vertex is painted by what the mask says there.
+                    from src.clothing.hsr import closest_on_surface, edit_colours
+                    nearest = _memo("hsr_nearest", (rows[:, :3], cage_points, cage_faces), lambda: closest_on_surface(
+                        rows[:, :3], *(np.asarray(cage_points, dtype=np.float64)[cage_faces[:, k]] for k in range(3))))
+                    rows = rows.copy()
+                    rows[:, 8:11] = edit_colours(nearest, cage_faces, hidden, getattr(custom, "hsr_hide", ()),
+                                                 getattr(custom, "hsr_show", ()))
+                    vertices = rows.ravel()
+                else:
+                    faces = _memo("hsr", (rows[:, :3], faces, cage_points, hidden, cage_faces),
+                                  lambda: cull_hidden_triangles(rows[:, :3], faces, cage_points, hidden, cage_faces))
             if len(faces):
                 new_parts.append(CharacterPart(name, TexturedMesh(vertices.astype(np.float32), faces.astype(np.uint32).ravel()),
                                                self.white_tex_id))
@@ -1754,14 +1768,27 @@ class CharacterModel:
         if vitiligo > 0.0:
             shader.set_float("u_VitiligoSeed", float(adjust.get("vitiligo_forma", 0.0) or 0.0))
             shader.set_vec3("u_SkinTone", *[float(c) for c in self.customization.skin_color_rgb[:3]])
-        for part in self.parts:
+        # While the skin's mask is edited the clothes are drawn last and see-through, over the painted skin.
+        edit = bool(getattr(self, "hsr_edit", False))
+        parts = sorted(self.parts, key=lambda part: part.source_obj is not None) if edit else self.parts
+        for part in parts:
             part_model = base_model if part.transform is None else base_model @ part.transform
             shader.set_mat4("u_Model", part_model)
             shader.set_bool("u_Skinned", bones is not None and getattr(part.mesh, "skinned", False))
-            shader.set_float("u_Vitiligo", vitiligo if part.name.startswith(SKIN_PART_NAMES) else 0.0)
+            shader.set_float("u_Vitiligo", vitiligo if part.name.startswith(SKIN_PART_NAMES) and not edit else 0.0)
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, part.texture_id)
+            clear = edit and part.source_obj is not None
+            if clear:
+                gl.glEnable(gl.GL_BLEND)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                gl.glDepthMask(gl.GL_FALSE)
+                shader.set_float("u_Alpha", EDIT_CLOTH_ALPHA)
             part.mesh.draw()
+            if clear:
+                shader.set_float("u_Alpha", 1.0)
+                gl.glDepthMask(gl.GL_TRUE)
+                gl.glDisable(gl.GL_BLEND)
         shader.set_bool("u_Skinned", False)
         shader.set_float("u_Vitiligo", 0.0)
 

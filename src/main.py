@@ -448,7 +448,7 @@ def main() -> None:
                 break
         brush_arg = next((a.partition("=")[2].lower() for a in sys.argv[1:] if a.startswith("--pincel=")), "")
         if brush_arg in ("esconder", "mostrar", "apagar"):  # o pincel de pele já ligado (capturas de tela)
-            character_editor.brush = brush_arg
+            character_editor.brush, character_editor.hsr_edit = brush_arg, True
             turntable_state["active"] = False
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
@@ -604,6 +604,7 @@ def main() -> None:
         
         if character_editor.is_open:
             cx, cy = window.get_cursor_pos()
+            character_editor.ctrl = window.is_key_pressed(glfw.KEY_LEFT_CONTROL)
             if character_editor.handle_mouse_button(cx, cy, button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
                 return
 
