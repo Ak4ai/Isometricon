@@ -65,7 +65,9 @@ SPIN_DEGREES = 30.0  # and this much each second on its own
 FACE_SECTIONS = ("Olhos", "Rosto", "Nariz", "Maquiagem")
 FINE_SECTION = "Ajuste fino"  # where the skin brush works
 BRUSHES = (("esconder", "Esconder pele"), ("mostrar", "Mostrar pele"), ("apagar", "Apagar pintura"))
-BRUSH_SIZES = (("Pequeno", 10), ("Médio", 22), ("Grande", 40))  # radius, in pixels of the window  # sections worked on with the camera close to the face
+BRUSH_SIZES = (("Pequeno", 10), ("Médio", 22), ("Grande", 40))  # radius, in pixels of the window
+HISTORY_BUTTON, HISTORY_GAP, HISTORY_MARGIN = 40, 6, 12  # the undo and redo arrows at the top right of the scene
+HISTORY_NOTICE = 48  # how far down they go while the loading notice is in that corner  # sections worked on with the camera close to the face
 
 BACKGROUND = (22, 24, 30, 240)
 TAB_STRIP = (15, 16, 20, 245)
@@ -224,6 +226,10 @@ class CharacterEditor:
         # points taken by the stroke being made, and what the main loop gives it each frame: a
         # function from the cursor to the points under it, and the points to show on the character.
         self.hsr_edit = False  # the edit mode of the skin under the clothes: painted skin, clear clothes, the brush
+        self.brush_on = False  # in that mode, the left button paints (off: it turns the character, as elsewhere)
+        self._history_quad = None
+        self._legend_quad = None
+        self._history_key: Any = None
         self.ctrl = False      # Ctrl is held (the main loop says): the brush does the opposite
         self._stroke_brush = ""
         self.brush: Optional[str] = BRUSHES[0][0]
@@ -366,7 +372,8 @@ class CharacterEditor:
                     Option("Espelhar os lados", "/skin hsr espelhar sim", selected=mirrored),
                     Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),
                 Group("Edição da pele sob a roupa (HSR)", [
-                    Option("Editar pele", "@hsr", selected=lambda m: self.hsr_edit, check=True)]),
+                    Option("Editar pele", "@hsr", selected=lambda m: self.hsr_edit, check=True),
+                    Option("Ativar pincel", "@pintar", selected=lambda m: self.brush_on, check=True)]),
                 Group("Pincel (esquerdo pinta, Ctrl inverte, direito gira)", [
                     Option(label, f"@pincel {name}", selected=lambda m, name=name: self.brush == name) for name, label in BRUSHES]),
                 Group("Tamanho do pincel", [Option(label, f"@tamanho {size}", selected=lambda m, size=size: self.brush_size == size)
@@ -420,7 +427,21 @@ class CharacterEditor:
     @property
     def brushing(self) -> bool:
         """O modo de edição da pele está ligado, com um pincel: o arraste no personagem pinta."""
-        return self.hsr_editing and self.brush is not None
+        return self.hsr_editing and self.brush_on and self.brush is not None
+
+    def history_rects(self, width: int, height: int) -> Dict[str, Rect]:
+        """As setas de desfazer e refazer, no canto de cima à direita (só no modo de edição da pele)."""
+        if not self.hsr_editing:
+            return {}
+        right = width - HISTORY_MARGIN
+        top = HISTORY_MARGIN + (HISTORY_NOTICE if getattr(self.handler, "busy_status", "") else 0)  # under the loading notice
+        redo = (right - HISTORY_BUTTON, top, right, top + HISTORY_BUTTON)
+        undo = (redo[0] - HISTORY_GAP - HISTORY_BUTTON, redo[1], redo[0] - HISTORY_GAP, redo[3])
+        return {"desfazer": undo, "refazer": redo}
+
+    def _history(self) -> Tuple[int, int]:
+        undone, redone = getattr(self.handler, "hsr_history", ((), ()))
+        return len(undone), len(redone)
 
     @property
     def hsr_editing(self) -> bool:
@@ -575,6 +596,12 @@ class CharacterEditor:
         """Clique esquerdo: escolhe no painel, ou começa a girar o personagem. True se o evento foi usado."""
         if not self.is_open:
             return False
+        if button == 0:
+            for name, (x0, y0, x1, y1) in self.history_rects(*self._size).items():
+                if x0 <= x < x1 and y0 <= y < y1:
+                    if action != 0:
+                        self.choose(Option("", f"/skin hsr {name}"))
+                    return True
         if button == 1 and self.hsr_editing and not self.over_panel(x) and action != 0:
             # In the edit mode the left button paints: the right one turns the character.
             self._dragging, self._drag_x, self._drag_y = True, x, y
@@ -666,8 +693,13 @@ class CharacterEditor:
     def choose(self, option: Option) -> None:
         if option.command.startswith("@"):  # the brush's own settings: nothing of the character changes
             name, _, value = option.command[1:].partition(" ")
+            if name == "pintar":
+                self.brush_on = not self.brush_on
+                if self.brush_on and not self.hsr_edit:
+                    name = "hsr"  # the brush paints in the edit mode: turned on with it
             if name == "hsr":
                 self.hsr_edit = not self.hsr_edit
+                self.brush_on = self.hsr_edit and (self.brush_on or option.command == "@hsr")  # on with the mode, off with it
                 if self.hsr_edit:
                     self.turntable["active"] = self._was_spinning = False  # a still character to paint on
                     self.message = ("Esquerdo pinta, Ctrl inverte, direito gira o personagem."
@@ -748,6 +780,9 @@ class CharacterEditor:
                 elif key == 86 and mods & 2:  # Ctrl+V
                     self.entry = (self.entry + (self.clipboard() or "").strip().replace("\n", " "))[:200]
                 self.dirty = True
+            return True
+        if key == 90 and mods & 2 and action in (1, 2) and self.hsr_editing:  # Ctrl+Z undoes, Ctrl+Shift+Z redoes
+            self.choose(Option("", f"/skin hsr {'refazer' if mods & 1 else 'desfazer'}"))
             return True
         if action != 1:
             return False
@@ -912,6 +947,59 @@ class CharacterEditor:
             self.dirty = False
         self._quad.draw(0, 0, width, height)
         self._draw_brush(width, height)
+        self._draw_history(width, height)
+
+    def history_image(self, width: int, height: int) -> Any:
+        """As duas setas (desfazer, refazer), apagadas quando não há o que desfazer ou refazer."""
+        from PIL import Image, ImageDraw
+        rects = self.history_rects(width, height)
+        x0, y0 = rects["desfazer"][0], rects["desfazer"][1]
+        image = Image.new("RGBA", (rects["refazer"][2] - x0, HISTORY_BUTTON), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(image)
+        for (name, rect), some in zip(rects.items(), self._history()):
+            left, size = rect[0] - x0, HISTORY_BUTTON
+            pen.rounded_rectangle((left, 0, left + size - 1, size - 1), 6, fill=TILE)
+            colour = TEXT if some else MUTED
+            tip, tail = (left + 11, left + size - 11) if name == "desfazer" else (left + size - 11, left + 11)
+            barb = 8 if name == "desfazer" else -8
+            pen.line((tail, size // 2, tip, size // 2), fill=colour, width=3)
+            pen.polygon([(tip, size // 2), (tip + barb, size // 2 - 8), (tip + barb, size // 2 + 8)], fill=colour)
+        return image
+
+    def legend_image(self) -> Any:
+        """A legenda do modo de edição da pele: o que é cada cor."""
+        from PIL import Image, ImageDraw
+        from src.interactive.skin_brush import LEGEND
+        font = self._font(12)
+        row, pad = 20, 10
+        probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        wide = int(max(probe.textlength(label, font=font) for _, label in LEGEND)) + 2 * pad + 22
+        image = Image.new("RGBA", (wide, row * len(LEGEND) + 2 * pad), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(image)
+        pen.rounded_rectangle((0, 0, image.width - 1, image.height - 1), 8, fill=BACKGROUND[:3] + (225,))
+        for k, (colour, label) in enumerate(LEGEND):
+            y = pad + k * row + row // 2
+            pen.ellipse((pad, y - 6, pad + 12, y + 6), fill=tuple(colour) + (255,))
+            pen.text((pad + 22, y), label, font=font, fill=TEXT, anchor="lm")
+        return image
+
+    def _draw_history(self, width: int, height: int) -> None:
+        rects = self.history_rects(width, height)
+        if not rects:
+            return
+        from src.rendering.hud_quad import HudQuad
+        if self._legend_quad is None:  # the legend, at the bottom right
+            self._legend_quad = HudQuad()
+            self._legend_quad.set_image(self.legend_image())
+        self._legend_quad.draw(width - HISTORY_MARGIN - self._legend_quad.size[0],
+                               height - HISTORY_MARGIN - self._legend_quad.size[1], width, height)
+        if self._history_quad is None:
+            self._history_quad = HudQuad()
+        key = (width, height, self._history()[0] > 0, self._history()[1] > 0)
+        if key != self._history_key:
+            self._history_quad.set_image(self.history_image(width, height))
+            self._history_key = key
+        self._history_quad.draw(rects["desfazer"][0], rects["desfazer"][1], width, height)
 
     def _draw_brush(self, width: int, height: int) -> None:
         """Os pontos da cage sobre o personagem (o que cada um é) e o cursor do pincel."""
@@ -937,7 +1025,7 @@ class CharacterEditor:
             self._ring_quad.draw(self.cursor[0] - half, self.cursor[1] - half, width, height)
 
     def delete(self) -> None:
-        for name in ("_overlay_quad", "_ring_quad"):
+        for name in ("_overlay_quad", "_ring_quad", "_history_quad", "_legend_quad"):
             if getattr(self, name) is not None:
                 getattr(self, name).delete()
                 setattr(self, name, None)
