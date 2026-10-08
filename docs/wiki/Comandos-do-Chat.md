@@ -21,7 +21,7 @@ execução, o autocompletar e a ajuda.
 | `/skin tirar <top\|calca\|jaqueta\|sapato\|cabelo\|arma\|tudo>` | remove (tudo mantém o cabelo) |
 | `/skin roupas` | lista o que está vestido |
 | `/skin preset <padrao\|gato_loiro\|cavaleiro\|rosa\|classico>` · `/skin reset` | aparência pronta (mantém o corpo) |
-| `/skin olhos <formato>` | formato dos olhos: padrao, arredondado, grande, feminino, fechado, sonolento, estreito, puxado, caido, suave, suave_redondo |
+| `/skin olhos <formato>` | formato dos olhos: padrao, arredondado, grande, feminino, fechado, sonolento, estreito, puxado, caido, suave, suave_redondo; modelos desenhados: serio, masculino, afiado, redondo, retro, cansado, felino |
 | `/skin olho <direito\|esquerdo> <cor>` | cor de um olho só (`/skin olhos <cor>` volta os dois à mesma) |
 | `/skin maquiagem <batom\|sombra> <cor\|sem>` · `<blush\|sardas> <sim\|nao>` · `sem` | maquiagem; cores: vermelho, rosa, nude, vinho, roxo, azul, verde, dourado, marrom, preto |
 | `/skin extra <nome\|id\|none>` | veste ou tira uma peça a mais, junto com as outras |

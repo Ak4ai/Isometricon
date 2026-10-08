@@ -557,6 +557,12 @@ class LayeredHeadCompositor:
                 if eye_img is None:
                     eye_img = self._load_layer("layer_eyes_anime_blue.png")
 
+                # Another model of eye, drawn in the same pixel art (and in blue, to take the colour below).
+                from .eye_shapes import draw_eyes
+                drawn_eyes = draw_eyes(getattr(cust, "eye_shape", "padrao"), eye_img.size if eye_img is not None else (512, 512))
+                if drawn_eyes is not None:
+                    eye_img = drawn_eyes
+
                 if eye_img is not None:
                     arr_e = np.array(eye_img)
                     is_iris = (arr_e[:, :, 3] > 0) & (

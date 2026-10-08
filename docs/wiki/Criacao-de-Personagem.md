@@ -57,6 +57,12 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   (`src/clothing/eye_shapes.py`): o globo é esticado ou achatado, a pálpebra desce, as colunas se deslocam, cílios
   são acrescentados ou tirados, em cada olho por si e sem borrar os pixels. Valem para o olho anime (não para o
   clássico) e seguem a cor de cada íris. Um formato novo é uma entrada em `EYE_SHAPES`.
+- **Modelos de olho desenhados** (mesmo comando e mesmo grupo): sério, masculino, afiado, redondo, retrô, cansado e
+  felino. São outros desenhos, não deformações do original: `eye_shapes.draw_eye` monta cada um na mesma pixel art
+  (grade de 22 × 15 pixels de 4 px, mesmo lugar no rosto e a paleta do olho original) a partir de um `EyeModel`: as
+  curvas das pálpebras, a íris, a pupila, os brilhos, os cílios soltos, a linha de baixo. A íris é desenhada em azul,
+  como a original, e por isso recebe a cor escolhida do mesmo jeito; a sombra do branco fica fora do azul para não
+  ser tingida. Um modelo novo é uma entrada em `EYE_MODELS`.
 - **Uma cor para cada olho:** em Rosto, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
   personagem) pintam um só (`/skin olho <direito|esquerdo> <cor>`, `customization.iris_color_other`).
 - **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra

@@ -379,3 +379,49 @@ def test_skin_olhos_takes_a_shape_as_well_as_a_colour_or_a_style():
     closed = np.array(builder.build_atlas(custom).convert("RGB"), dtype=int)
     custom.eye_shape = "padrao"
     assert (closed != np.array(builder.build_atlas(custom).convert("RGB"), dtype=int)).any()
+
+
+def test_drawn_eye_models_are_other_drawings_in_the_same_pixel_art():
+    from src.clothing import eye_shapes as eyes
+    base = np.array(Image.open("assets/models/textures/layers/eyes/eye_anime_blue.png").convert("RGBA"))
+    palette = {eyes.LASH, eyes.WHITE, eyes.SHADE, eyes.CREAM, eyes.IRIS_DARK, eyes.IRIS_MID, eyes.IRIS_BRIGHT, eyes.IRIS_GLOW, eyes.PUPIL}
+    count = lambda layer, colour: int((np.array(layer)[:, :, :3] == colour).all(axis=2).sum()) // eyes.CELL ** 2
+    layers = {name: eyes.draw_eyes(name) for name in eyes.MODEL_NAMES}
+    assert eyes.draw_eyes("padrao") is None and eyes.draw_eyes("arredondado") is None   # those come from the original drawing
+    assert set(eyes.MODEL_NAMES) <= set(eyes.SHAPE_NAMES) and len(eyes.MODEL_NAMES) >= 6
+    seen = set()
+    for name, layer in layers.items():
+        pixels = np.array(layer)
+        opaque = pixels[pixels[:, :, 3] > 0]
+        assert {tuple(p[:3]) for p in opaque.tolist()} <= palette                    # the original's colours, nothing else
+        box, old = layer.getbbox(), Image.fromarray(base).getbbox()
+        assert abs(box[0] - old[0]) <= 12 and abs(box[2] - old[2]) <= 12             # where the original eyes are
+        assert old[1] - 8 <= box[1] and box[3] <= old[3] + 8
+        np.testing.assert_array_equal(pixels[:, 9:97], pixels[:, 160:248][:, ::-1])   # the two eyes mirror each other
+        blocks = pixels[125:185, 9:97].reshape(15, eyes.CELL, 22, eyes.CELL, 4)
+        assert (blocks == blocks[:, :1, :, :1]).all()                                # whole art pixels, not blurred
+        assert pixels.tobytes() not in seen                                          # and each model is its own drawing
+        seen.add(pixels.tobytes())
+    serious, round_ = layers["serio"], layers["redondo"]
+    assert count(serious, eyes.CREAM) < count(round_, eyes.CREAM)                    # less shine
+    assert serious.getbbox()[3] - serious.getbbox()[1] < round_.getbbox()[3] - round_.getbbox()[1]   # and narrower
+    assert count(layers["masculino"], eyes.CREAM) <= 4 and not eyes.EYE_MODELS["masculino"].lashes   # no lashes; two art pixels of shine in each eye
+
+
+def test_a_drawn_eye_takes_the_iris_colour_and_keeps_its_white():
+    from src.clothing import eye_shapes as eyes
+    from src.clothing.customization import HeadAtlasBuilder, IrisColor
+    builder = HeadAtlasBuilder()
+    def atlas(**fields):
+        return np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    blue, green = atlas(eye_shape="serio", iris_color=IrisColor.BLUE), atlas(eye_shape="serio", iris_color=IrisColor.GREEN)
+    assert (atlas(iris_color=IrisColor.BLUE) != blue).any()                          # not the original eye
+    region = (slice(125, 185), slice(9, 97))
+    changed = (blue[region] != green[region]).any(axis=2)
+    drawn = np.array(eyes.draw_eyes("serio"))[region]
+    iris = np.isin(drawn[:, :, 2], [c[2] for c in (eyes.IRIS_DARK, eyes.IRIS_MID, eyes.IRIS_BRIGHT, eyes.IRIS_GLOW, eyes.PUPIL)]) & (drawn[:, :, 3] > 0)
+    assert changed.any() and not (changed & ~iris).any()                             # only the iris changes colour
+    white = (drawn[:, :, :3] == eyes.SHADE).all(axis=2)
+    assert white.any() and (green[region][white] == eyes.SHADE).all()                # the shaded white stays as drawn
+    g = green[region][iris]
+    assert (g[:, 1] >= g[:, 2]).mean() > 0.9                                          # and the iris is green now
