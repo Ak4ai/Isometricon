@@ -549,3 +549,63 @@ def test_the_female_face_has_no_shading_under_it_unless_it_is_asked_for():
     assert woman.body_adjust == {"rosto_sombra": 0.0} and woman.face_adjust("rosto_sombra") == 0.0   # a zero asked for is kept
     assert handler.execute("/skin ajuste peito 40")[0] and woman.face_adjust("rosto_sombra") == 0.0
     assert handler.execute("/skin ajuste reset")[0] and woman.face_adjust("rosto_sombra") == -1.0      # back to the body's default
+
+
+def test_makeup_takes_any_colour_and_its_tone_is_moved_by_the_controls():
+    from src.clothing.customization import MAKEUP_COLORS, parse_makeup_colour, shift_colour
+    assert parse_makeup_colour("rosa") == MAKEUP_COLORS["rosa"] and parse_makeup_colour("#20C0a0") == (32, 192, 160)
+    assert parse_makeup_colour("200,40,55") == (200, 40, 55) and len(MAKEUP_COLORS) >= 16
+    assert all(parse_makeup_colour(bad) is None for bad in ("", "fluorescente", "#12", "300,0,0", "1,2"))
+    red = (200, 40, 55)
+    assert shift_colour(red) == red
+    turned = shift_colour(red, hue=0.5)
+    assert turned[1] > turned[0] or turned[2] > turned[0]                                # a quarter of the wheel away: no longer red
+    assert max(shift_colour(red, saturation=-1.0)) - min(shift_colour(red, saturation=-1.0)) == 0   # grey
+    assert sum(shift_colour(red, brightness=1.0)) > sum(red) > sum(shift_colour(red, brightness=-0.5))
+    custom = AvatarCustomization(makeup={"batom": "vermelho", "blush": "#ff8899"}, body_adjust={"batom_brilho": -0.5})
+    assert custom.makeup_color("batom") == shift_colour(red, brightness=-0.5) and custom.makeup_color("blush") == (255, 136, 153)
+    assert custom.makeup_color("sombra") is None
+    assert {"blush_intensidade", "blush_tamanho", "blush_esfumado", "blush_altura", "blush_matiz", "sombra_esfumado",
+            "batom_saturacao"} <= set(body_shape.ADJUSTMENTS) & body_shape.REDRAWS_FACE
+    assert "batom_intensidade" not in body_shape.ADJUSTMENTS
+
+
+def test_blush_and_eye_shadow_are_drawn_soft_and_follow_their_controls():
+    from src.clothing.customization import BLUSH_AT, HeadAtlasBuilder
+    builder = HeadAtlasBuilder()
+    atlas = lambda **fields: np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    plain = atlas()
+    changed = lambda image: np.abs(image - plain).sum(axis=2)
+    x, y = int(BLUSH_AT[0]), int(BLUSH_AT[1])
+    blush = changed(atlas(makeup={"blush": "rosa"}))
+    assert blush[y, x] > 20 and blush[y, 256 - x] > 20 and blush[60, 128] == 0             # on both cheeks, nowhere else
+    assert 0 < blush[y, x + 30] < blush[y, x + 15] < blush[y, x]                           # fading out, with no hard edge
+    spread = lambda image: int((image > 6).sum())
+    strong = changed(atlas(makeup={"blush": "rosa"}, body_adjust={"blush_intensidade": 1.0}))
+    large = changed(atlas(makeup={"blush": "rosa"}, body_adjust={"blush_tamanho": 1.0}))
+    soft = changed(atlas(makeup={"blush": "rosa"}, body_adjust={"blush_esfumado": 1.0}))
+    high = changed(atlas(makeup={"blush": "rosa"}, body_adjust={"blush_altura": 1.0}))
+    assert strong[y, x] > blush[y, x] and spread(large) > spread(blush) and soft[y, x] < blush[y, x]
+    assert np.nonzero(high.sum(axis=1))[0].mean() < np.nonzero(blush.sum(axis=1))[0].mean()
+    green = atlas(makeup={"blush": "#20c0a0"})
+    assert green[y, x, 1] > green[y, x, 0]                                                  # any colour
+    shadow = changed(atlas(makeup={"sombra": "roxo"}))
+    rows = np.nonzero(shadow[:, :128].sum(axis=1))[0]
+    assert shadow.any() and rows.min() > 100 and rows.max() < 190                           # over the eyelid, under the eyebrow's top
+    bigger = changed(atlas(makeup={"sombra": "roxo"}, body_adjust={"sombra_tamanho": 1.0}))
+    stronger = changed(atlas(makeup={"sombra": "roxo"}, body_adjust={"sombra_intensidade": 1.0}))
+    softer = changed(atlas(makeup={"sombra": "roxo"}, body_adjust={"sombra_esfumado": 1.0}))
+    assert spread(bigger) > spread(shadow) and stronger.max() > shadow.max() and spread(softer) > spread(shadow)
+
+
+def test_blush_is_chosen_by_colour_and_takes_the_place_of_the_old_layer():
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: None, refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert handler.execute("/skin maquiagem blush alternar")[0] and handler.execute("/skin maquiagem sardas sim")[0]
+    assert custom.resolved_face_detail == "blush_and_freckles"
+    assert handler.execute("/skin maquiagem blush coral")[0]
+    assert custom.makeup == {"blush": "coral"} and custom.resolved_face_detail == "freckles"   # not two blushes
+    assert handler.execute("/skin maquiagem sombra #20C0A0")[0] and custom.makeup["sombra"] == "#20c0a0"
+    assert handler.execute("/skin maquiagem batom 200, 40, 55")[0] and custom.makeup["batom"] == "200,40,55"
+    assert not handler.execute("/skin maquiagem blush fluorescente")[0]
+    assert handler.execute("/skin maquiagem blush sem")[0] and "blush" not in custom.makeup

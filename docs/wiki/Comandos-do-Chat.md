@@ -23,7 +23,7 @@ execução, o autocompletar e a ajuda.
 | `/skin preset <padrao\|gato_loiro\|cavaleiro\|rosa\|classico>` · `/skin reset` | aparência pronta (mantém o corpo) |
 | `/skin olhos <formato>` | formato dos olhos: padrao, arredondado, grande, feminino, fechado, sonolento, estreito, puxado, caido, suave, suave_redondo; outros modelos: serio, masculino, afiado, redondo, retro, cansado, felino |
 | `/skin olho <direito\|esquerdo> <cor>` | cor de um olho só (`/skin olhos <cor>` volta os dois à mesma) |
-| `/skin maquiagem <batom\|sombra> <cor\|sem>` · `contorno <suave\|marcado\|sem>` · `<blush\|sardas> <sim\|nao>` · `sem` | maquiagem (as sombras do queixo ficam em `/skin ajuste rosto_sombra`); cores: vermelho, rosa, nude, vinho, roxo, azul, verde, dourado, marrom, preto |
+| `/skin maquiagem <batom\|sombra\|blush> <cor\|#rrggbb\|sem>` · `contorno <suave\|marcado\|sem>` · `sardas <sim\|nao>` · `sem` | maquiagem; cores: vermelho, rosa, nude, vinho, roxo, azul, verde, dourado, marrom, preto, coral, pessego, laranja, lilas, turquesa, prata, ou qualquer uma em `#rrggbb` ou `r,g,b`. Os controles de cada item ficam em `/skin ajuste`: `blush_intensidade`, `blush_tamanho`, `blush_esfumado`, `blush_altura`, `sombra_intensidade`, `sombra_tamanho`, `sombra_esfumado`, e `<item>_matiz`, `<item>_saturacao`, `<item>_brilho`; as sombras do queixo, em `rosto_sombra` |
 | `/skin hsr espelhar <sim\|nao>` · `<esconder\|mostrar\|apagar> <pontos>` · `limpar` · `desfazer` · `refazer` | a pele escondida sob a roupa: espelhar os dois lados do corpo, ou corrigir à mão os pontos da cage (o pincel da seção Ajuste fino) |
 | `/skin extra <nome\|id\|none>` | veste ou tira uma peça a mais, junto com as outras |
 | `/skin sobrancelha <padrao\|grossa\|decidida\|sem>` | estilo das sobrancelhas |

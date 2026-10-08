@@ -61,7 +61,18 @@ GARMENTS = {"blusa_barra": "Barra da blusa (altura)", "calca_cintura": "Cintura 
 GARMENT_EDGES = {"blusa_barra": ("top", 0, True), "calca_cintura": ("bottom", 1, False), "calca_barra": ("bottom", 0, True)}
 GARMENT_REACH = 0.08   # metres an edge moves at 1
 EDGE_FALLOFF = 0.20    # metres of cloth from the edge that stretch with it
-ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS}
+# Makeup: how each item is laid on, and its colour moved from the one chosen (hue, saturation, brightness).
+TONES = (("matiz", "Cor: matiz"), ("saturacao", "Cor: saturação"), ("brilho", "Cor: brilho"))
+MAKEUP_ITEMS = {
+    "batom": (),
+    "sombra": (("intensidade", "Intensidade"), ("tamanho", "Tamanho"), ("esfumado", "Esfumado")),
+    "blush": (("intensidade", "Intensidade"), ("tamanho", "Tamanho"), ("esfumado", "Esfumado"), ("altura", "Altura")),
+}
+MAKEUP_SLIDERS = {item: tuple((f"{item}_{name}", label) for name, label in controls + TONES)
+                  for item, controls in MAKEUP_ITEMS.items()}
+MAKEUP = {name: f"{item.capitalize()}: {label[0].lower()}{label[1:]}" for item, sliders in MAKEUP_SLIDERS.items()
+          for name, label in sliders}
+ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP}
 # What an adjustment is on a body when it was never set: the female face has no shading under it.
 DEFAULTS = {"female": {"rosto_sombra": -1.0}}
 
@@ -70,7 +81,7 @@ def resolved(adjust: Optional[Mapping[str, float]], body: str) -> Dict[str, floa
     """Os ajustes como valem num corpo: os que foram dados e, para os outros, o padrão desse corpo."""
     return {**DEFAULTS.get(str(body).lower(), {}), **(adjust or {})}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
-REDRAWS_FACE = set(FACE) | set(SHADING) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
+REDRAWS_FACE = set(FACE) | set(SHADING) | set(MAKEUP) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
 # With the shadow computed from the nose (customization.nose_shadow), every adjustment of the nose redraws it.
 REDRAWS_SHADOW = set(NOSE)
 

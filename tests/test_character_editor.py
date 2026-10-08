@@ -253,8 +253,8 @@ def test_makeup_and_extra_garments_are_chosen_from_their_sections():
     assert sent[-1] == "/skin extra 43"
     editor.select_section([s.title for s in editor.sections].index("Maquiagem"))
     commands = {o.label: o.command for g in editor.groups() for o in g.options}
-    assert commands["Vermelho"] == "/skin maquiagem batom vermelho" or commands["Vermelho"] == "/skin maquiagem sombra vermelho"
-    assert commands["Blush"] == "/skin maquiagem blush alternar" and commands["Sem maquiagem"] == "/skin maquiagem sem"
+    assert commands["Vermelho"] == "/skin maquiagem blush vermelho" and commands["Sem maquiagem"] == "/skin maquiagem sem"
+    assert commands["Sem blush"] == "/skin maquiagem blush sem" and commands["Sem sombra"] == "/skin maquiagem sombra sem"
     editor.select_section(0)
     assert "Vitiligo (quantidade)" in [o.label for g in editor.groups() for o in g.options]
 

@@ -21,7 +21,7 @@ import time
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, GARMENTS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, GARMENTS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
@@ -350,19 +350,21 @@ class CharacterEditor:
         def makeup() -> List[Group]:
             worn = lambda what: (getattr(custom(), "makeup", None) or {}).get(what) if custom() is not None else None
             detail = lambda word: custom() is not None and word in custom().resolved_face_detail
-            return [
-                Group("Batom", [Option(n.capitalize(), f"/skin maquiagem batom {n}", color=MAKEUP_COLORS[n],
-                                       selected=lambda m, n=n: worn("batom") == n) for n in MAKEUP_COLORS]),
-                Group("Sombra dos olhos", [Option(n.capitalize(), f"/skin maquiagem sombra {n}", color=MAKEUP_COLORS[n],
-                                                  selected=lambda m, n=n: worn("sombra") == n) for n in MAKEUP_COLORS]),
+            def item(title: str, name: str) -> List[Group]:
+                """As cores de um item, tirá-lo, e os controles dele (como é posto e a cor mexida)."""
+                return [Group(title, [Option(n.capitalize(), f"/skin maquiagem {name} {n}", color=MAKEUP_COLORS[n],
+                                             selected=lambda m, n=n: worn(name) == n) for n in MAKEUP_COLORS]),
+                        Group(f"Ajustes: {title.lower()}", [Option(f"Sem {name}", f"/skin maquiagem {name} sem",
+                                                                   selected=lambda m: not worn(name))]
+                              + [Option(label, "", slider=slider) for slider, label in MAKEUP_SLIDERS[name]])]
+
+            return item("Batom", "batom") + item("Sombra dos olhos", "sombra") + item("Blush", "blush") + [
                 Group("Contorno", [Option("Sem contorno", "/skin maquiagem contorno sem", selected=lambda m: not worn("contorno")),
                                    Option("Suave", "/skin maquiagem contorno suave", selected=lambda m: worn("contorno") == "suave"),
                                    Option("Marcado", "/skin maquiagem contorno marcado", selected=lambda m: worn("contorno") == "marcado")]),
                 Group("Sombras do rosto", [Option(label, "", slider=name) for name, label in SHADING.items()]),
-                Group("Rosto", [Option("Blush", "/skin maquiagem blush alternar", selected=lambda m: detail("blush")),
-                                Option("Sardas", "/skin maquiagem sardas alternar", selected=lambda m: detail("freckles"))]),
-                Group("Tirar", [Option("Sem batom", "/skin maquiagem batom sem"), Option("Sem sombra", "/skin maquiagem sombra sem"),
-                                Option("Sem maquiagem", "/skin maquiagem sem")]),
+                Group("Rosto", [Option("Sardas", "/skin maquiagem sardas alternar", selected=lambda m: detail("freckles"), check=True)]),
+                Group("Tirar", [Option("Sem maquiagem", "/skin maquiagem sem")]),
             ]
 
         def fine() -> List[Group]:

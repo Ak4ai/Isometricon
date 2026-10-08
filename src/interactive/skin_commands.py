@@ -311,13 +311,13 @@ class SkinCommandHandler:
         return True, f"[Skin] Olho {side}: {args[1].lower()}.", GREEN
 
     def makeup(self, args: List[str]) -> Result:
-        """/skin maquiagem <batom|sombra> <cor|sem> | contorno <suave|marcado|sem> | <blush|sardas> <sim|nao> | sem"""
+        """/skin maquiagem <batom|sombra|blush> <cor|#rrggbb|sem> | contorno <suave|marcado|sem> | sardas <sim|nao> | sem"""
         missing = self._need_model()
         if missing:
             return missing
-        from src.clothing.customization import CONTOURS, MAKEUP_COLORS, FaceDetail
-        usage = (f"Uso: /skin maquiagem <batom|sombra> <{'|'.join(MAKEUP_COLORS)}|sem> | contorno <{'|'.join(CONTOURS)}|sem> | "
-                 "<blush|sardas> <sim|nao> | sem")
+        from src.clothing.customization import CONTOURS, MAKEUP_COLORS, FaceDetail, parse_makeup_colour
+        usage = (f"Uso: /skin maquiagem <batom|sombra|blush> <{'|'.join(MAKEUP_COLORS)}|#rrggbb|sem> | "
+                 f"contorno <{'|'.join(CONTOURS)}|sem> | sardas <sim|nao> | sem")
         what = args[0].lower() if args else ""
         value = args[1].lower() if len(args) > 1 else ""
         details = {(False, False): FaceDetail.NONE, (True, False): FaceDetail.BLUSH, (False, True): FaceDetail.FRECKLES,
@@ -327,15 +327,19 @@ class SkinCommandHandler:
                 c.makeup, c.face_detail = {}, FaceDetail.NONE
             self._change(clear, face=True)
             return True, "[Maquiagem] Sem maquiagem.", GREEN
-        if what in ("batom", "sombra") and (value in MAKEUP_COLORS or value in NONE_WORDS):
+        colour = "".join(args[1:]).lower() if len(args) > 1 else ""  # "200, 40, 55" comes in pieces
+        painted = parse_makeup_colour(colour) is not None
+        if what in ("batom", "sombra", "blush") and (painted or value in NONE_WORDS):
             def paint(c):
                 worn = dict(c.makeup or {})
                 worn.pop(what, None)
-                if value in MAKEUP_COLORS:
-                    worn[what] = value
+                if painted:
+                    worn[what] = colour
                 c.makeup = worn
+                if what == "blush":  # the drawn blush takes the place of the old layer of the same name
+                    c.face_detail = FaceDetail.FRECKLES if "freckles" in c.resolved_face_detail else FaceDetail.NONE
             self._change(paint, face=True)
-            return True, f"[Maquiagem] {what.capitalize()}: {value if value in MAKEUP_COLORS else 'sem'}.", GREEN
+            return True, f"[Maquiagem] {what.capitalize()}: {colour if painted else 'sem'}.", GREEN
         if what == "contorno" and (value in CONTOURS or value in NONE_WORDS):
             def shade(c):
                 worn = dict(c.makeup or {})
@@ -931,7 +935,7 @@ SKIN_COMMANDS: List[Command] = [
             list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"] + list(EYE_SHAPE_NAMES), "Aparência"),
     Command(("olho", "eye"), "/skin olho <direito|esquerdo> <cor>", "cor de um olho só", SkinCommandHandler.eye,
             {"direito": list(EYE_COLORS), "esquerdo": list(EYE_COLORS)}, "Aparência"),
-    Command(("maquiagem", "makeup"), "/skin maquiagem <batom|sombra> <cor|sem> | contorno <suave|marcado|sem> | <blush|sardas> <sim|nao> | sem",
+    Command(("maquiagem", "makeup"), "/skin maquiagem <batom|sombra|blush> <cor|#rrggbb|sem> | contorno <suave|marcado|sem> | sardas <sim|nao> | sem",
             "batom, sombra, contorno, blush e sardas", SkinCommandHandler.makeup, ["batom", "sombra", "contorno", "blush", "sardas", "sem"],
             "Aparência"),
     Command(("boca", "mouth"), "/skin boca <estilo>", "estilo da boca", SkinCommandHandler.mouth,

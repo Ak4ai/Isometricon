@@ -42,7 +42,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
 | Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos | `/skin boca`, `/skin sobrancelha`, `/skin ajuste` |
 | Nariz | com ou sem, o formato e os ajustes de cada parte, a cor da ponta e a sombra | `/skin nariz`, `/skin ajuste` |
-| Maquiagem | batom e sombra dos olhos (dez cores cada), contorno (suave ou marcado), sombras do queixo e do maxilar, blush, sardas | `/skin maquiagem`, `/skin ajuste rosto_sombra` |
+| Maquiagem | batom, sombra dos olhos e blush (dezesseis cores, com matiz, saturação e brilho ajustáveis; a sombra e o blush com intensidade, tamanho e esfumado), contorno, sombras do queixo e do maxilar, sardas | `/skin maquiagem`, `/skin ajuste rosto_sombra` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
 | Superior | camisetas, camisas e suéteres | `/skin top <id>` |
 | Jaqueta | peça por cima da roupa | `/skin jaqueta <id>` |
@@ -82,9 +82,19 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   do vértice e a faixa escurece. A frente do rosto não muda.
   **No corpo feminino o padrão é -100** (`body_shape.DEFAULTS`, lido por `resolved_body_adjust`): vale enquanto o
   controle não for mexido, um zero escolhido fica guardado, e `/skin ajuste reset` volta ao padrão do corpo.
-- **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra
-  é uma mancha suave de cor sobre cada pálpebra, por baixo do desenho do olho. Blush e sardas são as camadas de
-  detalhe do rosto que já existiam. Tudo é refeito na textura da cabeça, sem recarregar o personagem.
+- **Maquiagem** (`customization.makeup`): batom, sombra dos olhos e blush, cada um com uma cor, e as sardas. Tudo é
+  refeito na textura da cabeça, sem recarregar o personagem.
+  - **Cor:** dezesseis cores prontas (`MAKEUP_COLORS`) ou qualquer outra pelo chat (`/skin maquiagem blush #ff8899`,
+    ou `200,40,55`). Três controles por item mexem na cor escolhida: matiz (meia volta do círculo de cores em cada
+    ponta), saturação e brilho (`customization.shift_colour`), então dá para chegar a qualquer tom sem sair da tela.
+  - **Batom:** recolore a boca mantendo o claro e o escuro do desenho.
+  - **Sombra:** uma mancha esfumada sobre cada pálpebra e um pouco além do canto de fora, por baixo do desenho do
+    olho e abaixo da sobrancelha. Controles: intensidade, tamanho e esfumado.
+  - **Blush:** desenhado, uma mancha esfumada em cada bochecha sob os olhos (`BLUSH_AT`, `BLUSH_RADII`). Controles:
+    intensidade, tamanho, esfumado e altura. Escolher uma cor de blush tira a camada antiga de blush
+    (`face_details/blush_soft.png`), que continua existindo só pelo chat (`/skin maquiagem blush sim`).
+  - Os controles são ajustes como os outros (`body_shape.MAKEUP`: `blush_intensidade`, `sombra_esfumado`,
+    `batom_matiz`...), de -100 a 100, e valem a partir do desenho padrão de cada item.
 - **Vitiligo:** desenhado pelo shader (`world_textured.frag`, `u_Vitiligo`) sobre as partes de pele, a partir da
   posição no corpo sem pose: as manchas ficam presas à pele ao andar e são iguais dos dois lados. Só o que tem a
   cor da pele clareia, então olhos, boca e sobrancelhas da textura do rosto ficam como estão. "Quantidade" vai de
