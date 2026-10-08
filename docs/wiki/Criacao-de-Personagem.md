@@ -67,7 +67,9 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   (grade de 22 × 15 pixels de 4 px, mesmo lugar no rosto e a paleta do olho original) a partir de um `EyeModel`: as
   curvas das pálpebras, a íris, a pupila, os brilhos, os cílios soltos, a linha de baixo. A íris é desenhada em azul,
   como a original, e por isso recebe a cor escolhida do mesmo jeito; a sombra do branco fica fora do azul para não
-  ser tingida. Um modelo novo é uma entrada em `EYE_MODELS`.
+  ser tingida. O segundo olho espelha o primeiro em tudo menos nos brilhos, que
+  ficam do mesmo lado nos dois (a luz vem de um lugar só), e a íris fica um pouco para fora do meio da abertura (para
+  dentro o personagem parece vesgo). Um modelo novo é uma entrada em `EYE_MODELS`.
 - **Uma cor para cada olho:** em Rosto, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
   personagem) pintam um só (`/skin olho <direito|esquerdo> <cor>`, `customization.iris_color_other`).
 - **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra

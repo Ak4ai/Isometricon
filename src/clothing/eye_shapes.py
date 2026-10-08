@@ -2,8 +2,8 @@
 
 O olho anime é pixel art numa camada da textura da cabeça: a massa escura dos cílios com pontas no
 canto de fora, pontinhos de cílio embaixo, a íris e o branco. Cada formato é uma transformação
-desse mesmo desenho (o globo esticado ou achatado, a pálpebra descida, colunas deslocadas, cílios
-acrescentados ou tirados), feita em cada olho por si e espelhada no outro, sem borrar os pixels.
+desse mesmo desenho (o globo esticado ou achatado, colunas deslocadas, cílios acrescentados ou
+tirados), feita em cada olho por si e espelhada no outro, sem borrar os pixels.
 Assim todos continuam no estilo do original e seguem a cor da íris, que já foi pintada antes.
 """
 from __future__ import annotations
@@ -56,26 +56,6 @@ def _tilt(eye: np.ndarray, lift: int) -> np.ndarray:
     return out
 
 
-def _close(eye: np.ndarray, drop: int) -> np.ndarray:
-    """Lower the lid by ``drop`` pixels over the eyeball: a half-closed eye."""
-    dark = _dark(eye)
-    if not dark.any():
-        return eye
-    top = np.nonzero(dark)[0].min()
-    rows = np.arange(eye.shape[0])[:, None]
-    lid = dark & (rows < top + LID)
-    lowered = np.zeros_like(lid)
-    lowered[drop:] = lid[:-drop]
-    out = eye.copy()
-    for x in range(eye.shape[1]):  # nothing shows above the lowered lid (between its lashes the eye still does)
-        under = np.nonzero(lowered[:, x])[0]
-        out[:(under.min() if len(under) else top + drop), x] = 0
-    moved = np.zeros_like(eye)
-    moved[drop:] = eye[:-drop]
-    out[lowered] = moved[lowered]
-    return out
-
-
 def _lashes(eye: np.ndarray) -> np.ndarray:
     """Longer lashes at the outer corner: two more steps up and out from the tip of the wing."""
     dark = _dark(eye)
@@ -90,7 +70,7 @@ def _lashes(eye: np.ndarray) -> np.ndarray:
     for step in (1, 2):
         y, x = tip - 4 * step, left - 4 * step
         if y >= 0 and x >= 0:
-            out[y:y + 4, x:x + 8] = colour
+            out[y:y + 4, x:x + 4] = colour
     return out
 
 
@@ -115,9 +95,11 @@ EYE_SHAPES: Dict[str, Callable[[np.ndarray], np.ndarray]] = {
     "arredondado": lambda eye: _scale(_stretch(eye, 1.26), 0.92, 1.0),
     "grande": lambda eye: _scale(eye, 1.14, 1.14),
     "feminino": lambda eye: _lashes(_tilt(_stretch(eye, 1.12), 4)),
-    "fechado": lambda eye: _close(eye, 12),
-    "sonolento": lambda eye: _tilt(_close(eye, 16), -4),
-    "estreito": lambda eye: _scale(_stretch(eye, 0.70), 1.06, 1.0),
+    # Half closed: the eyeball lower under the same lid (lowering the lid over the iris left
+    # bits of iris showing between the lashes above it).
+    "fechado": lambda eye: _stretch(eye, 0.56),
+    "sonolento": lambda eye: _tilt(_stretch(eye, 0.48), -4),
+    "estreito": lambda eye: _scale(_stretch(eye, 0.80), 1.06, 1.0),
     "puxado": lambda eye: _tilt(eye, 8),
     "caido": lambda eye: _tilt(eye, -8),
     "suave": lambda eye: _soft(eye),
@@ -179,6 +161,8 @@ FACE_MIDDLE = 128.5         # the column the two eyes mirror about
 LASH, WHITE, SHADE, CREAM = (50, 35, 35), (255, 255, 255), (196, 196, 208), (249, 246, 226)
 IRIS_DARK, IRIS_MID, IRIS_BRIGHT, IRIS_GLOW, PUPIL = (51, 69, 107), (91, 116, 172), (122, 175, 215), (186, 221, 225), (46, 61, 92)
 
+RIMMED_IRIS = 4.5           # an iris at least this wide (its radius, in cells) is drawn with a darker rim
+
 Points = Tuple[Tuple[float, float], ...]
 
 
@@ -190,7 +174,9 @@ class EyeModel:
     iris: Tuple[float, float, float, float]         # centre x, centre y, radius across, radius down
     lid: float = 1.6                                # thickness of the upper lid
     pupil: Tuple[int, int] = (2, 3)                 # width and height
-    highlights: Tuple[Tuple[int, int, int, int], ...] = ()   # x, y, width, height of each shine
+    # Each shine: how far from the centre of the iris (across, down), and its width and height. It is
+    # on the same side in both eyes (the light comes from one place), unlike the rest, which mirrors.
+    highlights: Tuple[Tuple[float, float, int, int], ...] = ()
     lashes: Tuple[Tuple[int, int], ...] = ()        # loose cells of lash
     lower_line: Optional[Tuple[int, int]] = None    # from which column to which the lower lid is drawn
     crease: Optional[Points] = None                 # a thin line over the lid (a heavy eyelid)
@@ -208,8 +194,9 @@ def _edge(points: Points, x: float) -> Optional[float]:
     return points[-1][1]
 
 
-def draw_eye(model: EyeModel) -> np.ndarray:
-    """Um olho (canto de fora à esquerda) em RGBA, de GRID células de CELL pixels."""
+def draw_eye(model: EyeModel, mirrored: bool = False) -> np.ndarray:
+    """Um olho em RGBA, de GRID células de CELL pixels: o primeiro (canto de fora à esquerda) ou, com
+    ``mirrored``, o outro, espelhado em tudo menos nos brilhos, que ficam do mesmo lado nos dois."""
     width, height = GRID
     cells = np.zeros((height, width, 4), dtype=np.uint8)
 
@@ -236,19 +223,14 @@ def draw_eye(model: EyeModel) -> np.ndarray:
             colour = IRIS_DARK if t < 0.40 else IRIS_MID if t < 0.72 else IRIS_BRIGHT
             if model.glow and t > 0.80:
                 colour = IRIS_GLOW
-            rim = any(not (0 <= u < width and 0 <= v < height and opening[v, u] and inside(u, v))
-                      for u, v in ((x - 1, y), (x + 1, y), (x, y + 1)))
-            put(x, y, IRIS_DARK if rim and opening[min(y + 1, height - 1), x] else colour)
+            # A large iris has a darker rim at its sides; on a small one that reads as stripes.
+            rim = rx >= RIMMED_IRIS and any(not (0 <= u < width and opening[y, u] and inside(u, y)) for u in (x - 1, x + 1))
+            put(x, y, IRIS_DARK if rim else colour)
     pw, ph = model.pupil
     for y in range(int(round(cy - ph / 2)), int(round(cy - ph / 2)) + ph):
         for x in range(int(round(cx - pw / 2)), int(round(cx - pw / 2)) + pw):
             if 0 <= x < width and 0 <= y < height and opening[y, x] and inside(x, y):
                 put(x, y, PUPIL)
-    for hx, hy, hw, hh in model.highlights:
-        for y in range(hy, hy + hh):
-            for x in range(hx, hx + hw):
-                if 0 <= x < width and 0 <= y < height and opening[y, x]:
-                    put(x, y, CREAM)
     for x in range(width):                           # the upper lid, over the top of the opening
         top = _edge(model.upper, x + 0.5)
         if top is None:
@@ -272,36 +254,45 @@ def draw_eye(model: EyeModel) -> np.ndarray:
                 put(x, int(np.floor(bottom - 0.5)) + 2, LASH)
     for x, y in model.lashes:
         put(x, y, LASH)
+    centre = cx
+    if mirrored:
+        cells, opening, centre = cells[:, ::-1].copy(), opening[:, ::-1], width - cx
+    iris = np.isin(cells[:, :, 2], [c[2] for c in (IRIS_DARK, IRIS_MID, IRIS_BRIGHT, IRIS_GLOW, PUPIL)]) & (cells[:, :, 3] > 0)
+    for dx, dy, hw, hh in model.highlights:          # the shines, where the iris shows
+        for y in range(int(round(cy + dy - 0.5)), int(round(cy + dy - 0.5)) + hh):
+            for x in range(int(round(centre + dx - 0.5)), int(round(centre + dx - 0.5)) + hw):
+                if 0 <= x < width and 0 <= y < height and iris[y, x]:
+                    cells[y, x] = CREAM + (255,)
     return np.repeat(np.repeat(cells, CELL, axis=0), CELL, axis=1)
 
 
+# In every model the iris sits a little to the outside of the middle of the opening, as in the
+# original (towards the nose the character looks cross-eyed), and the shine is up and to the left.
 EYE_MODELS: Dict[str, EyeModel] = {
-    # Narrow under a thick straight lid that comes down towards the nose; one small shine, no lashes.
-    "serio": EyeModel(upper=((1, 5.5), (6, 6.0), (20, 8.2)), lower=((3, 8.8), (7, 11.6), (16, 11.6), (20, 9.6)),
-                      iris=(12.0, 9.2, 3.6, 3.6), lid=2.0, pupil=(2, 2), highlights=((10, 8, 1, 1),),
-                      lashes=((0, 5),), lower_line=(4, 7)),
+    # Narrow under a straight lid that comes down towards the nose; one point of shine, no lashes.
+    "serio": EyeModel(upper=((1, 5.6), (6, 6.0), (20, 8.0)), lower=((3, 9.0), (7, 12.0), (16, 12.0), (20, 9.8)),
+                      iris=(10.9, 9.3, 3.8, 3.8), lid=1.5, pupil=(2, 2), highlights=((-1.5, -1.0, 1, 1),), lower_line=(4, 6)),
     # Calmer: a straight lid without lashes, a smaller iris, one bar of shine, a short line under the corner.
     "masculino": EyeModel(upper=((1, 6.2), (5, 4.9), (16, 4.9), (21, 7.2)), lower=((3, 9.0), (7, 12.2), (17, 12.2), (21, 9.2)),
-                          iris=(12.0, 8.8, 4.1, 4.3), lid=1.6, pupil=(2, 3), highlights=((9, 6, 2, 1),), lower_line=(5, 8)),
+                          iris=(11.3, 8.8, 4.1, 4.3), lid=1.6, pupil=(2, 2), highlights=((-2.5, -2.3, 2, 1),), lower_line=(5, 8)),
     # Long and slanted, its outer corner high and pointed; a narrow iris.
-    "afiado": EyeModel(upper=((0, 4.2), (6, 5.2), (21, 8.6)), lower=((2, 6.8), (8, 10.6), (17, 11.0), (21, 9.6)),
-                       iris=(12.0, 8.4, 3.3, 3.8), lid=1.4, pupil=(2, 3), highlights=((10, 7, 1, 1),),
-                       lashes=((0, 2),), lower_line=(3, 8)),
+    "afiado": EyeModel(upper=((0, 4.4), (6, 5.4), (21, 8.6)), lower=((2, 7.0), (8, 10.8), (17, 11.2), (21, 9.8)),
+                       iris=(11.0, 8.7, 3.6, 3.8), lid=1.2, pupil=(2, 2), highlights=((-1.5, -1.0, 1, 1),),
+                       lashes=((0, 3),), lower_line=(3, 5)),
     # Round and open, a large iris with a big shine: a cuter, simpler line.
     "redondo": EyeModel(upper=((2, 6.2), (6, 3.2), (15, 3.2), (20, 6.6)), lower=((2, 9.0), (6, 13.4), (16, 13.4), (20, 9.0)),
-                        iris=(11.0, 8.5, 5.2, 5.4), lid=1.5, pupil=(2, 3), highlights=((8, 5, 3, 2), (13, 10, 2, 1)),
+                        iris=(10.6, 8.5, 5.2, 5.4), lid=1.5, pupil=(2, 3), highlights=((-3.0, -3.5, 3, 2), (1.5, 1.5, 2, 1)),
                         lashes=((1, 4), (0, 5)), glow=True),
-    # Tall, as in older anime: an oval iris, large blocks of shine, a thick lid and the lower lid drawn.
+    # Tall, as in older anime: an oval iris, large blocks of shine, a thick lid and the lower lid at the corner.
     "retro": EyeModel(upper=((3, 6.0), (6, 2.2), (14, 1.6), (19, 5.6)), lower=((3, 9.0), (6, 13.6), (15, 14.0), (19, 10.0)),
-                      iris=(11.0, 8.4, 4.6, 6.0), lid=2.2, pupil=(2, 4), highlights=((8, 4, 2, 3), (13, 11, 1, 2)),
-                      lashes=((2, 3), (1, 2), (1, 5)), lower_line=(4, 16), glow=True),
-    # A heavy lid half over the eye, its crease above, and a line under it.
+                      iris=(10.6, 8.4, 4.6, 6.0), lid=2.0, pupil=(2, 3), highlights=((-3.0, -4.0, 2, 3), (1.5, 2.0, 1, 2)),
+                      lashes=((2, 3), (1, 2), (1, 5)), lower_line=(4, 8), glow=True),
+    # A heavy lid half over the eye, and a short line under it.
     "cansado": EyeModel(upper=((1, 7.2), (6, 7.6), (20, 8.2)), lower=((3, 9.6), (7, 12.6), (16, 12.6), (20, 10.0)),
-                        iris=(12.0, 9.8, 4.0, 4.0), lid=1.4, pupil=(2, 2), highlights=((10, 10, 1, 1),),
-                        crease=((3, 4.6), (17, 5.2)), under=(7, 15)),
+                        iris=(10.8, 9.9, 4.0, 4.0), lid=1.6, pupil=(2, 2), highlights=((-1.5, 0.0, 1, 1),), under=(8, 13)),
     # Wide at the outer corner and pointed at the inner one, with a slit pupil.
     "felino": EyeModel(upper=((0, 5.2), (5, 3.6), (15, 4.6), (21, 8.2)), lower=((2, 8.0), (7, 12.6), (16, 12.6), (21, 9.2)),
-                       iris=(12.0, 8.6, 4.4, 5.0), lid=1.6, pupil=(1, 5), highlights=((9, 6, 2, 2),),
+                       iris=(11.0, 8.6, 4.4, 5.0), lid=1.6, pupil=(1, 5), highlights=((-3.0, -3.0, 2, 2),),
                        lashes=((0, 3), (1, 3)), glow=True),
 }
 MODEL_NAMES = tuple(EYE_MODELS)
@@ -320,6 +311,8 @@ def draw_eyes(name: str, size: Tuple[int, int] = (512, 512)) -> Optional[Image.I
     layer = Image.new("RGBA", size, (0, 0, 0, 0))
     x, y = round(EYE_AT[0] * unit), round(EYE_AT[1] * unit)
     layer.paste(eye, (x, y), eye)
-    other = eye.transpose(Image.FLIP_LEFT_RIGHT)
+    other = Image.fromarray(draw_eye(model, mirrored=True))
+    if unit != 1.0:
+        other = other.resize(eye.size, Image.NEAREST)
     layer.paste(other, (round(2 * FACE_MIDDLE * unit) - x - eye.width, y), other)
     return layer

@@ -397,7 +397,13 @@ def test_drawn_eye_models_are_other_drawings_in_the_same_pixel_art():
         box, old = layer.getbbox(), Image.fromarray(base).getbbox()
         assert abs(box[0] - old[0]) <= 12 and abs(box[2] - old[2]) <= 12             # where the original eyes are
         assert old[1] - 8 <= box[1] and box[3] <= old[3] + 8
-        np.testing.assert_array_equal(pixels[:, 9:97], pixels[:, 160:248][:, ::-1])   # the two eyes mirror each other
+        first, second = pixels[125:185, 9:97], pixels[125:185, 160:248]
+        lash = lambda eye: (eye[:, :, :3] == eyes.LASH).all(axis=2)
+        np.testing.assert_array_equal(lash(first), lash(second)[:, ::-1])           # the lids and lashes mirror each other
+        shine = lambda eye: np.nonzero((eye[:, :, :3] == eyes.CREAM).all(axis=2))[1]
+        blue = lambda eye: np.nonzero((eye[:, :, 2] > eye[:, :, 0] + 15) & (eye[:, :, 3] > 0))[1]
+        if len(shine(first)):                                                        # but the shine is on the same side of both
+            assert shine(first).mean() < blue(first).mean() and shine(second).mean() < blue(second).mean()
         blocks = pixels[125:185, 9:97].reshape(15, eyes.CELL, 22, eyes.CELL, 4)
         assert (blocks == blocks[:, :1, :, :1]).all()                                # whole art pixels, not blurred
         assert pixels.tobytes() not in seen                                          # and each model is its own drawing
