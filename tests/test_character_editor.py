@@ -217,12 +217,20 @@ def test_dragging_a_body_slider_sends_the_adjustment_as_it_moves():
     assert len(sent) == before
 
 
-def test_a_face_slider_is_applied_when_it_is_let_go():
+def test_a_face_slider_redraws_a_few_times_a_second_and_takes_the_last_value(monkeypatch):
+    import src.interactive.character_editor as module
+    clock = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
     editor, sent = make_editor()
     x0, y0, x1, y1 = slider_rect(editor, "Rosto", "Tamanho dos olhos")
     y = (y0 + y1) / 2
     editor.handle_mouse_button(x1 - 10, y, LEFT, PRESS)
-    editor.handle_cursor(x1 - 40, y)
-    assert sent == []                                          # the face texture is not redrawn at every move
-    editor.handle_mouse_button(x1 - 40, y, LEFT, RELEASE)
-    assert len(sent) == 1 and sent[0].startswith("/skin ajuste olhos_tamanho ")
+    assert sent == ["/skin ajuste olhos_tamanho 100"]
+    editor.handle_cursor(x1 - 40, y)                          # right after: the face is not drawn again yet
+    assert len(sent) == 1
+    clock[0] += 0.2
+    editor.handle_cursor(x1 - 60, y)                          # later: it follows the mouse
+    assert len(sent) == 2
+    editor.handle_cursor(x1 - 80, y)
+    editor.handle_mouse_button(x1 - 80, y, LEFT, RELEASE)      # let go: the value it was left at
+    assert len(sent) == 3 and sent[-1] != sent[-2]

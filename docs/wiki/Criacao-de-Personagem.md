@@ -33,7 +33,7 @@ divergem.
 | Seção | Opções | Comando |
 |---|---|---|
 | Corpo | feminino/masculino, tom de pele, formato da cabeça | `/skin corpo`, `/skin pele`, `/skin cabeca` |
-| Ajustes | altura, cabeça, ombros, peito, quadril, bunda, braços, mãos, pernas, pés | `/skin ajuste <nome> <-100 a 100>` |
+| Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Rosto | estilo e cor dos olhos, boca, sobrancelhas; tamanho, altura e distância dos olhos, altura das sobrancelhas | `/skin olhos`, `/skin boca`, `/skin sobrancelha`, `/skin ajuste` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
 | Superior | camisetas, camisas e suéteres | `/skin top <id>` |
@@ -53,15 +53,24 @@ Cada ajuste vai de -100 a 100 (0 = o corpo como foi modelado) e fica em `AvatarC
 com o personagem. Nenhum mexe só no corpo ou só na roupa, o que desfaria o encaixe: todos agem igual sobre pele,
 roupa e cabelo (`src/clothing/body_shape.py`).
 
-- **Altura, cabeça, ombros, quadril, braços, pernas, mãos e pés** são escalas por osso, aplicadas com o esqueleto
-  (`Skeleton.pose(..., scales, height)`): o que o osso carrega cresce junto e os ossos filhos acompanham sem crescer.
-  Braços e pernas engrossam sem mudar de comprimento; os pés crescem sem afundar no chão.
-- **Peito e bunda** não têm osso: são uma deformação do espaço na pose de vestir (`warp`). A pele e o tecido que
-  está sobre o mesmo ponto se movem exatamente o mesmo tanto.
+- **Altura, cabeça, pescoço, ombros, pelve, quadril, braços, pernas, mãos e pés** são escalas por osso, aplicadas com
+  o esqueleto (`Skeleton.pose(..., scales, height)`): o que o osso carrega muda junto e os ossos filhos acompanham
+  sem mudar. Grossura e comprimento de braços e pernas são independentes (através e ao longo do osso). Com as
+  pernas mais longas o corpo sobe (`ground_lift`), e os pés crescem sem afundar no chão.
+  Quadril é a largura da pelve; pelve é o seu tamanho para os lados e de frente para trás.
+- **Peito, bunda e cintura** não têm osso: são uma deformação do espaço na pose de vestir (`warp`). A pele e o
+  tecido que está sobre o mesmo ponto se movem juntos; a cintura deixa as mãos, que ficam ao lado, onde estão.
+- **Folga das roupas** é o único que age só no tecido: afasta-o ao longo da própria superfície, até 2 cm. Para
+  aproximar o limite é 3 mm: mais que isso a pele atravessa a roupa justa.
 - **Olhos e sobrancelhas** agem na textura da cabeça: a camada é escalada, erguida ou afastada antes de ser colada
-  (`customization.place_face_layer`). Na tela, esses só são aplicados ao soltar o controle, porque a textura é refeita.
+  (`customization.place_face_layer`).
+- **O rosto muda sem recarregar o personagem:** olhos (cor, tamanho, altura, distância), sobrancelhas e boca refazem
+  só a textura da cabeça e a trocam no lugar (`CharacterModel.refresh_face`, ~30 ms). Só o que muda geometria
+  reconstrói o personagem: os olhos clássicos tiram o nariz 3D.
 - Com tudo em 0, nada muda em relação ao personagem sem ajustes. A bateria de robustez não mede os ajustes; os
-  extremos foram conferidos por imagem com roupa justa (regata e meia-calça), parado e andando.
+  extremos foram conferidos por imagem no corpo feminino com roupa justa (regata e meia-calça), parado e andando.
+- A pose de descanso dos braços não é recalculada com os ajustes: com quadril ou pelve muito largos as mãos podem
+  encostar no quadril.
 
 ## 🖼️ Miniaturas
 

@@ -841,6 +841,7 @@ class CharacterModel:
         self.async_loading = bool(async_loading)
         self.loading_status: str = ""  # shown by the HUD while a build is running
         self._dirty = False
+        self._face_builder = None  # kept between redraws of the face (its layers stay loaded)
         self._worker = None
         self._worker_result = None
         self.customization = customization if customization is not None else AvatarCustomization(
@@ -1727,6 +1728,24 @@ class CharacterModel:
         self.delete()
         if self.create_mesh:
             self._build()
+
+    def refresh_face(self) -> bool:
+        """Redraw only the head's texture (eyes, eyebrows, mouth) into the texture already on
+        the GPU, without rebuilding the model. False when that cannot be done now (nothing
+        built yet, or a build is running): the caller reloads instead."""
+        import OpenGL.GL as gl
+
+        head = next((part for part in self.parts if part.name == "head"), None)
+        if head is None or not self.create_mesh or self.is_loading or not isinstance(head.texture_id, (int, np.integer)) \
+                or head.texture_id <= 0:
+            return False
+        if self._face_builder is None:
+            self._face_builder = HeadAtlasBuilder()
+        image = self._face_builder.build_atlas(self.customization).convert("RGBA")
+        gl.glBindTexture(gl.GL_TEXTURE_2D, int(head.texture_id))
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, image.width, image.height, 0, gl.GL_RGBA,
+                        gl.GL_UNSIGNED_BYTE, np.array(image, dtype=np.uint8))
+        return True
 
     @property
     def is_loading(self) -> bool:
