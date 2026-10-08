@@ -470,3 +470,20 @@ def test_the_computed_nose_shadow_fades_up_the_nose_and_stays_off_it():
     assert shade[v - 1:v + 2, u - 1:u + 2].max() == 0                                  # nor where the nose takes its colour
     plain = nose.styled_rows(np.zeros((3, 11)), "batata", plain=True)[0]
     assert np.allclose(plain[:, 6:8], nose.PLAIN_UV) and not np.allclose(nose.styled_rows(np.zeros((3, 11)), "batata")[0][:, 6:8], nose.PLAIN_UV)
+
+
+def test_the_tip_comes_out_on_its_own_without_the_nostrils():
+    from dataclasses import replace
+    from src.clothing import nose
+    shape = nose.NOSE_STYLES["batata"]
+    out = nose.adjusted(shape, {"nariz_ponta_projecao": 1.0})
+    assert out.tip_depth > shape.tip_depth + 0.008 and out == replace(shape, tip_depth=out.tip_depth)   # nothing else: not the wings
+    assert nose.adjusted(shape, {"nariz_ponta_projecao": -1.0}).tip_depth < shape.tip_depth
+    assert "nariz_ponta_projecao" in body_shape.NOSE and "nariz_ponta_projecao" in nose.PARAMETRIC
+    plain, _ = nose.model_rows("bloco_narinas")
+    far, _ = nose.model_rows("bloco_narinas", {"nariz_ponta_projecao": 1.0})
+    block = len(nose.ROWS)
+    assert far[:block, 2].max() > plain[:block, 2].max() + 0.008                   # the block's tip
+    np.testing.assert_allclose(far[block:], plain[block:], atol=1e-9)              # its wings as they were
+    top = plain[:block, 1] > plain[:block, 1].max() - 0.001
+    np.testing.assert_allclose(far[:block][top], plain[:block][top], atol=1e-9)    # and the top of the bridge
