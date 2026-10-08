@@ -35,7 +35,11 @@ BODY_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
 BODY = {name: label for _, group in BODY_GROUPS for name, label in group}
 FACE = {"olhos_tamanho": "Tamanho dos olhos", "olhos_altura": "Altura dos olhos",
         "olhos_distancia": "Distância entre os olhos", "sobrancelha_altura": "Altura das sobrancelhas"}
-ADJUSTMENTS = {**BODY, **FACE}
+NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_largura": "Largura do nariz",
+        "nariz_projecao": "Projeção do nariz", "nariz_altura": "Altura do nariz", "nariz_sombra": "Sombra do nariz"}
+ADJUSTMENTS = {**BODY, **FACE, **NOSE}
+# The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
+REDRAWS_FACE = set(FACE) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
 
 # How much each adjustment changes at 1 (and the opposite at -1).
 HEIGHT = 0.15          # of the whole character
@@ -52,6 +56,8 @@ HANDS = 0.30
 FEET = 0.30            # length and width (not height: the foot stays on the ground)
 BULGE = 0.05           # metres the chest or the buttocks come out
 WAIST = 0.22           # share the waist narrows or widens by
+NOSE_SIZE, NOSE_WIDTH, NOSE_DEPTH = 0.5, 0.6, 0.8  # of the nose as a whole, sideways, and out of the face
+NOSE_LIFT = 0.015      # metres up or down the face
 CLEARANCE = (0.003, 0.02)  # metres the clothes can come closer to the body, and move off it
 # Where the chest and the buttocks are: (how far up the torso, or metres above the hip joints;
 # half the distance between the two sides; how wide the bulge is), in metres.
@@ -184,6 +190,22 @@ def warp(points: np.ndarray, skeleton, adjust: Optional[Mapping[str, float]], su
             this_side = np.clip(towards * (points[:, 2] - middle[2]) / DEPTH_FADE, 0.0, 1.0)
             out[:, 2] += towards * much * BULGE * np.exp(-(distance / radius) ** 2) * this_side * this_side * (3 - 2 * this_side)
     return out
+
+
+def nose_adjusted(adjust: Optional[Mapping[str, float]]) -> bool:
+    return any(amount(adjust, name) for name in ("nariz_tamanho", "nariz_largura", "nariz_projecao", "nariz_altura"))
+
+
+def nose_shape(points: np.ndarray, adjust: Optional[Mapping[str, float]]) -> np.ndarray:
+    """Os vértices do nariz com tamanho, largura, projeção e altura ajustados, em torno do ponto
+    onde ele se apoia no rosto (o nariz cresce para fora e não afunda na cabeça)."""
+    points = np.asarray(points, dtype=np.float64)
+    low, high = points.min(0), points.max(0)
+    anchor = np.array([(low[0] + high[0]) / 2, (low[1] + high[1]) / 2, low[2]])
+    size = 1.0 + NOSE_SIZE * amount(adjust, "nariz_tamanho")
+    scale = size * np.array([1.0 + NOSE_WIDTH * amount(adjust, "nariz_largura"), 1.0,
+                             1.0 + NOSE_DEPTH * amount(adjust, "nariz_projecao")])
+    return anchor + (points - anchor) * scale + np.array([0.0, NOSE_LIFT * amount(adjust, "nariz_altura"), 0.0])
 
 
 def smooth_normals(rows: np.ndarray) -> np.ndarray:
