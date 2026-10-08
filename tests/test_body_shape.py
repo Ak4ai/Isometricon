@@ -231,6 +231,12 @@ def test_each_part_of_the_nose_is_adjusted_by_itself():
     assert base.nostril_width > wide.nostril_width and base.wing_width > wide.wing_width
     assert base.wing_height > wide.wing_height and base.flare < wide.flare and base.tip_width == wide.tip_width
     assert nose.build(tip).shape == nose.build(wide).shape             # still the same triangles
+    wings = lambda shape: nose.build(shape).reshape(-1, 3, 8)[34:50, :, :3].reshape(-1, 3)
+    raised = nose.adjusted(wide, {"nariz_narinas_altura": 1.0})
+    np.testing.assert_allclose(wings(raised) - wings(wide), [[0.0, nose.WING_LIFT, 0.0]] * 48, atol=1e-12)  # only up
+    np.testing.assert_allclose(nose.build(raised)[:102], nose.build(wide)[:102])    # the nose itself stays
+    lowered = nose.adjusted(wide, {"nariz_narinas_altura": -1.0})
+    assert wings(lowered)[:, 1].min() == pytest.approx(-nose.WING_LIFT)
 
 
 def test_the_tip_of_the_nose_can_be_pinker_and_the_bridge_keeps_the_skin():

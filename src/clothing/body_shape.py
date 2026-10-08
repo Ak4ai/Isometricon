@@ -39,7 +39,8 @@ NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_altura": "Posição do nariz
         "nariz_projecao": "Projeção do nariz", "nariz_largura": "Largura do nariz inteiro",
         "nariz_ponte_largura": "Largura da ponte", "nariz_ponte_altura": "Altura da ponte",
         "nariz_ponta_largura": "Largura da ponta", "nariz_base_largura": "Largura da base",
-        "nariz_base_altura": "Altura da base", "nariz_ponta_cor": "Cor da ponta (rosada)",
+        "nariz_base_altura": "Altura da base", "nariz_narinas_altura": "Posição das narinas (altura)",
+        "nariz_ponta_cor": "Cor da ponta (rosada)",
         "nariz_sombra": "Sombra do nariz"}
 ADJUSTMENTS = {**BODY, **FACE, **NOSE}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
