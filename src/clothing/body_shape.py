@@ -73,7 +73,8 @@ MAKEUP_SLIDERS = {item: tuple((f"{item}_{name}", label) for name, label in contr
 MAKEUP = {name: f"{item.capitalize()}: {label[0].lower()}{label[1:]}" for item, sliders in MAKEUP_SLIDERS.items()
           for name, label in sliders}
 EARS = {"orelha_tamanho": "Tamanho das orelhas", "orelha_altura": "Altura das orelhas",
-        "orelha_abertura": "Abertura das orelhas"}
+        "orelha_abertura": "Abertura das orelhas", "orelha_matiz": "Cor: matiz", "orelha_saturacao": "Cor: saturação",
+        "orelha_brilho": "Cor: brilho"}
 ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS}
 # What an adjustment is on a body when it was never set: the female face has no shading under it.
 DEFAULTS = {"female": {"rosto_sombra": -1.0}}

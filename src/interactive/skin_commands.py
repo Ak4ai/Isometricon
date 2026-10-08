@@ -858,11 +858,25 @@ class SkinCommandHandler:
         return True, f"[Ajuste] {ADJUSTMENTS[name]}: {round(value):+d}.", GREEN
 
     def ears(self, args: List[str]) -> Result:
-        """/skin orelha <sem|modelo>: as orelhas 3D."""
+        """/skin orelha <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>: as orelhas 3D e a cor delas."""
         missing = self._need_model()
         if missing:
             return missing
         value = args[0].lower() if args else ""
+        if value in ("cor", "color"):
+            from src.clothing import ears
+            custom = self.character_model.customization
+            wanted = args[1].lower() if len(args) > 1 else ""
+            toggled = len(args) > 2 and args[2].lower() == "alternar"  # a check of the editor: again takes it off
+            names = (ears.SKIN_COAT, ears.HAIR_COAT) + tuple(ears.EAR_COLORS)
+            valid = wanted in names or (wanted.startswith("#") and len(wanted) == 7)
+            if wanted in ("auto", "automatica", "automática") + NONE_WORDS or (toggled and getattr(custom, "ear_color", "") == wanted):
+                custom.ear_color = ""
+                return True, "[Orelhas] Cor: a do modelo.", GREEN
+            if not valid:
+                return False, f"[Erro] Uso: /skin orelha cor <auto|{'|'.join(names)}|#rrggbb>", RED
+            custom.ear_color = wanted
+            return True, f"[Orelhas] Cor: {wanted}.", GREEN
         value = "sem" if value in NONE_WORDS else value
         if value not in EAR_STYLE_NAMES:
             return False, f"[Erro] Uso: /skin orelha <{'|'.join(EAR_STYLE_NAMES)}>", RED
@@ -980,8 +994,9 @@ SKIN_COMMANDS: List[Command] = [
             SkinCommandHandler.nose, ["sim", "nao", "sombra"] + list(NOSE_STYLE_NAMES), "Aparência"),
     Command(("raca", "raça", "race"), "/skin raca <nome>", "corpo pronto de uma raça: pele, orelhas, olhos, nariz e proporções",
             SkinCommandHandler.race, lambda: list(__import__("src.clothing.races", fromlist=["RACES"]).RACES), "Aparência"),
-    Command(("orelha", "orelhas", "ears"), "/skin orelha <sem|modelo>", "orelhas 3D (ajustes em /skin ajuste orelha_...)",
-            SkinCommandHandler.ears, list(EAR_STYLE_NAMES), "Aparência"),
+    Command(("orelha", "orelhas", "ears"), "/skin orelha <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>",
+            "orelhas 3D e a cor delas (ajustes em /skin ajuste orelha_...)",
+            SkinCommandHandler.ears, list(EAR_STYLE_NAMES) + ["cor"], "Aparência"),
     Command(("sobrancelha", "eyebrows"), "/skin sobrancelha <padrao|grossa|decidida|sem>", "estilo das sobrancelhas",
             SkinCommandHandler.eyebrows, list(EYEBROWS), "Aparência"),
     Command(("ajuste", "adjust"), "/skin ajuste <nome> <-100 a 100> | reset", "proporções do corpo e do rosto",

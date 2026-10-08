@@ -660,7 +660,7 @@ class CharacterAnimator:
         if abs(self.stride - target) < 1e-3:
             self.stride = target
         custom = getattr(self.model, "customization", None)
-        shape = (self._nose_style(), getattr(custom, "ear_style", None)) + tuple(sorted((getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}).items()))
+        shape = (self._nose_style(), (getattr(custom, "ear_style", None), getattr(custom, "ear_color", ""))) + tuple(sorted((getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}).items()))
         if shape != self._shape:
             self._reshape(shape)
         if self.arms_out != self._arms_shown:
@@ -684,16 +684,16 @@ class CharacterAnimator:
         custom = getattr(self.model, "customization", None)
         return getattr(custom, "nose_style", None), getattr(custom, "nose_shadow", "legado") == "calculada"
 
-    def _styled_ears(self, style, adjust):
-        """Vertex rows of the ears in ``style`` with their adjustments, on the bound head, when the
-        model has ears of the same vertices (None otherwise: no ears, or none wanted)."""
+    def _styled_ears(self, adjust):
+        """Vertex rows of the ears as the character has them now (model, adjustments, colour), on
+        the bound head, when the model has ears of the same vertices (None otherwise: no ears, or
+        none wanted)."""
         from . import ears
         named = {part.name: k for k, (part, *_) in enumerate(self._bindings)}
         if "ears" not in named or "head" not in named:
             return None
         custom = getattr(self.model, "customization", None)
-        made = ears.styled_rows(self._bound_rows[named["head"]], style, adjust, getattr(custom, "skin_color_rgb", (1.0, 1.0, 1.0)),
-                                tuple(c / 255.0 for c in getattr(custom, "hair_rgb_255", (102, 77, 64))))
+        made = ears.rows_for(self._bound_rows[named["head"]], custom, adjust)
         if made is None or made[0].shape != self._bound_rows[named["ears"]].shape:
             return None
         return made[0] if not np.array_equal(made[0], self._bound_rows[named["ears"]]) else None
@@ -715,7 +715,7 @@ class CharacterAnimator:
         """Take the model's body adjustments: the scale of each bone, the height, and the
         fitting pose warped where an adjustment has no bone (chest, buttocks). Skin, cloth and
         hair are warped alike, from the vertices they were bound with."""
-        nose_style, ear_style, adjust = shape[0], shape[1], dict(shape[2:])
+        nose_style, adjust = shape[0], dict(shape[2:])  # shape[1]: the ears' model and colour, read from the character
         self._shape = shape
         self._scales, self._height = body_shape.bone_scales(self.skeleton, adjust), body_shape.height(adjust)
         self._lift = body_shape.ground_lift(self.skeleton, self._scales)
@@ -732,7 +732,7 @@ class CharacterAnimator:
                  for name, (slot, which, lower) in body_shape.GARMENT_EDGES.items()
                  if slot in edges and body_shape.garment_shift(adjust, name)]
         # The ears in another style, or adjusted: every style has the same triangles, so they are moved in place.
-        eared = self._styled_ears(ear_style, adjust)
+        eared = self._styled_ears(adjust)
         warped = bulges or bool(loose) or nose or styled is not None or tinted or shaded or bool(moved) or eared is not None
         if warped or self._warped:
             surface = self._cage_binding[0]
