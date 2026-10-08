@@ -293,3 +293,35 @@ def test_undo_and_redo_by_keys_and_by_the_arrows_at_the_top_right():
     legend = np.array(editor.legend_image())
     colours = {tuple(p) for p in legend.reshape(-1, 4)[:, :3].tolist()}
     assert all(tuple(colour) in colours for colour, _ in skin_brush.LEGEND) and len(skin_brush.LEGEND) == 5
+
+
+def test_transparency_and_the_arms_at_ninety_degrees_are_checks_of_their_own():
+    editor, _ = make_editor()
+    assert option(editor, "Transparência").check and option(editor, "Braços a 90°").check
+    editor.choose(option(editor, "Editar pele"))
+    assert editor.model.hsr_edit is True and editor.brushing                                 # painted skin, clear clothes
+    editor.choose(option(editor, "Transparência"))
+    assert editor.model.hsr_edit is False and editor.hsr_editing and editor.brushing        # as in the game, still painting
+    editor.choose(option(editor, "Transparência"))
+    assert editor.model.hsr_edit is True
+    assert not editor.arms_raised
+    editor.choose(option(editor, "Braços a 90°"))
+    assert editor.arms_raised                                                                # with or without the edit mode
+    editor.select_section(0)
+    assert not editor.arms_raised                                                            # only in this section
+
+
+def test_the_animator_stands_with_the_arms_out_when_asked():
+    from src.clothing.character_animation import CharacterAnimator
+    from src.clothing.skeleton import Skeleton, rest_rotations
+    animator = CharacterAnimator.__new__(CharacterAnimator)
+    animator.skeleton, animator.arms_out, animator.arm_swing = Skeleton.load("female"), False, 1.0
+    animator.rest = rest_rotations(animator.skeleton)
+    down, _ = animator.walk_pose(0.0, 0.0)
+    animator.arms_out = True
+    out, _ = animator.walk_pose(0.0, 0.0)
+    assert not np.allclose(out["UpperArm_L"], down["UpperArm_L"])
+    skeleton = animator.skeleton
+    arm = skeleton.index("UpperArm_L")
+    along = out["UpperArm_L"] @ (skeleton.tails[arm] - skeleton.heads[arm])
+    assert abs(along[1]) < 0.02 * np.linalg.norm(along) + 1e-3                                # level: straight out to the side

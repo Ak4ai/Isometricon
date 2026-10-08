@@ -162,6 +162,8 @@ class CharacterAnimator:
         self._lift, self._cloth_normals, self._bound_nose_style = 0.0, {}, None
         self._posed = None  # the bones of the last points given to posed()
         self._arms = []     # the bones of the two arms
+        self.arms_out = False     # stand with the arms at 90 degrees (the character editor's fine adjustment)
+        self._arms_shown = False
         self._bound_rows = []
 
     def _body_cage(self):
@@ -301,7 +303,8 @@ class CharacterAnimator:
 
     def walk_pose(self, walk_time, stride=1.0):
         """(rotations, root) of the walk at ``walk_time``, ``stride`` of the way from the rest pose."""
-        rotations, root = dict(self.rest), (0.0, 0.0, 0.0)
+        # ``arms_out``: the arms straight out to the sides, to see and reach what they hide at rest.
+        rotations, root = dict(rest_rotations(self.skeleton, np.pi / 2) if self.arms_out else self.rest), (0.0, 0.0, 0.0)
         if stride > 0.0:
             walk, root = walk_rotations(walk_time)
             for bone, rotation in walk.items():
@@ -643,6 +646,8 @@ class CharacterAnimator:
         shape = (self._nose_style(),) + tuple(sorted((getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}).items()))
         if shape != self._shape:
             self._reshape(shape)
+        if self.arms_out != self._arms_shown:
+            self._arms_shown, self._shown = self.arms_out, None  # the rest pose is another one now
         if self.stride == 0.0 and self._shown == "rest":
             return
         if walk_time is not None:
