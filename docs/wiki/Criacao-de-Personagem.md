@@ -28,7 +28,7 @@ divergem.
 | **Shift + arrastar** ou botão do meio | move a câmera |
 | **Q / E** | gira a câmera 90° |
 
-**Câmera no rosto:** nas seções Rosto e Maquiagem a câmera vai sozinha para o rosto: na altura da cabeça (a da
+**Câmera no rosto:** nas seções Olhos, Rosto, Nariz e Maquiagem a câmera vai sozinha para o rosto: na altura da cabeça (a da
 pose atual, com os ajustes de altura e pescoço), de perto, na horizontal e com o personagem parado de frente. Dá
 para girar, inclinar e dar zoom a partir daí; ao trocar para outra seção volta o enquadramento de corpo inteiro
 que estava antes (`CharacterEditor.focus`, tratado no laço principal).
@@ -39,7 +39,9 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 |---|---|---|
 | Corpo | feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
-| Rosto | estilo e cor dos olhos, boca, sobrancelhas; tamanho, altura e distância dos olhos, altura das sobrancelhas; nariz (com ou sem), seu tamanho, largura, projeção, altura e sombra | `/skin olhos`, `/skin boca`, `/skin sobrancelha`, `/skin nariz`, `/skin ajuste` |
+| Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
+| Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos | `/skin boca`, `/skin sobrancelha`, `/skin ajuste` |
+| Nariz | com ou sem, o formato e os ajustes de cada parte, a cor da ponta e a sombra | `/skin nariz`, `/skin ajuste` |
 | Maquiagem | batom e sombra dos olhos (dez cores cada), blush, sardas | `/skin maquiagem` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
 | Superior | camisetas, camisas e suéteres | `/skin top <id>` |
@@ -70,7 +72,7 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   ser tingida. O segundo olho espelha o primeiro em tudo menos nos brilhos, que
   ficam do mesmo lado nos dois (a luz vem de um lugar só), e a íris fica um pouco para fora do meio da abertura (para
   dentro o personagem parece vesgo). Um modelo novo é uma entrada em `EYE_MODELS`.
-- **Uma cor para cada olho:** em Rosto, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
+- **Uma cor para cada olho:** em Olhos, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
   personagem) pintam um só (`/skin olho <direito|esquerdo> <cor>`, `customization.iris_color_other`).
 - **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra
   é uma mancha suave de cor sobre cada pálpebra, por baixo do desenho do olho. Blush e sardas são as camadas de

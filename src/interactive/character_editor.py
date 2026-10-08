@@ -19,7 +19,7 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, FACE, NOSE, REDRAWS_FACE, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, NOSE, REDRAWS_FACE, SKIN
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
@@ -60,7 +60,7 @@ DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged side
 TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
 TILT_LIMITS = (-20.0, 80.0)  # from a little below the character to almost straight above
 SPIN_DEGREES = 30.0  # and this much each second on its own
-FACE_SECTIONS = ("Rosto", "Maquiagem")  # sections worked on with the camera close to the face
+FACE_SECTIONS = ("Olhos", "Rosto", "Nariz", "Maquiagem")  # sections worked on with the camera close to the face
 
 BACKGROUND = (22, 24, 30, 240)
 TAB_STRIP = (15, 16, 20, 245)
@@ -248,7 +248,7 @@ class CharacterEditor:
                 Group("Pele", [Option(label, "", slider=name) for name, label in SKIN.items()]),
             ]
 
-        def face() -> List[Group]:
+        def eyes() -> List[Group]:
             return [
                 Group("Olhos", [Option(n.capitalize(), f"/skin olhos {n}", selected=lambda m, v=EYE_STYLES[n]: custom() is not None and custom().resolved_eye_style == _value(v))
                                 for n in PORTUGUESE_EYE_STYLES]),
@@ -267,12 +267,21 @@ class CharacterEditor:
                                                selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(
                                                    custom().iris_color_other if custom().iris_color_other is not None else custom().iris_color) == _value(v))
                                         for n in EYE_COLORS]),
+                Group("Ajustes dos olhos", [Option(label, "", slider=name) for name, label in EYES.items()]),
+            ]
+
+        def face() -> List[Group]:
+            return [
                 Group("Boca", [Option(n.capitalize(), f"/skin boca {n}", selected=lambda m, v=MOUTHS[n]: custom() is not None and _value(custom().mouth_style) == _value(v))
                                for n in PORTUGUESE_MOUTHS]),
                 Group("Sobrancelhas", [Option(n.capitalize(), f"/skin sobrancelha {n}",
                                               selected=lambda m, v=EYEBROWS[n]: custom() is not None and custom().resolved_eyebrow_style == _value(v))
                                        for n in EYEBROWS]),
-                Group("Ajustes do rosto", [Option(label, "", slider=name) for name, label in FACE.items()]),
+                Group("Ajustes das sobrancelhas", [Option(label, "", slider=name) for name, label in BROWS.items()]),
+            ]
+
+        def nose() -> List[Group]:
+            return [
                 Group("Nariz", [Option("Com nariz", "/skin nariz sim", selected=lambda m: custom() is not None and custom().should_render_3d_nose),
                                 Option("Sem nariz", "/skin nariz nao", selected=lambda m: custom() is not None and not custom().should_render_3d_nose)]),
                 Group("Formato do nariz", [
@@ -335,7 +344,9 @@ class CharacterEditor:
         return [
             Section("Corpo", body),
             Section("Ajustes", shape),
+            Section("Olhos", eyes),
             Section("Rosto", face),
+            Section("Nariz", nose),
             Section("Maquiagem", makeup),
             Section("Cabelo", hair),
             Section("Superior", lambda: [Group("Roupa de cima", self._garments("top", "top", "top_id"))]),
