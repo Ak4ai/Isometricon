@@ -734,7 +734,7 @@ class SkinCommandHandler:
         missing = self._need_model()
         if missing:
             return missing
-        from src.clothing.body_shape import ADJUSTMENTS, REDRAWS_FACE, REDRAWS_SHADOW
+        from src.clothing.body_shape import ADJUSTMENTS, DEFAULTS, REDRAWS_FACE, REDRAWS_SHADOW
         custom = self.character_model.customization
         FACE = REDRAWS_FACE | (REDRAWS_SHADOW if getattr(custom, "nose_shadow", "legado") == "calculada" else set())
         current = dict(getattr(custom, "body_adjust", None) or {})
@@ -744,7 +744,7 @@ class SkinCommandHandler:
             return True, f"[Ajuste] {shown}\n{usage}", GOLD
         name = args[0].lower()
         if name == "reset":
-            face = any(current.get(k) for k in FACE)
+            face = any(k in current for k in FACE)
             if face:
                 self._change(lambda c: setattr(c, "body_adjust", {}), face=True)
             else:
@@ -756,9 +756,11 @@ class SkinCommandHandler:
             value = max(-100.0, min(100.0, float(args[1].replace("%", "").replace(",", "."))))
         except ValueError:
             return False, f"[Erro] Valor inválido: '{args[1]}'. {usage}", RED
-        changed = round(value) != round(current.get(name, 0.0) * 100)
+        before = getattr(custom, "resolved_body_adjust", None) or current
+        changed = round(value) != round(before.get(name, 0.0) * 100)
         current[name] = value / 100.0
-        adjusted = {k: v for k, v in current.items() if v}
+        kept = {k for defaults in DEFAULTS.values() for k in defaults}  # a zero there is a choice, not the default
+        adjusted = {k: v for k, v in current.items() if v or k in kept}
         if name in FACE and changed:
             self._change(lambda c: setattr(c, "body_adjust", adjusted), face=True)  # the face is drawn again
         else:

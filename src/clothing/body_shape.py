@@ -53,6 +53,13 @@ SKIN = {"vitiligo": "Vitiligo (quantidade)", "vitiligo_forma": "Vitiligo (desenh
 # and take a darker tone of the head's texture. Down to none of it (a flat face), up to stronger.
 SHADING = {"rosto_sombra": "Sombras do queixo e do maxilar"}
 ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING}
+# What an adjustment is on a body when it was never set: the female face has no shading under it.
+DEFAULTS = {"female": {"rosto_sombra": -1.0}}
+
+
+def resolved(adjust: Optional[Mapping[str, float]], body: str) -> Dict[str, float]:
+    """Os ajustes como valem num corpo: os que foram dados e, para os outros, o padrão desse corpo."""
+    return {**DEFAULTS.get(str(body).lower(), {}), **(adjust or {})}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
 REDRAWS_FACE = set(FACE) | set(SHADING) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
 # With the shadow computed from the nose (customization.nose_shadow), every adjustment of the nose redraws it.

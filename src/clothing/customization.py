@@ -387,10 +387,16 @@ class AvatarCustomization:
         """A cor de um item de maquiagem ("batom", "sombra"), ou None se não é usado."""
         return MAKEUP_COLORS.get(str((self.makeup or {}).get(what, "")).lower())
 
+    @property
+    def resolved_body_adjust(self) -> Dict[str, float]:
+        """Os ajustes como valem neste corpo: os dados e, para os outros, o padrão do corpo."""
+        from .body_shape import resolved
+        return resolved(self.body_adjust, "female" if self.is_female else "male")
+
     def face_adjust(self, name: str) -> float:
         """Um ajuste do rosto, de -1 a 1 (0 = como desenhado)."""
         try:
-            return max(-1.0, min(1.0, float((self.body_adjust or {}).get(name, 0.0))))
+            return max(-1.0, min(1.0, float(self.resolved_body_adjust.get(name, 0.0))))
         except (TypeError, ValueError):
             return 0.0
 

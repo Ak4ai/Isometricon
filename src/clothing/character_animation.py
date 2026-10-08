@@ -621,7 +621,7 @@ class CharacterAnimator:
         if abs(self.stride - target) < 1e-3:
             self.stride = target
         custom = getattr(self.model, "customization", None)
-        shape = (self._nose_style(),) + tuple(sorted((getattr(custom, "body_adjust", None) or {}).items()))
+        shape = (self._nose_style(),) + tuple(sorted((getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}).items()))
         if shape != self._shape:
             self._reshape(shape)
         if self.stride == 0.0 and self._shown == "rest":
