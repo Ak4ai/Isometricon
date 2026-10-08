@@ -228,8 +228,9 @@ def _place(rows8: np.ndarray, head_rows: np.ndarray) -> np.ndarray:
 # Adjustments that change the measures of a shape (the old block nose has none of them), and how
 # much each does at 1: widths as a share, the height of the bridge in metres, where the base starts.
 PARAMETRIC = ("nariz_ponta_largura", "nariz_ponte_largura", "nariz_ponte_altura", "nariz_base_largura", "nariz_base_altura",
-              "nariz_narinas_altura")
+              "nariz_narinas_altura", "nariz_ponta_projecao")
 PART_WIDTH, BRIDGE_HEIGHT, BASE_HEIGHT = 0.6, 0.006, 0.6
+TIP_REACH = 0.010  # metres the tip alone comes out of the face or goes back (the wings of the nostrils stay)
 WING_LIFT = 0.008  # metres the wings of the nostrils go up or down the nose
 # The colour of the tip: what the skin is multiplied by at its pinkest, and at its darkest.
 TIP_PINK, TIP_DARK = (1.0, 0.70, 0.72), (0.80, 0.72, 0.68)
@@ -252,6 +253,7 @@ def adjusted(shape: NoseShape, adjust: Optional[Mapping[str, float]]) -> NoseSha
     tip, bridge = 1.0 + PART_WIDTH * _amount(adjust, "nariz_ponta_largura"), 1.0 + PART_WIDTH * _amount(adjust, "nariz_ponte_largura")
     base, tall = 1.0 + PART_WIDTH * _amount(adjust, "nariz_base_largura"), _amount(adjust, "nariz_base_altura")
     return replace(shape, tip_width=shape.tip_width * tip,
+                   tip_depth=max(0.003, shape.tip_depth + TIP_REACH * _amount(adjust, "nariz_ponta_projecao")),
                    bridge_base=shape.bridge_base * bridge, bridge_ridge=shape.bridge_ridge * bridge,
                    bridge_depth=max(0.0005, shape.bridge_depth + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura")),
                    nostril_width=shape.nostril_width * base, wing_width=shape.wing_width * base,
@@ -289,6 +291,8 @@ def _block(adjust: Optional[Mapping[str, float]]) -> np.ndarray:
     lower, front = ROWS[:, 1] < (ROWS[:, 1].min() + ROWS[:, 1].max()) / 2, ROWS[:, 2] > BLOCK_FRONT
     rows[:, 0] = centre + (ROWS[:, 0] - centre) * np.where(lower, np.where(front, tip, base), bridge)
     rows[lower, 1] = NOSE_BOTTOM + (ROWS[lower, 1] - NOSE_BOTTOM) * (1.0 + BASE_HEIGHT * tall)
+    out = lower & front  # the front of the tip box, and the foot of the bridge on it
+    rows[out, 2] = np.maximum(ROWS[out, 2] + TIP_REACH * _amount(adjust, "nariz_ponta_projecao"), FACE_FRONT + 0.003)
     top = ~lower & front
     rows[top, 2] = np.maximum(ROWS[top, 2] + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura"), FACE_FRONT + 0.0005)
     return rows
