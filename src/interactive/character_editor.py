@@ -632,6 +632,8 @@ class CharacterEditor:
             if self._slider is not None:
                 option, self._slider = self._slider[0], None
                 self.set_slider(option, self._slider_value)  # the face is drawn again only now
+                if option.slider in GARMENTS and hasattr(self.handler, "recut_skin"):
+                    self.handler.recut_skin()                # and the skin under a moved edge is cut
                 return True
             if self._dragging:
                 self._dragging = False
@@ -698,7 +700,12 @@ class CharacterEditor:
         now = time.monotonic()
         if option.slider not in REDRAWS_FACE or now - self._slider_sent >= FACE_REDRAW:
             self._slider_sent = now
-            self.set_slider(option, value)
+            # An edge of a garment follows the mouse as cloth; the skin under it waits for the release.
+            self.handler.defer_skin = option.slider in GARMENTS
+            try:
+                self.set_slider(option, value)
+            finally:
+                self.handler.defer_skin = False
 
     def choose(self, option: Option) -> None:
         if option.command.startswith("@"):  # the brush's own settings: nothing of the character changes

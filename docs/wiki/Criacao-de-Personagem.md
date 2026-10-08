@@ -170,8 +170,17 @@ para cima ou para baixo, até 8 cm (`body_shape.GARMENT_REACH`):
 - Onde está a borda vem da peça encaixada (`CharacterModel.garment_edges`: o ponto mais baixo e o mais alto, fora as
   mangas). A mudança é feita na pose de encaixe, junto com os ajustes do corpo (`CharacterAnimator._reshape`), sem
   encaixar a roupa de novo.
-- A pele acompanha (`hsr.move_mask_edge`): a que a borda descobre volta a ser desenhada e a que ela passa a cobrir é
-  escondida, com uma folga de 1 a 1,5 cm para não abrir buraco na borda.
+- **A pele sob a peça é calculada de novo** (`hsr.recut_mask_edges`): a peça encaixada é movida como o personagem a
+  mostra e raios saem da cage do corpo através dela (`ray_hidden_mask`, o mesmo cálculo das peças sem máscara do
+  Roblox). Da borda para fora, e para dentro da peça até onde o tecido se moveu (20 cm), a máscara passa a ser o que
+  os raios acham; o resto dela e os braços ficam como eram. Pele que estava à mostra só é escondida onde está coberta
+  em toda a volta: um cordão ou uma alça passando sobre a pele também é atingido por um raio, e esconder a pele sob
+  ele abria um buraco.
+- **Enquanto o controle é arrastado só o tecido se move**; a pele é recortada ao soltar (cerca de meio segundo na
+  primeira vez de cada valor). O recorte da pele em si ficou imediato: onde cada vértice da pele fica na cage é
+  guardado à parte (`_NEAREST`) e cada recorte é só uma conta sobre isso, com o mesmo resultado de
+  `hsr.cull_hidden_triangles`. Antes, cada passo do arraste refazia essa busca, cada vez mais devagar, e o controle
+  parecia travado.
 - Valem para a peça de cima e a de baixo (um vestido é a peça de cima, e a barra dele é a da saia); jaqueta, sapatos e
   peças extras não têm esses controles. A borda só sobe e desce: ao descer sobre uma parte mais larga do corpo o
   tecido não alarga, e a pele pode aparecer.

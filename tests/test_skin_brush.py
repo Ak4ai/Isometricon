@@ -341,3 +341,55 @@ def test_the_brush_reaches_a_point_out_of_sight_through_the_skin_under_it():
     assert seen.pick(100, 100, 4) == []
     weak = (skin[0], skin[1], np.array([[0.45, 0.45, 0.1], [0.4, 0.3, 0.3]]))               # a point that barely decides it is left
     assert skin_brush.BrushView(CAGE, None, np.identity(4), look, projection, (400, 0, 1200, 800), skin=weak).pick(825, 290, 4) == [0, 2]
+
+
+def tube(low, high, radius=0.25, sides=12):
+    """A tube of cloth around the vertical axis, from the height ``low`` to ``high``."""
+    turn = np.linspace(0.0, 2 * np.pi, sides, endpoint=False)
+    ring = lambda y: np.column_stack((radius * np.cos(turn), np.full(sides, y), radius * np.sin(turn)))
+    heights = np.linspace(low, high, 7)
+    vertices = np.concatenate([ring(y) for y in heights])
+    faces = []
+    for level in range(len(heights) - 1):
+        for k in range(sides):
+            a, b = level * sides + k, level * sides + (k + 1) % sides
+            faces += [[a, b, a + sides], [b, b + sides, a + sides]]
+    return vertices, np.array(faces)
+
+
+def test_the_mask_of_a_moved_edge_is_computed_again_from_the_garment():
+    from src.clothing.hsr import recut_mask_edges
+    cage, cage_faces = tube(0.6, 1.6, radius=0.15, sides=10)                               # a body: a narrower tube inside
+    parts = np.array(["UpperTorso"] * len(cage))
+    cloth, faces = tube(1.0, 1.5, radius=0.20)                                              # a top from 1.0 (its hem) to 1.5
+    y = cage[:, 1]
+    hidden = (y >= 1.0) & (y <= 1.5)
+    same = recut_mask_edges(hidden, cage, cage_faces, parts, cloth, faces, [(1.0, 0.0, True)])
+    assert same.tolist() == hidden.tolist()                                                 # nothing moved: the mask given
+    raised = recut_mask_edges(hidden, cage, cage_faces, parts, cloth, faces, [(1.0, 0.15, True)])
+    assert hidden[np.isclose(y, 1.1)].all() and not raised[np.isclose(y, 1.1)].any()        # the skin the hem left shows
+    assert raised[(y > 1.2) & (y < 1.45)].all()
+    lowered = recut_mask_edges(hidden, cage, cage_faces, parts, cloth, faces, [(1.0, -0.08, True)])
+    assert lowered.sum() >= hidden.sum() and lowered[(y > 1.0) & (y < 1.45)].all()          # none lost; more of it covered
+    assert not lowered[y < 0.85].any()                                                      # and nothing below where the hem now is
+    arms = np.array(["LeftUpperArm"] * len(cage))
+    assert recut_mask_edges(hidden, cage, cage_faces, arms, cloth, faces, [(1.0, 0.15, True)]).tolist() == hidden.tolist()
+    assert hidden.sum() == ((y >= 1.0) & (y <= 1.5)).sum()                                  # the mask given is not changed
+
+
+def test_a_garment_slider_moves_the_cloth_while_dragged_and_cuts_the_skin_on_release():
+    editor, sent = make_editor()
+    calls = []
+    editor.handler.recut_skin = lambda: calls.append("recut")
+    deferred = []
+    execute = editor.handler.execute
+    editor.handler.execute = lambda command: (deferred.append(getattr(editor.handler, "defer_skin", False)), execute(command))[1]
+    rect = next(r for r, kind, payload in editor.layout(*SIZE) if kind == "option" and payload.slider == "blusa_barra")
+    y = (rect[1] + rect[3]) / 2
+    assert editor.handle_mouse_button(rect[0] + 140, y, LEFT, PRESS)
+    editor.handle_cursor(rect[0] + 170, y)
+    editor.handle_cursor(rect[0] + 200, y)
+    assert deferred and all(deferred) and calls == []                                       # dragged: cloth only
+    assert editor.handle_mouse_button(rect[0] + 200, y, LEFT, RELEASE)
+    assert deferred[-1] is False and calls == ["recut"] and editor.handler.defer_skin is False   # let go: the skin, once
+    assert sent[-1].startswith("/skin ajuste blusa_barra ")

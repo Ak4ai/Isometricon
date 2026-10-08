@@ -806,7 +806,8 @@ class SkinCommandHandler:
             return missing
         from src.clothing.body_shape import ADJUSTMENTS, DEFAULTS, GARMENTS, REDRAWS_FACE, REDRAWS_SHADOW
         model = self.character_model
-        recut = lambda: getattr(model, "refresh_skin", lambda: False)() or model.reload()  # the skin under a moved edge
+        # The skin under a moved edge is cut again, unless the caller does that when it is done (a slider being dragged).
+        recut = (lambda: None) if getattr(self, "defer_skin", False) else self.recut_skin
         custom = self.character_model.customization
         FACE = REDRAWS_FACE | (REDRAWS_SHADOW if getattr(custom, "nose_shadow", "legado") == "calculada" else set())
         current = dict(getattr(custom, "body_adjust", None) or {})
@@ -842,6 +843,12 @@ class SkinCommandHandler:
             if name in GARMENTS and changed:
                 recut()
         return True, f"[Ajuste] {ADJUSTMENTS[name]}: {round(value):+d}.", GREEN
+
+    def recut_skin(self) -> None:
+        """Recorta de novo a pele sob as roupas (rápido), ou reconstrói o personagem se não der."""
+        model = self.character_model
+        if model is not None and not getattr(model, "refresh_skin", lambda: False)():
+            model.reload()
 
     def nose(self, args: List[str]) -> Result:
         missing = self._need_model()

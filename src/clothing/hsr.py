@@ -371,6 +371,60 @@ def move_mask_edge(hidden: np.ndarray, cage_points: np.ndarray, parts, edge: flo
     return hidden
 
 
+
+
+def garment_mesh(fitted_obj_path):
+    """(vertices in body-mesh coordinates, triangles) of a fitted garment OBJ."""
+    vertices, faces = [], []
+    with open(fitted_obj_path, encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            if line.startswith("v "):
+                vertices.append([float(x) for x in line.split()[1:4]])
+            elif line.startswith("f "):
+                ids = [int(token.split("/")[0]) - 1 for token in line.split()[1:]]
+                faces += [[ids[0], ids[i], ids[i + 1]] for i in range(1, len(ids) - 1)]
+    return engine_to_body_mesh(np.asarray(vertices, dtype=np.float64).reshape(-1, 3)), np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+
+
+def recut_mask_edges(hidden: np.ndarray, cage_points: np.ndarray, cage_faces: np.ndarray, parts, vertices: np.ndarray,
+                     faces: np.ndarray, moves, keep=None) -> np.ndarray:
+    """A garment's mask after its edges were moved, computed again from the garment as it is now.
+
+    ``moves``: (height of the edge, metres it was moved up, whether it is the lower edge) of each
+    edge moved. The garment is moved as the character shows it (``body_shape.move_edge``; ``keep``:
+    its vertices that move, a top's sleeves staying on the arms) and rays are cast from the body
+    cage through it (``ray_hidden_mask``): from each moved edge outwards, and into the garment as
+    far as its cloth moved with the edge (``EDGE_FALLOFF``), the mask is what the rays find (skin
+    newly hidden only where it is covered all around); the rest of it, and the arms, stay as they were.
+    """
+    from .body_shape import EDGE_FALLOFF, move_edge
+    hidden = np.array(hidden, dtype=bool, copy=True)
+    moves = [(float(edge), float(shift), bool(lower)) for edge, shift, lower in moves if shift]
+    if not moves or cage_faces is None or not len(faces):
+        for edge, shift, lower in moves:
+            hidden = move_mask_edge(hidden, cage_points, parts, edge, shift, lower)
+        return hidden
+    moved = np.asarray(vertices, dtype=np.float64)
+    for edge, shift, lower in moves:
+        moved = move_edge(moved, edge, shift, lower, keep)
+    covered = ray_hidden_mask(cage_points, cage_faces, moved, faces)
+    # Skin that was showing is hidden only where the cloth covers it and all around it: a string or
+    # a strap passing over the skin is met by a ray too, and hiding the skin under it leaves a hole.
+    beside_bare = np.zeros(len(covered), dtype=bool)
+    cage = np.asarray(cage_faces)
+    for a, b in ((0, 1), (1, 2), (2, 0)):
+        np.logical_or.at(beside_bare, cage[:, a], ~covered[cage[:, b]])
+        np.logical_or.at(beside_bare, cage[:, b], ~covered[cage[:, a]])
+    covered = np.where(hidden, covered, covered & ~beside_bare)
+    y = np.asarray(cage_points, dtype=np.float64)[:, 1]
+    body = np.ones(len(hidden), dtype=bool) if parts is None else \
+        np.array(["Arm" not in str(name) and "Hand" not in str(name) for name in parts])
+    for edge, shift, lower in moves:
+        zone = body & ((y < max(edge, edge + shift) + EDGE_FALLOFF) if lower else (y > min(edge, edge + shift) - EDGE_FALLOFF))
+        hidden[zone] = covered[zone]
+    return hidden
+
+
 MIRROR_REACH = 0.005  # metres within which a cage point is the mirror of another, across the middle of the body
 
 
