@@ -17,6 +17,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.clothing.body_shape import ADJUSTMENTS
+from src.clothing.nose import STYLE_NAMES as NOSE_STYLE_NAMES
 from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, OUTFIT_PRESETS, SKIN_PRESETS, CharacterModel
 from src.clothing.customization import (
     AvatarCustomization,
@@ -658,9 +659,19 @@ class SkinCommandHandler:
         missing = self._need_model()
         if missing:
             return missing
+        from src.clothing.nose import BLOCK, STYLE_NAMES
         value = args[0].lower() if args else ""
+        custom = self.character_model.customization
+        if value in STYLE_NAMES:
+            before = getattr(custom, "nose_style", "padrao")
+            hidden = not custom.should_render_3d_nose
+            custom.nose_style = value
+            if hidden or (before == BLOCK) != (value == BLOCK):
+                # No nose on the model yet, or the old block nose (a mesh of its own): rebuilt.
+                self._change(lambda c: setattr(c, "has_3d_nose", True))
+            return True, f"[Nariz] Formato {value.replace('_', ' ')}.", GREEN
         if value not in ("sim", "nao", "não", "on", "off"):
-            return False, "[Erro] Uso: /skin nariz <sim|nao>", RED
+            return False, f"[Erro] Uso: /skin nariz <sim|nao|{'|'.join(STYLE_NAMES)}>", RED
         shown = value in ("sim", "on")
         self._change(lambda c: setattr(c, "has_3d_nose", shown))
         return True, f"[Nariz] {'Com' if shown else 'Sem'} nariz.", GREEN
@@ -727,8 +738,8 @@ SKIN_COMMANDS: List[Command] = [
             list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"], "Aparência"),
     Command(("boca", "mouth"), "/skin boca <estilo>", "estilo da boca", SkinCommandHandler.mouth,
             ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem"], "Aparência"),
-    Command(("nariz", "nose"), "/skin nariz <sim|nao>", "nariz 3D (os ajustes ficam em /skin ajuste nariz_...)",
-            SkinCommandHandler.nose, ["sim", "nao"], "Aparência"),
+    Command(("nariz", "nose"), "/skin nariz <sim|nao|formato>", "nariz 3D e seu formato (ajustes em /skin ajuste nariz_...)",
+            SkinCommandHandler.nose, ["sim", "nao"] + list(NOSE_STYLE_NAMES), "Aparência"),
     Command(("sobrancelha", "eyebrows"), "/skin sobrancelha <padrao|grossa|decidida|sem>", "estilo das sobrancelhas",
             SkinCommandHandler.eyebrows, list(EYEBROWS), "Aparência"),
     Command(("ajuste", "adjust"), "/skin ajuste <nome> <-100 a 100> | reset", "proporções do corpo e do rosto",

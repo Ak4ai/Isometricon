@@ -64,10 +64,17 @@ roupa e cabelo (`src/clothing/body_shape.py`).
   aproximar o limite é 3 mm: mais que isso a pele atravessa a roupa justa.
 - **Olhos e sobrancelhas** agem na textura da cabeça: a camada é escalada, erguida ou afastada antes de ser colada
   (`customization.place_face_layer`).
-- **Nariz:** a malha é a do modelo masculino antigo (objeto `nariz.002`, guardada em `src/clothing/nose.py`),
-  posta no rosto de cada cabeça (`nose.rows_for`) e presa a ela. Os corpos atuais não traziam o nariz: ele tinha
-  sumido na troca dos arquivos de corpo. Tamanho, largura, projeção e altura mudam a malha em torno do ponto onde
-  ela se apoia no rosto (`body_shape.nose_shape`), sem reconstruir o personagem.
+- **Nariz:** os corpos atuais não traziam o nariz (ele tinha sumido na troca dos arquivos de corpo). O nariz é
+  gerado por parâmetros (`src/clothing/nose.py`, `NoseShape` e `build`), com as medidas do nariz do modelo masculino
+  antigo como base: cortes ao longo do dorso, cada um com a largura no rosto, a largura do dorso e a projeção. É
+  posto no rosto de cada cabeça (`styled_rows`) e preso a ela.
+- **Formatos de nariz** (`/skin nariz <formato>`, grupo "Formato do nariz"): padrão, projetado, ponta larga, narinas
+  largas, aquilino (ponte curva para fora), arrebitado (ponte para dentro e ponta levantada), fino, largo, botão,
+  longo, e bloco (a malha antiga, objeto `nariz.002`, como era). Os formatos gerados têm os mesmos triângulos, então
+  trocar entre eles muda a malha no lugar; só o bloco reconstrói o personagem. Para um formato novo, acrescente
+  uma entrada em `nose.NOSE_STYLES`.
+- **Ajustes do nariz:** tamanho, largura, projeção e altura valem por cima de qualquer formato, em torno do ponto
+  onde o nariz se apoia no rosto (`body_shape.nose_shape`), sem reconstruir o personagem.
 - **Sombra do nariz:** um trecho um pouco mais escuro pintado na textura do rosto, entre os olhos, como na textura
   antiga da cabeça. A malha do nariz usa esse pedaço da textura, então escurece junto. O controle vai de sem
   sombra (-100) ao dobro (+100), e a sombra acompanha o tamanho, a largura e a altura do nariz.
