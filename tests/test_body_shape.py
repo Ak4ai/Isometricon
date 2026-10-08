@@ -535,3 +535,17 @@ def test_contour_is_chosen_by_command():
     assert handler.execute("/skin maquiagem batom rosa")[0] and model.customization.makeup == {"contorno": "marcado", "batom": "rosa"}
     assert handler.execute("/skin maquiagem contorno sem")[0] and model.customization.makeup == {"batom": "rosa"}
     assert not handler.execute("/skin maquiagem contorno forte")[0]
+
+
+def test_the_female_face_has_no_shading_under_it_unless_it_is_asked_for():
+    from src.clothing.customization import BodyType
+    woman, man = AvatarCustomization(body_type=BodyType.FEMALE), AvatarCustomization(body_type=BodyType.MALE)
+    assert woman.face_adjust("rosto_sombra") == -1.0 and man.face_adjust("rosto_sombra") == 0.0
+    assert woman.body_adjust == {} and woman.resolved_body_adjust == {"rosto_sombra": -1.0} and man.resolved_body_adjust == {}
+    assert woman.get_cache_key() != man.get_cache_key()
+    model = SimpleNamespace(customization=woman, reload=lambda: None, refresh_face=lambda: True)
+    handler = SkinCommandHandler(character_model=model)
+    assert handler.execute("/skin ajuste rosto_sombra 0")[0]
+    assert woman.body_adjust == {"rosto_sombra": 0.0} and woman.face_adjust("rosto_sombra") == 0.0   # a zero asked for is kept
+    assert handler.execute("/skin ajuste peito 40")[0] and woman.face_adjust("rosto_sombra") == 0.0
+    assert handler.execute("/skin ajuste reset")[0] and woman.face_adjust("rosto_sombra") == -1.0      # back to the body's default

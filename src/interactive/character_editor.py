@@ -549,7 +549,8 @@ class CharacterEditor:
         """O valor de um ajuste, de -100 a 100 (o que está sendo arrastado, enquanto é arrastado)."""
         if self._slider is not None and self._slider[0] is option:
             return self._slider_value
-        adjust = getattr(self._custom(), "body_adjust", None) or {}
+        custom = self._custom()
+        adjust = getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}
         return int(round(float(adjust.get(option.slider, 0.0)) * 100))
 
     def set_slider(self, option: Option, value: int) -> None:

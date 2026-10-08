@@ -79,6 +79,8 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   que elas usam. Para menos, as normais dessas facetas viram a da frente do rosto (`body_shape.face_shading`) e a
   faixa clareia até a cor da pele (`CHIN_BAND`): em -100 o rosto fica liso. Para mais, as facetas escurecem pela cor
   do vértice e a faixa escurece. A frente do rosto não muda.
+  **No corpo feminino o padrão é -100** (`body_shape.DEFAULTS`, lido por `resolved_body_adjust`): vale enquanto o
+  controle não for mexido, um zero escolhido fica guardado, e `/skin ajuste reset` volta ao padrão do corpo.
 - **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra
   é uma mancha suave de cor sobre cada pálpebra, por baixo do desenho do olho. Blush e sardas são as camadas de
   detalhe do rosto que já existiam. Tudo é refeito na textura da cabeça, sem recarregar o personagem.
