@@ -173,6 +173,7 @@ class AvatarCustomization:
     hair_2d_style: Optional[Union[Hair2DStyle, str]] = None
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
+    eye_shape: str = "padrao"   # formato dos olhos anime (ver eye_shapes.SHAPE_NAMES)
     # Cor da íris do outro olho (o esquerdo do personagem), para olhos de cores diferentes; None = igual.
     iris_color_other: Optional[Union[IrisColor, str, Tuple[int, int, int]]] = None
     # Maquiagem: "batom" e "sombra", cada um com o nome de uma cor de MAKEUP_COLORS.
@@ -367,7 +368,7 @@ class AvatarCustomization:
             f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
             f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_altura')]}_"
             f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
-            f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}"
+            f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}_es_{self.eye_shape}"
         )
 
     @property
@@ -573,6 +574,9 @@ class LayeredHeadCompositor:
 
                     eye_img = Image.fromarray(arr_e)
 
+            if eye_img is not None and eye_style != "classic":
+                from .eye_shapes import shape_eyes
+                eye_img = shape_eyes(eye_img, getattr(cust, "eye_shape", "padrao"))
             if eye_img is not None:
                 placed = place_face_layer(
                     eye_img, 1.0 + EYE_SIZE * cust.face_adjust("olhos_tamanho"), EYE_LIFT * cust.face_adjust("olhos_altura"),

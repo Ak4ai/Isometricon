@@ -27,6 +27,7 @@ from src.clothing.layer_clearance import fitted_asset_type
 from src.interactive.skin_commands import (
     BODIES,
     CLOTHING_DIR,
+    EYE_SHAPE_NAMES,
     EYEBROWS,
     EYE_COLORS,
     EYE_STYLES,
@@ -250,6 +251,11 @@ class CharacterEditor:
             return [
                 Group("Olhos", [Option(n.capitalize(), f"/skin olhos {n}", selected=lambda m, v=EYE_STYLES[n]: custom() is not None and custom().resolved_eye_style == _value(v))
                                 for n in PORTUGUESE_EYE_STYLES]),
+                Group("Formato dos olhos", [
+                    Option(n.replace("_", " ").capitalize(), f"/skin olhos {n}",
+                           selected=lambda m, n=n: custom() is not None and getattr(custom(), "eye_shape", "padrao") == n
+                           and custom().resolved_eye_style not in ("classic", "blank"))
+                    for n in EYE_SHAPE_NAMES]),
                 Group("Cor dos olhos", [Option(n.capitalize(), f"/skin olhos {n}", color=EYE_RGB[n],
                                                selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(custom().iris_color) == _value(v))
                                         for n in EYE_COLORS]),

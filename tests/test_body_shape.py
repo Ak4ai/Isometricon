@@ -334,3 +334,48 @@ def test_skin_olho_and_maquiagem_set_what_the_face_is_drawn_with():
     assert handler.execute("/skin maquiagem blush alternar")[0] and custom.resolved_face_detail == "freckles"
     assert handler.execute("/skin maquiagem batom fluorescente")[0] is False
     assert handler.execute("/skin maquiagem sem")[0] and custom.makeup == {} and custom.resolved_face_detail == "none"
+
+
+def test_eye_shapes_come_from_the_eye_the_face_already_has():
+    from src.clothing.eye_shapes import EDGE, SHAPE_NAMES, shape_eyes
+    base = Image.open("assets/models/textures/layers/eyes/eye_anime_blue.png").convert("RGBA")
+    assert shape_eyes(base, "padrao") is base and shape_eyes(base, "formato_que_nao_existe") is base
+    box = base.getbbox()
+    middle = (box[0] + box[2]) // 2
+    left = lambda image: image.crop((0, 0, middle, image.height)).getbbox()
+    plain = left(base)
+    height = lambda name: left(shape_eyes(base, name))[3] - left(shape_eyes(base, name))[1]
+    width = lambda name: left(shape_eyes(base, name))[2] - left(shape_eyes(base, name))[0]
+    assert height("arredondado") > plain[3] - plain[1] + 6 and width("arredondado") < plain[2] - plain[0]
+    assert height("estreito") < plain[3] - plain[1] - 6 and height("fechado") < plain[3] - plain[1] - 6
+    assert height("grande") > plain[3] - plain[1] and width("grande") > plain[2] - plain[0]
+    assert width("feminino") > plain[2] - plain[0]                      # the lashes reach further out
+    palette = {tuple(p) for p in np.array(base).reshape(-1, 4).tolist()}
+    for name in SHAPE_NAMES:
+        shaped = shape_eyes(base, name)
+        assert shaped.size == base.size
+        assert left(shaped)[3] == plain[3]                                  # every shape rests on the same line
+        assert {tuple(p) for p in np.array(shaped).reshape(-1, 4).tolist()} <= palette | {(0, 0, 0, 0)}  # no new colours: not blurred
+        right = shaped.crop((middle, 0, shaped.width, shaped.height)).getbbox()   # the other eye is reshaped too
+        assert right is not None and right[3] == plain[3]
+    soft = np.array(shape_eyes(base, "suave"))
+    drawn = np.nonzero(soft[:, :, 3] > 0)[0]
+    assert drawn.min() >= plain[1] + 8                                      # the spikes above the lid are gone
+    lower = soft[plain[3] - 8:plain[3], plain[0]:plain[0] + 26]
+    assert not ((lower[:, :, 3] > 0) & (lower[:, :, :3].astype(int).mean(axis=2) < EDGE)).any()  # and the dots under it
+
+
+def test_skin_olhos_takes_a_shape_as_well_as_a_colour_or_a_style():
+    from src.clothing.customization import EyeStyle, HeadAtlasBuilder
+    model = SimpleNamespace(customization=AvatarCustomization(eye_style=EyeStyle.CLASSIC), reload=lambda: None)
+    handler = SkinCommandHandler(character_model=model)
+    custom = model.customization
+    assert handler.execute("/skin olhos arredondado")[0] and custom.eye_shape == "arredondado"
+    assert custom.resolved_eye_style == "anime"                             # the shapes are of the anime eye
+    assert handler.execute("/skin olhos formato fechado")[0] and custom.eye_shape == "fechado"
+    assert handler.execute("/skin olhos verde")[0] and custom.eye_shape == "fechado"   # the colour leaves the shape
+    assert handler.execute("/skin olhos quadrado")[0] is False
+    builder = HeadAtlasBuilder()
+    closed = np.array(builder.build_atlas(custom).convert("RGB"), dtype=int)
+    custom.eye_shape = "padrao"
+    assert (closed != np.array(builder.build_atlas(custom).convert("RGB"), dtype=int)).any()

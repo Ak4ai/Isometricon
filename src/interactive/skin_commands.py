@@ -17,6 +17,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.clothing.body_shape import ADJUSTMENTS
+from src.clothing.eye_shapes import SHAPE_NAMES as EYE_SHAPE_NAMES
 from src.clothing.nose import STYLE_NAMES as NOSE_STYLE_NAMES
 from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, OUTFIT_PRESETS, SKIN_PRESETS, CharacterModel
 from src.clothing.customization import (
@@ -259,13 +260,24 @@ class SkinCommandHandler:
         return True, f"[Skin] Tom de pele: {value}.", GREEN
 
     def eyes(self, args: List[str]) -> Result:
+        from src.clothing.eye_shapes import SHAPE_NAMES
         value = args[0].lower() if args else ""
+        if value in ("formato", "forma") and len(args) > 1:
+            value = args[1].lower()
+        if value in SHAPE_NAMES and value not in EYE_STYLES:
+            def shape(c):
+                c.eye_shape = value
+                if c.resolved_eye_style in ("classic", "blank"):
+                    c.eye_style = EyeStyle.ANIME  # os formatos são do olho anime
+            self._change(shape, face=True)
+            return True, f"[Skin] Olhos: formato {value.replace('_', ' ')}.", GREEN
         if value in EYE_STYLES:
             self._change(lambda c: setattr(c, "eye_style", EYE_STYLES[value]), face=True)
             return True, f"[Skin] Olhos: estilo {value}.", GREEN
         color = EYE_COLORS.get(value) or _english(IrisColor).get(value)
         if color is None:
-            return False, f"Uso: /skin olhos <cor: {', '.join(EYE_COLORS)} | estilo: anime, piscando, classico, sem>", GOLD
+            return False, (f"Uso: /skin olhos <cor: {', '.join(EYE_COLORS)} | estilo: anime, piscando, classico, sem | "
+                           f"formato: {', '.join(SHAPE_NAMES)}>"), GOLD
 
         def apply(c):
             c.iris_color = color
@@ -821,8 +833,8 @@ SKIN_COMMANDS: List[Command] = [
     Command(("corpo", "body"), "/skin corpo <feminino|masculino>", "troca o corpo", SkinCommandHandler.body,
             ["feminino", "masculino"], "Aparência"),
     Command(("pele", "tone"), "/skin pele <tom>", "tom de pele", SkinCommandHandler.tone, list(SKIN_TONES), "Aparência"),
-    Command(("olhos", "eyes"), "/skin olhos <cor|estilo>", "cor ou estilo dos olhos", SkinCommandHandler.eyes,
-            list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"], "Aparência"),
+    Command(("olhos", "eyes"), "/skin olhos <cor|estilo|formato>", "cor, estilo ou formato dos olhos", SkinCommandHandler.eyes,
+            list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"] + list(EYE_SHAPE_NAMES), "Aparência"),
     Command(("olho", "eye"), "/skin olho <direito|esquerdo> <cor>", "cor de um olho só", SkinCommandHandler.eye,
             {"direito": list(EYE_COLORS), "esquerdo": list(EYE_COLORS)}, "Aparência"),
     Command(("maquiagem", "makeup"), "/skin maquiagem <batom|sombra> <cor|sem> | <blush|sardas> <sim|nao> | sem",

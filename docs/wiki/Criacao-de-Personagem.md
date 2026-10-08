@@ -51,6 +51,12 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 
 ## 👁️ Olhos, maquiagem e pele
 
+- **Formatos de olho** (`/skin olhos <formato>`, grupo "Formato dos olhos"): padrão, arredondado, grande, feminino
+  (cílios mais longos e canto levantado), fechado, sonolento, estreito, puxado, caído, suave (sem as pontas de
+  cílio) e suave redondo. São gerados a partir do desenho de olho anime que já existia
+  (`src/clothing/eye_shapes.py`): o globo é esticado ou achatado, a pálpebra desce, as colunas se deslocam, cílios
+  são acrescentados ou tirados, em cada olho por si e sem borrar os pixels. Valem para o olho anime (não para o
+  clássico) e seguem a cor de cada íris. Um formato novo é uma entrada em `EYE_SHAPES`.
 - **Uma cor para cada olho:** em Rosto, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
   personagem) pintam um só (`/skin olho <direito|esquerdo> <cor>`, `customization.iris_color_other`).
 - **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra
