@@ -22,6 +22,7 @@ uniform vec3 u_AmbientColor; // Luz ambiente
 uniform float u_Vitiligo;
 uniform float u_VitiligoSeed;
 uniform vec3 u_SkinTone;
+uniform float u_Alpha = 1.0;  // below 1: a see-through part (the clothes, while the skin under them is edited)
 
 float hash3(vec3 p)
 {
@@ -75,5 +76,5 @@ void main()
     }
     vec3 result = lighting * albedo;
 
-    FragColor = vec4(result, texColor.a);
+    FragColor = vec4(result, texColor.a * u_Alpha);
 }

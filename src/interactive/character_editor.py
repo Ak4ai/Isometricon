@@ -101,6 +101,7 @@ class Option:
     image: Optional[str] = None                   # a picture file (a garment)
     selected: Callable[[Any], bool] = lambda model: False
     slider: Optional[str] = None                  # an adjustment of body_shape, set from -100 to 100
+    check: bool = False                           # drawn with a box that is ticked when selected
 
     @property
     def kind(self) -> str:
@@ -222,7 +223,10 @@ class CharacterEditor:
         # The skin brush: what it does (None: off), its radius, whether it paints both sides, the
         # points taken by the stroke being made, and what the main loop gives it each frame: a
         # function from the cursor to the points under it, and the points to show on the character.
-        self.brush: Optional[str] = None
+        self.hsr_edit = False  # the edit mode of the skin under the clothes: painted skin, clear clothes, the brush
+        self.ctrl = False      # Ctrl is held (the main loop says): the brush does the opposite
+        self._stroke_brush = ""
+        self.brush: Optional[str] = BRUSHES[0][0]
         self.brush_size = BRUSH_SIZES[1][1]
         self.brush_mirror = False
         self.picker: Optional[Callable[..., Any]] = None
@@ -361,7 +365,9 @@ class CharacterEditor:
                 Group("Pele sob a roupa: automático", [
                     Option("Espelhar os lados", "/skin hsr espelhar sim", selected=mirrored),
                     Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),
-                Group("Pincel de pele (arraste no personagem)", [Option("Desligado", "@pincel", selected=lambda m: self.brush is None)] + [
+                Group("Edição da pele sob a roupa (HSR)", [
+                    Option("Editar pele", "@hsr", selected=lambda m: self.hsr_edit, check=True)]),
+                Group("Pincel (esquerdo pinta, Ctrl inverte, direito gira)", [
                     Option(label, f"@pincel {name}", selected=lambda m, name=name: self.brush == name) for name, label in BRUSHES]),
                 Group("Tamanho do pincel", [Option(label, f"@tamanho {size}", selected=lambda m, size=size: self.brush_size == size)
                                             for label, size in BRUSH_SIZES]),
@@ -413,8 +419,23 @@ class CharacterEditor:
 
     @property
     def brushing(self) -> bool:
-        """O pincel de pele está ligado e na seção dele: o arraste no personagem pinta."""
-        return self.is_open and self.brush is not None and self.sections[self.active].title == FINE_SECTION
+        """O modo de edição da pele está ligado, com um pincel: o arraste no personagem pinta."""
+        return self.hsr_editing and self.brush is not None
+
+    @property
+    def hsr_editing(self) -> bool:
+        """O modo de edição da pele está ligado e a tela está na seção dele."""
+        return self.is_open and self.hsr_edit and self.sections[self.active].title == FINE_SECTION
+
+    def _sync_edit(self) -> None:
+        """Põe o modelo no modo de edição da pele, ou tira (ao sair da seção ou fechar a tela)."""
+        model = self.model
+        wanted = self.hsr_editing
+        if model is None or bool(getattr(model, "hsr_edit", False)) == wanted:
+            return
+        model.hsr_edit = wanted
+        if not getattr(model, "refresh_skin", lambda: False)() and hasattr(model, "reload"):
+            model.reload()
 
     def _paint(self, x: float, y: float) -> None:
         if self._stroke is not None and self.picker is not None:
@@ -441,6 +462,8 @@ class CharacterEditor:
         self.is_open = False
         self._dragging = False
         self.hover = None
+        self._stroke = None
+        self._sync_edit()  # the game shows the character as it is, not as it is edited
 
     def refresh_catalog(self) -> None:
         """Relê os itens baixados e pede as miniaturas dos que ainda não têm."""
@@ -463,11 +486,14 @@ class CharacterEditor:
     def select_section(self, index: int) -> None:
         if 0 <= index < len(self.sections) and index != self.active:
             self.active, self.scroll, self._groups, self.dirty = index, 0, None, True
+            self._stroke = None
+            self._sync_edit()
 
     def update(self, dt: float) -> None:
         """Gira o personagem e nota o que mudou por fora (comando do chat, roupa que terminou de encaixar)."""
         if not self.is_open:
             return
+        self._sync_edit()
         if self.turntable.get("active") and not self._dragging:
             self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + dt * SPIN_DEGREES) % 360.0
         busy = self.handler.busy_status or ""
@@ -549,8 +575,8 @@ class CharacterEditor:
         """Clique esquerdo: escolhe no painel, ou começa a girar o personagem. True se o evento foi usado."""
         if not self.is_open:
             return False
-        if button == 1 and self.brushing and not self.over_panel(x) and action != 0:
-            # With the brush on, the left button paints: the right one turns the character.
+        if button == 1 and self.hsr_editing and not self.over_panel(x) and action != 0:
+            # In the edit mode the left button paints: the right one turns the character.
             self._dragging, self._drag_x, self._drag_y = True, x, y
             self._was_spinning = bool(self.turntable.get("active"))
             return True
@@ -564,7 +590,7 @@ class CharacterEditor:
             if self._stroke is not None:
                 points, self._stroke = sorted(self._stroke), None
                 if points:
-                    self.choose(Option("", f"/skin hsr {self.brush} {','.join(str(p) for p in points)}"))
+                    self.choose(Option("", f"/skin hsr {self._stroke_brush} {','.join(str(p) for p in points)}"))
                 return True
             if self._slider is not None:
                 option, self._slider = self._slider[0], None
@@ -581,6 +607,9 @@ class CharacterEditor:
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
             if self.brushing:
+                # Ctrl paints the opposite, as in Blender: showing with the brush that hides, and back.
+                opposite = {"esconder": "mostrar", "mostrar": "esconder"}
+                self._stroke_brush = opposite.get(self.brush, self.brush) if self.ctrl else self.brush
                 self._stroke = set()
                 self._paint(x, y)
                 return True
@@ -637,13 +666,16 @@ class CharacterEditor:
     def choose(self, option: Option) -> None:
         if option.command.startswith("@"):  # the brush's own settings: nothing of the character changes
             name, _, value = option.command[1:].partition(" ")
-            if name == "pincel":
-                self.brush = value or None
-                if self.brush is not None:
+            if name == "hsr":
+                self.hsr_edit = not self.hsr_edit
+                if self.hsr_edit:
                     self.turntable["active"] = self._was_spinning = False  # a still character to paint on
-                    self.message = ("Arraste sobre o personagem para pintar. Botão direito gira."
+                    self.message = ("Esquerdo pinta, Ctrl inverte, direito gira o personagem."
                                     if getattr(self.model, "hsr_cage", None) is not None
-                                    else "Vista uma roupa: o pincel corrige a pele sob ela.")
+                                    else "Vista uma roupa: a edição corrige a pele sob ela.")
+                self._sync_edit()
+            elif name == "pincel":
+                self.brush = value or BRUSHES[0][0]
             elif name == "tamanho":
                 self.brush_size = int(value)
             elif name == "simetria":
@@ -812,6 +844,15 @@ class CharacterEditor:
                     pen.line((x1 - 30, y0 + 26, x0 + 30, y0 + 54), fill=MUTED, width=2)
                 for k, line in enumerate(self._fit_text(pen, payload.label, small, CARD[0] - 8, 2)):
                     pen.text(((x0 + x1) // 2, y0 + 80 + k * 13), line, font=small, fill=TEXT, anchor="ma")
+            elif payload.check:
+                ticked = self.model is not None and payload.selected(self.model)
+                box = (x0 + 12, (y0 + y1) // 2 - 8, x0 + 28, (y0 + y1) // 2 + 8)
+                pen.rounded_rectangle(box, 3, fill=ACCENT if ticked else (14, 15, 19, 255), outline=ACCENT if ticked else MUTED)
+                if ticked:
+                    pen.line((box[0] + 3, box[1] + 8, box[0] + 7, box[1] + 12, box[0] + 13, box[1] + 4), fill=(20, 20, 24, 255), width=2)
+                pen.text((x0 + 36, (y0 + y1) // 2), self._fit_text(pen, payload.label, text, x1 - x0 - 44, 1)[0],
+                         font=text, fill=TEXT, anchor="lm")
+                continue
             else:
                 pen.text(((x0 + x1) // 2, (y0 + y1) // 2), self._fit_text(pen, payload.label, text, x1 - x0 - 10, 1)[0],
                          font=text, fill=TEXT, anchor="mm")
