@@ -367,7 +367,7 @@ class AvatarCustomization:
             f"m_{self.resolved_mouth_style}_eb_{self.resolved_eyebrow_style}_ebc_{self.resolved_eyebrow_color}_"
             f"h2_{self.resolved_hair_2d_style}_fd_{self.resolved_face_detail}_"
             f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
-            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_tamanho', 'sobrancelha_altura', 'sobrancelha_distancia')]}_"
+            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_tamanho', 'sobrancelha_altura', 'sobrancelha_distancia', 'rosto_sombra')]}_"
             f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
             f"ns_{self.nose_shadow}_{(self.nose_style, sorted((k, round(float(v), 3)) for k, v in (self.body_adjust or {}).items() if k.startswith('nariz_'))) if self.nose_shadow == 'calculada' else ''}_"
             f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}_es_{self.eye_shape}"
@@ -440,6 +440,17 @@ NOSE_SHADOW_GROWTH = (0.5, 0.6, 12.0)
 # nose's height, from its top, over which the shadow fades in (none at the top of the bridge).
 NOSE_CAST, NOSE_CONTACT, NOSE_CAST_FALL, NOSE_RIM, NOSE_FADE = 2.6, 0.55, (-0.85, 0.70), 2, 0.75
 NOSE_SHADOWS = ("legado", "calculada")
+# The band of darker skin under the face on the head atlas (the chin and the jaw take it): its
+# rows and columns, and how much darker it gets at the strongest shading.
+CHIN_BAND, CHIN_DARKER = (232, 256, 0, 256), 0.18
+# Contour makeup: how strongly each kind is laid on, the tone (a share of the skin's) of the
+# shade and of the light, and the strokes on the left half of the face (mirrored on the other):
+# (from, to, width) in pixels of the 512 px atlas. Under the cheekbone, down the temple, along the jaw.
+CONTOURS = {"suave": 0.30, "marcado": 0.52}
+CONTOUR_TONE, CONTOUR_LIGHT, CONTOUR_BLUR = 0.62, 1.10, 3.5
+CONTOUR_SHADE = (((26, 190), (84, 214), 9), ((14, 52), (14, 128), 16), ((30, 229), (104, 231), 5))
+CONTOUR_SHINE = (((40, 186), (88, 202), 4),)
+FACE_MIDDLE = 128.25
 
 
 class LayeredHeadCompositor:
@@ -494,6 +505,18 @@ class LayeredHeadCompositor:
 
         for ch in range(3):
             arr_skin[:, :, ch] = np.clip(arr_skin[:, :, ch] * factor[ch], 0, 255)
+
+        # The darker band of the chin and the jaw, lighter (down to the skin itself) or darker.
+        chin = cust.face_adjust("rosto_sombra")
+        if chin:
+            unit = arr_skin.shape[0] / 512.0
+            y0, y1, x0, x1 = (int(round(v * unit)) for v in CHIN_BAND)
+            band = arr_skin[y0:y1, x0:x1, :3]
+            if chin < 0:
+                band += (target_skin - band) * -chin
+            else:
+                band *= 1.0 - CHIN_DARKER * chin
+            arr_skin[y0:y1, x0:x1, :3] = np.clip(band, 0, 255)
 
         canvas = Image.fromarray(arr_skin.astype(np.uint8))
 
@@ -587,6 +610,25 @@ class LayeredHeadCompositor:
             dark = Image.new("RGBA", canvas.size, tuple(int(c * NOSE_SHADOW_TONE) for c in cust.skin_rgb_255) + (255,))
             dark.putalpha(mask)
             canvas.alpha_composite(dark)
+
+        # ---------------------------------------------------------
+        # 3.2 CONTORNO (maquiagem): sombra sob as maçãs do rosto, nas têmporas e no maxilar, e uma
+        # faixa de luz sobre as maçãs, esfumadas.
+        # ---------------------------------------------------------
+        contour = CONTOURS.get(str((cust.makeup or {}).get("contorno", "")).lower())
+        if contour:
+            unit = canvas.width / 512.0
+            for strokes, tone, strength in ((CONTOUR_SHADE, CONTOUR_TONE, contour), (CONTOUR_SHINE, CONTOUR_LIGHT, contour * 0.7)):
+                mask = Image.new("L", canvas.size, 0)
+                pen = ImageDraw.Draw(mask)
+                for (ax, ay), (bx, by), width in strokes:
+                    for side in (1.0, -1.0):  # the left half as given, and mirrored on the right
+                        points = [((FACE_MIDDLE + side * (x - FACE_MIDDLE)) * unit, y * unit) for x, y in ((ax, ay), (bx, by))]
+                        pen.line(points, fill=int(round(255 * strength)), width=max(1, int(round(width * unit))))
+                mask = mask.filter(ImageFilter.GaussianBlur(CONTOUR_BLUR * unit))
+                paint = Image.new("RGBA", canvas.size, tuple(int(min(c * tone, 255)) for c in cust.skin_rgb_255) + (255,))
+                paint.putalpha(mask)
+                canvas.alpha_composite(paint)
 
         # ---------------------------------------------------------
         # 4. OLHOS & TINGIMENTO DA ÍRIS (Eyes & Iris Tint)

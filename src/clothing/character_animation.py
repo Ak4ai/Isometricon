@@ -670,7 +670,8 @@ class CharacterAnimator:
         # block nose has a mesh of its own and asks for the model to be rebuilt.
         styled = self._styled_nose(nose_style, adjust)
         tinted = bool(body_shape.amount(adjust, "nariz_ponta_cor"))
-        warped = bulges or bool(loose) or nose or styled is not None or tinted
+        shaded = bool(body_shape.amount(adjust, "rosto_sombra"))
+        warped = bulges or bool(loose) or nose or styled is not None or tinted or shaded
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
@@ -679,6 +680,8 @@ class CharacterAnimator:
                     rows = styled.copy()
                 if nose and part.name == "nose":
                     rows[:, :3] = body_shape.nose_shape(rows[:, :3], adjust)
+                if shaded and part.name == "head":
+                    rows = body_shape.face_shading(rows, adjust)
                 if tinted and part.name == "nose":
                     from .nose import tip_colours
                     rows[:, 8:11] = tip_colours(rows, adjust)
