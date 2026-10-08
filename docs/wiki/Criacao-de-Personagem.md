@@ -78,8 +78,9 @@ roupa e cabelo (`src/clothing/body_shape.py`).
 - **Ajustes do nariz inteiro:** tamanho, largura, projeção e posição valem por cima de qualquer formato, em torno
   do ponto onde o nariz se apoia no rosto (`body_shape.nose_shape`).
 - **Ajustes de cada parte** (`nose.adjusted`, mudam as medidas do formato; não valem para o bloco): largura da
-  ponte, altura da ponte (quanto ela sai do rosto), largura da ponta, largura da base (narinas e asas) e altura da
-  base (as asas ficam mais altas e o nariz começa a alargar mais acima).
+  ponte, altura da ponte (quanto ela sai do rosto), largura da ponta, largura da base (narinas e asas), altura da
+  base (as asas ficam mais altas e o nariz começa a alargar mais acima) e posição das narinas (as asas sobem ou
+  descem até 8 mm; só tem efeito nos formatos com asas).
 - **Cor da ponta:** a cor dos vértices da ponta e das asas multiplica a textura (`nose.tip_colours`): positivo
   deixa mais rosada, 0 é a cor da pele, negativo escurece um pouco. A ponte fica sempre na cor da pele.
 - O nariz pega a cor de um trecho da textura do rosto entre os olhos. O trecho do nariz antigo encostava na borda

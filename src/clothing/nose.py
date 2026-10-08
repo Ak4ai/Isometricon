@@ -108,6 +108,7 @@ class NoseShape:
     wing_width: float = 0.0       # the wings of the nostrils: a block on each side of the tip,
     wing_height: float = 0.0      # this wide, this tall
     wing_depth: float = 0.0       # and standing this far out of the face
+    wing_lift: float = 0.0        # how far above the bottom of the nose the wings start (negative: below it)
 
 
 BASE = NoseShape()  # the measures of the old nose: 7 cm long, a 1.5 cm tip, as wide as its tip box
@@ -173,12 +174,13 @@ def build(shape: NoseShape) -> np.ndarray:
     # a little less deep at its outer edge. With no width or height they are flat, hidden in the nose.
     for side in (-1.0, 1.0):
         x0, x1 = side * shape.nostril_width * 0.42, side * (shape.nostril_width / 2 + shape.wing_width)
-        y1, z0, z1 = shape.wing_height, shape.wing_depth, shape.wing_depth * 0.7
-        centre = np.array([(x0 + x1) / 2, y1 / 2, z0 / 2])
-        for corners in (([x0, 0.0, z0], [x1, 0.0, z1], [x1, y1, z1], [x0, y1, z0]),      # front
-                        ([x1, 0.0, 0.0], [x1, 0.0, z1], [x1, y1, z1], [x1, y1, 0.0]),    # outer side
-                        ([x0, y1, 0.0], [x0, y1, z0], [x1, y1, z1], [x1, y1, 0.0]),      # top
-                        ([x0, 0.0, 0.0], [x1, 0.0, 0.0], [x1, 0.0, z1], [x0, 0.0, z0])):  # underside
+        y0, z0, z1 = shape.wing_lift, shape.wing_depth, shape.wing_depth * 0.7
+        y1 = y0 + shape.wing_height
+        centre = np.array([(x0 + x1) / 2, (y0 + y1) / 2, z0 / 2])
+        for corners in (([x0, y0, z0], [x1, y0, z1], [x1, y1, z1], [x0, y1, z0]),      # front
+                        ([x1, y0, 0.0], [x1, y0, z1], [x1, y1, z1], [x1, y1, 0.0]),    # outer side
+                        ([x0, y1, 0.0], [x0, y1, z0], [x1, y1, z1], [x1, y1, 0.0]),    # top
+                        ([x0, y0, 0.0], [x1, y0, 0.0], [x1, y0, z1], [x0, y0, z0])):   # underside
             quads.append((corners, (1.0,) * 4, centre))
     triangles = []
     for corners, ts, within in quads:
@@ -217,8 +219,10 @@ def _place(rows8: np.ndarray, head_rows: np.ndarray) -> np.ndarray:
 
 # Adjustments that change the measures of a shape (the old block nose has none of them), and how
 # much each does at 1: widths as a share, the height of the bridge in metres, where the base starts.
-PARAMETRIC = ("nariz_ponta_largura", "nariz_ponte_largura", "nariz_ponte_altura", "nariz_base_largura", "nariz_base_altura")
+PARAMETRIC = ("nariz_ponta_largura", "nariz_ponte_largura", "nariz_ponte_altura", "nariz_base_largura", "nariz_base_altura",
+              "nariz_narinas_altura")
 PART_WIDTH, BRIDGE_HEIGHT, BASE_HEIGHT = 0.6, 0.006, 0.6
+WING_LIFT = 0.008  # metres the wings of the nostrils go up or down the nose
 # The colour of the tip: what the skin is multiplied by at its pinkest, and at its darkest.
 TIP_PINK, TIP_DARK = (1.0, 0.70, 0.72), (0.80, 0.72, 0.68)
 
@@ -244,6 +248,7 @@ def adjusted(shape: NoseShape, adjust: Optional[Mapping[str, float]]) -> NoseSha
                    bridge_depth=max(0.0005, shape.bridge_depth + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura")),
                    nostril_width=shape.nostril_width * base, wing_width=shape.wing_width * base,
                    wing_height=shape.wing_height * (1.0 + BASE_HEIGHT * tall),
+                   wing_lift=shape.wing_lift + WING_LIFT * _amount(adjust, "nariz_narinas_altura"),
                    under=max(0.001, shape.under * (1.0 + BASE_HEIGHT * tall)),
                    flare=min(max(shape.flare - 0.3 * tall, 0.05), 0.85))
 
