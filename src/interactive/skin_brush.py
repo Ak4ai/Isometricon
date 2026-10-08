@@ -21,6 +21,10 @@ COLOURS = {SHOWN: (190, 195, 205, 90), HIDDEN: (255, 150, 60, 200), PAINTED_HIDD
            PAINTED_SHOWN: (70, 230, 110, 255)}
 RADII = {SHOWN: 1.5, HIDDEN: 2.5, PAINTED_HIDDEN: 3.5, PAINTED_SHOWN: 3.5}
 STROKE = (255, 235, 80, 255)  # the points taken by the stroke being made
+# What each colour means, for the legend of the edit mode.
+LEGEND = ((COLOURS[SHOWN][:3], "Pele à mostra"), (COLOURS[HIDDEN][:3], "Escondida pela roupa"),
+          (COLOURS[PAINTED_HIDDEN][:3], "Escondida à mão"), (COLOURS[PAINTED_SHOWN][:3], "Mostrada à mão"),
+          (STROKE[:3], "Traço em curso"))
 
 _cache: Dict[int, Tuple[Any, np.ndarray, np.ndarray]] = {}
 

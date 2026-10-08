@@ -114,6 +114,13 @@ peça não é simétrica), e a pele atravessa o tecido em dentes. A seção corr
   mão, verde a mostrada à mão. As roupas ficam transparentes por cima (`EDIT_CLOTH_ALPHA`, o uniforme `u_Alpha` do
   shader), e os pontos da cage, que são o que se pinta, aparecem como pontos nas mesmas cores (amarelo os do traço
   em curso). O modo vale só na seção: ao trocar de seção ou fechar a tela o personagem volta ao normal.
+- **Ativar pincel** (a caixa ao lado): com ela marcada o botão esquerdo pinta; desmarcada, ele gira o personagem
+  como nas outras seções, com as cores ainda à vista. Marcar "Editar pele" já liga o pincel, e marcar o pincel liga
+  o modo.
+- **Desfazer e refazer:** Ctrl+Z e Ctrl+Shift+Z, ou as duas setas no canto de cima à direita (apagadas quando não
+  há o que desfazer ou refazer). Valem para as correções da pele (pintura, espelhamento, apagar tudo), até 100
+  passos, só nesta sessão (`/skin hsr desfazer`, `/skin hsr refazer`, `SkinCommandHandler.hsr_history`).
+- **Legenda:** no canto de baixo à direita, o que é cada cor (`skin_brush.LEGEND`).
 - **O pincel**, como no Blender: o botão esquerdo pinta os pontos sob o círculo, só os do lado de cá do corpo e na
   frente (`skin_brush.BrushView.pick`); Ctrl faz o contrário do pincel escolhido (mostra com o de esconder, e
   vice-versa); o botão direito gira e inclina o personagem. Os pincéis são Esconder pele, Mostrar pele e Apagar
@@ -125,7 +132,12 @@ O que é pintado vence o automático (`hsr.adjusted_hidden`) e fica em `AvatarCu
 `hsr_hide`, `hsr_show`), salvo com o personagem. Vale para o personagem, não para a peça: trocar de roupa mantém a
 pintura, que pode não servir à roupa nova. Os pontos são mostrados posados com os ossos do personagem
 (`CharacterAnimator.posed`); as deformações sem osso (peito, cintura) não entram, e com elas os pontos ficam um pouco
-fora do lugar. `--pincel=<esconder|mostrar|apagar>` abre o jogo já no modo de edição (capturas de tela).
+fora do lugar. `--pincel=<esconder|mostrar|apagar>` abre o jogo já no modo de edição, e `--mouse="x,y,press;x,y;x,y,release"` move e
+clica o mouse por um roteiro, um passo por quadro, pelos mesmos caminhos do mouse de verdade (conferências).
+
+No jogo o personagem é montado em segundo plano (`CharacterModel.poll`), e o que a montagem descobre (a máscara da
+pele, as bordas das roupas, o formato da malha do nariz) é levado para o modelo em uso na troca. Sem isso o pincel
+não tinha o que pintar fora do `--char` com captura de tela.
 
 ### Bordas das roupas
 

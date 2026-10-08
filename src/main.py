@@ -448,7 +448,7 @@ def main() -> None:
                 break
         brush_arg = next((a.partition("=")[2].lower() for a in sys.argv[1:] if a.startswith("--pincel=")), "")
         if brush_arg in ("esconder", "mostrar", "apagar"):  # o pincel de pele já ligado (capturas de tela)
-            character_editor.brush, character_editor.hsr_edit = brush_arg, True
+            character_editor.brush, character_editor.hsr_edit, character_editor.brush_on = brush_arg, True, True
             turntable_state["active"] = False
     
     # Carregar lista de texturas PNG de assets filtrando apenas blocos sólidos quadrados (100% opacos)
@@ -729,7 +729,19 @@ def main() -> None:
     # ------------------------------------------------------------------
     title_update_timer = 0.25  # Atualiza imediatamente no primeiro frame
     frame_index = 0
+    # --mouse="700,300,press;720,310;720,310,release": o mouse movido e clicado por um roteiro, um
+    # passo por quadro a partir do décimo, pelos mesmos caminhos do mouse de verdade (conferências).
+    mouse_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--mouse=")), "")
+    mouse_steps = [step.split(",") for step in mouse_script.split(";") if step.strip()]
     while not window.should_close():
+        if mouse_steps and frame_index >= 10:
+            step = mouse_steps.pop(0)
+            at = (float(step[0]), float(step[1]))
+            window.get_cursor_pos = lambda at=at: at
+            handle_cursor_position(*at)
+            if len(step) > 2:
+                handle_mouse_button(int(step[3]) if len(step) > 3 else glfw.MOUSE_BUTTON_LEFT,
+                                    glfw.PRESS if step[2].strip() == "press" else glfw.RELEASE, 0)
         dt = window.update_delta_time()
         camera.update(dt)
         chat_console.update(dt)

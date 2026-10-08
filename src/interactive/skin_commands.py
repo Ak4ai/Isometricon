@@ -37,6 +37,8 @@ CLOTHING_DIR = os.path.join(PROJECT_ROOT, "assets", "models", "clothing")
 
 GREEN = (85, 255, 85)
 GOLD = (255, 215, 0)
+HSR_HISTORY = 100  # changes of the skin under the clothes that can be undone
+
 RED = (255, 85, 85)
 CYAN = (85, 255, 255)
 
@@ -508,10 +510,22 @@ class SkinCommandHandler:
             return missing
         model = self.character_model
         custom = model.customization
-        usage = "Uso: /skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar"
+        usage = "Uso: /skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar | desfazer | refazer"
         mirror = bool(getattr(custom, "hsr_mirror", False))
         hide, show = set(getattr(custom, "hsr_hide", ()) or ()), set(getattr(custom, "hsr_show", ()) or ())
         what = args[0].lower() if args else ""
+        before = (mirror, tuple(sorted(hide)), tuple(sorted(show)))
+        undone, redone = self.hsr_history
+        if what in ("desfazer", "undo", "refazer", "redo"):
+            back = what in ("desfazer", "undo")
+            source, target = (undone, redone) if back else (redone, undone)
+            if not source:
+                return False, f"[Pele] Nada para {'desfazer' if back else 'refazer'}.", GOLD
+            target.append(before)
+            custom.hsr_mirror, custom.hsr_hide, custom.hsr_show = source.pop()
+            if not getattr(model, "refresh_skin", lambda: False)():
+                model.reload()
+            return True, f"[Pele] {'Desfeito' if back else 'Refeito'}.", GREEN
         if not what:
             return True, (f"[Pele] Espelhar: {'sim' if mirror else 'não'}; pintados para esconder: {len(hide)}, "
                           f"para mostrar: {len(show)}.\n{usage}"), GOLD
@@ -536,10 +550,22 @@ class SkinCommandHandler:
             feedback = f"[Pele] {len(points)} ponto(s): {what}."
         else:
             return False, f"[Erro] {usage}", RED
-        custom.hsr_mirror, custom.hsr_hide, custom.hsr_show = mirror, tuple(sorted(hide)), tuple(sorted(show))
+        after = (mirror, tuple(sorted(hide)), tuple(sorted(show)))
+        if after != before:  # what was there can be had back (/skin hsr desfazer)
+            undone.append(before)
+            del undone[:-HSR_HISTORY], redone[:]
+        custom.hsr_mirror, custom.hsr_hide, custom.hsr_show = after
         if not getattr(model, "refresh_skin", lambda: False)():
             model.reload()
         return True, feedback, GREEN
+
+    @property
+    def hsr_history(self):
+        """(o que há para desfazer, o que há para refazer) nas correções da pele sob a roupa:
+        duas pilhas de (espelhar, pontos escondidos, pontos mostrados), desta sessão."""
+        if not hasattr(self, "_hsr_history"):
+            self._hsr_history = ([], [])
+        return self._hsr_history
 
     def extra(self, args: List[str]) -> Result:
         """/skin extra <nome|id|none>: veste (ou tira) uma peça a mais, junto com as outras."""
@@ -931,9 +957,9 @@ SKIN_COMMANDS: List[Command] = [
             lambda: sorted({k for k in BOTTOM_PRESETS if not k.isdigit()} | {"none"}), "Roupas"),
     Command(("jaqueta", "jacket"), "/skin jaqueta <id|none> | folga <mm> | puxar <mm>", "peça por cima do top",
             SkinCommandHandler.jacket, {"folga": ["3", "6", "10"], "puxar": ["10", "15", "20"], "none": []}, "Roupas"),
-    Command(("hsr", "ocultar"), "/skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar",
+    Command(("hsr", "ocultar"), "/skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar | desfazer | refazer",
             "pele escondida sob a roupa: espelhar os dois lados, ou corrigir à mão (o pincel da tela de criação)",
-            SkinCommandHandler.hsr, {"espelhar": ["sim", "nao"], "esconder": [], "mostrar": [], "apagar": [], "limpar": []}, "Roupas"),
+            SkinCommandHandler.hsr, {"espelhar": ["sim", "nao"], "esconder": [], "mostrar": [], "apagar": [], "limpar": [], "desfazer": [], "refazer": []}, "Roupas"),
     Command(("extra", "mais"), "/skin extra <nome|id|none>", "peça a mais, junto com as outras (polainas com saia)",
             SkinCommandHandler.extra, lambda: ["none"] + sorted(catalog_names()), "Roupas"),
     Command(("sapato", "shoes"), "/skin sapato <pacote|esquerdo,direito|none>", "calçado", SkinCommandHandler.shoes,

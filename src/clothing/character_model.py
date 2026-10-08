@@ -1914,6 +1914,11 @@ class CharacterModel:
                 self.cage_debug_mesh = builder.cage_debug_mesh
                 self._garment_buffers = builder._garment_buffers
                 self._hide_feet = getattr(builder, "_hide_feet", False)
+                # What the build found out about itself, which the corrections made without rebuilding
+                # go by: the mask of hidden skin, the edges of the clothes, the style of the nose's mesh.
+                for name in ("hsr_cage", "hsr_hidden", "_hsr_call", "_edges", "built_nose_style"):
+                    if hasattr(builder, name):
+                        setattr(self, name, getattr(builder, name))
         if not self._dirty:
             self.loading_status = ""
             return

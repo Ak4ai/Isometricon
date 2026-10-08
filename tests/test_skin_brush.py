@@ -232,3 +232,64 @@ def test_the_edited_skin_is_painted_by_what_each_point_is():
     np.testing.assert_allclose(painted[2], EDIT_PAINTED_HIDDEN)
     np.testing.assert_allclose(painted[3], EDIT_PAINTED_SHOWN)
     assert not np.allclose(painted[1], colours[1]) and np.allclose(painted[0], colours[0])  # blended between the two; untouched elsewhere
+
+
+def test_the_brush_has_its_own_check_and_comes_on_with_the_edit_mode():
+    editor, _ = make_editor()
+    assert option(editor, "Ativar pincel").check and not editor.brush_on
+    editor.choose(option(editor, "Ativar pincel"))                                          # the brush alone: the mode comes with it
+    assert editor.hsr_edit and editor.brush_on and editor.brushing
+    editor.choose(option(editor, "Ativar pincel"))                                          # off: the mode stays, the drag turns
+    assert editor.hsr_edit and not editor.brushing and editor.model.hsr_edit is True
+    yaw = editor.turntable["yaw"]
+    editor.handle_mouse_button(700, 300, LEFT, PRESS)
+    editor.handle_cursor(760, 300)
+    editor.handle_mouse_button(760, 300, LEFT, RELEASE)
+    assert editor.turntable["yaw"] != yaw
+    editor.choose(option(editor, "Editar pele"))
+    assert not editor.hsr_edit and not editor.brush_on
+    editor.choose(option(editor, "Editar pele"))
+    assert editor.brushing                                                                  # the mode brings the brush
+
+
+def test_changes_of_the_skin_are_undone_and_redone():
+    model, _ = make_model()
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    state = lambda: (custom.hsr_mirror, custom.hsr_hide, custom.hsr_show)
+    assert not handler.execute("/skin hsr desfazer")[0] and not handler.execute("/skin hsr refazer")[0]
+    handler.execute("/skin hsr esconder 1,2")
+    handler.execute("/skin hsr mostrar 2,7")
+    handler.execute("/skin hsr espelhar sim")
+    assert state() == (True, (1,), (2, 7))
+    handler.execute("/skin hsr espelhar sim")                                               # nothing changed: nothing to undo
+    assert [len(stack) for stack in handler.hsr_history] == [3, 0]
+    assert handler.execute("/skin hsr desfazer")[0] and state() == (False, (1,), (2, 7))
+    assert handler.execute("/skin hsr desfazer")[0] and state() == (False, (1, 2), ())
+    assert handler.execute("/skin hsr refazer")[0] and state() == (False, (1,), (2, 7))
+    handler.execute("/skin hsr limpar")                                                     # a new change: nothing left to redo
+    assert state() == (False, (), ()) and not handler.execute("/skin hsr refazer")[0]
+    assert handler.execute("/skin hsr desfazer")[0] and state() == (False, (1,), (2, 7))
+
+
+def test_undo_and_redo_by_keys_and_by_the_arrows_at_the_top_right():
+    editor, sent = make_editor()
+    CTRL, SHIFT, Z = 2, 1, 90
+    assert editor.history_rects(*SIZE) == {} and not editor.handle_key(Z, PRESS, CTRL)       # only in the edit mode
+    editor.choose(option(editor, "Editar pele"))
+    assert editor.handle_key(Z, PRESS, CTRL) and sent[-1] == "/skin hsr desfazer"
+    assert editor.handle_key(Z, PRESS, CTRL | SHIFT) and sent[-1] == "/skin hsr refazer"
+    assert not editor.handle_key(Z, PRESS, 0)
+    rects = editor.history_rects(*SIZE)
+    undo, redo = rects["desfazer"], rects["refazer"]
+    assert redo[2] <= SIZE[0] and redo[2] > SIZE[0] - 20 and undo[1] < 20 and undo[2] <= redo[0]   # the top right corner, undo on the left
+    count = len(sent)
+    assert editor.handle_mouse_button(undo[0] + 5, undo[1] + 5, LEFT, PRESS) and sent[-1] == "/skin hsr desfazer"
+    assert editor.handle_mouse_button(undo[0] + 5, undo[1] + 5, LEFT, RELEASE) and len(sent) == count + 1   # one for the click; no stroke
+    assert editor.handle_mouse_button(redo[0] + 5, redo[1] + 5, LEFT, PRESS) and sent[-1] == "/skin hsr refazer"
+    editor.handler.hsr_history = ([1, 2], [])
+    image = np.array(editor.history_image(*SIZE))
+    lit = lambda rect: int(image[:, rect[0] - undo[0]:rect[2] - undo[0], :3].max())
+    assert lit(undo) > lit(redo)                                                             # the arrow with nothing to do is dim
+    legend = np.array(editor.legend_image())
+    colours = {tuple(p) for p in legend.reshape(-1, 4)[:, :3].tolist()}
+    assert all(tuple(colour) in colours for colour, _ in skin_brush.LEGEND) and len(skin_brush.LEGEND) == 5
