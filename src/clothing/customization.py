@@ -376,6 +376,7 @@ class AvatarCustomization:
             f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
             f"ns_{self.nose_shadow}_{(self.nose_style, sorted((k, round(float(v), 3)) for k, v in (self.body_adjust or {}).items() if k.startswith('nariz_'))) if self.nose_shadow == 'calculada' else ''}_"
             f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}_es_{self.eye_shape}"
+            f"_mka_{sorted((k, round(float(v), 3)) for k, v in (self.body_adjust or {}).items() if k.startswith(('batom_', 'sombra_', 'blush_')))}"
         )
 
     @property
@@ -389,8 +390,14 @@ class AvatarCustomization:
         return IRIS_PALETTES.get(str(getattr(other, "value", other)).lower(), self.resolved_iris_color)
 
     def makeup_color(self, what: str) -> Optional[Tuple[int, int, int]]:
-        """A cor de um item de maquiagem ("batom", "sombra"), ou None se não é usado."""
-        return MAKEUP_COLORS.get(str((self.makeup or {}).get(what, "")).lower())
+        """A cor de um item de maquiagem ("batom", "sombra", "blush"), ou None se não é usado: a
+        escolhida (um nome de MAKEUP_COLORS ou "#rrggbb"), com o matiz, a saturação e o brilho
+        mexidos pelos controles do item."""
+        chosen = parse_makeup_colour((self.makeup or {}).get(what, ""))
+        if chosen is None:
+            return None
+        return shift_colour(chosen, self.face_adjust(f"{what}_matiz"), self.face_adjust(f"{what}_saturacao"),
+                            self.face_adjust(f"{what}_brilho"))
 
     @property
     def resolved_body_adjust(self) -> Dict[str, float]:
@@ -438,8 +445,40 @@ BROW_SIZE, BROW_LIFT, BROW_SPREAD = 0.25, 12.0, 10.0
 # reaches above the eye and down over it (shares of the eye's height).
 MAKEUP_COLORS = {"vermelho": (200, 40, 55), "rosa": (235, 120, 150), "nude": (196, 132, 112), "vinho": (120, 30, 55),
                  "roxo": (140, 85, 175), "azul": (70, 115, 205), "verde": (70, 150, 115), "dourado": (212, 170, 80),
-                 "marrom": (120, 80, 60), "preto": (40, 36, 42)}
-EYE_SHADOW, EYE_SHADOW_REACH = 0.55, (0.36, 0.30)
+                 "marrom": (120, 80, 60), "preto": (40, 36, 42), "coral": (240, 128, 110), "pessego": (245, 170, 140),
+                 "laranja": (235, 130, 60), "lilas": (190, 150, 220), "turquesa": (60, 180, 180), "prata": (185, 190, 200)}
+# Eye shadow: how strongly it is laid on, how far it goes above the eye and down over it (shares of
+# the eye's height), how far past the outer corner (a share of its width), and pixels of blur (on
+# the 512 px atlas). Each grows or shrinks with the item's controls by the share after it.
+EYE_SHADOW, EYE_SHADOW_REACH, EYE_SHADOW_OUT, EYE_SHADOW_BLUR = 0.58, (0.20, 0.45), 0.12, 3.0
+# Blush: where its middle is on the left cheek (mirrored on the other), its radii, its blur, how
+# strongly it is laid on, and pixels it goes up or down the face.
+BLUSH_AT, BLUSH_RADII, BLUSH_BLUR, BLUSH, BLUSH_LIFT = (52.0, 191.0), (25.0, 10.0), 7.0, 0.50, 12.0
+MAKEUP_STRENGTH, MAKEUP_SIZE, MAKEUP_SOFT = 0.9, 0.6, 0.8  # what the controls of an item do at 1
+
+
+def parse_makeup_colour(value: Any) -> Optional[Tuple[int, int, int]]:
+    """A colour of makeup from its name (MAKEUP_COLORS), "#rrggbb" or "r,g,b"; None when it is neither."""
+    text = str(value or "").strip().lower()
+    if text in MAKEUP_COLORS:
+        return MAKEUP_COLORS[text]
+    try:
+        if text.startswith("#") and len(text) == 7:
+            return tuple(int(text[k:k + 2], 16) for k in (1, 3, 5))
+        parts = [int(p) for p in text.split(",")]
+        return tuple(parts) if len(parts) == 3 and all(0 <= p <= 255 for p in parts) else None
+    except ValueError:
+        return None
+
+
+def shift_colour(rgb: Tuple[int, int, int], hue: float = 0.0, saturation: float = 0.0, brightness: float = 0.0) -> Tuple[int, int, int]:
+    """A colour with its hue turned (half the wheel at 1 or -1) and its saturation and brightness
+    moved towards full (positive) or none (negative)."""
+    import colorsys
+    h, s, v = colorsys.rgb_to_hsv(*[c / 255.0 for c in rgb])
+    move = lambda x, by: x + (1.0 - x) * by if by > 0 else x * (1.0 + by)
+    r, g, b = colorsys.hsv_to_rgb((h + 0.5 * hue) % 1.0, move(s, saturation), move(v, brightness))
+    return int(round(r * 255)), int(round(g * 255)), int(round(b * 255))
 # The nose's shadow, as the old head texture had it: its box in the 512 px atlas, how much of the
 # darker tone is laid over the skin (and that tone, as a share of the skin's), and how it follows
 # the nose's adjustments (its size, its width, and pixels of its height).
@@ -642,6 +681,25 @@ class LayeredHeadCompositor:
                 canvas.alpha_composite(paint)
 
         # ---------------------------------------------------------
+        # 3.3 BLUSH: uma mancha de cor esfumada em cada bochecha, sob os olhos.
+        # ---------------------------------------------------------
+        blush_rgb = cust.makeup_color("blush")
+        if blush_rgb is not None:
+            unit = canvas.width / 512.0
+            grow = 1.0 + MAKEUP_SIZE * cust.face_adjust("blush_tamanho")
+            rx, ry = BLUSH_RADII[0] * grow * unit, BLUSH_RADII[1] * grow * unit
+            cy = (BLUSH_AT[1] - BLUSH_LIFT * cust.face_adjust("blush_altura")) * unit
+            strength = min(max(BLUSH * (1.0 + MAKEUP_STRENGTH * cust.face_adjust("blush_intensidade")), 0.0), 0.95)
+            mask = Image.new("L", canvas.size, 0)
+            pen = ImageDraw.Draw(mask)
+            for cx in (BLUSH_AT[0] * unit, (2 * FACE_MIDDLE - BLUSH_AT[0]) * unit):
+                pen.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=int(round(255 * strength)))
+            mask = mask.filter(ImageFilter.GaussianBlur(max(BLUSH_BLUR * (1.0 + MAKEUP_SOFT * cust.face_adjust("blush_esfumado")), 0.5) * unit))
+            paint = Image.new("RGBA", canvas.size, tuple(blush_rgb) + (255,))
+            paint.putalpha(mask)
+            canvas.alpha_composite(paint)
+
+        # ---------------------------------------------------------
         # 4. OLHOS & TINGIMENTO DA ÍRIS (Eyes & Iris Tint)
         # ---------------------------------------------------------
         eye_style = cust.resolved_eye_style
@@ -683,18 +741,24 @@ class LayeredHeadCompositor:
                 shadow_rgb = cust.makeup_color("sombra")
                 box = placed.getbbox()
                 if shadow_rgb is not None and box is not None:
-                    # Eye shadow: a soft patch of colour over each eyelid, under the eye's own drawing.
+                    # Eye shadow: a soft patch of colour over each eyelid and past its outer corner,
+                    # under the eye's own drawing.
                     mask = Image.new("L", canvas.size, 0)
                     pen = ImageDraw.Draw(mask)
                     centre = (box[0] + box[2]) // 2
-                    for x0, x1 in ((0, centre), (centre, placed.width)):
+                    grow = 1.0 + MAKEUP_SIZE * cust.face_adjust("sombra_tamanho")
+                    strength = min(max(EYE_SHADOW * (1.0 + MAKEUP_STRENGTH * cust.face_adjust("sombra_intensidade")), 0.0), 1.0)
+                    for side, (x0, x1) in ((-1, (0, centre)), (1, (centre, placed.width))):
                         eye = placed.crop((x0, 0, x1, placed.height)).getbbox()
                         if eye is None:
                             continue
-                        tall = eye[3] - eye[1]
-                        pen.ellipse([x0 + eye[0], eye[1] - EYE_SHADOW_REACH[0] * tall, x0 + eye[2],
-                                     eye[1] + EYE_SHADOW_REACH[1] * tall], fill=int(255 * EYE_SHADOW))
-                    mask = mask.filter(ImageFilter.GaussianBlur(2.0 * canvas.width / 512.0))
+                        tall, wide = eye[3] - eye[1], eye[2] - eye[0]
+                        out = EYE_SHADOW_OUT * grow * wide
+                        pen.ellipse([x0 + eye[0] - (out if side < 0 else 0.25 * out), eye[1] - EYE_SHADOW_REACH[0] * grow * tall,
+                                     x0 + eye[2] + (out if side > 0 else 0.25 * out), eye[1] + EYE_SHADOW_REACH[1] * tall],
+                                    fill=int(round(255 * strength)))
+                    soft = max(EYE_SHADOW_BLUR * (1.0 + MAKEUP_SOFT * cust.face_adjust("sombra_esfumado")), 0.5)
+                    mask = mask.filter(ImageFilter.GaussianBlur(soft * canvas.width / 512.0))
                     colour = Image.new("RGBA", canvas.size, tuple(shadow_rgb) + (255,))
                     colour.putalpha(mask)
                     canvas.alpha_composite(colour)
