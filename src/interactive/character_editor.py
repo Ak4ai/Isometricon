@@ -21,7 +21,7 @@ import time
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EYES, GARMENTS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
@@ -37,6 +37,7 @@ from src.interactive.skin_commands import (
     HEADS,
     MOUTHS,
     NOSE_STYLE_NAMES,
+    EAR_STYLE_NAMES,
     PRESETS,
     SKIN_TONES,
     SkinCommandHandler,
@@ -312,6 +313,10 @@ class CharacterEditor:
                                               selected=lambda m, v=EYEBROWS[n]: custom() is not None and custom().resolved_eyebrow_style == _value(v))
                                        for n in EYEBROWS]),
                 Group("Ajustes das sobrancelhas", [Option(label, "", slider=name) for name, label in BROWS.items()]),
+                Group("Orelhas", [Option("Sem orelhas" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin orelha {n}",
+                                         selected=lambda m, n=n: custom() is not None and getattr(custom(), "ear_style", "sem") == n)
+                                  for n in EAR_STYLE_NAMES]),
+                Group("Ajustes das orelhas", [Option(label, "", slider=name) for name, label in EARS.items()]),
             ]
 
         def nose() -> List[Group]:
