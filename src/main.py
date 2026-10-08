@@ -734,14 +734,6 @@ def main() -> None:
     mouse_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--mouse=")), "")
     mouse_steps = [step.split(",") for step in mouse_script.split(";") if step.strip()]
     while not window.should_close():
-        if mouse_steps and frame_index >= 10:
-            step = mouse_steps.pop(0)
-            at = (float(step[0]), float(step[1]))
-            window.get_cursor_pos = lambda at=at: at
-            handle_cursor_position(*at)
-            if len(step) > 2:
-                handle_mouse_button(int(step[3]) if len(step) > 3 else glfw.MOUSE_BUTTON_LEFT,
-                                    glfw.PRESS if step[2].strip() == "press" else glfw.RELEASE, 0)
         dt = window.update_delta_time()
         camera.update(dt)
         chat_console.update(dt)
@@ -875,6 +867,14 @@ def main() -> None:
         # Processar eventos de I/O
         # --------------------------------------------------------------
         window.poll_events()
+        if mouse_steps and frame_index >= 10:  # onde os eventos do mouse de verdade chegam
+            step = mouse_steps.pop(0)
+            at = (float(step[0]), float(step[1]))
+            window.get_cursor_pos = lambda at=at: at
+            handle_cursor_position(*at)
+            if len(step) > 2:
+                handle_mouse_button(int(step[3]) if len(step) > 3 else glfw.MOUSE_BUTTON_LEFT,
+                                    glfw.PRESS if step[2].strip() == "press" else glfw.RELEASE, 0)
 
         # --------------------------------------------------------------
         # Limpar buffers
@@ -954,6 +954,8 @@ def main() -> None:
             shader.set_vec3("u_LightDir", 0.5, 1.2, 0.8)
             shader.set_vec3("u_LightColor", 0.70, 0.70, 0.70)
             shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
+            if editor_animator is not None:
+                editor_animator.sync()  # a pele recortada por um clique deste quadro já entra na pose
             character_model.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
             gl.glViewport(0, 0, fb_w, fb_h)
             # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
@@ -1025,6 +1027,7 @@ def main() -> None:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
             char_base_model = model @ spin_mat
+            character_animator.sync()  # um comando do chat deste quadro que trocou malhas já entra na pose
             character_model.draw(shader, char_base_model)
         else:
             gl.glActiveTexture(gl.GL_TEXTURE0)

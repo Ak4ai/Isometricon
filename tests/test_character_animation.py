@@ -154,3 +154,17 @@ def test_adjustments_do_not_pile_up_when_only_the_skin_is_cut_again():
     less = shown(0.11, recut=True)
     assert plain[0, 1] < less[0, 1] < first[0, 1]                                           # 11 is under 12, not 12 and 11 together
     np.testing.assert_allclose(shown(0.0, recut=True), plain, atol=1e-6)                    # and zero is the garment as fitted
+
+
+def test_a_model_whose_meshes_changed_is_posed_again_before_it_is_drawn():
+    skin = lambda: SimpleNamespace(name='trunk_skin', mesh=MemoryMesh([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]]),
+                                   transform=None, source_obj=None)
+    model = SimpleNamespace(body='female', parts=[skin()])
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    bound = animator._bound_key
+    animator.sync()
+    assert animator._bound_key == bound                       # nothing changed: nothing done
+    model.parts[0] = skin()                                   # the skin cut again by a command, after the update
+    animator.sync()
+    assert animator._bound_key == animator._key() != bound    # bound and posed for this frame's drawing

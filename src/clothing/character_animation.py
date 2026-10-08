@@ -643,6 +643,13 @@ class CharacterAnimator:
     def _key(self):
         return tuple(id(p.mesh) for p in self.model.parts)
 
+    def sync(self) -> None:
+        """Pose again, now, a model whose meshes changed since the last update (the skin cut again
+        by a command handled after it): drawn before that, the new meshes would show for a frame
+        in the pose they were built in."""
+        if self._bound_key != self._key():
+            self.update(0.0)
+
     def update(self, dt: float, walk_time=None) -> None:
         """Advance the walk by ``dt`` seconds (or to ``walk_time``, when the caller keeps the
         step) and pose the model. Starting and stopping ease in and out of the rest pose."""
