@@ -366,7 +366,7 @@ class AvatarCustomization:
             f"m_{self.resolved_mouth_style}_eb_{self.resolved_eyebrow_style}_ebc_{self.resolved_eyebrow_color}_"
             f"h2_{self.resolved_hair_2d_style}_fd_{self.resolved_face_detail}_"
             f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
-            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_altura')]}_"
+            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_tamanho', 'sobrancelha_altura', 'sobrancelha_distancia')]}_"
             f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
             f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}_es_{self.eye_shape}"
         )
@@ -418,8 +418,9 @@ def place_face_layer(layer: Image.Image, scale: float = 1.0, lift: float = 0.0, 
 
 
 # How far the face adjustments go at 1: the eyes' size (share), and pixels of the 512 px head
-# atlas for their height and distance and for the height of the eyebrows over them.
-EYE_SIZE, EYE_LIFT, EYE_SPREAD, BROW_LIFT = 0.22, 10.0, 8.0, 8.0
+# atlas for their height and distance; the same for the eyebrows, which are adjusted on their own.
+EYE_SIZE, EYE_LIFT, EYE_SPREAD = 0.22, 10.0, 8.0
+BROW_SIZE, BROW_LIFT, BROW_SPREAD = 0.25, 12.0, 10.0
 # Makeup: the colours on offer, how strongly the eye shadow is laid over the skin, and how far it
 # reaches above the eye and down over it (shares of the eye's height).
 MAKEUP_COLORS = {"vermelho": (200, 40, 55), "rosa": (235, 120, 150), "nude": (196, 132, 112), "vinho": (120, 30, 55),
@@ -628,9 +629,8 @@ class LayeredHeadCompositor:
                 for ch in range(3):
                     arr_b[alpha_b, ch] = np.clip(eb_rgb[ch], 0, 255)
                 canvas.alpha_composite(place_face_layer(
-                    Image.fromarray(arr_b.astype(np.uint8)), 1.0,
-                    BROW_LIFT * cust.face_adjust("sobrancelha_altura") + EYE_LIFT * cust.face_adjust("olhos_altura"),
-                    EYE_SPREAD * cust.face_adjust("olhos_distancia")))
+                    Image.fromarray(arr_b.astype(np.uint8)), 1.0 + BROW_SIZE * cust.face_adjust("sobrancelha_tamanho"),
+                    BROW_LIFT * cust.face_adjust("sobrancelha_altura"), BROW_SPREAD * cust.face_adjust("sobrancelha_distancia")))
 
         # ---------------------------------------------------------
         # 6. BOCA / EXPRESSÃO (Mouth)

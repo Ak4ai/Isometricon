@@ -33,8 +33,12 @@ BODY_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
     ("Roupas", [("folga", "Folga das roupas")]),
 ]
 BODY = {name: label for _, group in BODY_GROUPS for name, label in group}
-FACE = {"olhos_tamanho": "Tamanho dos olhos", "olhos_altura": "Altura dos olhos",
-        "olhos_distancia": "Distância entre os olhos", "sobrancelha_altura": "Altura das sobrancelhas"}
+EYES = {"olhos_tamanho": "Tamanho dos olhos", "olhos_altura": "Altura dos olhos",
+        "olhos_distancia": "Distância entre os olhos"}
+# The eyebrows have their own: they do not follow the eyes.
+BROWS = {"sobrancelha_tamanho": "Tamanho das sobrancelhas", "sobrancelha_altura": "Altura das sobrancelhas",
+         "sobrancelha_distancia": "Distância entre as sobrancelhas"}
+FACE = {**EYES, **BROWS}
 NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_altura": "Posição do nariz (altura)",
         "nariz_projecao": "Projeção do nariz", "nariz_largura": "Largura do nariz inteiro",
         "nariz_ponte_largura": "Largura da ponte", "nariz_ponte_altura": "Altura da ponte",

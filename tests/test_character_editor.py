@@ -1,6 +1,8 @@
 """A tela de criação de personagem: o que lista, onde clica e o que cada gesto faz (sem OpenGL)."""
 from types import SimpleNamespace
 
+import numpy as np
+
 from src.interactive.character_editor import PANEL_WIDTH, CharacterEditor, catalog
 from src.interactive.skin_commands import SkinCommandHandler
 
@@ -67,12 +69,14 @@ def test_a_click_on_an_option_runs_its_chat_command():
 def test_tabs_change_section_and_the_wheel_scrolls_only_over_the_panel():
     editor, _ = make_editor()
     titles = [section.title for section in editor.sections]
-    assert titles[:5] == ["Corpo", "Ajustes", "Rosto", "Maquiagem", "Cabelo"] and "Superior" in titles and "Extras" in titles
-    rect = next(rect for rect, kind, payload in editor.layout(*SIZE) if kind == "tab" and payload == titles.index("Rosto"))
-    click(editor, *centre(rect))
-    assert editor.active == titles.index("Rosto")
-    labels = [option.label for group in editor.groups() for option in group.options]   # the whole section, scrolled or not
-    assert "Azul" in labels and "Sorriso" in labels and "Arredondado" in labels
+    assert titles[:7] == ["Corpo", "Ajustes", "Olhos", "Rosto", "Nariz", "Maquiagem", "Cabelo"] and "Superior" in titles and "Extras" in titles
+    labels = lambda: [option.label for group in editor.groups() for option in group.options]   # the whole section, scrolled or not
+    for title, expected in (("Rosto", ("Sorriso", "Altura das sobrancelhas")), ("Nariz", ("Narinas grandes", "Bloco", "Largura da ponte")),
+                            ("Olhos", ("Azul", "Arredondado", "Altura dos olhos"))):
+        rect = next(rect for rect, kind, payload in editor.layout(*SIZE) if kind == "tab" and payload == titles.index(title))
+        click(editor, *centre(rect))
+        assert editor.active == titles.index(title) and set(expected) <= set(labels())
+    assert "Altura das sobrancelhas" not in labels()                                            # the eyebrows are not in with the eyes
     editor.layout(*SIZE)
     assert editor.handle_scroll(PANEL_WIDTH + 50, -1.0) is False  # over the character: the camera zooms
     assert editor.handle_scroll(50, -1.0) is True                 # over the panel: the grid scrolls
@@ -223,7 +227,7 @@ def test_a_face_slider_redraws_a_few_times_a_second_and_takes_the_last_value(mon
     clock = [100.0]
     monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
     editor, sent = make_editor()
-    x0, y0, x1, y1 = slider_rect(editor, "Rosto", "Tamanho dos olhos")
+    x0, y0, x1, y1 = slider_rect(editor, "Olhos", "Tamanho dos olhos")
     y = (y0 + y1) / 2
     editor.handle_mouse_button(x1 - 10, y, LEFT, PRESS)
     assert sent == ["/skin ajuste olhos_tamanho 100"]
@@ -263,4 +267,18 @@ def test_the_face_sections_ask_the_camera_for_the_face():
         editor.select_section(index)
         focus[title] = editor.focus
     assert focus["Rosto"] == focus["Maquiagem"] == "face"
-    assert {t for t, f in focus.items() if f == "face"} == {"Rosto", "Maquiagem"}   # every other section shows the body
+    assert {t for t, f in focus.items() if f == "face"} == {"Olhos", "Rosto", "Nariz", "Maquiagem"}   # every other section shows the body
+
+
+def test_the_eyebrows_are_adjusted_apart_from_the_eyes():
+    from src.clothing.customization import AvatarCustomization, HeadAtlasBuilder
+    builder = HeadAtlasBuilder()
+    atlas = lambda **adjust: np.array(builder.build_atlas(AvatarCustomization(body_adjust=adjust)).convert("RGB"), dtype=int)
+    plain = atlas()
+    brows, eyes = (slice(95, 122), slice(0, 256)), (slice(125, 185), slice(0, 256))   # the face of the atlas: eyebrows over eyes
+    moved_eyes = atlas(olhos_distancia=1.0)
+    assert (moved_eyes[eyes] != plain[eyes]).any() and (moved_eyes[brows] == plain[brows]).all()
+    for name in ("sobrancelha_tamanho", "sobrancelha_altura", "sobrancelha_distancia"):
+        moved = atlas(**{name: 1.0})
+        assert (moved[:125, :256] != plain[:125, :256]).any(), name                    # the eyebrows change
+        assert (moved[135:185, :256] == plain[135:185, :256]).all(), name             # and the eyes stay where they were
