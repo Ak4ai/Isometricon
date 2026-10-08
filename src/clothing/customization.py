@@ -174,6 +174,7 @@ class AvatarCustomization:
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
     ear_style: str = "sem"      # orelhas 3D (ver ears.STYLE_NAMES); "sem": nenhuma
+    ear_color: str = ""         # a cor delas: "" a do modelo, "pele", "cabelo", um nome de ears.EAR_COLORS ou "#rrggbb"
     race: str = ""              # a raça escolhida por último (races.RACES); "": nenhuma, o corpo como veio
     nose_shadow: str = "legado"  # sombra do nariz: "legado" (um trecho fixo) ou "calculada" (do contorno do nariz)
     eye_shape: str = "padrao"   # formato dos olhos anime (ver eye_shapes.SHAPE_NAMES)

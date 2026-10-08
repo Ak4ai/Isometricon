@@ -22,6 +22,7 @@ import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.ears import EAR_COLORS
 from src.clothing.races import RACES
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
@@ -322,6 +323,14 @@ class CharacterEditor:
                 Group("Orelhas", [Option("Sem orelhas" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin orelha {n}",
                                          selected=lambda m, n=n: custom() is not None and getattr(custom(), "ear_style", "sem") == n)
                                   for n in EAR_STYLE_NAMES]),
+                Group("Cor das orelhas", [
+                    Option("Cor da pele", "/skin orelha cor pele alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "ear_color", "") == "pele"),
+                    Option("Cor do cabelo", "/skin orelha cor cabelo alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "ear_color", "") == "cabelo")]
+                    + [Option(n.capitalize(), f"/skin orelha cor {n}", color=EAR_COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "ear_color", "") == n)
+                       for n in EAR_COLORS]),
                 Group("Ajustes das orelhas", [Option(label, "", slider=name) for name, label in EARS.items()]),
             ]
 

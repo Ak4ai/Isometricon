@@ -1,20 +1,23 @@
-"""As orelhas 3D do personagem: placas finas recortadas num contorno, uma de cada lado da cabeça.
+"""As orelhas 3D do personagem: placas recortadas num contorno, uma de cada lado da cabeça.
 
 Cada modelo é um contorno de OUTLINE pontos no plano da orelha (afastando-se da raiz, ao longo
 dela). As de gente ficam nos lados da cabeça, presas pela borda da frente e abertas para fora por
 um ângulo (``flare``): deitadas na cabeça numa orelha humana, bem abertas numa de elfo. As de
-bicho ficam no alto da cabeça (``mount="top"``), em pé ou caídas para o lado (``tilt``), na cor
-do cabelo. Todos os modelos têm os mesmos triângulos, na mesma ordem, então trocar de modelo ou
-mexer num ajuste só move os vértices.
+bicho ficam no alto da cabeça (``mount="top"``), em pé ou caídas: uma orelha caída é curvada de
+verdade (``bend``), sobe da cabeça, dobra para fora e desce ao lado dela. Todos os modelos têm os
+mesmos triângulos, na mesma ordem, então trocar de modelo ou mexer num ajuste só move os vértices.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Mapping, Optional, Sequence, Tuple
+from dataclasses import dataclass, replace
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-OUTLINE = 10          # points of every outline: the same triangles for every model
+OUTLINE = 10          # points of every outline
+STATIONS = 7          # cuts along a bent ear, from its root to its tip
+FRONT = 4 * STATIONS  # triangles of the front of every model (and of its back); a flat ear leaves some empty
+RIM = 2 * STATIONS + 2  # and quads around its edge
 THICKNESS = 0.006     # metres from the front of the plate to its back
 EMBED = 0.004         # metres the root goes into the head (no gap on a rounded head)
 EAR_HEIGHT = 0.125    # metres from the bottom of the head up to the middle of the ear's root (the height of the eyes)
@@ -27,6 +30,10 @@ PINK_SHARE = 0.65
 SCALE_TONES = (1.0, 0.80)           # a scaly ear: its triangles one lighter, one darker
 # What the adjustments do at 1: size as a share, metres up the head, degrees more open.
 SIZE, LIFT, OPEN = 0.5, 0.03, 30.0
+# Colours an ear can be given by name (besides the skin's, the hair's, and any "#rrggbb").
+EAR_COLORS = {"branco": (245, 245, 240), "creme": (236, 214, 180), "caramelo": (196, 140, 84), "marrom": (120, 80, 56),
+              "ruivo": (190, 90, 50), "cinza": (150, 150, 156), "preto": (40, 36, 40), "rosa": (240, 170, 190)}
+SKIN_COAT, HAIR_COAT = "pele", "cabelo"
 
 
 @dataclass(frozen=True)
@@ -36,9 +43,12 @@ class EarShape:
     ``outline``: o contorno (afastando-se da raiz, ao longo dela), em metros, a raiz em 0.
     ``flare``: numa orelha dos lados da cabeça, quanto ela abre para fora, em graus.
     ``mount``: "side" (nos lados, na altura dos olhos) ou "top" (no alto da cabeça).
-    ``tilt``: numa do alto, quanto ela se inclina para fora (0 em pé, mais de 90 caída para o lado).
+    ``tilt``: numa do alto, quanto ela se inclina para fora ao sair da cabeça (0: em pé).
     ``turn``: e quanto a frente dela vira para fora, em graus.
     ``at``: onde fica no alto da cabeça, do meio (0) à borda (1).
+    ``bend``: numa caída, quantos graus ela se curva para fora e para baixo; ``span``: em que
+    parte do comprimento, a partir da raiz, essa curva acontece (o resto desce reto).
+    ``thick``: a espessura da placa, em metros.
     ``coat``: "skin" ou "hair", a cor dela; ``furry``: por dentro é rosada; ``scaly``: em escamas.
     ``other``: o modelo da orelha do outro lado, quando as duas diferem (uma em pé, uma caída).
     """
@@ -48,6 +58,9 @@ class EarShape:
     tilt: float = 0.0
     turn: float = 12.0
     at: float = 0.55
+    bend: float = 0.0
+    span: float = 0.42
+    thick: float = THICKNESS
     coat: str = "skin"
     furry: bool = False
     scaly: bool = False
@@ -59,15 +72,20 @@ def _cm(*points: Tuple[float, float]) -> Tuple[Tuple[float, float], ...]:
     return tuple((away / 100.0, along / 100.0) for away, along in points)
 
 
-def _animal(outline, tilt: float, at: float = 0.55, turn: float = 12.0, other: Optional[EarShape] = None) -> EarShape:
-    return EarShape(outline, mount="top", tilt=tilt, turn=turn, at=at, coat="hair", furry=True, other=other)
+def _animal(outline, tilt: float, at: float = 0.55, turn: float = 12.0, **more) -> EarShape:
+    return EarShape(outline, mount="top", tilt=tilt, turn=turn, at=at, coat="hair", furry=True, **more)
 
 
 # Each outline runs from one end of the root, out along one edge to the tip and back along the
 # other edge to the other end of the root, and ends at the middle of the root.
-_RABBIT = _cm((0, -1.6), (2.5, -2.0), (6.0, -2.1), (10.0, -1.6), (13.0, 0.0), (10.0, 1.6), (6.0, 2.1), (2.5, 2.0), (0, 1.6), (0, 0))
-_RABBIT_UP = _animal(_RABBIT, tilt=8.0, at=0.35, turn=6.0)
-_RABBIT_DOWN = _animal(_RABBIT, tilt=160.0, at=0.9, turn=90.0)  # hanging flat against the side of the head
+# A rabbit's: long and broad. A dog's is broader and thicker still, and not as long.
+_RABBIT = _cm((0, -2.0), (2.5, -2.6), (6.0, -2.8), (10.0, -2.2), (13.0, 0.0), (10.0, 2.2), (6.0, 2.8), (2.5, 2.6), (0, 2.0), (0, 0))
+_RABBIT_UP = _animal(_RABBIT, tilt=8.0, at=0.35, turn=6.0, thick=0.011)
+_RABBIT_DOWN = _animal(_RABBIT, tilt=42.0, at=0.80, bend=134.0, span=0.32, thick=0.011)
+_DOG = _cm((0, -2.8), (1.8, -3.0), (3.6, -2.6), (5.2, -1.7), (6.4, 0.0), (5.2, 1.7), (3.6, 2.6), (1.8, 3.0), (0, 2.8), (0, 0))
+_DOG_LONG = _cm((0, -3.4), (2.2, -4.2), (5.0, -4.6), (7.6, -3.4), (9.2, 0.0), (7.6, 3.4), (5.0, 4.2), (2.2, 4.0), (0, 3.4), (0, 0))
+_DOG_UP = _animal(_DOG, tilt=14.0, thick=0.015)
+_DOG_DOWN = _animal(_DOG_LONG, tilt=55.0, at=0.84, bend=122.0, span=0.34, thick=0.016)
 EAR_STYLES: Dict[str, EarShape] = {
     # A simple human ear, squarish, close to the head.
     "humana": EarShape(_cm((0, -1.7), (1.0, -1.9), (1.8, -1.4), (2.0, -0.5), (2.0, 0.5), (2.0, 1.4), (1.8, 1.9), (1.0, 2.0),
@@ -90,12 +108,10 @@ EAR_STYLES: Dict[str, EarShape] = {
     # A cat's: a neat triangle on top of the head.
     "gato": _animal(_cm((0, -2.2), (1.2, -2.1), (2.6, -1.5), (3.9, -0.7), (5.0, 0.2), (3.8, 0.9), (2.5, 1.6), (1.2, 2.1),
                         (0, 2.2), (0, 0)), tilt=18.0),
-    # A dog's standing up: taller, with a rounded tip.
-    "cachorro": _animal(_cm((0, -2.0), (1.6, -2.1), (3.4, -1.8), (5.0, -1.2), (6.3, 0.0), (5.0, 1.2), (3.4, 1.8), (1.6, 2.1),
-                            (0, 2.0), (0, 0)), tilt=14.0),
-    # A dog's large shaggy ear, lying down the side of the head.
-    "cachorro_caido": _animal(_cm((0, -2.6), (2.5, -3.5), (6.0, -3.8), (9.0, -2.6), (10.5, 0.0), (9.0, 2.6), (6.0, 3.2),
-                                  (2.5, 3.0), (0, 2.6), (0, 0)), tilt=162.0, at=0.92, turn=90.0),
+    # A dog's: standing up, lying down the side of the head (large and shaggy), or one of each.
+    "cachorro": _DOG_UP,
+    "cachorro_caido": _DOG_DOWN,
+    "cachorro_uma_caida": replace(_DOG_UP, other=_DOG_DOWN),
     # A wolf's: large and pointed, with a tuft at the outer edge.
     "lobo": _animal(_cm((0, -2.8), (1.4, -3.0), (3.2, -2.2), (5.4, -1.0), (7.4, 0.3), (5.2, 1.3), (3.6, 1.4), (2.2, 2.6),
                         (0, 2.8), (0, 0)), tilt=22.0),
@@ -104,7 +120,7 @@ EAR_STYLES: Dict[str, EarShape] = {
                           (0, 3.0), (0, 0)), tilt=28.0, at=0.6),
     # A rabbit's: two long ears up, one up and one down, or both down.
     "coelho": _RABBIT_UP,
-    "coelho_uma_caida": EarShape(**{**_RABBIT_UP.__dict__, "other": _RABBIT_DOWN}),
+    "coelho_uma_caida": replace(_RABBIT_UP, other=_RABBIT_DOWN),
     "coelho_caidas": _RABBIT_DOWN,
     # A dragon's: a scaly frill of spines swept back and up.
     "dragao": EarShape(_cm((0, -1.6), (1.6, -2.2), (4.0, -2.4), (3.4, -0.4), (6.4, 0.6), (4.2, 1.8), (6.0, 4.6), (2.4, 3.0),
@@ -115,7 +131,8 @@ EAR_STYLES: Dict[str, EarShape] = {
 }
 NONE = "sem"
 STYLE_NAMES = (NONE,) + tuple(EAR_STYLES)
-ADJUSTMENTS = ("orelha_tamanho", "orelha_altura", "orelha_abertura")
+TONES = ("orelha_matiz", "orelha_saturacao", "orelha_brilho")  # the ear's colour moved from the one it has
+ADJUSTMENTS = ("orelha_tamanho", "orelha_altura", "orelha_abertura") + TONES
 
 
 def _amount(adjust: Optional[Mapping[str, float]], name: str) -> float:
@@ -125,52 +142,123 @@ def _amount(adjust: Optional[Mapping[str, float]], name: str) -> float:
         return 0.0
 
 
+def coat_of(custom: Any) -> Optional[Tuple[float, float, float]]:
+    """A cor que o personagem deu às orelhas (0 a 1), ou None para a de cada modelo: "pele",
+    "cabelo", um nome de EAR_COLORS ou "#rrggbb" em ``AvatarCustomization.ear_color``."""
+    value = str(getattr(custom, "ear_color", "") or "").strip().lower()
+    if value == SKIN_COAT:
+        return tuple(float(c) for c in custom.skin_color_rgb[:3])
+    if value == HAIR_COAT:
+        return tuple(c / 255.0 for c in custom.hair_rgb_255)
+    rgb = EAR_COLORS.get(value)
+    if rgb is None and value.startswith("#") and len(value) == 7:
+        try:
+            rgb = tuple(int(value[k:k + 2], 16) for k in (1, 3, 5))
+        except ValueError:
+            rgb = None
+    return tuple(c / 255.0 for c in rgb) if rgb is not None else None
+
+
+def _bent(shape: EarShape, length: float, start: float):
+    """Where the middle line of a bent ear goes: for a distance from the root, (out of the head,
+    up, the direction it runs in), found by walking the curve."""
+    steps = np.linspace(0.0, length, 65)
+    reach = np.clip(steps / max(shape.span * length, 1e-9), 0.0, 1.0)
+    angle = start + np.radians(shape.bend) * reach * reach * (3.0 - 2.0 * reach)  # from the vertical, leaning out
+    middle = (angle[1:] + angle[:-1]) / 2.0
+    out = np.concatenate([[0.0], np.cumsum(np.sin(middle) * np.diff(steps))])
+    up = np.concatenate([[0.0], np.cumsum(np.cos(middle) * np.diff(steps))])
+    return lambda a: (np.interp(a, steps, out), np.interp(a, steps, up), np.interp(a, steps, angle))
+
+
 def build(shape: EarShape, side: float, adjust: Optional[Mapping[str, float]] = None,
-          skin: Sequence[float] = (1.0, 1.0, 1.0), hair: Sequence[float] = (0.4, 0.3, 0.25)) -> np.ndarray:
+          skin: Sequence[float] = (1.0, 1.0, 1.0), hair: Sequence[float] = (0.4, 0.3, 0.25),
+          coat: Optional[Sequence[float]] = None) -> np.ndarray:
     """Vértices (N, 11: posição, normal, UV, cor), três por triângulo, de uma orelha com o meio da
-    raiz na origem: ``side`` +1 a do lado +x da cabeça, -1 a do outro (espelhada)."""
+    raiz na origem: ``side`` +1 a do lado +x da cabeça, -1 a do outro (espelhada). ``coat``: a
+    cor dela, quando não é a do modelo (a do cabelo num bicho, a da pele nos outros)."""
     grow = SCALE * (1.0 + SIZE * _amount(adjust, "orelha_tamanho"))
     opened = OPEN * _amount(adjust, "orelha_abertura")
-    if shape.mount == "top":
-        tilt, turn = np.radians(min(max(shape.tilt + opened, 0.0), 175.0)), np.radians(shape.turn)
-        away = np.array([np.sin(tilt), np.cos(tilt), 0.0])           # from the root: up, leaning out of the head
-        along = np.array([-np.cos(turn), 0.0, np.sin(turn)])         # along the root, across the head
+    colour = np.asarray(coat if coat is not None else (hair if shape.coat == "hair" else skin), dtype=np.float64)[:3]
+    if any(_amount(adjust, name) for name in TONES):
+        from .customization import shift_colour
+        colour = np.array(shift_colour(tuple(int(round(c * 255)) for c in np.clip(colour, 0.0, 1.0)),
+                                       *(_amount(adjust, name) for name in TONES))) / 255.0
+    inner = colour + (np.array(PINK) - colour) * PINK_SHARE if shape.furry else colour * INNER_TONE
+    points = []  # the middle surface: (position, normal, colour) of each corner, three to a triangle
+    edge = []    # its outline: (position, normal) of the two ends of each stretch
+
+    if shape.bend:
+        # A bent ear, cut across at STATIONS places from the root to the tip: it rises from the
+        # head leaning out, bends over, and comes down beside it. Its width runs front to back.
+        length = shape.outline[4][0]
+        lower, upper = shape.outline[:5], (shape.outline[8], shape.outline[7], shape.outline[6], shape.outline[5], shape.outline[4])
+        line = _bent(shape, length, np.radians(min(max(shape.tilt + opened, 0.0), 80.0)))
+        width = np.array([0.0, 0.0, -1.0])
+
+        def cut(a: float):
+            out, up, angle = line(a)
+            centre = grow * np.array([out, up, 0.0])
+            normal = np.array([np.cos(angle), -np.sin(angle), 0.0])  # its inside: under it at the root, towards the head where it hangs
+            low = float(np.interp(a, [p[0] for p in lower], [p[1] for p in lower]))
+            high = float(np.interp(a, [p[0] for p in upper], [p[1] for p in upper]))
+            return centre + grow * low * width, centre + grow * high * width, normal
+
+        cuts = [cut(length * k / STATIONS) for k in range(STATIONS + 1)]
+        for (a0, b0, n0), (a1, b1, n1) in zip(cuts, cuts[1:]):
+            centre, normal = (a0 + b0 + a1 + b1) / 4.0, (n0 + n1) / 2.0
+            for p, q, np_, nq in ((a0, a1, n0, n1), (a1, b1, n1, n1), (b1, b0, n1, n0), (b0, a0, n0, n0)):
+                points += [(centre, normal, inner), (p, np_, colour), (q, nq, colour)]
+            edge += [((a0, n0), (a1, n1)), ((b1, n1), (b0, n0))]
+        edge += [((cuts[0][1], cuts[0][2]), (cuts[0][0], cuts[0][2]))]  # the root
     else:
-        flare = np.radians(min(max(shape.flare + opened, 5.0), 88.0))
-        away = np.array([np.sin(flare), 0.0, -np.cos(flare)])        # from the root: back, opening out of the head
-        along = np.array([0.0, 1.0, 0.0])                            # along the root, up the head
-    along = along - (along @ away) * away                             # square to it: the outline is not skewed
-    along /= np.linalg.norm(along)
-    out = np.cross(away, along)                                       # the face of the plate that is its front
-    plate = lambda a, b: grow * (a * away + b * along)
-    outline = [plate(a, b) for a, b in shape.outline]
-    # The hollow: by the root in a person's ear; the middle of a furry one, where it is pink.
-    hollow = 0.55 * np.mean(outline, axis=0) if shape.furry else plate(*INNER)
-    half = out * THICKNESS / 2.0
-    coat = np.asarray(hair if shape.coat == "hair" else skin, dtype=np.float64)[:3]
-    inner = coat + (np.array(PINK) - coat) * PINK_SHARE if shape.furry else coat * INNER_TONE
-    triangles = []  # (three corners, colour of each)
-    for k in range(OUTLINE):
-        a, b = outline[k], outline[(k + 1) % OUTLINE]
-        tone = SCALE_TONES[k % 2] if shape.scaly else 1.0
-        triangles.append(((hollow + half, a + half, b + half), (inner if not shape.scaly else coat * tone * INNER_TONE,
-                                                                coat * tone, coat * tone)))               # the front
-        triangles.append(((hollow - half, b - half, a - half), (coat * BACK_TONE * tone,) * 3))             # the back
-        triangles.append(((a + half, a - half, b - half), (coat * BACK_TONE,) * 3))                         # the rim
-        triangles.append(((a + half, b - half, b + half), (coat * BACK_TONE,) * 3))
+        if shape.mount == "top":
+            tilt, turn = np.radians(min(max(shape.tilt + opened, 0.0), 175.0)), np.radians(shape.turn)
+            away = np.array([np.sin(tilt), np.cos(tilt), 0.0])           # from the root: up, leaning out of the head
+            along = np.array([-np.cos(turn), 0.0, np.sin(turn)])         # along the root, across the head
+        else:
+            flare = np.radians(min(max(shape.flare + opened, 5.0), 88.0))
+            away = np.array([np.sin(flare), 0.0, -np.cos(flare)])        # from the root: back, opening out of the head
+            along = np.array([0.0, 1.0, 0.0])                            # along the root, up the head
+        along = along - (along @ away) * away                             # square to it: the outline is not skewed
+        along /= np.linalg.norm(along)
+        out = np.cross(away, along)                                       # the face of the plate that is its front
+        plate = lambda a, b: grow * (a * away + b * along)
+        outline = [plate(a, b) for a, b in shape.outline]
+        # The hollow: by the root in a person's ear; the middle of a furry one, where it is pink.
+        hollow = 0.55 * np.mean(outline, axis=0) if shape.furry else plate(*INNER)
+        for k in range(OUTLINE):
+            a, b = outline[k], outline[(k + 1) % OUTLINE]
+            tone = SCALE_TONES[k % 2] if shape.scaly else 1.0
+            points += [(hollow, out, colour * tone * INNER_TONE if shape.scaly else inner), (a, out, colour * tone), (b, out, colour * tone)]
+            edge.append(((a, out), (b, out)))
+    nowhere = (np.zeros(3), np.array([0.0, 0.0, 1.0]), colour)
+    points += [nowhere] * (3 * FRONT - len(points))            # every model has the same triangles
+    edge += [(nowhere[:2], nowhere[:2])] * (RIM - len(edge))
+
+    half = shape.thick / 2.0
+    middle = np.mean([p for p, _, _ in points], axis=0)
+    triangles = []  # (three positions, three colours, the way it faces)
+    for k in range(0, len(points), 3):
+        trio = points[k:k + 3]
+        facing = np.mean([n for _, n, _ in trio], axis=0)
+        triangles.append(([p + n * half for p, n, _ in trio], [c for _, _, c in trio], facing))                 # the front
+        triangles.append(([p - n * half for p, n, _ in trio][::-1], [colour * BACK_TONE] * 3, -facing))         # the back
+    for (p, n), (q, m) in edge:                                                                                  # the rim
+        outward = (p + q) / 2.0 - middle
+        for corners in ((p + n * half, p - n * half, q - m * half), (p + n * half, q - m * half, q + m * half)):
+            triangles.append((list(corners), [colour * BACK_TONE] * 3, outward))
     rows = np.zeros((len(triangles) * 3, 11))
-    middle = np.mean(outline, axis=0)
-    for k, (corners, colours) in enumerate(triangles):
+    for k, (corners, colours, facing) in enumerate(triangles):
         p = np.array(corners)
         normal = np.cross(p[1] - p[0], p[2] - p[0])
         length = np.linalg.norm(normal)
-        normal = normal / length if length > 1e-12 else out
-        if k % 4 >= 2 and normal @ (p.mean(0) - middle) < 0:  # the rim faces out of the plate
-            normal = -normal
-        elif k % 4 == 0:
-            normal = out
-        elif k % 4 == 1:
-            normal = -out
+        if length > 1e-12:
+            normal = normal / length
+            if normal @ facing < 0:
+                normal = -normal
+        else:  # an empty triangle, or one of no area
+            normal = facing / max(np.linalg.norm(facing), 1e-12)
         rows[3 * k:3 * k + 3, :3] = p
         rows[3 * k:3 * k + 3, 3:6] = normal
         rows[3 * k:3 * k + 3, 8:11] = np.array(colours)
@@ -181,7 +269,8 @@ def build(shape: EarShape, side: float, adjust: Optional[Mapping[str, float]] = 
 
 
 def styled_rows(head_rows: np.ndarray, style: str, adjust: Optional[Mapping[str, float]] = None,
-                skin: Sequence[float] = (1.0, 1.0, 1.0), hair: Sequence[float] = (0.4, 0.3, 0.25)):
+                skin: Sequence[float] = (1.0, 1.0, 1.0), hair: Sequence[float] = (0.4, 0.3, 0.25),
+                coat: Optional[Sequence[float]] = None):
     """(vertex rows, triangles) of the two ears of a style on a head, or None for no ears (an
     unknown style is none too). A person's ears sit on the sides of the head at the height of the
     eyes; an animal's on top of it."""
@@ -197,7 +286,7 @@ def styled_rows(head_rows: np.ndarray, style: str, adjust: Optional[Mapping[str,
     rows = []
     for side in (1.0, -1.0):
         one = shape.other if side < 0 and shape.other is not None else shape
-        ear = build(one, side, adjust, skin, hair)
+        ear = build(one, side, adjust, skin, hair, coat)
         if one.mount == "top":
             ear[:, :3] += np.array([side * one.at * np.abs(head[:, 0]).max(), head[:, 1].max() - EMBED + lift, middle])
         else:
@@ -205,3 +294,12 @@ def styled_rows(head_rows: np.ndarray, style: str, adjust: Optional[Mapping[str,
         rows.append(ear)
     rows = np.concatenate(rows).astype(np.float32)
     return rows, np.arange(len(rows), dtype=np.uint32).reshape(-1, 3)
+
+
+def rows_for(head_rows: np.ndarray, custom: Any, adjust: Optional[Mapping[str, float]] = None):
+    """As orelhas de um personagem (``AvatarCustomization``) numa cabeça: o modelo, os ajustes e
+    as cores dele. None sem orelhas."""
+    if adjust is None:
+        adjust = getattr(custom, "resolved_body_adjust", None)
+    return styled_rows(head_rows, getattr(custom, "ear_style", NONE), adjust, getattr(custom, "skin_color_rgb", (1.0, 1.0, 1.0)),
+                       tuple(c / 255.0 for c in getattr(custom, "hair_rgb_255", (102, 77, 64))), coat_of(custom))

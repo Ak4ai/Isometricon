@@ -735,3 +735,55 @@ def test_animal_ears_stand_on_top_of_the_head_in_the_colour_of_the_hair():
         tones = np.unique(np.round(right(name)[:, 8], 3))
         assert len(tones) >= 3 and right(name)[:, 8].max() <= skin[0] + 1e-6, name      # scales: lighter and darker, of the skin
     assert np.ptp(right("dragao")[:, 0]) > 3 * np.ptp(right("reptil")[:, 0])
+
+
+def test_lop_ears_are_bent_and_the_dog_is_thicker_and_shorter_than_the_rabbit():
+    from src.clothing import ears
+    styles = ears.EAR_STYLES
+    assert {"cachorro_uma_caida", "coelho_uma_caida", "cachorro_caido", "coelho_caidas"} <= set(styles)
+    rabbit, dog = styles["coelho_caidas"], styles["cachorro_caido"]
+    assert rabbit.bend > 90 and dog.bend > 90 and styles["coelho"].bend == 0
+    assert dog.thick > rabbit.thick > ears.THICKNESS and styles["cachorro"].thick > styles["coelho"].thick   # thicker, the dog most
+    length = lambda shape: max(a for a, _ in shape.outline)
+    width = lambda shape: max(b for _, b in shape.outline) - min(b for _, b in shape.outline)
+    assert length(dog) < length(rabbit) and width(dog) > width(rabbit)                    # and not as long, but broader
+    assert styles["cachorro_uma_caida"].other is dog and styles["cachorro_uma_caida"].bend == 0
+    for name in ("coelho_caidas", "cachorro_caido"):
+        ear = ears.build(styles[name], 1.0)
+        front = ear.reshape(-1, 3, 11)[:2 * ears.FRONT:2].reshape(-1, 11)                 # the corners of the front triangles
+        used = front[np.abs(front[:, :3]).sum(axis=1) > 1e-9][:, :3]
+        assert used[:, 1].max() > -0.01 and used[:, 1].min() < -0.05, name                # from the top of the head, well down
+        assert used[:, 0].max() > 0.02, name                                              # and out to the side
+        middle = used - used.mean(axis=0)
+        assert np.linalg.svd(middle, compute_uv=False)[2] > 0.004, name                   # not a flat plate: curved
+        normals = front[:, 3:6]
+        assert normals[:, 0].max() > 0.2 and normals[:, 0].min() < -0.8, name             # its inside turns with it: to the head where it hangs
+    flat = ears.build(styles["coelho"], 1.0)
+    used = flat.reshape(-1, 3, 11)[:2 * ears.FRONT:2].reshape(-1, 11)[:3 * ears.OUTLINE, :3]
+    assert np.linalg.svd(used - used.mean(axis=0), compute_uv=False)[2] < 1e-6            # the standing one is a plate
+    assert len({ears.styled_rows(head_box(), name)[0].shape for name in styles}) == 1     # every model: the same triangles
+
+
+def test_the_ears_take_a_colour_of_their_own_or_the_skin_s_at_a_click():
+    from src.clothing import ears
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: None, refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    custom.ear_style = "gato"
+    hair, skin = tuple(c / 255.0 for c in custom.hair_rgb_255), tuple(custom.skin_color_rgb[:3])
+    colour = lambda: ears.rows_for(head_box(), custom)[0][:, 8:11].max(axis=0)             # the lightest of the ear: its coat (or the pink inside)
+    coat = lambda: ears.rows_for(head_box(), custom)[0][1, 8:11]                           # an outline corner of the front: the coat itself
+    assert ears.coat_of(custom) is None and np.allclose(coat(), hair, atol=1e-6)          # an animal's: the hair's
+    assert handler.execute("/skin orelha cor pele alternar")[0] and custom.ear_color == "pele"
+    assert np.allclose(coat(), skin, atol=1e-6)
+    assert handler.execute("/skin orelha cor pele alternar")[0] and custom.ear_color == ""   # the check, again: off
+    assert handler.execute("/skin orelha cor cabelo")[0] and handler.execute("/skin orelha cor cabelo")[0] and custom.ear_color == "cabelo"
+    assert handler.execute("/skin orelha cor branco")[0] and np.allclose(coat(), np.array(ears.EAR_COLORS["branco"]) / 255.0, atol=1e-6)
+    assert handler.execute("/skin orelha cor #20c0a0")[0] and np.allclose(coat(), [32 / 255, 192 / 255, 160 / 255], atol=1e-6)
+    assert not handler.execute("/skin orelha cor fluorescente")[0] and custom.ear_color == "#20c0a0"
+    assert handler.execute("/skin orelha cor auto")[0] and custom.ear_color == "" and np.allclose(coat(), hair, atol=1e-6)
+    plain = coat().copy()
+    custom.body_adjust = {"orelha_brilho": 1.0}
+    assert coat().sum() > plain.sum()                                                      # and its tone is moved by the controls
+    custom.ear_style, custom.body_adjust = "elfo", {}
+    assert np.allclose(coat(), skin, atol=1e-6) and colour().max() <= max(skin) + 1e-6     # a person's: the skin's
+    assert set(ears.TONES) <= set(body_shape.EARS) and set(ears.ADJUSTMENTS) == set(body_shape.EARS)
