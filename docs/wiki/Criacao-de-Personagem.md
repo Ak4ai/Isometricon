@@ -126,7 +126,15 @@ roupa e cabelo (`src/clothing/body_shape.py`).
   da boca e a base saía rosada; nos formatos gerados ele para antes (`nose.UV_SPAN`).
 - **Sombra do nariz:** um trecho um pouco mais escuro pintado na textura do rosto, entre os olhos, como na textura
   antiga da cabeça. A malha do nariz usa esse pedaço da textura, então escurece junto. O controle vai de sem
-  sombra (-100) ao dobro (+100), e a sombra acompanha o tamanho, a largura e a altura do nariz.
+  sombra (-100) ao dobro (+100), e a sombra acompanha o tamanho, a largura e a altura do nariz. Essa é a sombra
+  **legada** (`/skin nariz sombra legado`, o padrão).
+- **Sombra calculada** (`/skin nariz sombra calculada`, grupo "Sombra do nariz"): feita a partir do nariz em uso. A
+  malha do formato, com todos os ajustes, é vista de frente na textura do rosto (`nose.model_rows`,
+  `nose.face_pixels`, medidas em `FACE_PIXELS`): o contorno ganha uma borda de sombra, e cada ponto lança a sua para
+  o lado e para baixo conforme o quanto sai do rosto (`NOSE_CAST_FALL`), então um nariz projetado tem sombra mais
+  longa e um de narinas largas, mais larga. Trocar o formato ou mexer num ajuste do nariz refaz a textura.
+- **Bloco com narinas** (`/skin nariz bloco_narinas`): o nariz em bloco do modelo antigo com as asas das narinas do
+  "batata" ao lado da ponta. Como o bloco, é uma malha própria: trocar para ele ou a partir dele reconstrói o nariz.
 - **O rosto muda sem recarregar o personagem:** olhos (cor, tamanho, altura, distância), sobrancelhas e boca refazem
   só a textura da cabeça e a trocam no lugar (`CharacterModel.refresh_face`, ~30 ms). Só o que muda geometria
   reconstrói o personagem: pôr ou tirar o nariz, e os olhos clássicos, que o tiram.

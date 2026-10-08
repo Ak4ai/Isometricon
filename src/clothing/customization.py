@@ -173,6 +173,7 @@ class AvatarCustomization:
     hair_2d_style: Optional[Union[Hair2DStyle, str]] = None
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
+    nose_shadow: str = "legado"  # sombra do nariz: "legado" (um trecho fixo) ou "calculada" (do contorno do nariz)
     eye_shape: str = "padrao"   # formato dos olhos anime (ver eye_shapes.SHAPE_NAMES)
     # Cor da íris do outro olho (o esquerdo do personagem), para olhos de cores diferentes; None = igual.
     iris_color_other: Optional[Union[IrisColor, str, Tuple[int, int, int]]] = None
@@ -368,6 +369,7 @@ class AvatarCustomization:
             f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
             f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_tamanho', 'sobrancelha_altura', 'sobrancelha_distancia')]}_"
             f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
+            f"ns_{self.nose_shadow}_{(self.nose_style, sorted((k, round(float(v), 3)) for k, v in (self.body_adjust or {}).items() if k.startswith('nariz_'))) if self.nose_shadow == 'calculada' else ''}_"
             f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}_es_{self.eye_shape}"
         )
 
@@ -432,6 +434,11 @@ EYE_SHADOW, EYE_SHADOW_REACH = 0.55, (0.36, 0.30)
 # the nose's adjustments (its size, its width, and pixels of its height).
 NOSE_SHADOW_BOX, NOSE_SHADOW, NOSE_SHADOW_TONE = (117, 143, 139, 198), 0.14, 0.55
 NOSE_SHADOW_GROWTH = (0.5, 0.6, 12.0)
+# The shadow computed from the nose: how much stronger than the legacy one where the nose casts
+# it, the share of that around the nose's outline and on the nose itself, how far the shadow falls
+# to the side and down (pixels for each pixel the nose stands out), and pixels of the rim around it.
+NOSE_CAST, NOSE_CONTACT, NOSE_OWN, NOSE_CAST_FALL, NOSE_RIM = 2.6, 0.55, 0.35, (-0.85, 0.70), 2
+NOSE_SHADOWS = ("legado", "calculada")
 
 
 class LayeredHeadCompositor:
@@ -528,7 +535,36 @@ class LayeredHeadCompositor:
         # (a malha do nariz usa esse pedaço da textura, então escurece com ele).
         # ---------------------------------------------------------
         shadow = NOSE_SHADOW * (1.0 + cust.face_adjust("nariz_sombra"))
-        if cust.should_render_3d_nose and shadow > 0.0:
+        if cust.should_render_3d_nose and shadow > 0.0 and getattr(cust, "nose_shadow", "legado") == "calculada":
+            # Calculada: o contorno do nariz ativo visto de frente, e a sombra que ele lança no rosto
+            # (cada ponto cai para o lado e para baixo conforme o quanto sai do rosto).
+            from . import body_shape, nose as noses
+            unit = canvas.width / 512.0
+            rows8, triangles = noses.model_rows(getattr(cust, "nose_style", "padrao"), cust.body_adjust)
+            points = rows8[:, :3].astype(np.float64)
+            if body_shape.nose_adjusted(cust.body_adjust):
+                points = body_shape.nose_shape(points, cust.body_adjust)
+            flat = noses.face_pixels(points)
+            out = np.clip(points[:, 2] - noses.FACE_FRONT, 0.0, None) * noses.FACE_PIXELS[1]  # pixels out of the face
+            fallen = flat + out[:, None] * np.array(NOSE_CAST_FALL)
+            outline, cast = Image.new("L", canvas.size, 0), Image.new("L", canvas.size, 0)
+            for pen, where in ((ImageDraw.Draw(outline), flat), (ImageDraw.Draw(cast), fallen)):
+                for trio in triangles:
+                    pen.polygon([tuple(xy) for xy in (where[trio] * unit).tolist()], fill=255)
+            # the shadow joins the nose: from each point of it to where that point's shadow falls
+            pen = ImageDraw.Draw(cast)
+            for a, b in zip((flat * unit).tolist(), (fallen * unit).tolist()):
+                pen.line([tuple(a), tuple(b)], fill=255, width=max(1, int(round(2 * unit))))
+            rim = outline.filter(ImageFilter.MaxFilter(2 * int(round(NOSE_RIM * unit)) + 1))
+            strength = min(shadow * NOSE_CAST, 1.0)
+            level = np.maximum(np.array(cast, dtype=np.float64), np.array(rim, dtype=np.float64) * NOSE_CONTACT)
+            level = np.array(Image.fromarray(level.astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2 * unit)), dtype=np.float64)
+            level[np.array(outline) > 0] = 255.0 * NOSE_OWN  # the nose itself (it takes its colour here): even
+            mask = Image.fromarray((level * strength).astype(np.uint8))
+            dark = Image.new("RGBA", canvas.size, tuple(int(c * NOSE_SHADOW_TONE) for c in cust.skin_rgb_255) + (255,))
+            dark.putalpha(mask)
+            canvas.alpha_composite(dark)
+        elif cust.should_render_3d_nose and shadow > 0.0:
             unit = canvas.width / 512.0
             size = 1.0 + NOSE_SHADOW_GROWTH[0] * cust.face_adjust("nariz_tamanho")
             half_w = (NOSE_SHADOW_BOX[2] - NOSE_SHADOW_BOX[0]) / 2 * size * (1.0 + NOSE_SHADOW_GROWTH[1] * cust.face_adjust("nariz_largura"))

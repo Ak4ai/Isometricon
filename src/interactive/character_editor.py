@@ -288,6 +288,10 @@ class CharacterEditor:
                     Option(n.replace("_", " ").capitalize(), f"/skin nariz {n}",
                            selected=lambda m, n=n: custom() is not None and custom().should_render_3d_nose and getattr(custom(), "nose_style", "padrao") == n)
                     for n in NOSE_STYLE_NAMES]),
+                Group("Sombra do nariz", [
+                    Option(label, f"/skin nariz sombra {kind}",
+                           selected=lambda m, kind=kind: custom() is not None and getattr(custom(), "nose_shadow", "legado") == kind)
+                    for kind, label in (("legado", "Legado"), ("calculada", "Calculada"))]),
                 Group("Ajustes do nariz", [Option(label, "", slider=name) for name, label in NOSE.items()]),
             ]
 
