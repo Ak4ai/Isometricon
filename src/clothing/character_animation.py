@@ -692,7 +692,8 @@ class CharacterAnimator:
         if "ears" not in named or "head" not in named:
             return None
         custom = getattr(self.model, "customization", None)
-        made = ears.styled_rows(self._bound_rows[named["head"]], style, adjust, getattr(custom, "skin_color_rgb", (1.0, 1.0, 1.0)))
+        made = ears.styled_rows(self._bound_rows[named["head"]], style, adjust, getattr(custom, "skin_color_rgb", (1.0, 1.0, 1.0)),
+                                tuple(c / 255.0 for c in getattr(custom, "hair_rgb_255", (102, 77, 64))))
         if made is None or made[0].shape != self._bound_rows[named["ears"]].shape:
             return None
         return made[0] if not np.array_equal(made[0], self._bound_rows[named["ears"]]) else None

@@ -1545,7 +1545,8 @@ class CharacterModel:
             # sides of this head, which turn with it.
             from .ears import styled_rows as ear_rows
             ears = ear_rows(v_h, getattr(self.customization, "ear_style", "sem"),
-                            getattr(self.customization, "resolved_body_adjust", None), self.customization.skin_color_rgb)
+                            getattr(self.customization, "resolved_body_adjust", None), self.customization.skin_color_rgb,
+                            tuple(c / 255.0 for c in self.customization.hair_rgb_255))  # an animal's ears are the hair's colour
             if ears is not None:
                 self.parts.append(CharacterPart("ears", TexturedMesh(ears[0].flatten(), ears[1].flatten()), self.white_tex_id))
 
