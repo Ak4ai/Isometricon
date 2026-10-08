@@ -351,12 +351,10 @@ class CharacterEditor:
             worn = lambda what: (getattr(custom(), "makeup", None) or {}).get(what) if custom() is not None else None
             detail = lambda word: custom() is not None and word in custom().resolved_face_detail
             def item(title: str, name: str) -> List[Group]:
-                """As cores de um item, tirá-lo, e os controles dele (como é posto e a cor mexida)."""
+                """As cores de um item e os controles dele (como é posto e a cor mexida)."""
                 return [Group(title, [Option(n.capitalize(), f"/skin maquiagem {name} {n}", color=MAKEUP_COLORS[n],
                                              selected=lambda m, n=n: worn(name) == n) for n in MAKEUP_COLORS]),
-                        Group(f"Ajustes: {title.lower()}", [Option(f"Sem {name}", f"/skin maquiagem {name} sem",
-                                                                   selected=lambda m: not worn(name))]
-                              + [Option(label, "", slider=slider) for slider, label in MAKEUP_SLIDERS[name]])]
+                        Group(f"Ajustes: {title.lower()}", [Option(label, "", slider=slider) for slider, label in MAKEUP_SLIDERS[name]])]
 
             return item("Batom", "batom") + item("Sombra dos olhos", "sombra") + item("Blush", "blush") + [
                 Group("Contorno", [Option("Sem contorno", "/skin maquiagem contorno sem", selected=lambda m: not worn("contorno")),
@@ -364,7 +362,8 @@ class CharacterEditor:
                                    Option("Marcado", "/skin maquiagem contorno marcado", selected=lambda m: worn("contorno") == "marcado")]),
                 Group("Sombras do rosto", [Option(label, "", slider=name) for name, label in SHADING.items()]),
                 Group("Rosto", [Option("Sardas", "/skin maquiagem sardas alternar", selected=lambda m: detail("freckles"), check=True)]),
-                Group("Tirar", [Option("Sem maquiagem", "/skin maquiagem sem")]),
+                Group("Tirar", [Option(f"Sem {name}", f"/skin maquiagem {name} sem") for name in ("batom", "sombra", "blush")]
+                      + [Option("Sem maquiagem", "/skin maquiagem sem")]),
             ]
 
         def fine() -> List[Group]:
