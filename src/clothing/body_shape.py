@@ -35,8 +35,12 @@ BODY_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
 BODY = {name: label for _, group in BODY_GROUPS for name, label in group}
 FACE = {"olhos_tamanho": "Tamanho dos olhos", "olhos_altura": "Altura dos olhos",
         "olhos_distancia": "Distância entre os olhos", "sobrancelha_altura": "Altura das sobrancelhas"}
-NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_largura": "Largura do nariz",
-        "nariz_projecao": "Projeção do nariz", "nariz_altura": "Altura do nariz", "nariz_sombra": "Sombra do nariz"}
+NOSE = {"nariz_tamanho": "Tamanho do nariz", "nariz_altura": "Posição do nariz (altura)",
+        "nariz_projecao": "Projeção do nariz", "nariz_largura": "Largura do nariz inteiro",
+        "nariz_ponte_largura": "Largura da ponte", "nariz_ponte_altura": "Altura da ponte",
+        "nariz_ponta_largura": "Largura da ponta", "nariz_base_largura": "Largura da base",
+        "nariz_base_altura": "Altura da base", "nariz_ponta_cor": "Cor da ponta (rosada)",
+        "nariz_sombra": "Sombra do nariz"}
 ADJUSTMENTS = {**BODY, **FACE, **NOSE}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
 REDRAWS_FACE = set(FACE) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}

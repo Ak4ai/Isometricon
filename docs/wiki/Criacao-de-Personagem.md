@@ -70,11 +70,20 @@ roupa e cabelo (`src/clothing/body_shape.py`).
   posto no rosto de cada cabeça (`styled_rows`) e preso a ela.
 - **Formatos de nariz** (`/skin nariz <formato>`, grupo "Formato do nariz"): padrão, projetado, ponta larga, narinas
   largas, aquilino (ponte curva para fora), arrebitado (ponte para dentro e ponta levantada), fino, largo, botão,
-  longo, e bloco (a malha antiga, objeto `nariz.002`, como era). Os formatos gerados têm os mesmos triângulos, então
+  longo; os curtos e largos, com as **asas das narinas** como um bloco de cada lado da ponta (`wing_width`,
+  `wing_height`, `wing_depth`): botão largo, botão arrebitado, narinas grandes, achatado, batata e aberto; e bloco
+  (a malha antiga, objeto `nariz.002`, como era). Nos formatos sem asas os blocos têm tamanho zero. Os formatos gerados têm os mesmos triângulos, então
   trocar entre eles muda a malha no lugar; só o bloco reconstrói o personagem. Para um formato novo, acrescente
   uma entrada em `nose.NOSE_STYLES`.
-- **Ajustes do nariz:** tamanho, largura, projeção e altura valem por cima de qualquer formato, em torno do ponto
-  onde o nariz se apoia no rosto (`body_shape.nose_shape`), sem reconstruir o personagem.
+- **Ajustes do nariz inteiro:** tamanho, largura, projeção e posição valem por cima de qualquer formato, em torno
+  do ponto onde o nariz se apoia no rosto (`body_shape.nose_shape`).
+- **Ajustes de cada parte** (`nose.adjusted`, mudam as medidas do formato; não valem para o bloco): largura da
+  ponte, altura da ponte (quanto ela sai do rosto), largura da ponta, largura da base (narinas e asas) e altura da
+  base (as asas ficam mais altas e o nariz começa a alargar mais acima).
+- **Cor da ponta:** a cor dos vértices da ponta e das asas multiplica a textura (`nose.tip_colours`): positivo
+  deixa mais rosada, 0 é a cor da pele, negativo escurece um pouco. A ponte fica sempre na cor da pele.
+- O nariz pega a cor de um trecho da textura do rosto entre os olhos. O trecho do nariz antigo encostava na borda
+  da boca e a base saía rosada; nos formatos gerados ele para antes (`nose.UV_SPAN`).
 - **Sombra do nariz:** um trecho um pouco mais escuro pintado na textura do rosto, entre os olhos, como na textura
   antiga da cabeça. A malha do nariz usa esse pedaço da textura, então escurece junto. O controle vai de sem
   sombra (-100) ao dobro (+100), e a sombra acompanha o tamanho, a largura e a altura do nariz.
