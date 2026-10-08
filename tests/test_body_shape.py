@@ -399,3 +399,34 @@ def test_the_eye_models_are_cut_from_the_original_eye():
         assert abs(box[3] - old[3]) <= 8 and blue(shaped).sum() > 0.3 * blue(base).sum(), name   # at the same height, the iris showing
     wing = lambda name: np.array(shape_eyes(base, name))[:, :128, 3].any(axis=0).nonzero()[0].min()
     assert wing("masculino") > wing("padrao") and wing("serio") > wing("padrao")          # without the wing of lashes
+
+
+def test_the_block_nose_with_nostrils_is_the_old_block_and_two_wings():
+    from src.clothing import nose
+    block, _ = nose.model_rows("bloco")
+    winged, triangles = nose.model_rows("bloco_narinas")
+    assert "bloco_narinas" in nose.STYLE_NAMES and len(winged) > len(block)
+    np.testing.assert_array_equal(winged[:len(block)], block)                      # the block as it was
+    wings = winged[len(block):]
+    assert triangles.max() == len(winged) - 1
+    assert wings[:, 0].min() < block[:, 0].min() and wings[:, 0].max() > block[:, 0].max()   # one on each side
+    assert abs(wings[:, 1].min() - block[:, 1].min()) < 1e-9 and wings[:, 1].max() < block[:, 1].max()   # at the tip, not up the bridge
+
+
+def test_the_computed_nose_shadow_follows_the_nose_in_use():
+    from src.clothing.customization import HeadAtlasBuilder
+    builder = HeadAtlasBuilder()
+    atlas = lambda **fields: np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    bare = atlas(body_adjust={"nariz_sombra": -1.0})
+    dark = lambda image: (bare - image).sum(axis=2) > 6                              # where a shadow darkened the skin
+    legacy, plain = dark(atlas()), dark(atlas(nose_shadow="calculada"))
+    wide, short = dark(atlas(nose_shadow="calculada", nose_style="narinas_grandes")), dark(atlas(nose_shadow="calculada", nose_style="botao"))
+    assert legacy.any() and plain.any() and (legacy != plain).any()
+    assert (dark(atlas(nose_style="botao")) == legacy).all()                         # the legacy one is the same for every nose
+    rows = lambda mask: np.nonzero(mask.any(axis=1))[0]
+    columns = lambda mask: np.nonzero(mask.any(axis=0))[0]
+    assert rows(short).min() > rows(plain).min() + 10                                # a short nose: a short shadow
+    assert np.ptp(columns(wide)) > np.ptp(columns(plain)) + 6                        # wide nostrils: a wider one
+    assert not plain[:, 160:].any() and not plain[:120].any()                        # and it stays by the nose
+    wider = dark(atlas(nose_shadow="calculada", body_adjust={"nariz_base_largura": 1.0}))
+    assert (wider != plain).any()                                                    # the adjustments of the nose move it too

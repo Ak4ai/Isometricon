@@ -51,6 +51,8 @@ SKIN = {"vitiligo": "Vitiligo (quantidade)", "vitiligo_forma": "Vitiligo (desenh
 ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
 REDRAWS_FACE = set(FACE) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
+# With the shadow computed from the nose (customization.nose_shadow), every adjustment of the nose redraws it.
+REDRAWS_SHADOW = set(NOSE)
 
 # How much each adjustment changes at 1 (and the opposite at -1).
 HEIGHT = 0.15          # of the whole character
