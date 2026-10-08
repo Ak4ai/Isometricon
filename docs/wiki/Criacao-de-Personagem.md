@@ -28,6 +28,11 @@ divergem.
 | **Shift + arrastar** ou botão do meio | move a câmera |
 | **Q / E** | gira a câmera 90° |
 
+**Câmera no rosto:** nas seções Rosto e Maquiagem a câmera vai sozinha para o rosto: na altura da cabeça (a da
+pose atual, com os ajustes de altura e pescoço), de perto, na horizontal e com o personagem parado de frente. Dá
+para girar, inclinar e dar zoom a partir daí; ao trocar para outra seção volta o enquadramento de corpo inteiro
+que estava antes (`CharacterEditor.focus`, tratado no laço principal).
+
 ## 🗂️ Seções
 
 | Seção | Opções | Comando |

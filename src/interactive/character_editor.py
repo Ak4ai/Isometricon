@@ -60,6 +60,7 @@ DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged side
 TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
 TILT_LIMITS = (-20.0, 80.0)  # from a little below the character to almost straight above
 SPIN_DEGREES = 30.0  # and this much each second on its own
+FACE_SECTIONS = ("Rosto", "Maquiagem")  # sections worked on with the camera close to the face
 
 BACKGROUND = (22, 24, 30, 240)
 TAB_STRIP = (15, 16, 20, 245)
@@ -348,6 +349,11 @@ class CharacterEditor:
             Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
             Section("Prontos", looks),
         ]
+
+    @property
+    def focus(self) -> str:
+        """O que a câmera deve enquadrar na seção aberta: "face" (o rosto, de frente) ou "body"."""
+        return "face" if self.sections[self.active].title in FACE_SECTIONS else "body"
 
     def groups(self) -> List[Group]:
         if self._groups is None:
