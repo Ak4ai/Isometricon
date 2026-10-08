@@ -31,13 +31,13 @@ SAVE_PATH = os.path.join(PROJECT_ROOT, "saves", "personagem.json")
 VERSION = 1
 
 # What the model wears, and the hair's manual placement.
-WORN = ("top_id", "bottom_id", "outer_top_id", "shoes_id", "hair_id", "tool_id")
+WORN = ("top_id", "bottom_id", "outer_top_id", "shoes_id", "hair_id", "tool_id", "extra_ids")
 HAIR_PLACEMENT = ("hair_offset_x", "hair_offset_y", "hair_offset_z", "hair_scale_x", "hair_scale_y", "hair_scale_z")
 # Paths chosen while the model is built: they depend on the body and are found again on loading.
 NOT_SAVED = ("custom_face_path", "custom_hair_obj", "custom_hair_tex")
 ENUMS = {"body_type": BodyType, "head_type": HeadType, "face": FaceOption, "hair_style": HairStyle,
          "hair_color": HairColor, "eye_style": EyeStyle, "iris_color": IrisColor, "mouth_style": MouthStyle,
-         "eyebrow_style": EyebrowStyle, "eyebrow_color": HairColor}
+         "eyebrow_style": EyebrowStyle, "eyebrow_color": HairColor, "iris_color_other": IrisColor}
 # Command-line options that choose the character themselves: with any of them the save is not loaded.
 CHARACTER_FLAGS = ("--novo", "--new", "--female", "--fem", "--woman", "--mulher", "--male", "--man", "--homem",
                    "--masculino", "--body", "--corpo", "--model", "--head", "--mouth", "--eyes", "--iris",
@@ -91,6 +91,7 @@ def model_arguments(data: Dict[str, Any]) -> Dict[str, Any]:
     arguments: Dict[str, Any] = {"customization": customization_from(data)}
     for name in WORN:
         arguments[name] = (data.get("veste") or {}).get(name)
+    arguments["extra_ids"] = list(arguments.get("extra_ids") or [])
     return arguments
 
 

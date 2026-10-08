@@ -19,7 +19,8 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, FACE, NOSE, REDRAWS_FACE
+from src.clothing.body_shape import BODY_GROUPS, FACE, NOSE, REDRAWS_FACE, SKIN
+from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
@@ -102,7 +103,7 @@ class Option:
             "swatch" if self.color is not None else "text"
 
 
-CARD_COMMANDS = ("/skin top ", "/skin calca ", "/skin jaqueta ", "/skin sapato ", "/skin vestir ")
+CARD_COMMANDS = ("/skin top ", "/skin calca ", "/skin jaqueta ", "/skin sapato ", "/skin vestir ", "/skin extra ")
 
 
 @dataclass
@@ -242,6 +243,7 @@ class CharacterEditor:
                                       for n in SKIN_TONES]),
                 Group("Cabeça", [Option(n.capitalize(), f"/skin cabeca {n}", selected=lambda m, v=HEADS[n]: custom() is not None and _value(custom().head_type) == _value(v))
                                  for n in ("arredondada", "quadrada")]),
+                Group("Pele", [Option(label, "", slider=name) for name, label in SKIN.items()]),
             ]
 
         def face() -> List[Group]:
@@ -250,6 +252,13 @@ class CharacterEditor:
                                 for n in PORTUGUESE_EYE_STYLES]),
                 Group("Cor dos olhos", [Option(n.capitalize(), f"/skin olhos {n}", color=EYE_RGB[n],
                                                selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(custom().iris_color) == _value(v))
+                                        for n in EYE_COLORS]),
+                Group("Olho direito", [Option(n.capitalize(), f"/skin olho direito {n}", color=EYE_RGB[n],
+                                              selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(custom().iris_color) == _value(v))
+                                       for n in EYE_COLORS]),
+                Group("Olho esquerdo", [Option(n.capitalize(), f"/skin olho esquerdo {n}", color=EYE_RGB[n],
+                                               selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(
+                                                   custom().iris_color_other if custom().iris_color_other is not None else custom().iris_color) == _value(v))
                                         for n in EYE_COLORS]),
                 Group("Boca", [Option(n.capitalize(), f"/skin boca {n}", selected=lambda m, v=MOUTHS[n]: custom() is not None and _value(custom().mouth_style) == _value(v))
                                for n in PORTUGUESE_MOUTHS]),
@@ -287,6 +296,31 @@ class CharacterEditor:
                                     for n in HAIR_COLORS])]
             return groups + ([Group("Cabelos do Roblox", worn)] if worn else [])
 
+        def makeup() -> List[Group]:
+            worn = lambda what: (getattr(custom(), "makeup", None) or {}).get(what) if custom() is not None else None
+            detail = lambda word: custom() is not None and word in custom().resolved_face_detail
+            return [
+                Group("Batom", [Option(n.capitalize(), f"/skin maquiagem batom {n}", color=MAKEUP_COLORS[n],
+                                       selected=lambda m, n=n: worn("batom") == n) for n in MAKEUP_COLORS]),
+                Group("Sombra dos olhos", [Option(n.capitalize(), f"/skin maquiagem sombra {n}", color=MAKEUP_COLORS[n],
+                                                  selected=lambda m, n=n: worn("sombra") == n) for n in MAKEUP_COLORS]),
+                Group("Rosto", [Option("Blush", "/skin maquiagem blush alternar", selected=lambda m: detail("blush")),
+                                Option("Sardas", "/skin maquiagem sardas alternar", selected=lambda m: detail("freckles"))]),
+                Group("Tirar", [Option("Sem batom", "/skin maquiagem batom sem"), Option("Sem sombra", "/skin maquiagem sombra sem"),
+                                Option("Sem maquiagem", "/skin maquiagem sem")]),
+            ]
+
+        def extras() -> List[Group]:
+            worn = lambda m: [str(i) for i in getattr(m, "extra_ids", None) or []]
+            groups = [Group("Tirar", [Option("Nenhuma peça extra", "/skin extra none", selected=lambda m: not worn(m))])]
+            for title, kind in (("De baixo", "bottom"), ("Vestidos e saias", "dress"), ("De cima", "top"), ("Jaquetas", "jacket")):
+                items = self._catalog.get(kind, [])
+                if items:
+                    groups.append(Group(f"{title} (clique veste ou tira)", [
+                        Option(i.name, f"/skin extra {i.asset_id}", image=i.image or "",
+                               selected=lambda m, a=i.asset_id: str(a) in worn(m)) for i in items]))
+            return groups
+
         def looks() -> List[Group]:
             return [Group("Aparências prontas", [Option(n.replace("_", " ").capitalize(), f"/skin preset {n}") for n in PRESETS]),
                     Group("Recomeçar", [Option("Padrão", "/skin reset"), Option("Tirar roupas", "/skin tirar tudo")])]
@@ -295,6 +329,7 @@ class CharacterEditor:
             Section("Corpo", body),
             Section("Ajustes", shape),
             Section("Rosto", face),
+            Section("Maquiagem", makeup),
             Section("Cabelo", hair),
             Section("Superior", lambda: [Group("Roupa de cima", self._garments("top", "top", "top_id"))]),
             Section("Jaqueta", lambda: [Group("Por cima da roupa", self._garments("jacket", "jaqueta", "outer_top_id"))]),
@@ -303,6 +338,7 @@ class CharacterEditor:
                 Option(i.name, f"/skin vestir {i.asset_id}", image=i.image or "",
                        selected=lambda m, a=i.asset_id: _same(getattr(m, "top_id", None), a) or _same(getattr(m, "bottom_id", None), a))
                 for i in self._catalog.get("dress", [])])]),
+            Section("Extras", extras),
             Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
             Section("Prontos", looks),
         ]

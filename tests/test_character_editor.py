@@ -67,7 +67,7 @@ def test_a_click_on_an_option_runs_its_chat_command():
 def test_tabs_change_section_and_the_wheel_scrolls_only_over_the_panel():
     editor, _ = make_editor()
     titles = [section.title for section in editor.sections]
-    assert titles[:4] == ["Corpo", "Ajustes", "Rosto", "Cabelo"] and "Superior" in titles and "Inferior" in titles
+    assert titles[:5] == ["Corpo", "Ajustes", "Rosto", "Maquiagem", "Cabelo"] and "Superior" in titles and "Extras" in titles
     rect = next(rect for rect, kind, payload in editor.layout(*SIZE) if kind == "tab" and payload == titles.index("Rosto"))
     click(editor, *centre(rect))
     assert editor.active == titles.index("Rosto")
@@ -234,3 +234,21 @@ def test_a_face_slider_redraws_a_few_times_a_second_and_takes_the_last_value(mon
     editor.handle_cursor(x1 - 80, y)
     editor.handle_mouse_button(x1 - 80, y, LEFT, RELEASE)      # let go: the value it was left at
     assert len(sent) == 3 and sent[-1] != sent[-2]
+
+
+def test_makeup_and_extra_garments_are_chosen_from_their_sections():
+    editor, sent = make_editor(extra_ids=[42])
+    editor._catalog = {"bottom": [SimpleNamespace(asset_id="42", name="Polainas", image=None),
+                                  SimpleNamespace(asset_id="43", name="Cinto", image=None)]}
+    editor.select_section([s.title for s in editor.sections].index("Extras"))
+    chosen = {o.label: o.selected(editor.model) for g in editor.groups() for o in g.options}
+    assert chosen == {"Nenhuma peça extra": False, "Polainas": True, "Cinto": False}
+    cinto = next(o for g in editor.groups() for o in g.options if o.label == "Cinto")
+    editor.choose(cinto)
+    assert sent[-1] == "/skin extra 43"
+    editor.select_section([s.title for s in editor.sections].index("Maquiagem"))
+    commands = {o.label: o.command for g in editor.groups() for o in g.options}
+    assert commands["Vermelho"] == "/skin maquiagem batom vermelho" or commands["Vermelho"] == "/skin maquiagem sombra vermelho"
+    assert commands["Blush"] == "/skin maquiagem blush alternar" and commands["Sem maquiagem"] == "/skin maquiagem sem"
+    editor.select_section(0)
+    assert "Vitiligo (quantidade)" in [o.label for g in editor.groups() for o in g.options]

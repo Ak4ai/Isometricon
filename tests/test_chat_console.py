@@ -179,7 +179,7 @@ def test_autocomplete_follows_the_command_table():
     assert {"olhos", "boca", "cabelo", "vestir", "top", "calca", "tirar"} <= set(chat.suggestions)
     assert "eyes" not in chat.suggestions  # os apelidos não poluem a lista
     chat.handle_char(ord("o"))
-    assert chat.suggestions == ["olhos"]
+    assert chat.suggestions == ["olhos", "olho"]  # os dois olhos, ou um só
     chat.handle_key(glfw.KEY_TAB, glfw.PRESS, 0)
     assert chat.input_text == "/skin olhos "
     assert "azul" in chat.suggestions and "vermelho" in chat.suggestions

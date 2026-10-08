@@ -173,6 +173,10 @@ class AvatarCustomization:
     hair_2d_style: Optional[Union[Hair2DStyle, str]] = None
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
+    # Cor da íris do outro olho (o esquerdo do personagem), para olhos de cores diferentes; None = igual.
+    iris_color_other: Optional[Union[IrisColor, str, Tuple[int, int, int]]] = None
+    # Maquiagem: "batom" e "sombra", cada um com o nome de uma cor de MAKEUP_COLORS.
+    makeup: Dict[str, str] = field(default_factory=dict)
     # Ajustes de proporção, de -1 a 1 (ver body_shape.ADJUSTMENTS): corpo e rosto.
     body_adjust: Dict[str, float] = field(default_factory=dict)
 
@@ -362,8 +366,23 @@ class AvatarCustomization:
             f"h2_{self.resolved_hair_2d_style}_fd_{self.resolved_face_detail}_"
             f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
             f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_altura')]}_"
-            f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}"
+            f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
+            f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}"
         )
+
+    @property
+    def resolved_iris_color_other(self) -> Tuple[int, int, int]:
+        """Cor da íris do outro olho (a mesma do primeiro quando não foi escolhida)."""
+        other = self.iris_color_other
+        if other is None:
+            return self.resolved_iris_color
+        if isinstance(other, (tuple, list)) and len(other) >= 3:
+            return (int(other[0]), int(other[1]), int(other[2]))
+        return IRIS_PALETTES.get(str(getattr(other, "value", other)).lower(), self.resolved_iris_color)
+
+    def makeup_color(self, what: str) -> Optional[Tuple[int, int, int]]:
+        """A cor de um item de maquiagem ("batom", "sombra"), ou None se não é usado."""
+        return MAKEUP_COLORS.get(str((self.makeup or {}).get(what, "")).lower())
 
     def face_adjust(self, name: str) -> float:
         """Um ajuste do rosto, de -1 a 1 (0 = como desenhado)."""
@@ -400,6 +419,12 @@ def place_face_layer(layer: Image.Image, scale: float = 1.0, lift: float = 0.0, 
 # How far the face adjustments go at 1: the eyes' size (share), and pixels of the 512 px head
 # atlas for their height and distance and for the height of the eyebrows over them.
 EYE_SIZE, EYE_LIFT, EYE_SPREAD, BROW_LIFT = 0.22, 10.0, 8.0, 8.0
+# Makeup: the colours on offer, how strongly the eye shadow is laid over the skin, and how far it
+# reaches above the eye and down over it (shares of the eye's height).
+MAKEUP_COLORS = {"vermelho": (200, 40, 55), "rosa": (235, 120, 150), "nude": (196, 132, 112), "vinho": (120, 30, 55),
+                 "roxo": (140, 85, 175), "azul": (70, 115, 205), "verde": (70, 150, 115), "dourado": (212, 170, 80),
+                 "marrom": (120, 80, 60), "preto": (40, 36, 42)}
+EYE_SHADOW, EYE_SHADOW_REACH = 0.55, (0.36, 0.30)
 # The nose's shadow, as the old head texture had it: its box in the 512 px atlas, how much of the
 # darker tone is laid over the skin (and that tone, as a share of the skin's), and how it follows
 # the nose's adjustments (its size, its width, and pixels of its height).
@@ -536,18 +561,41 @@ class LayeredHeadCompositor:
                     is_iris = (arr_e[:, :, 3] > 0) & (
                         (arr_e[:, :, 2].astype(int) - arr_e[:, :, 0].astype(int) > 15) & (arr_e[:, :, 2] > 80)
                     )
-                    intensity = np.clip((arr_e[is_iris, 2].astype(float) - 50.0) / 190.0, 0.0, 1.0)
-                    iris_rgb = cust.resolved_iris_color
-
-                    for ch in range(3):
-                        arr_e[is_iris, ch] = np.clip(iris_rgb[ch] * (0.35 + 0.95 * intensity), 0, 255).astype(np.uint8)
+                    # Each eye takes its own colour: the layer is split between the two eyes.
+                    columns = np.nonzero(is_iris.any(axis=0))[0]
+                    middle = (int(columns.min()) + int(columns.max())) // 2 if len(columns) else arr_e.shape[1] // 2
+                    first = np.arange(arr_e.shape[1])[None, :] <= middle
+                    for half, iris_rgb in ((first, cust.resolved_iris_color), (~first, cust.resolved_iris_color_other)):
+                        tinted = is_iris & half
+                        intensity = np.clip((arr_e[tinted, 2].astype(float) - 50.0) / 190.0, 0.0, 1.0)
+                        for ch in range(3):
+                            arr_e[tinted, ch] = np.clip(iris_rgb[ch] * (0.35 + 0.95 * intensity), 0, 255).astype(np.uint8)
 
                     eye_img = Image.fromarray(arr_e)
 
             if eye_img is not None:
-                canvas.alpha_composite(place_face_layer(
+                placed = place_face_layer(
                     eye_img, 1.0 + EYE_SIZE * cust.face_adjust("olhos_tamanho"), EYE_LIFT * cust.face_adjust("olhos_altura"),
-                    EYE_SPREAD * cust.face_adjust("olhos_distancia")))
+                    EYE_SPREAD * cust.face_adjust("olhos_distancia"))
+                shadow_rgb = cust.makeup_color("sombra")
+                box = placed.getbbox()
+                if shadow_rgb is not None and box is not None:
+                    # Eye shadow: a soft patch of colour over each eyelid, under the eye's own drawing.
+                    mask = Image.new("L", canvas.size, 0)
+                    pen = ImageDraw.Draw(mask)
+                    centre = (box[0] + box[2]) // 2
+                    for x0, x1 in ((0, centre), (centre, placed.width)):
+                        eye = placed.crop((x0, 0, x1, placed.height)).getbbox()
+                        if eye is None:
+                            continue
+                        tall = eye[3] - eye[1]
+                        pen.ellipse([x0 + eye[0], eye[1] - EYE_SHADOW_REACH[0] * tall, x0 + eye[2],
+                                     eye[1] + EYE_SHADOW_REACH[1] * tall], fill=int(255 * EYE_SHADOW))
+                    mask = mask.filter(ImageFilter.GaussianBlur(2.0 * canvas.width / 512.0))
+                    colour = Image.new("RGBA", canvas.size, tuple(shadow_rgb) + (255,))
+                    colour.putalpha(mask)
+                    canvas.alpha_composite(colour)
+                canvas.alpha_composite(placed)
 
         # ---------------------------------------------------------
         # 5. SOBRANCELHAS (Eyebrows)
@@ -591,6 +639,17 @@ class LayeredHeadCompositor:
                 if mouth_img is None:
                     mouth_img = self._load_layer("layer_mouth_smile.png")
 
+            lipstick = cust.makeup_color("batom")
+            if mouth_img is not None and lipstick is not None:
+                # Lipstick: the mouth in another colour, keeping its light and dark.
+                arr_m = np.array(mouth_img.convert("RGBA"), dtype=float)
+                drawn = arr_m[:, :, 3] > 0
+                if drawn.any():
+                    light = arr_m[:, :, :3].mean(axis=2)
+                    light = light / max(float(light[drawn].mean()), 1.0)
+                    for ch in range(3):
+                        arr_m[:, :, ch] = np.where(drawn, np.clip(lipstick[ch] * light, 0, 255), arr_m[:, :, ch])
+                    mouth_img = Image.fromarray(arr_m.astype(np.uint8))
             if mouth_img is not None:
                 canvas.alpha_composite(mouth_img)
 

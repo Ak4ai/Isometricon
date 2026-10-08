@@ -32,20 +32,41 @@ divergem.
 
 | Seção | Opções | Comando |
 |---|---|---|
-| Corpo | feminino/masculino, tom de pele, formato da cabeça | `/skin corpo`, `/skin pele`, `/skin cabeca` |
+| Corpo | feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Rosto | estilo e cor dos olhos, boca, sobrancelhas; tamanho, altura e distância dos olhos, altura das sobrancelhas; nariz (com ou sem), seu tamanho, largura, projeção, altura e sombra | `/skin olhos`, `/skin boca`, `/skin sobrancelha`, `/skin nariz`, `/skin ajuste` |
+| Maquiagem | batom e sombra dos olhos (dez cores cada), blush, sardas | `/skin maquiagem` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
 | Superior | camisetas, camisas e suéteres | `/skin top <id>` |
 | Jaqueta | peça por cima da roupa | `/skin jaqueta <id>` |
 | Inferior | calças e shorts | `/skin calca <id>` |
 | Vestidos | vestidos e saias (o comando decide se é de cima ou de baixo) | `/skin vestir <id>` |
+| Extras | qualquer peça a mais, junto com as outras (polainas com saia, cinto, adesivos); clicar veste ou tira | `/skin extra <id>` |
 | Sapatos | os dois pés como um item | `/skin sapato <esquerdo,direito>` |
 | Prontos | aparências prontas, voltar ao padrão, tirar roupas | `/skin preset`, `/skin reset`, `/skin tirar tudo` |
 
 As roupas são os itens baixados em `assets/models/clothing`. A seção de cada um vem do tipo do asset do Roblox,
 lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um item novo baixado com
 `/skin vestir <id>` aparece na próxima vez que a tela for aberta.
+
+## 👁️ Olhos, maquiagem e pele
+
+- **Uma cor para cada olho:** em Rosto, "Cor dos olhos" pinta os dois; "Olho direito" e "Olho esquerdo" (os do
+  personagem) pintam um só (`/skin olho <direito|esquerdo> <cor>`, `customization.iris_color_other`).
+- **Maquiagem** (`customization.makeup`): o batom recolore a boca mantendo o claro e o escuro do desenho; a sombra
+  é uma mancha suave de cor sobre cada pálpebra, por baixo do desenho do olho. Blush e sardas são as camadas de
+  detalhe do rosto que já existiam. Tudo é refeito na textura da cabeça, sem recarregar o personagem.
+- **Vitiligo:** desenhado pelo shader (`world_textured.frag`, `u_Vitiligo`) sobre as partes de pele, a partir da
+  posição no corpo sem pose: as manchas ficam presas à pele ao andar e são iguais dos dois lados. Só o que tem a
+  cor da pele clareia, então olhos, boca e sobrancelhas da textura do rosto ficam como estão. "Quantidade" vai de
+  0 a 100 (o lado negativo do controle não faz nada) e "desenho" troca o padrão das manchas.
+
+## 🧦 Peças extras
+
+`CharacterModel.extra_ids` é uma lista de peças vestidas junto com as outras, cada uma encaixada no corpo por si
+(como os sapatos) e incluída no recorte da pele. Serve para o que não disputa espaço com as outras: polainas com
+saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
+jaqueta é encaixada por cima de outra roupa.
 
 ## 📐 Ajustes de proporção
 
