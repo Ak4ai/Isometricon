@@ -79,14 +79,16 @@ HEAD_BOTTOM, FACE_FRONT = 1.492, 0.133
 # ponta), gerada por parâmetros para poder curvar a ponte, alargar a ponta ou as narinas.
 # ---------------------------------------------------------------------------------------------
 from dataclasses import dataclass, replace
-from typing import Dict
+from typing import Dict, Mapping, Optional
 
 SECTIONS = 6          # cortes ao longo do dorso, da ponte à ponta
 EMBED = 0.003         # metres the base goes into the face (no gap on a rounded head)
 HUMP = 0.005          # metres a fully curved bridge rises (or sinks) at its middle
 TIP_LIFT = 0.006      # metres a fully upturned tip rises
 NOSE_BOTTOM = float(ROWS[:, 1].min())  # under the tip, on the old head: every shape ends here, above the mouth
-UV_CENTRE, UV_SPAN = (0.2455, 0.379), (1.2, 0.0275)  # the patch of the head atlas the old nose used
+# Where on the head atlas the nose takes its colour: the patch the old nose used, between the eyes,
+# but stopping short of the mouth (the old one ran into its upper edge and came out pink underneath).
+UV_CENTRE, UV_SPAN = (0.2455, 0.379), (1.2, 0.014)
 
 
 @dataclass(frozen=True)
@@ -102,6 +104,10 @@ class NoseShape:
     tip_depth: float = 0.015      # how far the tip stands out
     curve: float = 0.0            # bridge: + curved outwards (aquiline), - inwards
     tip_lift: float = 0.0         # tip: + turned up, - turned down
+    flare: float = 0.45           # how far down the nose (0 to 1) it starts to widen to the nostrils
+    wing_width: float = 0.0       # the wings of the nostrils: a block on each side of the tip,
+    wing_height: float = 0.0      # this wide, this tall
+    wing_depth: float = 0.0       # and standing this far out of the face
 
 
 BASE = NoseShape()  # the measures of the old nose: 7 cm long, a 1.5 cm tip, as wide as its tip box
@@ -116,6 +122,22 @@ NOSE_STYLES: Dict[str, NoseShape] = {
     "largo": replace(BASE, bridge_base=0.014, bridge_ridge=0.008, tip_width=0.018, nostril_width=0.024),
     "botao": replace(BASE, length=0.038, tip_depth=0.012, bridge_depth=0.002, tip_lift=0.5, tip_width=0.013),
     "longo": replace(BASE, length=0.084, tip_depth=0.017),
+    # Short and wide, from the button nose, with the wings of the nostrils as blocks beside the tip.
+    "botao_largo": replace(BASE, length=0.038, tip_depth=0.012, bridge_depth=0.002, tip_lift=0.5, tip_width=0.016,
+                           nostril_width=0.020, wing_width=0.005, wing_height=0.010, wing_depth=0.007),
+    "botao_arrebitado": replace(BASE, length=0.036, tip_depth=0.013, bridge_depth=0.002, tip_lift=1.0, curve=-0.5,
+                                under=0.006, tip_width=0.014, nostril_width=0.018, wing_width=0.004, wing_height=0.009,
+                                wing_depth=0.007),
+    "narinas_grandes": replace(BASE, length=0.046, tip_depth=0.013, bridge_depth=0.002, bridge_base=0.013,
+                               bridge_ridge=0.007, tip_width=0.018, nostril_width=0.022, flare=0.30,
+                               wing_width=0.009, wing_height=0.013, wing_depth=0.010),
+    "achatado": replace(BASE, length=0.050, tip_depth=0.009, bridge_depth=0.0015, bridge_base=0.014, bridge_ridge=0.008,
+                        tip_width=0.020, nostril_width=0.024, flare=0.30, wing_width=0.008, wing_height=0.011,
+                        wing_depth=0.007),
+    "batata": replace(BASE, length=0.050, tip_depth=0.017, bridge_depth=0.003, tip_width=0.021, nostril_width=0.022,
+                      flare=0.35, wing_width=0.006, wing_height=0.012, wing_depth=0.011),
+    "aberto": replace(BASE, length=0.060, tip_depth=0.014, bridge_depth=0.003, tip_width=0.015, nostril_width=0.022,
+                      flare=0.35, wing_width=0.008, wing_height=0.012, wing_depth=0.009),
 }
 BLOCK = "bloco"  # the old mesh itself, as it was
 STYLE_NAMES = tuple(NOSE_STYLES) + (BLOCK,)
@@ -135,25 +157,36 @@ def build(shape: NoseShape) -> np.ndarray:
         t = k / (SECTIONS - 1)
         y = top - shape.length * t + TIP_LIFT * shape.tip_lift * _smooth(0.6, 1.0, t)
         depth = shape.bridge_depth + (shape.tip_depth - shape.bridge_depth) * t + HUMP * shape.curve * np.sin(np.pi * t)
-        base = shape.bridge_base + (shape.nostril_width - shape.bridge_base) * _smooth(0.45, 1.0, t)
+        base = shape.bridge_base + (shape.nostril_width - shape.bridge_base) * _smooth(shape.flare, 1.0, t)
         ridge = shape.bridge_ridge + (shape.tip_width - shape.bridge_ridge) * _smooth(0.3, 1.0, t)
         sections.append(([-base / 2, y, 0.0], [-ridge / 2, y, depth], [ridge / 2, y, depth], [base / 2, y, 0.0], t))
-    quads = []  # (four corners, t of each)
+    inside = np.array([0.0, shape.under + shape.length / 2, 0.0])
+    quads = []  # (four corners, t of each, a point inside the solid they close)
     first, last = sections[0], sections[-1]
-    quads.append(((first[0], first[1], first[2], first[3]), (0.0,) * 4))                      # top of the bridge
+    quads.append(((first[0], first[1], first[2], first[3]), (0.0,) * 4, inside))              # top of the bridge
     for a, b in zip(sections, sections[1:]):
         for i in range(3):                                                                    # left wall, ridge, right wall
-            quads.append(((a[i], b[i], b[i + 1], a[i + 1]), (a[4], b[4], b[4], a[4])))
+            quads.append(((a[i], b[i], b[i + 1], a[i + 1]), (a[4], b[4], b[4], a[4]), inside))
     left, right = [-shape.nostril_width / 2, 0.0, 0.0], [shape.nostril_width / 2, 0.0, 0.0]   # under the tip, on the face
-    quads.append(((last[1], left, right, last[2]), (1.0,) * 4))                               # underside of the tip
+    quads.append(((last[1], left, right, last[2]), (1.0,) * 4, inside))                       # underside of the tip
+    # The wings of the nostrils: a block on each side, from inside the base of the nose outwards,
+    # a little less deep at its outer edge. With no width or height they are flat, hidden in the nose.
+    for side in (-1.0, 1.0):
+        x0, x1 = side * shape.nostril_width * 0.42, side * (shape.nostril_width / 2 + shape.wing_width)
+        y1, z0, z1 = shape.wing_height, shape.wing_depth, shape.wing_depth * 0.7
+        centre = np.array([(x0 + x1) / 2, y1 / 2, z0 / 2])
+        for corners in (([x0, 0.0, z0], [x1, 0.0, z1], [x1, y1, z1], [x0, y1, z0]),      # front
+                        ([x1, 0.0, 0.0], [x1, 0.0, z1], [x1, y1, z1], [x1, y1, 0.0]),    # outer side
+                        ([x0, y1, 0.0], [x0, y1, z0], [x1, y1, z1], [x1, y1, 0.0]),      # top
+                        ([x0, 0.0, 0.0], [x1, 0.0, 0.0], [x1, 0.0, z1], [x0, 0.0, z0])):  # underside
+            quads.append((corners, (1.0,) * 4, centre))
     triangles = []
-    for corners, ts in quads:
-        triangles += [((corners[0], corners[1], corners[2]), (ts[0], ts[1], ts[2])),
-                      ((corners[0], corners[2], corners[3]), (ts[0], ts[2], ts[3]))]
-    triangles += [((last[0], last[1], left), (1.0,) * 3), ((last[3], right, last[2]), (1.0,) * 3)]  # sides of the nostrils
-    inside = np.array([0.0, shape.under + shape.length / 2, 0.0])
+    for corners, ts, within in quads:
+        triangles += [((corners[0], corners[1], corners[2]), (ts[0], ts[1], ts[2]), within),
+                      ((corners[0], corners[2], corners[3]), (ts[0], ts[2], ts[3]), within)]
+    triangles += [((last[0], last[1], left), (1.0,) * 3, inside), ((last[3], right, last[2]), (1.0,) * 3, inside)]  # sides of the nostrils
     rows = np.zeros((len(triangles) * 3, 8))
-    for k, (corners, ts) in enumerate(triangles):
+    for k, (corners, ts, inside) in enumerate(triangles):
         p = np.array(corners, dtype=np.float64)
         ts = np.array(ts, dtype=np.float64)
         normal = np.cross(p[1] - p[0], p[2] - p[0])
@@ -182,11 +215,56 @@ def _place(rows8: np.ndarray, head_rows: np.ndarray) -> np.ndarray:
     return rows
 
 
-def styled_rows(head_rows: np.ndarray, style: str = "padrao"):
-    """(vertex rows, triangles) of the nose of a style on a head. An unknown style is the default one."""
+# Adjustments that change the measures of a shape (the old block nose has none of them), and how
+# much each does at 1: widths as a share, the height of the bridge in metres, where the base starts.
+PARAMETRIC = ("nariz_ponta_largura", "nariz_ponte_largura", "nariz_ponte_altura", "nariz_base_largura", "nariz_base_altura")
+PART_WIDTH, BRIDGE_HEIGHT, BASE_HEIGHT = 0.6, 0.006, 0.6
+# The colour of the tip: what the skin is multiplied by at its pinkest, and at its darkest.
+TIP_PINK, TIP_DARK = (1.0, 0.70, 0.72), (0.80, 0.72, 0.68)
+
+
+def _amount(adjust: Optional[Mapping[str, float]], name: str) -> float:
+    try:
+        return min(max(float((adjust or {}).get(name, 0.0)), -1.0), 1.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def parametric(adjust: Optional[Mapping[str, float]]) -> bool:
+    return any(_amount(adjust, name) for name in PARAMETRIC)
+
+
+def adjusted(shape: NoseShape, adjust: Optional[Mapping[str, float]]) -> NoseShape:
+    """As medidas de um formato com os ajustes de cada parte: a ponta, a ponte e a base (as narinas e
+    suas asas) mudam cada uma por si."""
+    tip, bridge = 1.0 + PART_WIDTH * _amount(adjust, "nariz_ponta_largura"), 1.0 + PART_WIDTH * _amount(adjust, "nariz_ponte_largura")
+    base, tall = 1.0 + PART_WIDTH * _amount(adjust, "nariz_base_largura"), _amount(adjust, "nariz_base_altura")
+    return replace(shape, tip_width=shape.tip_width * tip,
+                   bridge_base=shape.bridge_base * bridge, bridge_ridge=shape.bridge_ridge * bridge,
+                   bridge_depth=max(0.0005, shape.bridge_depth + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura")),
+                   nostril_width=shape.nostril_width * base, wing_width=shape.wing_width * base,
+                   wing_height=shape.wing_height * (1.0 + BASE_HEIGHT * tall),
+                   under=max(0.001, shape.under * (1.0 + BASE_HEIGHT * tall)),
+                   flare=min(max(shape.flare - 0.3 * tall, 0.05), 0.85))
+
+
+def tip_colours(rows: np.ndarray, adjust: Optional[Mapping[str, float]]) -> np.ndarray:
+    """Cor (N, 3) de cada vértice do nariz: a pele como está na ponte e, na ponta e nas asas, mais
+    rosada (ajuste positivo) ou mais escura (negativo). Multiplica a textura."""
+    much = _amount(adjust, "nariz_ponta_cor")
+    y = np.asarray(rows[:, 1], dtype=np.float64)
+    down = (y.max() - y) / max(float(np.ptp(y)), 1e-9)
+    t = np.clip((down - 0.50) / 0.40, 0.0, 1.0)
+    weight = (t * t * (3 - 2 * t))[:, None] * abs(much)
+    return 1.0 + weight * (np.array(TIP_PINK if much > 0 else TIP_DARK) - 1.0)
+
+
+def styled_rows(head_rows: np.ndarray, style: str = "padrao", adjust: Optional[Mapping[str, float]] = None):
+    """(vertex rows, triangles) of the nose of a style on a head, with the adjustments of its parts.
+    An unknown style is the default one."""
     if style == BLOCK:
         return _place(ROWS, head_rows), TRIANGLES.copy()
-    rows8 = build(NOSE_STYLES.get(style, BASE))
+    rows8 = build(adjusted(NOSE_STYLES.get(style, BASE), adjust))
     rows8[:, 1] += NOSE_BOTTOM   # where the old nose ended, above the mouth
     rows8[:, 2] += FACE_FRONT - EMBED
     rows = _place(rows8, head_rows)

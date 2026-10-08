@@ -173,7 +173,7 @@ def test_the_nose_sits_on_the_face_of_each_head():
         assert rows.shape[1] == 11 and triangles.max() < len(rows)
         assert rows[:, 1].min() == pytest.approx(nose.NOSE_BOTTOM - 0.013, abs=1e-6)  # ends above the mouth, as on the old head
         assert 0.150 - 0.004 <= rows[:, 2].min() <= 0.150                             # its base is on this face
-        assert rows[:, 2].max() > 0.150 + 0.008                                       # and it stands out of it
+        assert rows[:, 2].max() > 0.150 + 0.005                                       # and it stands out of it (the flat one, less)
         np.testing.assert_array_equal(rows[:, 8:], 1.0)
 
 
@@ -194,10 +194,59 @@ def test_nose_styles_share_their_triangles_and_differ_where_their_names_say():
     assert middle(curved_out) > middle(base) + 0.003 and middle(curved_in) < middle(base) - 0.003
     assert nose.NOSE_STYLES["aquilino"].curve > 0 > nose.NOSE_STYLES["arrebitado"].curve
     assert np.ptp(built["botao"][:, 1]) < 0.05 < 0.08 < np.ptp(built["longo"][:, 1])
-    for rows in built.values():                                       # every face looks out of the nose
-        inside = np.array([0.0, np.ptp(rows[:, 1]) / 2, 0.0])
-        centres = rows[:, :3].reshape(-1, 3, 3).mean(1)
-        assert ((rows[::3, 3:6] * (centres - inside)).sum(1) > -1e-9).all()
+    for rows in built.values():                                       # each normal is the one of its triangle
+        corners = rows[:, :3].reshape(-1, 3, 3)
+        winding = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        solid = np.linalg.norm(winding, axis=1) > 1e-12
+        assert ((rows[::3, 3:6] * winding).sum(1)[solid] > 0).all()
+    ridge = base[:102]                                                 # the body of the nose comes first: it faces outwards
+    inside = np.array([0.0, np.ptp(base[:, 1]) / 2, 0.0])
+    assert ((ridge[::3, 3:6] * (ridge[:, :3].reshape(-1, 3, 3).mean(1) - inside)).sum(1) > -1e-9).all()
+
+
+def test_wide_noses_have_wings_beside_the_tip_and_the_others_have_none():
+    from src.clothing import nose
+    width = lambda name: np.ptp(nose.build(nose.NOSE_STYLES[name])[:, 0])
+    for name in ("botao_largo", "narinas_grandes", "achatado", "batata", "aberto", "botao_arrebitado"):
+        shape = nose.NOSE_STYLES[name]
+        assert shape.wing_width > 0 and width(name) == pytest.approx(shape.nostril_width + 2 * shape.wing_width)
+    assert width("narinas_grandes") > 2 * width("botao")              # much wider than the button nose it comes from
+    assert nose.NOSE_STYLES["narinas_grandes"].length < nose.BASE.length
+    plain = nose.build(nose.BASE).reshape(-1, 3, 8)[34:50]            # the wings of a nose without them
+    areas = np.linalg.norm(np.cross(plain[:, 1, :3] - plain[:, 0, :3], plain[:, 2, :3] - plain[:, 0, :3]), axis=1)
+    assert len(plain) == 16 and (areas < 1e-12).all()                 # flat: nothing to see
+
+
+def test_each_part_of_the_nose_is_adjusted_by_itself():
+    from src.clothing import nose
+    wide = nose.NOSE_STYLES["narinas_grandes"]
+    assert not nose.parametric({"nariz_tamanho": 1.0}) and nose.parametric({"nariz_ponta_largura": 0.3})
+    assert nose.adjusted(wide, {}) == wide
+    tip = nose.adjusted(wide, {"nariz_ponta_largura": 1.0})
+    assert tip.tip_width > wide.tip_width and (tip.bridge_base, tip.nostril_width) == (wide.bridge_base, wide.nostril_width)
+    bridge = nose.adjusted(wide, {"nariz_ponte_largura": -1.0, "nariz_ponte_altura": 1.0})
+    assert bridge.bridge_base < wide.bridge_base and bridge.bridge_depth == pytest.approx(wide.bridge_depth + 0.006)
+    assert (bridge.tip_width, bridge.nostril_width, bridge.wing_width) == (wide.tip_width, wide.nostril_width, wide.wing_width)
+    base = nose.adjusted(wide, {"nariz_base_largura": 1.0, "nariz_base_altura": 1.0})
+    assert base.nostril_width > wide.nostril_width and base.wing_width > wide.wing_width
+    assert base.wing_height > wide.wing_height and base.flare < wide.flare and base.tip_width == wide.tip_width
+    assert nose.build(tip).shape == nose.build(wide).shape             # still the same triangles
+
+
+def test_the_tip_of_the_nose_can_be_pinker_and_the_bridge_keeps_the_skin():
+    from src.clothing import nose
+    head = np.zeros((8, 11))
+    head[:, :3] = [[x, y, z] for x in (-0.11, 0.11) for y in (1.492, 1.809) for z in (-0.10, 0.133)]
+    rows, _ = nose.styled_rows(head, "padrao")
+    np.testing.assert_array_equal(nose.tip_colours(rows, {}), 1.0)
+    pink = nose.tip_colours(rows, {"nariz_ponta_cor": 1.0})
+    top, bottom = rows[:, 1] > rows[:, 1].max() - 0.01, rows[:, 1] < rows[:, 1].min() + 0.005
+    np.testing.assert_array_equal(pink[top], 1.0)                      # the bridge is the skin as it is
+    np.testing.assert_allclose(pink[bottom], [nose.TIP_PINK] * int(bottom.sum()))
+    assert (pink[bottom][:, 0] > pink[bottom][:, 1]).all()             # red stays, green and blue drop: pink
+    half = nose.tip_colours(rows, {"nariz_ponta_cor": 0.5})
+    assert (half[bottom] > pink[bottom] - 1e-12).all() and (half[bottom][:, 1] < 1.0).all()
+    assert (nose.tip_colours(rows, {"nariz_ponta_cor": -1.0})[bottom] < 1.0).all()   # the other way: darker
 
 
 def test_nose_adjustments_grow_it_out_of_the_face_not_into_it():

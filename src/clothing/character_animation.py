@@ -636,14 +636,17 @@ class CharacterAnimator:
         root = (root[0], root[1] + self._lift * self._height, root[2])  # longer legs raise the body
         return self.skeleton.pose(rotations, root, scales=self._scales, height=self._height)
 
-    def _styled_nose(self, style):
-        """Vertex rows of the nose in ``style`` on the bound head, when that is not the nose the
-        model was built with and it has the same vertices (None otherwise)."""
+    def _styled_nose(self, style, adjust):
+        """Vertex rows of the nose in ``style`` with the adjustments of its parts, on the bound
+        head, when that is not the nose the model was built with and it has the same vertices
+        (None otherwise)."""
         from . import nose as noses
         named = {part.name: k for k, (part, *_) in enumerate(self._bindings)}
-        if style is None or style == self._bound_nose_style or "nose" not in named or "head" not in named:
+        if style is None or "nose" not in named or "head" not in named:
             return None
-        rows, _ = noses.styled_rows(self._bound_rows[named["head"]], style)
+        if style == self._bound_nose_style and not noses.parametric(adjust):
+            return None
+        rows, _ = noses.styled_rows(self._bound_rows[named["head"]], style, adjust)
         return rows if rows.shape == self._bound_rows[named["nose"]].shape else None
 
     def _reshape(self, shape) -> None:
@@ -658,8 +661,9 @@ class CharacterAnimator:
         nose = body_shape.nose_adjusted(adjust)
         # The nose in another style of the same triangles is reshaped in place: only the old
         # block nose has a mesh of its own and asks for the model to be rebuilt.
-        styled = self._styled_nose(nose_style)
-        warped = bulges or bool(loose) or nose or styled is not None
+        styled = self._styled_nose(nose_style, adjust)
+        tinted = bool(body_shape.amount(adjust, "nariz_ponta_cor"))
+        warped = bulges or bool(loose) or nose or styled is not None or tinted
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
@@ -668,6 +672,9 @@ class CharacterAnimator:
                     rows = styled.copy()
                 if nose and part.name == "nose":
                     rows[:, :3] = body_shape.nose_shape(rows[:, :3], adjust)
+                if tinted and part.name == "nose":
+                    from .nose import tip_colours
+                    rows[:, 8:11] = tip_colours(rows, adjust)
                 if bulges:
                     rows[:, :3] = body_shape.warp(rows[:, :3], self.skeleton, adjust, surface)
                 if loose and part.source_obj is not None and "hair" not in part.name:
