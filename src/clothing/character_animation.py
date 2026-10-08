@@ -276,8 +276,7 @@ class CharacterAnimator:
         self._cloth_normals = {}
         # The style the nose's mesh was built in: the style chosen may have changed since then
         # (a command or a saved character applied before the first frame), and is then put on in _reshape.
-        self._bound_nose_style = getattr(self.model, "built_nose_style",
-                                         getattr(getattr(self.model, "customization", None), "nose_style", None))
+        self._bound_nose_style = getattr(self.model, "built_nose_style", self._nose_style())
         self._bound_key = self._key()
         self._shown = None
 
@@ -622,7 +621,7 @@ class CharacterAnimator:
         if abs(self.stride - target) < 1e-3:
             self.stride = target
         custom = getattr(self.model, "customization", None)
-        shape = (getattr(custom, "nose_style", None),) + tuple(sorted((getattr(custom, "body_adjust", None) or {}).items()))
+        shape = (self._nose_style(),) + tuple(sorted((getattr(custom, "body_adjust", None) or {}).items()))
         if shape != self._shape:
             self._reshape(shape)
         if self.stride == 0.0 and self._shown == "rest":
@@ -639,17 +638,22 @@ class CharacterAnimator:
         root = (root[0], root[1] + self._lift * self._height, root[2])  # longer legs raise the body
         return self.skeleton.pose(rotations, root, scales=self._scales, height=self._height)
 
+    def _nose_style(self):
+        """(the style of nose chosen, whether it is in one plain colour: the computed shadow)."""
+        custom = getattr(self.model, "customization", None)
+        return getattr(custom, "nose_style", None), getattr(custom, "nose_shadow", "legado") == "calculada"
+
     def _styled_nose(self, style, adjust):
         """Vertex rows of the nose in ``style`` with the adjustments of its parts, on the bound
         head, when that is not the nose the model was built with and it has the same vertices
         (None otherwise)."""
         from . import nose as noses
         named = {part.name: k for k, (part, *_) in enumerate(self._bindings)}
-        if style is None or "nose" not in named or "head" not in named:
+        if style is None or style[0] is None or "nose" not in named or "head" not in named:
             return None
         if style == self._bound_nose_style and not noses.parametric(adjust):
             return None
-        rows, _ = noses.styled_rows(self._bound_rows[named["head"]], style, adjust)
+        rows, _ = noses.styled_rows(self._bound_rows[named["head"]], style[0], adjust, plain=style[1])
         return rows if rows.shape == self._bound_rows[named["nose"]].shape else None
 
     def _reshape(self, shape) -> None:

@@ -132,9 +132,15 @@ roupa e cabelo (`src/clothing/body_shape.py`).
   malha do formato, com todos os ajustes, é vista de frente na textura do rosto (`nose.model_rows`,
   `nose.face_pixels`, medidas em `FACE_PIXELS`): o contorno ganha uma borda de sombra, e cada ponto lança a sua para
   o lado e para baixo conforme o quanto sai do rosto (`NOSE_CAST_FALL`), então um nariz projetado tem sombra mais
-  longa e um de narinas largas, mais larga. Trocar o formato ou mexer num ajuste do nariz refaz a textura.
+  longa e um de narinas largas, mais larga. Ela esmaece nariz acima até sumir no topo da ponte (`NOSE_FADE`) e não
+  cai sobre o nariz: nesse modo o nariz inteiro pega a cor de um ponto limpo da pele (`nose.PLAIN_UV`), não do
+  trecho entre os olhos que a sombra legada escurece. Trocar o formato ou mexer num ajuste do nariz refaz a textura.
 - **Bloco com narinas** (`/skin nariz bloco_narinas`): o nariz em bloco do modelo antigo com as asas das narinas do
   "batata" ao lado da ponta. Como o bloco, é uma malha própria: trocar para ele ou a partir dele reconstrói o nariz.
+- **Ajustes nos narizes em bloco** (`nose._block`): o bloco tem dois níveis, a caixa da ponta e o topo da ponte. A
+  frente da ponta segue a largura da ponta, o fundo dela (no rosto) a largura da base, o topo a largura e a altura
+  da ponte, e a caixa da ponta cresce com a altura da base. No bloco com narinas, as asas acompanham a ponta e
+  seguem a largura e a altura da base e a posição das narinas.
 - **O rosto muda sem recarregar o personagem:** olhos (cor, tamanho, altura, distância), sobrancelhas e boca refazem
   só a textura da cabeça e a trocam no lugar (`CharacterModel.refresh_face`, ~30 ms). Só o que muda geometria
   reconstrói o personagem: pôr ou tirar o nariz, e os olhos clássicos, que o tiram.
