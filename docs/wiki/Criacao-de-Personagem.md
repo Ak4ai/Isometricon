@@ -40,7 +40,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 | Corpo | feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
-| Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos | `/skin boca`, `/skin sobrancelha`, `/skin ajuste` |
+| Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D (seis modelos) e seus ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin ajuste` |
 | Nariz | com ou sem, o formato e os ajustes de cada parte, a cor da ponta e a sombra | `/skin nariz`, `/skin ajuste` |
 | Maquiagem | batom, sombra dos olhos e blush (dezesseis cores, com matiz, saturação e brilho ajustáveis; a sombra e o blush com intensidade, tamanho e esfumado), contorno, sombras do queixo e do maxilar, sardas | `/skin maquiagem`, `/skin ajuste rosto_sombra` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
@@ -106,6 +106,30 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 (como os sapatos) e incluída no recorte da pele. Serve para o que não disputa espaço com as outras: polainas com
 saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
 jaqueta é encaixada por cima de outra roupa.
+
+## 👂 Orelhas
+
+O personagem não tinha orelhas; elas são opcionais (`/skin orelha <modelo>`, grupo "Orelhas" na seção Rosto, "sem"
+por padrão). São malhas 3D geradas em `src/clothing/ears.py`, uma de cada lado da cabeça, presas a ela:
+
+| Modelo | Como é |
+|---|---|
+| `humana` | simples, quadradinha, rente à cabeça |
+| `redonda` | humana ainda, mais redonda e um pouco maior |
+| `elfo` | longa e horizontal, saindo para o lado |
+| `elfo_asa` | de elfo, em diagonal para trás e para cima, como uma asa |
+| `morcego` | grande, apontando para cima |
+| `barbatana` | três espinhos unidos, como uma nadadeira (povo do mar, sangue de dragão) |
+
+- Cada modelo é um contorno de dez pontos no plano da orelha (para trás, para cima), preso à cabeça pela borda da
+  frente e aberto para fora por um ângulo (`EarShape.flare`: pouco numa humana, muito numa de elfo). A placa tem
+  6 mm de espessura; a frente é mais escura no meio (a concha), e a cor é a da pele (cor de vértice, textura branca).
+- Ficam na altura dos olhos, nos lados da cabeça em uso (`ears.styled_rows` mede a cabeça), e giram com ela.
+- Todos os modelos têm os mesmos triângulos: trocar de um para outro, ou mexer num ajuste, só move os vértices
+  (`CharacterAnimator._styled_ears`). Só pôr ou tirar as orelhas reconstrói o personagem.
+- Ajustes (`body_shape.EARS`): tamanho, altura e abertura (o quanto abrem para fora).
+- Não há nada que as esconda sob o cabelo: num cabelo cheio a orelha humana some dentro dele, e as longas saem
+  por ele. Um modelo novo é uma entrada em `EAR_STYLES` com dez pontos.
 
 ## 🖌️ Ajuste fino: a pele sob a roupa
 

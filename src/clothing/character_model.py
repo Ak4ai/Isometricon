@@ -1541,6 +1541,13 @@ class CharacterModel:
                 nose_rows, nose_triangles = styled_rows(v_h, self.built_nose_style[0], plain=self.built_nose_style[1])
                 self.parts.append(CharacterPart("nose", TexturedMesh(nose_rows.flatten(), nose_triangles.flatten()),
                                                 head_tex_id))
+            # The ears, in the style chosen (none by default): plates of the skin's colour on the
+            # sides of this head, which turn with it.
+            from .ears import styled_rows as ear_rows
+            ears = ear_rows(v_h, getattr(self.customization, "ear_style", "sem"),
+                            getattr(self.customization, "resolved_body_adjust", None), self.customization.skin_color_rgb)
+            if ears is not None:
+                self.parts.append(CharacterPart("ears", TexturedMesh(ears[0].flatten(), ears[1].flatten()), self.white_tex_id))
 
         current = self.customization.custom_hair_obj
         if current and os.path.basename(current).startswith(f"Hair_fitted_{DEFAULT_HAIR_ID}"):

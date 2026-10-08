@@ -173,6 +173,7 @@ class AvatarCustomization:
     hair_2d_style: Optional[Union[Hair2DStyle, str]] = None
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
+    ear_style: str = "sem"      # orelhas 3D (ver ears.STYLE_NAMES); "sem": nenhuma
     nose_shadow: str = "legado"  # sombra do nariz: "legado" (um trecho fixo) ou "calculada" (do contorno do nariz)
     eye_shape: str = "padrao"   # formato dos olhos anime (ver eye_shapes.SHAPE_NAMES)
     # Cor da íris do outro olho (o esquerdo do personagem), para olhos de cores diferentes; None = igual.

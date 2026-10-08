@@ -609,3 +609,52 @@ def test_blush_is_chosen_by_colour_and_takes_the_place_of_the_old_layer():
     assert handler.execute("/skin maquiagem batom 200, 40, 55")[0] and custom.makeup["batom"] == "200,40,55"
     assert not handler.execute("/skin maquiagem blush fluorescente")[0]
     assert handler.execute("/skin maquiagem blush sem")[0] and "blush" not in custom.makeup
+
+
+def head_box():
+    """A head as rows of 11 floats: a box 0.2 m wide and deep, 0.3 m tall, standing on y = 1.5."""
+    corners = np.array([[x, y, z] for x in (-0.1, 0.1) for y in (1.5, 1.8) for z in (-0.1, 0.1)])
+    rows = np.zeros((len(corners), 11))
+    rows[:, :3] = corners
+    return rows
+
+
+def test_every_ear_model_has_the_same_triangles_and_its_own_shape():
+    from src.clothing import ears
+    assert ears.STYLE_NAMES == ("sem", "humana", "redonda", "elfo", "elfo_asa", "morcego", "barbatana")
+    assert ears.styled_rows(head_box(), "sem") is None and ears.styled_rows(head_box(), "de_gato") is None
+    made = {name: ears.styled_rows(head_box(), name, skin=(0.9, 0.7, 0.6)) for name in ears.EAR_STYLES}
+    shapes = {rows.shape for rows, _ in made.values()}
+    assert len(shapes) == 1                                                             # moved in place from one model to another
+    for name, (rows, triangles) in made.items():
+        assert triangles.max() == len(rows) - 1 and np.isfinite(rows).all()
+        right, left = rows[:len(rows) // 2], rows[len(rows) // 2:]
+        np.testing.assert_allclose(left[:, 0], -right[:, 0], atol=1e-6)                 # one on each side, mirrored
+        np.testing.assert_allclose(left[:, 1:3], right[:, 1:3], atol=1e-6)
+        assert right[:, 0].max() > 0.1 and right[:, 0].min() < 0.1                      # out of the head, its root inside it
+        np.testing.assert_allclose(np.linalg.norm(rows[:, 3:6], axis=1), 1.0, atol=1e-5)
+        assert (rows[:, 8:11] <= np.array([0.9, 0.7, 0.6]) + 1e-6).all() and rows[:, 8].max() > 0.89   # the skin's colour, darker in the hollow
+    span = lambda name, axis: float(np.ptp(made[name][0][:len(made[name][0]) // 2, axis]))
+    top = lambda name: float(made[name][0][:, 1].max())
+    assert span("elfo", 0) > 2 * span("humana", 0)                                      # the elf's stands out to the side
+    assert top("morcego") > top("elfo_asa") > top("elfo")                               # the bat's goes up, the wing up and back
+    assert span("redonda", 1) > span("humana", 1) and span("barbatana", 0) > span("humana", 0)
+    bigger = ears.styled_rows(head_box(), "elfo", {"orelha_tamanho": 1.0})[0]
+    higher = ears.styled_rows(head_box(), "elfo", {"orelha_altura": 1.0})[0]
+    open_ = ears.styled_rows(head_box(), "humana", {"orelha_abertura": 1.0})[0]
+    plain = made["elfo"][0]
+    assert np.ptp(bigger[:, 0]) > np.ptp(ears.styled_rows(head_box(), "elfo")[0][:, 0])
+    assert abs(higher[:, 1].mean() - ears.styled_rows(head_box(), "elfo")[0][:, 1].mean() - ears.LIFT) < 1e-5
+    assert open_[:, 0].max() > ears.styled_rows(head_box(), "humana")[0][:, 0].max()
+    assert set(ears.ADJUSTMENTS) == set(body_shape.EARS) <= set(body_shape.ADJUSTMENTS) and plain is not None
+
+
+def test_ears_are_chosen_by_command_and_rebuilt_only_to_appear_or_go():
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: reloads.append(1), refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert custom.ear_style == "sem"
+    assert handler.execute("/skin orelha elfo")[0] and custom.ear_style == "elfo" and len(reloads) == 1   # they appear: built
+    assert handler.execute("/skin orelha morcego")[0] and custom.ear_style == "morcego" and len(reloads) == 1   # another model: moved in place
+    assert not handler.execute("/skin orelha de_gato")[0] and custom.ear_style == "morcego"
+    assert handler.execute("/skin orelha sem")[0] and custom.ear_style == "sem" and len(reloads) == 2
