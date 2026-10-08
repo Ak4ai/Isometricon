@@ -122,3 +122,35 @@ def test_torn_area_counts_only_triangles_stretched_well_past_their_size():
     assert _torn_area(rows, rows * [2.0, 1.0, 1.0], faces) == 0.0  # twice as long: not torn
     torn = rows * [4.0, 1.0, 1.0]
     assert _torn_area(rows, torn, faces) == pytest.approx(0.5 * 0.4 * 0.1)
+
+
+def test_adjustments_do_not_pile_up_when_only_the_skin_is_cut_again():
+    # The clothes stay through a new cut of the skin (CharacterModel.refresh_skin): their buffers
+    # hold the vertices as adjusted, and binding again from those applied each adjustment twice.
+    def model_with(skin_points):
+        skin_mesh = MemoryMesh(skin_points)
+        return SimpleNamespace(name='trunk_skin', mesh=skin_mesh, transform=None, source_obj=None)
+
+    cloth_mesh = MemoryMesh([[-.2, .95, .15], [.2, .95, .15], [0, 1.4, .15]])
+    cloth = SimpleNamespace(name='top', mesh=cloth_mesh, transform=None, source_obj='missing.obj')
+    custom = SimpleNamespace(body_adjust={}, nose_style=None)
+    model = SimpleNamespace(body='female', parts=[model_with([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]]), cloth],
+                            customization=custom, garment_edges=lambda: {'top': (0.95, 1.4)})
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    plain = cloth_mesh.read_vertices()
+
+    def shown(value, recut):
+        custom.body_adjust = {'blusa_barra': value} if value else {}
+        if recut:  # a new skin, the same clothes
+            model.parts[0] = model_with([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.15, .2]])
+        animator.update(0)
+        return cloth_mesh.read_vertices()
+
+    first = shown(0.12, recut=False)
+    assert first[0, 1] > plain[0, 1] + 0.005 and abs(first[2, 1] - plain[2, 1]) < 1e-6      # the hem went up, the top stayed
+    again = shown(0.12, recut=True)
+    np.testing.assert_allclose(again, first, atol=1e-6)                                     # the same after the skin is cut again
+    less = shown(0.11, recut=True)
+    assert plain[0, 1] < less[0, 1] < first[0, 1]                                           # 11 is under 12, not 12 and 11 together
+    np.testing.assert_allclose(shown(0.0, recut=True), plain, atol=1e-6)                    # and zero is the garment as fitted
