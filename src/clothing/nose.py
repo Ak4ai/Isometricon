@@ -294,7 +294,9 @@ def _block(adjust: Optional[Mapping[str, float]]) -> np.ndarray:
     out = lower & front  # the front of the tip box, and the foot of the bridge on it
     rows[out, 2] = np.maximum(ROWS[out, 2] + TIP_REACH * _amount(adjust, "nariz_ponta_projecao"), FACE_FRONT + 0.003)
     top = ~lower & front
-    rows[top, 2] = np.maximum(ROWS[top, 2] + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura"), FACE_FRONT + 0.0005)
+    # never into the face, and as it was with no adjustment (the top of the old bridge is almost flush with it)
+    rows[top, 2] = np.maximum(ROWS[top, 2] + BRIDGE_HEIGHT * _amount(adjust, "nariz_ponte_altura"),
+                              np.minimum(ROWS[top, 2], FACE_FRONT + 0.0005))
     return rows
 
 
