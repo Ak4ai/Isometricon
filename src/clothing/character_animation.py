@@ -274,7 +274,10 @@ class CharacterAnimator:
         self._bound_rows = [rows for _, rows, _, _ in self._bindings]  # as fitted, before any body adjustment
         self._shape, self._warped = None, False  # taken again from the model on the next update
         self._cloth_normals = {}
-        self._bound_nose_style = getattr(getattr(self.model, "customization", None), "nose_style", None)
+        # The style the nose's mesh was built in: the style chosen may have changed since then
+        # (a command or a saved character applied before the first frame), and is then put on in _reshape.
+        self._bound_nose_style = getattr(self.model, "built_nose_style",
+                                         getattr(getattr(self.model, "customization", None), "nose_style", None))
         self._bound_key = self._key()
         self._shown = None
 
