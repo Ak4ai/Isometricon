@@ -161,6 +161,7 @@ class CharacterAnimator:
         self._shape, self._warped, self._scales, self._height = None, False, {}, 1.0  # body adjustments in use
         self._lift, self._cloth_normals, self._bound_nose_style = 0.0, {}, None
         self._posed = None  # the bones of the last points given to posed()
+        self._arms = []     # the bones of the two arms
         self._bound_rows = []
 
     def _body_cage(self):
@@ -272,6 +273,7 @@ class CharacterAnimator:
             if hasattr(part.mesh, "set_skin"):
                 part.mesh.set_skin(indices, weights)
         arms = [b for side in "LR" for b in self._subtree(self.skeleton.index("UpperArm_" + side))]
+        self._arms = arms
         beside_arms = [rows[np.where(np.isin(indices, arms), weights, 0.0).sum(1) < 0.05, :3]
                        for part, rows, indices, weights in self._bindings if part.source_obj is not None]
         if beside_arms:
@@ -688,7 +690,12 @@ class CharacterAnimator:
         styled = self._styled_nose(nose_style, adjust)
         tinted = bool(body_shape.amount(adjust, "nariz_ponta_cor"))
         shaded = bool(body_shape.amount(adjust, "rosto_sombra"))
-        warped = bulges or bool(loose) or nose or styled is not None or tinted or shaded
+        # The edges of the clothes moved up or down (the hem of the top, the waist and the hem of the pants).
+        edges = getattr(self.model, "garment_edges", lambda: {})() or {}
+        moved = [(slot, edges[slot][which], body_shape.garment_shift(adjust, name), lower)
+                 for name, (slot, which, lower) in body_shape.GARMENT_EDGES.items()
+                 if slot in edges and body_shape.garment_shift(adjust, name)]
+        warped = bulges or bool(loose) or nose or styled is not None or tinted or shaded or bool(moved)
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
@@ -697,6 +704,11 @@ class CharacterAnimator:
                     rows = styled.copy()
                 if nose and part.name == "nose":
                     rows[:, :3] = body_shape.nose_shape(rows[:, :3], adjust)
+                for slot, edge, shift, lower in moved:
+                    if part.name == slot:
+                        # a top's sleeves stay on the arms: only what hangs on the body moves
+                        keep = np.where(np.isin(indices, self._arms), weights, 0.0).sum(1) < 0.5 if slot == "top" else None
+                        rows[:, :3] = body_shape.move_edge(rows[:, :3], edge, shift, lower, keep)
                 if shaded and part.name == "head":
                     rows = body_shape.face_shading(rows, adjust)
                 if tinted and part.name == "nose":

@@ -158,3 +158,47 @@ def test_the_brush_only_works_in_its_own_section():
     editor.handle_mouse_button(700, 300, LEFT, PRESS)
     editor.handle_mouse_button(700, 300, LEFT, RELEASE)
     assert sent == []
+
+
+def test_an_edge_of_a_garment_moves_and_the_cloth_near_it_follows():
+    from src.clothing import body_shape
+    points = np.array([[0.0, 1.00, 0.0], [0.1, 1.05, 0.0], [0.0, 1.20, 0.0], [0.0, 1.40, 0.0], [0.3, 1.00, 0.0]])
+    keep = np.array([True, True, True, True, False])                                        # the last one is a sleeve
+    up = body_shape.move_edge(points, 1.00, 0.08, lower=True, keep=keep)
+    assert abs(up[0, 1] - 1.08) < 1e-9 and up[4, 1] == 1.00                                 # the hem goes whole; the sleeve stays
+    assert 1.05 < up[1, 1] < 1.13 and up[2, 1] == 1.20 and up[3, 1] == 1.40                 # less and less, nothing past the reach
+    assert (np.diff(up[:4, 1]) > 0).all() and (up[:, [0, 2]] == points[:, [0, 2]]).all()    # no fold; only the height changes
+    down = body_shape.move_edge(points, 1.40, -0.08, lower=False)
+    assert abs(down[3, 1] - 1.32) < 1e-9 and down[0, 1] == 1.00 and down[2, 1] == 1.20
+    assert body_shape.garment_shift({"blusa_barra": -0.5}, "blusa_barra") == -0.04
+    assert set(body_shape.GARMENTS) == set(body_shape.GARMENT_EDGES) <= set(body_shape.ADJUSTMENTS)
+
+
+def test_the_skin_follows_a_moved_edge():
+    from src.clothing.hsr import EDGE_HIDDEN, EDGE_SHOWN, move_mask_edge
+    y = np.array([0.90, 0.97, 1.00, 1.05, 1.20, 1.05])
+    cage = np.column_stack((np.zeros(6), y, np.zeros(6)))
+    parts = np.array(["LowerTorso"] * 5 + ["LeftUpperArm"])
+    top = np.array([False, False, True, True, True, True])                                  # a top whose hem is at 1.00
+    assert move_mask_edge(top, cage, parts, 1.00, 0.0).tolist() == top.tolist()
+    raised = move_mask_edge(top, cage, parts, 1.00, 0.08)                                   # hem at 1.08: the skin below it shows
+    assert raised.tolist() == [False, False, False, False, True, True]                      # the arm keeps its sleeve
+    lowered = move_mask_edge(top, cage, parts, 1.00, -0.08)                                 # hem at 0.92: the band it covers is hidden
+    assert lowered.tolist() == [False, True, True, True, True, True] and 0.92 + EDGE_HIDDEN < 0.97
+    pants = np.array([True, True, True, False, False, False])                               # pants whose waist is at 1.00
+    assert move_mask_edge(pants, cage, parts, 1.00, -0.08, lower=False).tolist() == [True, False, False, False, False, False]
+    assert move_mask_edge(pants, cage, parts, 1.00, 0.08, lower=False).tolist() == [True, True, True, True, False, False]
+    assert top.tolist() == [False, False, True, True, True, True] and EDGE_SHOWN > 0
+
+
+def test_moving_an_edge_cuts_the_skin_again():
+    model, calls = make_model()
+    handler = SkinCommandHandler(character_model=model)
+    assert handler.execute("/skin ajuste blusa_barra 50")[0] and calls == ["skin"]
+    assert model.customization.body_adjust["blusa_barra"] == 0.5
+    assert handler.execute("/skin ajuste blusa_barra 50")[0] and calls == ["skin"]           # the same value: nothing to do
+    assert handler.execute("/skin ajuste peito 30")[0] and calls == ["skin"]                 # the body's own adjustments do not
+    assert handler.execute("/skin ajuste reset")[0] and calls == ["skin", "skin"]
+    editor, _ = make_editor()
+    labels = [o.label for group in editor.groups() for o in group.options]
+    assert {"Barra da blusa (altura)", "Cintura da calça (altura)", "Barra da calça (altura)"} <= set(labels)

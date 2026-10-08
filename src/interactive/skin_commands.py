@@ -774,7 +774,9 @@ class SkinCommandHandler:
         missing = self._need_model()
         if missing:
             return missing
-        from src.clothing.body_shape import ADJUSTMENTS, DEFAULTS, REDRAWS_FACE, REDRAWS_SHADOW
+        from src.clothing.body_shape import ADJUSTMENTS, DEFAULTS, GARMENTS, REDRAWS_FACE, REDRAWS_SHADOW
+        model = self.character_model
+        recut = lambda: getattr(model, "refresh_skin", lambda: False)() or model.reload()  # the skin under a moved edge
         custom = self.character_model.customization
         FACE = REDRAWS_FACE | (REDRAWS_SHADOW if getattr(custom, "nose_shadow", "legado") == "calculada" else set())
         current = dict(getattr(custom, "body_adjust", None) or {})
@@ -789,6 +791,8 @@ class SkinCommandHandler:
                 self._change(lambda c: setattr(c, "body_adjust", {}), face=True)
             else:
                 custom.body_adjust = {}
+            if any(current.get(k) for k in GARMENTS):
+                recut()
             return True, "[Ajuste] Proporções de volta ao padrão.", GREEN
         if name not in ADJUSTMENTS or len(args) < 2:
             return False, f"[Erro] {usage}", RED
@@ -805,6 +809,8 @@ class SkinCommandHandler:
             self._change(lambda c: setattr(c, "body_adjust", adjusted), face=True)  # the face is drawn again
         else:
             custom.body_adjust = adjusted
+            if name in GARMENTS and changed:
+                recut()
         return True, f"[Ajuste] {ADJUSTMENTS[name]}: {round(value):+d}.", GREEN
 
     def nose(self, args: List[str]) -> Result:

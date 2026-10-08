@@ -50,7 +50,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 | Vestidos | vestidos e saias (o comando decide se é de cima ou de baixo) | `/skin vestir <id>` |
 | Extras | qualquer peça a mais, junto com as outras (polainas com saia, cinto, adesivos); clicar veste ou tira | `/skin extra <id>` |
 | Sapatos | os dois pés como um item | `/skin sapato <esquerdo,direito>` |
-| Ajuste fino | a pele sob a roupa: espelhar os dois lados, ou pintar com o pincel onde ela some ou aparece | `/skin hsr` |
+| Ajuste fino | a altura da barra da blusa, da cintura e da barra da calça; a pele sob a roupa: espelhar os dois lados, ou pintar com o pincel onde ela some ou aparece | `/skin hsr` |
 | Prontos | aparências prontas, voltar ao padrão, tirar roupas | `/skin preset`, `/skin reset`, `/skin tirar tudo` |
 
 As roupas são os itens baixados em `assets/models/clothing`. A seção de cada um vem do tipo do asset do Roblox,
@@ -121,6 +121,22 @@ O que é pintado vence o automático (`hsr.adjusted_hidden`) e fica em `AvatarCu
 pintura, que pode não servir à roupa nova. Os pontos são mostrados posados com os ossos do personagem
 (`CharacterAnimator.posed`); as deformações sem osso (peito, cintura) não entram, e com elas os pontos ficam um pouco
 fora do lugar. `--pincel=<esconder|mostrar|apagar>` abre o jogo com o pincel ligado (capturas de tela).
+
+### Bordas das roupas
+
+Três controles (`/skin ajuste blusa_barra`, `calca_cintura`, `calca_barra`, de -100 a 100) levam uma borda da roupa
+para cima ou para baixo, até 8 cm (`body_shape.GARMENT_REACH`):
+
+- A borda vai inteira e o tecido a acompanha cada vez menos até 20 cm dela (`body_shape.move_edge`), então a peça
+  estica ou encolhe perto da borda sem dobrar. As mangas de uma blusa ficam nos braços: só o que está no tronco se move.
+- Onde está a borda vem da peça encaixada (`CharacterModel.garment_edges`: o ponto mais baixo e o mais alto, fora as
+  mangas). A mudança é feita na pose de encaixe, junto com os ajustes do corpo (`CharacterAnimator._reshape`), sem
+  encaixar a roupa de novo.
+- A pele acompanha (`hsr.move_mask_edge`): a que a borda descobre volta a ser desenhada e a que ela passa a cobrir é
+  escondida, com uma folga de 1 a 1,5 cm para não abrir buraco na borda.
+- Valem para a peça de cima e a de baixo (um vestido é a peça de cima, e a barra dele é a da saia); jaqueta, sapatos e
+  peças extras não têm esses controles. A borda só sobe e desce: ao descer sobre uma parte mais larga do corpo o
+  tecido não alarga, e a pele pode aparecer.
 
 ## 📐 Ajustes de proporção
 
