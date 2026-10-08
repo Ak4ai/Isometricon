@@ -172,6 +172,7 @@ class AvatarCustomization:
     eyebrow_color: Optional[Union[HairColor, str, Tuple[int, int, int]]] = None
     hair_2d_style: Optional[Union[Hair2DStyle, str]] = None
     face_detail: Optional[Union[FaceDetail, str]] = None
+    nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
     # Ajustes de proporção, de -1 a 1 (ver body_shape.ADJUSTMENTS): corpo e rosto.
     body_adjust: Dict[str, float] = field(default_factory=dict)
 

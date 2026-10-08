@@ -168,12 +168,36 @@ def test_the_nose_sits_on_the_face_of_each_head():
     from src.clothing import nose
     head = np.zeros((8, 11))
     head[:, :3] = [[x, y, z] for x in (-0.11, 0.11) for y in (1.479, 1.795) for z in (-0.10, 0.150)]  # the female head's box
-    rows, triangles = nose.rows_for(head)
-    assert rows.shape == (len(nose.ROWS), 11) and triangles.max() < len(rows)
-    assert rows[:, 1].min() == pytest.approx(nose.ROWS[:, 1].min() - 0.013, abs=1e-6)  # as far up this head as on the old one
-    assert rows[:, 2].min() == pytest.approx(0.150 - (nose.FACE_FRONT - nose.ROWS[:, 2].min()), abs=1e-6)  # on this face
-    assert rows[:, 2].max() > 0.150 + 0.01                                             # and out of it
-    np.testing.assert_array_equal(rows[:, 8:], 1.0)
+    for style in nose.STYLE_NAMES:
+        rows, triangles = nose.styled_rows(head, style)
+        assert rows.shape[1] == 11 and triangles.max() < len(rows)
+        assert rows[:, 1].min() == pytest.approx(nose.NOSE_BOTTOM - 0.013, abs=1e-6)  # ends above the mouth, as on the old head
+        assert 0.150 - 0.004 <= rows[:, 2].min() <= 0.150                             # its base is on this face
+        assert rows[:, 2].max() > 0.150 + 0.008                                       # and it stands out of it
+        np.testing.assert_array_equal(rows[:, 8:], 1.0)
+
+
+def test_nose_styles_share_their_triangles_and_differ_where_their_names_say():
+    from src.clothing import nose
+    built = {name: nose.build(shape) for name, shape in nose.NOSE_STYLES.items()}
+    base = built["padrao"]
+    assert all(rows.shape == base.shape for rows in built.values())   # one topology: a style is changed in place
+    width = lambda rows: np.ptp(rows[:, 0])
+    assert np.ptp(base[:, 1]) == pytest.approx(0.070) and base[:, 2].max() == pytest.approx(0.015)  # the old nose's measures
+    assert built["projetado"][:, 2].max() > base[:, 2].max() + 0.005
+    assert width(built["narinas_largas"]) > width(base) + 0.008 and width(built["fino"]) < width(base)
+    tip = lambda rows: rows[rows[:, 2] > rows[:, 2].max() - 1e-9]
+    assert np.ptp(tip(built["ponta_larga"])[:, 0]) > np.ptp(tip(base)[:, 0]) + 0.005
+    from dataclasses import replace
+    middle = lambda rows: rows[np.abs(rows[:, 1] - 0.035) < 0.012][:, 2].max()   # the ridge half-way up, same length
+    curved_out, curved_in = nose.build(replace(nose.BASE, curve=1.0)), nose.build(replace(nose.BASE, curve=-1.0))
+    assert middle(curved_out) > middle(base) + 0.003 and middle(curved_in) < middle(base) - 0.003
+    assert nose.NOSE_STYLES["aquilino"].curve > 0 > nose.NOSE_STYLES["arrebitado"].curve
+    assert np.ptp(built["botao"][:, 1]) < 0.05 < 0.08 < np.ptp(built["longo"][:, 1])
+    for rows in built.values():                                       # every face looks out of the nose
+        inside = np.array([0.0, np.ptp(rows[:, 1]) / 2, 0.0])
+        centres = rows[:, :3].reshape(-1, 3, 3).mean(1)
+        assert ((rows[::3, 3:6] * (centres - inside)).sum(1) > -1e-9).all()
 
 
 def test_nose_adjustments_grow_it_out_of_the_face_not_into_it():
@@ -211,3 +235,8 @@ def test_skin_nariz_shows_and_hides_the_nose():
     assert handler.execute("/skin nariz sim")[0] and model.customization.should_render_3d_nose and len(reloads) == 2
     assert handler.execute("/skin nariz talvez")[0] is False
     assert handler.execute("/skin ajuste nariz_projecao 60")[0] and len(reloads) == 2  # the mesh is reshaped, not rebuilt
+    assert handler.execute("/skin nariz aquilino")[0] and model.customization.nose_style == "aquilino"
+    assert handler.execute("/skin nariz arrebitado")[0] and len(reloads) == 2            # another shape of the same mesh
+    assert handler.execute("/skin nariz bloco")[0] and len(reloads) == 3                 # the old mesh: rebuilt
+    assert handler.execute("/skin nariz nao")[0] and handler.execute("/skin nariz fino")[0]
+    assert model.customization.should_render_3d_nose and len(reloads) == 5               # a style puts the nose back

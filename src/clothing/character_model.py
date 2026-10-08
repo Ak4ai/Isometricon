@@ -1426,10 +1426,10 @@ class CharacterModel:
             mesh = TexturedMesh(v_h.flatten().astype(np.float32), head_data[1])
             self.parts.append(CharacterPart("head", mesh, head_tex_id))
             if self.customization.should_render_3d_nose:
-                # The nose of the old model, on this head's face; it takes the head's texture
+                # The nose, in the style chosen, on this head's face; it takes the head's texture
                 # (where its shadow is painted) and turns with the head.
-                from .nose import rows_for
-                nose_rows, nose_triangles = rows_for(v_h)
+                from .nose import styled_rows
+                nose_rows, nose_triangles = styled_rows(v_h, getattr(self.customization, "nose_style", "padrao"))
                 self.parts.append(CharacterPart("nose", TexturedMesh(nose_rows.flatten(), nose_triangles.flatten()),
                                                 head_tex_id))
 

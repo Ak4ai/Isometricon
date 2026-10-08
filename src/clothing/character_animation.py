@@ -159,7 +159,7 @@ class CharacterAnimator:
         self._bindings = []
         self._shown = None  # "rest" or "walk": what the GPU buffers hold
         self._shape, self._warped, self._scales, self._height = None, False, {}, 1.0  # body adjustments in use
-        self._lift, self._cloth_normals = 0.0, {}
+        self._lift, self._cloth_normals, self._bound_nose_style = 0.0, {}, None
         self._bound_rows = []
 
     def _body_cage(self):
@@ -274,6 +274,7 @@ class CharacterAnimator:
         self._bound_rows = [rows for _, rows, _, _ in self._bindings]  # as fitted, before any body adjustment
         self._shape, self._warped = None, False  # taken again from the model on the next update
         self._cloth_normals = {}
+        self._bound_nose_style = getattr(getattr(self.model, "customization", None), "nose_style", None)
         self._bound_key = self._key()
         self._shown = None
 
@@ -617,7 +618,8 @@ class CharacterAnimator:
         self.stride += (target - self.stride) * min(dt * STRIDE_EASE, 1.0)
         if abs(self.stride - target) < 1e-3:
             self.stride = target
-        shape = tuple(sorted((getattr(getattr(self.model, "customization", None), "body_adjust", None) or {}).items()))
+        custom = getattr(self.model, "customization", None)
+        shape = (getattr(custom, "nose_style", None),) + tuple(sorted((getattr(custom, "body_adjust", None) or {}).items()))
         if shape != self._shape:
             self._reshape(shape)
         if self.stride == 0.0 and self._shown == "rest":
@@ -634,21 +636,36 @@ class CharacterAnimator:
         root = (root[0], root[1] + self._lift * self._height, root[2])  # longer legs raise the body
         return self.skeleton.pose(rotations, root, scales=self._scales, height=self._height)
 
+    def _styled_nose(self, style):
+        """Vertex rows of the nose in ``style`` on the bound head, when that is not the nose the
+        model was built with and it has the same vertices (None otherwise)."""
+        from . import nose as noses
+        named = {part.name: k for k, (part, *_) in enumerate(self._bindings)}
+        if style is None or style == self._bound_nose_style or "nose" not in named or "head" not in named:
+            return None
+        rows, _ = noses.styled_rows(self._bound_rows[named["head"]], style)
+        return rows if rows.shape == self._bound_rows[named["nose"]].shape else None
+
     def _reshape(self, shape) -> None:
         """Take the model's body adjustments: the scale of each bone, the height, and the
         fitting pose warped where an adjustment has no bone (chest, buttocks). Skin, cloth and
         hair are warped alike, from the vertices they were bound with."""
-        adjust = dict(shape)
+        nose_style, adjust = shape[0], dict(shape[1:])
         self._shape = shape
         self._scales, self._height = body_shape.bone_scales(self.skeleton, adjust), body_shape.height(adjust)
         self._lift = body_shape.ground_lift(self.skeleton, self._scales)
         bulges, loose = body_shape.warps(adjust), body_shape.clearance(adjust)
         nose = body_shape.nose_adjusted(adjust)
-        warped = bulges or bool(loose) or nose
+        # The nose in another style of the same triangles is reshaped in place: only the old
+        # block nose has a mesh of its own and asks for the model to be rebuilt.
+        styled = self._styled_nose(nose_style)
+        warped = bulges or bool(loose) or nose or styled is not None
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
                 rows = self._bound_rows[k].copy()
+                if styled is not None and part.name == "nose":
+                    rows = styled.copy()
                 if nose and part.name == "nose":
                     rows[:, :3] = body_shape.nose_shape(rows[:, :3], adjust)
                 if bulges:

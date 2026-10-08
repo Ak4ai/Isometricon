@@ -32,6 +32,7 @@ from src.interactive.skin_commands import (
     HAIR_COLORS,
     HEADS,
     MOUTHS,
+    NOSE_STYLE_NAMES,
     PRESETS,
     SKIN_TONES,
     SkinCommandHandler,
@@ -258,6 +259,10 @@ class CharacterEditor:
                 Group("Ajustes do rosto", [Option(label, "", slider=name) for name, label in FACE.items()]),
                 Group("Nariz", [Option("Com nariz", "/skin nariz sim", selected=lambda m: custom() is not None and custom().should_render_3d_nose),
                                 Option("Sem nariz", "/skin nariz nao", selected=lambda m: custom() is not None and not custom().should_render_3d_nose)]),
+                Group("Formato do nariz", [
+                    Option(n.replace("_", " ").capitalize(), f"/skin nariz {n}",
+                           selected=lambda m, n=n: custom() is not None and custom().should_render_3d_nose and getattr(custom(), "nose_style", "padrao") == n)
+                    for n in NOSE_STYLE_NAMES]),
                 Group("Ajustes do nariz", [Option(label, "", slider=name) for name, label in NOSE.items()]),
             ]
 
