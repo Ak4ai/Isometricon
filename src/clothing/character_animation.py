@@ -243,13 +243,20 @@ class CharacterAnimator:
         cage_points, cage_bones = self._body_cage()
         self._cage_binding = cage_points, cage_bones
         self.rest = rest_rotations(self.skeleton, self._rest_arm_angle(cage_points, cage_bones))
+        # The meshes that stay from the last binding (the clothes, when only the skin was cut again)
+        # hold in their buffers the vertices as adjusted: they are bound again from the vertices
+        # they came with, or every adjustment would be applied over the last one.
+        kept = {id(part.mesh): (part.mesh, rows) for (part, *_), rows in zip(self._bindings, getattr(self, "_bound_rows", None) or [])}
         self._bindings = []
+        reused = False
         no_arm = ~np.isin(cage_bones, [b for side in "LR" for b in self._subtree(self.skeleton.index("UpperArm_" + side))])
         beside = cage_bones[no_arm]  # the body part beside a point, the arms aside
         for part in self.model.parts:
             if part.transform is not None or not hasattr(part.mesh, "read_vertices"):
                 continue
-            rows = part.mesh.read_vertices()
+            before = kept.get(id(part.mesh))
+            rows = before[1] if before is not None and before[0] is part.mesh else part.mesh.read_vertices()
+            reused = reused or (before is not None and before[0] is part.mesh)
             if not len(rows):
                 continue
             if part.name in RIGID_PARTS:
@@ -295,7 +302,8 @@ class CharacterAnimator:
         self.arm_swing = 1.0
         self.arm_swing = self._arm_swing()
         self._bound_rows = [rows for _, rows, _, _ in self._bindings]  # as fitted, before any body adjustment
-        self._shape, self._warped = None, False  # taken again from the model on the next update
+        # Taken again from the model on the next update; a mesh kept may hold the last adjustments, so all are written again.
+        self._shape, self._warped = None, reused
         self._cloth_normals = {}
         # The style the nose's mesh was built in: the style chosen may have changed since then
         # (a command or a saved character applied before the first frame), and is then put on in _reshape.
