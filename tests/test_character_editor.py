@@ -71,8 +71,9 @@ def test_tabs_change_section_and_the_wheel_scrolls_only_over_the_panel():
     rect = next(rect for rect, kind, payload in editor.layout(*SIZE) if kind == "tab" and payload == titles.index("Rosto"))
     click(editor, *centre(rect))
     assert editor.active == titles.index("Rosto")
-    labels = [payload.label for _, kind, payload in editor.layout(*SIZE) if kind == "option"]
-    assert "Azul" in labels and "Sorriso" in labels
+    labels = [option.label for group in editor.groups() for option in group.options]   # the whole section, scrolled or not
+    assert "Azul" in labels and "Sorriso" in labels and "Arredondado" in labels
+    editor.layout(*SIZE)
     assert editor.handle_scroll(PANEL_WIDTH + 50, -1.0) is False  # over the character: the camera zooms
     assert editor.handle_scroll(50, -1.0) is True                 # over the panel: the grid scrolls
     assert editor.scroll > 0
