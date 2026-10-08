@@ -751,6 +751,10 @@ def main() -> None:
             skin_command_handler.editor_requested = False
             character_editor.open()
         editing = character_editor.is_open and character_model is not None
+        if not editing:  # os braços a 90 graus são só do ajuste fino da tela de criação
+            for posed_animator in (character_animator if char_demo else None, getattr(player_token, "animator", None)):
+                if posed_animator is not None:
+                    posed_animator.arms_out = False
         if editing and editor_camera["saved"] is None:
             editor_camera["saved"] = (camera.target.copy(), camera.ortho_size, camera.pitch)
             turntable_state["pitch"] = math.degrees(camera.pitch)  # o arraste vertical inclina a câmera
@@ -769,6 +773,8 @@ def main() -> None:
         if editing:
             character_editor.update(dt)
             editor_animator = character_animator if char_demo else getattr(player_token, "animator", None)
+            if editor_animator is not None:
+                editor_animator.arms_out = character_editor.arms_raised  # braços a 90 graus, no ajuste fino
             if terrain_demo and editor_animator is not None:
                 editor_animator.walking = False
                 editor_animator.update(dt)

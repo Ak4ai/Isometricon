@@ -117,6 +117,12 @@ peça não é simétrica), e a pele atravessa o tecido em dentes. A seção corr
 - **Ativar pincel** (a caixa ao lado): com ela marcada o botão esquerdo pinta; desmarcada, ele gira o personagem
   como nas outras seções, com as cores ainda à vista. Marcar "Editar pele" já liga o pincel, e marcar o pincel liga
   o modo.
+- **Transparência** (outra caixa, marcada de início): é ela que mostra a pele inteira e pintada sob as roupas
+  transparentes. Desmarcada, o personagem é editado como o jogo o mostra, com as roupas opacas e a pele recortada,
+  e só os pontos e o pincel aparecem por cima: dá para ver o resultado de cada traço na hora.
+- **Braços a 90°** (outra caixa): o personagem fica com os braços abertos para os lados enquanto a tela está nesta
+  seção (`CharacterAnimator.arms_out`), para ver e pintar as axilas e a lateral do tronco, que os braços cobrem em
+  descanso. Os pontos acompanham a pose. Vale com ou sem o modo de edição.
 - **Desfazer e refazer:** Ctrl+Z e Ctrl+Shift+Z, ou as duas setas no canto de cima à direita (apagadas quando não
   há o que desfazer ou refazer). Valem para as correções da pele (pintura, espelhamento, apagar tudo), até 100
   passos, só nesta sessão (`/skin hsr desfazer`, `/skin hsr refazer`, `SkinCommandHandler.hsr_history`).

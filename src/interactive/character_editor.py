@@ -227,6 +227,8 @@ class CharacterEditor:
         # function from the cursor to the points under it, and the points to show on the character.
         self.hsr_edit = False  # the edit mode of the skin under the clothes: painted skin, clear clothes, the brush
         self.brush_on = False  # in that mode, the left button paints (off: it turns the character, as elsewhere)
+        self.clear_clothes = True  # and the skin is shown whole and painted, under see-through clothes (off: as in the game)
+        self.arms_out = False      # the character stands with the arms at 90 degrees while in the fine adjustment
         self._history_quad = None
         self._legend_quad = None
         self._history_key: Any = None
@@ -373,7 +375,9 @@ class CharacterEditor:
                     Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),
                 Group("Edição da pele sob a roupa (HSR)", [
                     Option("Editar pele", "@hsr", selected=lambda m: self.hsr_edit, check=True),
-                    Option("Ativar pincel", "@pintar", selected=lambda m: self.brush_on, check=True)]),
+                    Option("Ativar pincel", "@pintar", selected=lambda m: self.brush_on, check=True),
+                    Option("Transparência", "@transparente", selected=lambda m: self.clear_clothes, check=True),
+                    Option("Braços a 90°", "@bracos", selected=lambda m: self.arms_out, check=True)]),
                 Group("Pincel (esquerdo pinta, Ctrl inverte, direito gira)", [
                     Option(label, f"@pincel {name}", selected=lambda m, name=name: self.brush == name) for name, label in BRUSHES]),
                 Group("Tamanho do pincel", [Option(label, f"@tamanho {size}", selected=lambda m, size=size: self.brush_size == size)
@@ -448,10 +452,15 @@ class CharacterEditor:
         """O modo de edição da pele está ligado e a tela está na seção dele."""
         return self.is_open and self.hsr_edit and self.sections[self.active].title == FINE_SECTION
 
+    @property
+    def arms_raised(self) -> bool:
+        """O personagem deve ficar com os braços a 90 graus: a opção está marcada e a tela na seção dela."""
+        return self.is_open and self.arms_out and self.sections[self.active].title == FINE_SECTION
+
     def _sync_edit(self) -> None:
         """Põe o modelo no modo de edição da pele, ou tira (ao sair da seção ou fechar a tela)."""
         model = self.model
-        wanted = self.hsr_editing
+        wanted = self.hsr_editing and self.clear_clothes  # without it the character is edited as the game shows it
         if model is None or bool(getattr(model, "hsr_edit", False)) == wanted:
             return
         model.hsr_edit = wanted
@@ -693,6 +702,11 @@ class CharacterEditor:
     def choose(self, option: Option) -> None:
         if option.command.startswith("@"):  # the brush's own settings: nothing of the character changes
             name, _, value = option.command[1:].partition(" ")
+            if name == "transparente":
+                self.clear_clothes = not self.clear_clothes
+                self._sync_edit()
+            elif name == "bracos":
+                self.arms_out = not self.arms_out
             if name == "pintar":
                 self.brush_on = not self.brush_on
                 if self.brush_on and not self.hsr_edit:
