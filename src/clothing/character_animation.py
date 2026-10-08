@@ -643,11 +643,14 @@ class CharacterAnimator:
         self._scales, self._height = body_shape.bone_scales(self.skeleton, adjust), body_shape.height(adjust)
         self._lift = body_shape.ground_lift(self.skeleton, self._scales)
         bulges, loose = body_shape.warps(adjust), body_shape.clearance(adjust)
-        warped = bulges or bool(loose)
+        nose = body_shape.nose_adjusted(adjust)
+        warped = bulges or bool(loose) or nose
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
                 rows = self._bound_rows[k].copy()
+                if nose and part.name == "nose":
+                    rows[:, :3] = body_shape.nose_shape(rows[:, :3], adjust)
                 if bulges:
                     rows[:, :3] = body_shape.warp(rows[:, :3], self.skeleton, adjust, surface)
                 if loose and part.source_obj is not None and "hair" not in part.name:

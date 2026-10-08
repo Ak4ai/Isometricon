@@ -162,3 +162,52 @@ def test_clearance_moves_the_cloth_along_one_normal_at_each_seam():
     np.testing.assert_allclose(normals[2], [0, 0, 1])
     assert body_shape.clearance({"folga": 1.0}) == 0.02 and body_shape.clearance({}) == 0.0
     assert body_shape.clearance({"folga": -1.0}) == -0.003  # closer to the body there is little room
+
+
+def test_the_nose_sits_on_the_face_of_each_head():
+    from src.clothing import nose
+    head = np.zeros((8, 11))
+    head[:, :3] = [[x, y, z] for x in (-0.11, 0.11) for y in (1.479, 1.795) for z in (-0.10, 0.150)]  # the female head's box
+    rows, triangles = nose.rows_for(head)
+    assert rows.shape == (len(nose.ROWS), 11) and triangles.max() < len(rows)
+    assert rows[:, 1].min() == pytest.approx(nose.ROWS[:, 1].min() - 0.013, abs=1e-6)  # as far up this head as on the old one
+    assert rows[:, 2].min() == pytest.approx(0.150 - (nose.FACE_FRONT - nose.ROWS[:, 2].min()), abs=1e-6)  # on this face
+    assert rows[:, 2].max() > 0.150 + 0.01                                             # and out of it
+    np.testing.assert_array_equal(rows[:, 8:], 1.0)
+
+
+def test_nose_adjustments_grow_it_out_of_the_face_not_into_it():
+    from src.clothing import nose
+    points = nose.ROWS[:, :3]
+    assert not body_shape.nose_adjusted({"nariz_sombra": 1.0}) and body_shape.nose_adjusted({"nariz_altura": 0.2})
+    out = body_shape.nose_shape(points, {"nariz_projecao": 1.0})
+    assert out[:, 2].min() == pytest.approx(points[:, 2].min())                        # still on the face
+    assert np.ptp(out[:, 2]) == pytest.approx(np.ptp(points[:, 2]) * (1 + body_shape.NOSE_DEPTH))
+    wide = body_shape.nose_shape(points, {"nariz_largura": 1.0})
+    assert np.ptp(wide[:, 0]) == pytest.approx(np.ptp(points[:, 0]) * (1 + body_shape.NOSE_WIDTH))
+    assert np.ptp(wide[:, 1]) == pytest.approx(np.ptp(points[:, 1]))
+    high = body_shape.nose_shape(points, {"nariz_altura": 1.0})
+    np.testing.assert_allclose(high - points, [[0.0, body_shape.NOSE_LIFT, 0.0]] * len(points), atol=1e-12)
+
+
+def test_the_nose_shadow_is_painted_between_the_eyes_and_follows_its_slider():
+    from src.clothing.customization import HeadAtlasBuilder
+    builder = HeadAtlasBuilder()
+    spot = (128, 170)  # the middle of the shadow in the 512 px atlas
+    def skin_at(**fields):
+        return np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB").getpixel(spot), dtype=int)
+    bare = skin_at(has_3d_nose=False)
+    assert (skin_at() < bare).all()                                                    # a little darker with the nose
+    assert (skin_at(body_adjust={"nariz_sombra": 1.0}) < skin_at()).all()              # darker still
+    np.testing.assert_array_equal(skin_at(body_adjust={"nariz_sombra": -1.0}), bare)   # and none at all
+
+
+def test_skin_nariz_shows_and_hides_the_nose():
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: reloads.append(1))
+    handler = SkinCommandHandler(character_model=model)
+    assert model.customization.should_render_3d_nose
+    assert handler.execute("/skin nariz nao")[0] and not model.customization.should_render_3d_nose
+    assert handler.execute("/skin nariz sim")[0] and model.customization.should_render_3d_nose and len(reloads) == 2
+    assert handler.execute("/skin nariz talvez")[0] is False
+    assert handler.execute("/skin ajuste nariz_projecao 60")[0] and len(reloads) == 2  # the mesh is reshaped, not rebuilt

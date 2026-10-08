@@ -34,7 +34,7 @@ divergem.
 |---|---|---|
 | Corpo | feminino/masculino, tom de pele, formato da cabeça | `/skin corpo`, `/skin pele`, `/skin cabeca` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
-| Rosto | estilo e cor dos olhos, boca, sobrancelhas; tamanho, altura e distância dos olhos, altura das sobrancelhas | `/skin olhos`, `/skin boca`, `/skin sobrancelha`, `/skin ajuste` |
+| Rosto | estilo e cor dos olhos, boca, sobrancelhas; tamanho, altura e distância dos olhos, altura das sobrancelhas; nariz (com ou sem), seu tamanho, largura, projeção, altura e sombra | `/skin olhos`, `/skin boca`, `/skin sobrancelha`, `/skin nariz`, `/skin ajuste` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
 | Superior | camisetas, camisas e suéteres | `/skin top <id>` |
 | Jaqueta | peça por cima da roupa | `/skin jaqueta <id>` |
@@ -64,9 +64,16 @@ roupa e cabelo (`src/clothing/body_shape.py`).
   aproximar o limite é 3 mm: mais que isso a pele atravessa a roupa justa.
 - **Olhos e sobrancelhas** agem na textura da cabeça: a camada é escalada, erguida ou afastada antes de ser colada
   (`customization.place_face_layer`).
+- **Nariz:** a malha é a do modelo masculino antigo (objeto `nariz.002`, guardada em `src/clothing/nose.py`),
+  posta no rosto de cada cabeça (`nose.rows_for`) e presa a ela. Os corpos atuais não traziam o nariz: ele tinha
+  sumido na troca dos arquivos de corpo. Tamanho, largura, projeção e altura mudam a malha em torno do ponto onde
+  ela se apoia no rosto (`body_shape.nose_shape`), sem reconstruir o personagem.
+- **Sombra do nariz:** um trecho um pouco mais escuro pintado na textura do rosto, entre os olhos, como na textura
+  antiga da cabeça. A malha do nariz usa esse pedaço da textura, então escurece junto. O controle vai de sem
+  sombra (-100) ao dobro (+100), e a sombra acompanha o tamanho, a largura e a altura do nariz.
 - **O rosto muda sem recarregar o personagem:** olhos (cor, tamanho, altura, distância), sobrancelhas e boca refazem
   só a textura da cabeça e a trocam no lugar (`CharacterModel.refresh_face`, ~30 ms). Só o que muda geometria
-  reconstrói o personagem: os olhos clássicos tiram o nariz 3D.
+  reconstrói o personagem: pôr ou tirar o nariz, e os olhos clássicos, que o tiram.
 - Com tudo em 0, nada muda em relação ao personagem sem ajustes. A bateria de robustez não mede os ajustes; os
   extremos foram conferidos por imagem no corpo feminino com roupa justa (regata e meia-calça), parado e andando.
 - A pose de descanso dos braços não é recalculada com os ajustes: com quadril ou pelve muito largos as mãos podem

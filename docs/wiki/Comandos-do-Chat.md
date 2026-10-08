@@ -22,6 +22,7 @@ execução, o autocompletar e a ajuda.
 | `/skin roupas` | lista o que está vestido |
 | `/skin preset <padrao\|gato_loiro\|cavaleiro\|rosa\|classico>` · `/skin reset` | aparência pronta (mantém o corpo) |
 | `/skin sobrancelha <padrao\|grossa\|decidida\|sem>` | estilo das sobrancelhas |
+| `/skin nariz <sim\|nao>` | nariz 3D (ajustes: `nariz_tamanho`, `nariz_largura`, `nariz_projecao`, `nariz_altura`, `nariz_sombra` em `/skin ajuste`) |
 | `/skin ajuste <nome> <-100 a 100>` · `reset` | proporções: altura, cabeca, pescoco, ombros, peito, cintura, pelve, quadril, bunda, bracos, bracos_comprimento, maos, pernas, pernas_comprimento, pes, folga, olhos_tamanho, olhos_altura, olhos_distancia, sobrancelha_altura |
 | `/skin salvar` · `/skin carregar` | grava o personagem em `saves/personagem.json`, ou volta ao gravado |
 | `/skin interface` | abre a [[tela de criação de personagem\|Criacao-de-Personagem]] |

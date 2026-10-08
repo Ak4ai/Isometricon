@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Optional, Tuple, Dict, Any, Union
 import os
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 
 class BodyType(str, Enum):
@@ -360,7 +360,8 @@ class AvatarCustomization:
             f"m_{self.resolved_mouth_style}_eb_{self.resolved_eyebrow_style}_ebc_{self.resolved_eyebrow_color}_"
             f"h2_{self.resolved_hair_2d_style}_fd_{self.resolved_face_detail}_"
             f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
-            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_altura')]}"
+            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_altura')]}_"
+            f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}"
         )
 
     def face_adjust(self, name: str) -> float:
@@ -398,6 +399,11 @@ def place_face_layer(layer: Image.Image, scale: float = 1.0, lift: float = 0.0, 
 # How far the face adjustments go at 1: the eyes' size (share), and pixels of the 512 px head
 # atlas for their height and distance and for the height of the eyebrows over them.
 EYE_SIZE, EYE_LIFT, EYE_SPREAD, BROW_LIFT = 0.22, 10.0, 8.0, 8.0
+# The nose's shadow, as the old head texture had it: its box in the 512 px atlas, how much of the
+# darker tone is laid over the skin (and that tone, as a share of the skin's), and how it follows
+# the nose's adjustments (its size, its width, and pixels of its height).
+NOSE_SHADOW_BOX, NOSE_SHADOW, NOSE_SHADOW_TONE = (117, 143, 139, 198), 0.14, 0.55
+NOSE_SHADOW_GROWTH = (0.5, 0.6, 12.0)
 
 
 class LayeredHeadCompositor:
@@ -488,6 +494,26 @@ class LayeredHeadCompositor:
             freckles_img = self._load_layer("face_details/freckles.png")
             if freckles_img is not None:
                 canvas.alpha_composite(freckles_img)
+
+        # ---------------------------------------------------------
+        # 3.1 SOMBRA DO NARIZ: um trecho um pouco mais escuro entre os olhos, onde o nariz 3D se apoia
+        # (a malha do nariz usa esse pedaço da textura, então escurece com ele).
+        # ---------------------------------------------------------
+        shadow = NOSE_SHADOW * (1.0 + cust.face_adjust("nariz_sombra"))
+        if cust.should_render_3d_nose and shadow > 0.0:
+            unit = canvas.width / 512.0
+            size = 1.0 + NOSE_SHADOW_GROWTH[0] * cust.face_adjust("nariz_tamanho")
+            half_w = (NOSE_SHADOW_BOX[2] - NOSE_SHADOW_BOX[0]) / 2 * size * (1.0 + NOSE_SHADOW_GROWTH[1] * cust.face_adjust("nariz_largura"))
+            half_h = (NOSE_SHADOW_BOX[3] - NOSE_SHADOW_BOX[1]) / 2 * size
+            cx = (NOSE_SHADOW_BOX[0] + NOSE_SHADOW_BOX[2]) / 2
+            cy = (NOSE_SHADOW_BOX[1] + NOSE_SHADOW_BOX[3]) / 2 - NOSE_SHADOW_GROWTH[2] * cust.face_adjust("nariz_altura")
+            mask = Image.new("L", canvas.size, 0)
+            ImageDraw.Draw(mask).rectangle([(cx - half_w) * unit, (cy - half_h) * unit, (cx + half_w) * unit, (cy + half_h) * unit],
+                                           fill=int(round(255 * min(shadow, 1.0))))
+            mask = mask.filter(ImageFilter.GaussianBlur(1.5 * unit))
+            dark = Image.new("RGBA", canvas.size, tuple(int(c * NOSE_SHADOW_TONE) for c in cust.skin_rgb_255) + (255,))
+            dark.putalpha(mask)
+            canvas.alpha_composite(dark)
 
         # ---------------------------------------------------------
         # 4. OLHOS & TINGIMENTO DA ÍRIS (Eyes & Iris Tint)

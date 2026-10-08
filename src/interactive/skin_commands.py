@@ -624,7 +624,7 @@ class SkinCommandHandler:
         missing = self._need_model()
         if missing:
             return missing
-        from src.clothing.body_shape import ADJUSTMENTS, FACE
+        from src.clothing.body_shape import ADJUSTMENTS, REDRAWS_FACE as FACE
         custom = self.character_model.customization
         current = dict(getattr(custom, "body_adjust", None) or {})
         usage = f"Uso: /skin ajuste <{'|'.join(ADJUSTMENTS)}> <-100 a 100> | reset"
@@ -653,6 +653,17 @@ class SkinCommandHandler:
         else:
             custom.body_adjust = adjusted
         return True, f"[Ajuste] {ADJUSTMENTS[name]}: {round(value):+d}.", GREEN
+
+    def nose(self, args: List[str]) -> Result:
+        missing = self._need_model()
+        if missing:
+            return missing
+        value = args[0].lower() if args else ""
+        if value not in ("sim", "nao", "não", "on", "off"):
+            return False, "[Erro] Uso: /skin nariz <sim|nao>", RED
+        shown = value in ("sim", "on")
+        self._change(lambda c: setattr(c, "has_3d_nose", shown))
+        return True, f"[Nariz] {'Com' if shown else 'Sem'} nariz.", GREEN
 
     def eyebrows(self, args: List[str]) -> Result:
         missing = self._need_model()
@@ -716,6 +727,8 @@ SKIN_COMMANDS: List[Command] = [
             list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"], "Aparência"),
     Command(("boca", "mouth"), "/skin boca <estilo>", "estilo da boca", SkinCommandHandler.mouth,
             ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem"], "Aparência"),
+    Command(("nariz", "nose"), "/skin nariz <sim|nao>", "nariz 3D (os ajustes ficam em /skin ajuste nariz_...)",
+            SkinCommandHandler.nose, ["sim", "nao"], "Aparência"),
     Command(("sobrancelha", "eyebrows"), "/skin sobrancelha <padrao|grossa|decidida|sem>", "estilo das sobrancelhas",
             SkinCommandHandler.eyebrows, list(EYEBROWS), "Aparência"),
     Command(("ajuste", "adjust"), "/skin ajuste <nome> <-100 a 100> | reset", "proporções do corpo e do rosto",

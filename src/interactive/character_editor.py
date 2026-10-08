@@ -19,7 +19,7 @@ import sys
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, FACE
+from src.clothing.body_shape import BODY_GROUPS, FACE, NOSE, REDRAWS_FACE
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
@@ -256,6 +256,9 @@ class CharacterEditor:
                                               selected=lambda m, v=EYEBROWS[n]: custom() is not None and custom().resolved_eyebrow_style == _value(v))
                                        for n in EYEBROWS]),
                 Group("Ajustes do rosto", [Option(label, "", slider=name) for name, label in FACE.items()]),
+                Group("Nariz", [Option("Com nariz", "/skin nariz sim", selected=lambda m: custom() is not None and custom().should_render_3d_nose),
+                                Option("Sem nariz", "/skin nariz nao", selected=lambda m: custom() is not None and not custom().should_render_3d_nose)]),
+                Group("Ajustes do nariz", [Option(label, "", slider=name) for name, label in NOSE.items()]),
             ]
 
         def shape() -> List[Group]:
@@ -488,7 +491,7 @@ class CharacterEditor:
         # The body follows the mouse. The face is a texture drawn again at each change: it
         # follows a few times a second, and takes the last value when the slider is let go.
         now = time.monotonic()
-        if option.slider not in FACE or now - self._slider_sent >= FACE_REDRAW:
+        if option.slider not in REDRAWS_FACE or now - self._slider_sent >= FACE_REDRAW:
             self._slider_sent = now
             self.set_slider(option, value)
 
