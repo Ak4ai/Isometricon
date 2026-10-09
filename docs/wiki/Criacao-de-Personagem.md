@@ -121,11 +121,13 @@ no grupo "Estilo" da seção Cabelo).
   de cabelo do personagem, como o cabelo padrão. Os cabelos feitos à mão ficam em `character_model.HANDMADE_HAIR`
   (nome -> id) e são escolhidos pelo nome, sem nada para baixar.
 - **Como o nudred é feito** (`scripts/blender_nudred_hair.py`, rodado dentro do Blender com `assets/models/123.blend`
-  aberto): uma calota em volta da cabeça, medida a partir da própria cabeça por raios do centro dela, justa (4 mm) na
-  linha do cabelo e cheia em cima, com a passagem de uma para a outra em 7 cm (o degradê); e sobre ela cerca de
-  seiscentos "twists", tubinhos curtos e grossos de três anéis que giram um pouco a cada passo, mais em pé do que
-  para fora, separados por 1,5 cm. São cerca de 18 mil triângulos (o cabelo padrão tem 3,9 mil).
-- No `.blend` o script cria a coleção "Nudred": `Cabelo_Nudred` sobre a cabeça masculina, `Cabelo_Nudred_feminino`
+  aberto): uma calota em volta da cabeça, medida a partir da própria cabeça por raios do centro dela. Nos lados e na
+  nuca ela é um **degradê**: cabelo rente (3 mm), sem twists, nos 4 cm acima da linha do cabelo (`FADE`), e só então
+  enche; sobre a testa não há degradê, o volume começa na linha. No alto ficam cerca de cento e sessenta "twists"
+  compridos e largos (`TWIST_LENGTH`, `TWIST_RADIUS`), tubinhos de quatro anéis que giram um pouco a cada passo, mais
+  em pé do que para fora, só onde o cabelo está cheio (`TWIST_FROM`). São cerca de 10 mil triângulos (o cabelo padrão
+  tem 3,9 mil). A primeira versão tinha seiscentos twists curtos pela cabeça toda, lados incluídos.
+- No `.blend` o script cria a coleção "Nudred": `Cabelo_Nudred` sobre a cabeça masculina, `Cabelo_Nudred_female`
   (oculto) sobre a feminina, e cópias de referência da cabeça e do cabelo padrão. Para mexer no cabelo à mão e levar
   de volta ao jogo, edite o objeto e chame `export(objeto, caminho, título)` do mesmo script.
 - Os `.obj` são ignorados pelo git (`*.obj`); os dois do nudred foram adicionados à força (`git add -f`), como os
