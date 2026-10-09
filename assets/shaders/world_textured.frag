@@ -22,6 +22,13 @@ uniform vec3 u_AmbientColor; // Luz ambiente
 uniform float u_Vitiligo;
 uniform float u_VitiligoSeed;
 uniform vec3 u_SkinTone;
+// Underwear painted on the skin of the trunk and the legs, by where the point is on the unposed
+// body: 0 none, 1 the bottom, 2 the bottom and a top.
+uniform int u_Underwear = 0;
+uniform vec3 u_UnderwearColor;
+uniform vec4 u_UnderBottom;     // lowest of the edge between the legs, the waist, half the strip there, the rise to the sides
+uniform vec4 u_UnderTop;        // from, to, where the straps are across the body, half their width
+uniform float u_UnderShoulder;  // where the straps end
 uniform float u_Alpha = 1.0;  // below 1: a see-through part (the clothes, while the skin under them is edited)
 
 float hash3(vec3 p)
@@ -73,6 +80,23 @@ void main()
         float patch_ = smoothstep(edge, edge + 0.035, n);
         float skin = 1.0 - smoothstep(0.12, 0.24, distance(albedo, u_SkinTone));
         albedo = mix(albedo, mix(albedo, vec3(0.99, 0.93, 0.91), 0.86), patch_ * skin);
+    }
+    if (u_Underwear > 0)
+    {
+        float across = abs(v_BindPos.x);
+        float height = v_BindPos.y;
+        float low = u_UnderBottom.x + u_UnderBottom.w * max(across - u_UnderBottom.z, 0.0);
+        bool on = height >= low && height <= u_UnderBottom.y;
+        bool trim = on && (height > u_UnderBottom.y - 0.012 || height < low + 0.008);     // the waistband and the leg seams
+        if (u_Underwear > 1)
+        {
+            bool band = height >= u_UnderTop.x && height <= u_UnderTop.y;
+            bool strap = height > u_UnderTop.y && height < u_UnderShoulder && abs(across - u_UnderTop.z) < u_UnderTop.w;
+            trim = trim || (band && (height < u_UnderTop.x + 0.012 || height > u_UnderTop.y - 0.008));
+            on = on || band || strap;
+        }
+        if (on)
+            albedo = u_UnderwearColor * (trim ? 0.86 : 1.0);
     }
     vec3 result = lighting * albedo;
 

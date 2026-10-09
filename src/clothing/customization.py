@@ -175,6 +175,7 @@ class AvatarCustomization:
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
     ear_style: str = "sem"      # orelhas 3D (ver ears.STYLE_NAMES); "sem": nenhuma
+    underwear: str = "branco"   # a roupa de baixo pintada na pele: "sem", um nome de underwear.COLORS ou "#rrggbb"
     wing_style: str = "sem"     # asas 3D (ver wings.STYLE_NAMES); "sem": nenhuma
     wing_color: str = ""        # a cor delas: "" a do modelo, "pele", "cabelo", um nome de ears.EAR_COLORS ou "#rrggbb"
     tail_style: str = "sem"     # cauda 3D (ver tails.STYLE_NAMES); "sem": nenhuma

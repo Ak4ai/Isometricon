@@ -821,6 +821,7 @@ class CharacterPart:
     source_obj: Optional[str] = None  # fitted garment OBJ, for the animation's bone binding
 
 
+UNDERWEAR_PARTS = ("trunk_skin", "legs_skin")  # the skin the underwear is painted on (not the arms beside it)
 WING_HEIGHT = 0.72  # where the wings leave the torso, from its bottom (0) to its top (1)
 TAIL_HEIGHT = 0.72  # where a tail leaves the pelvis, from its bottom (0) to its top (1)
 HSR_HIDDEN = 0.9  # the share of the mask at a skin vertex past which it is hidden (as hsr.cull_hidden_triangles)
@@ -1834,12 +1835,25 @@ class CharacterModel:
         from .wings import alpha_of
         wing_alpha = alpha_of(self.customization)
         see_through = lambda part: (edit and part.source_obj is not None) or (part.name == "wings" and wing_alpha < 1.0)
+        # The underwear: painted by the shader on the skin of the trunk and the legs.
+        from . import underwear
+        under_colour = None if edit else underwear.colour_of(self.customization)
+        under = underwear.regions(self.body) if under_colour is not None else None
+        if under is not None:
+            shader.set_vec3("u_UnderwearColor", *under_colour)
+            shader.set_vec4("u_UnderBottom", under["bottom"])
+            top = under["top"]
+            if top is not None:
+                shader.set_vec4("u_UnderTop", top[:4])
+                shader.set_float("u_UnderShoulder", top[4])
         parts = sorted(self.parts, key=see_through) if edit or wing_alpha < 1.0 else self.parts
         for part in parts:
             part_model = base_model if part.transform is None else base_model @ part.transform
             shader.set_mat4("u_Model", part_model)
             shader.set_bool("u_Skinned", bones is not None and getattr(part.mesh, "skinned", False))
             shader.set_float("u_Vitiligo", vitiligo if part.name.startswith(SKIN_PART_NAMES) and not edit else 0.0)
+            shader.set_int("u_Underwear", (2 if under["top"] is not None else 1)
+                           if under is not None and part.name.startswith(UNDERWEAR_PARTS) else 0)
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, part.texture_id)
             clear = see_through(part)
@@ -1855,6 +1869,7 @@ class CharacterModel:
                 gl.glDisable(gl.GL_BLEND)
         shader.set_bool("u_Skinned", False)
         shader.set_float("u_Vitiligo", 0.0)
+        shader.set_int("u_Underwear", 0)
 
         # Renderização da Cage em modo Wireframe (Depuração Visual)
         if self.show_cage and self.cage_debug_mesh is not None:
@@ -2137,8 +2152,8 @@ def parse_character_cli_args(args: List[str]) -> Tuple[AvatarCustomization, int,
     hair_style = HairStyle.ANIME_LONG
     hair_color = HairColor.BRUNETTE
     skin_color = SKIN_PRESETS["pale"]
-    top_id = OUTFIT_PRESETS["sweater"]
-    bottom_id = 109837605892174
+    top_id = None      # a character starts without clothes, in the underwear painted on the skin
+    bottom_id = None
     tool_id: Optional[int] = None
     custom_hair_obj: Optional[str] = None
     custom_hair_tex: Optional[str] = None

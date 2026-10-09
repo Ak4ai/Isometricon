@@ -26,6 +26,7 @@ from src.clothing.ears import EAR_COLORS
 from src.clothing.horns import HORN_COLORS, STYLE_NAMES as HORN_STYLE_NAMES
 from src.clothing.tails import STYLE_NAMES as TAIL_STYLE_NAMES
 from src.clothing.wings import STYLE_NAMES as WING_STYLE_NAMES
+from src.clothing import underwear as underwear_models
 from src.clothing.races import RACES
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
@@ -296,6 +297,12 @@ class CharacterEditor:
                               selected=lambda m, n=n: custom() is not None and getattr(custom(), "tail_color", "") == n)
                        for n in EAR_COLORS]),
                 Group("Ajustes da cauda", [Option(label, "", slider=name) for name, label in TAILS.items()]),
+                Group("Roupa de baixo (pintada na pele)", [
+                    Option("Usar", "/skin intima alternar", check=True,
+                           selected=lambda m: custom() is not None and underwear_models.colour_of(custom()) is not None)]
+                    + [Option(n.capitalize(), f"/skin intima {n}", color=underwear_models.COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "underwear", "") == n)
+                       for n in underwear_models.COLORS]),
                 Group("Asas", [Option("Sem asas" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin asa {n}",
                                       selected=lambda m, n=n: custom() is not None and getattr(custom(), "wing_style", "sem") == n)
                                for n in WING_STYLE_NAMES]),

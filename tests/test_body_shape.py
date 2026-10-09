@@ -973,3 +973,36 @@ def test_wings_and_tail_leave_the_back_of_the_body_not_its_front(body):
     assert wing[0] == 0.0 and wing[2] < middle - 0.05 and wing[2] <= torso[:, 2].min() + 0.06   # on the back (the male's came out of the chest)
     assert torso[:, 1].min() < wing[1] < torso[:, 1].max()
     assert tail[0] == 0.0 and abs(tail[2] - pelvis[:, 2].min()) < 1e-6 and pelvis[:, 1].min() < tail[1] < pelvis[:, 1].max()
+
+
+def test_underwear_is_painted_on_the_skin_where_each_body_wears_it():
+    from src.clothing import underwear
+    woman, man = underwear.regions("female"), underwear.regions("male")
+    assert woman["top"] is not None and man["top"] is None                              # a bra on the female body only
+    for found in (woman, man):
+        low, waist, strip, rise = found["bottom"]
+        assert 0.7 < low < waist < 1.0 and waist - low > 0.08
+        assert underwear.covers((0.0, (low + waist) / 2, 0.1), found) and underwear.covers((0.0, (low + waist) / 2, -0.1), found)   # front and back
+        assert not underwear.covers((0.0, waist + 0.03, 0.1), found) and not underwear.covers((0.0, low - 0.03, 0.1), found)
+        assert underwear.covers((0.15, waist - 0.01, 0.0), found)                          # round the hips at the waist
+    assert not underwear.covers((0.15, woman["bottom"][0] + 0.02, 0.0), woman)             # cut high at the sides
+    assert underwear.covers((0.10, man["bottom"][0] + 0.03, 0.0), man)                     # where a man's briefs still cover
+    start, end, strap, half, shoulder = woman["top"]
+    assert underwear.covers((0.0, (start + end) / 2, 0.15), woman) and underwear.covers((-0.12, (start + end) / 2, -0.1), woman)
+    assert underwear.covers((strap, end + 0.05, 0.1), woman) and underwear.covers((-strap, end + 0.05, -0.1), woman)   # the straps
+    assert not underwear.covers((0.0, end + 0.05, 0.1), woman) and not underwear.covers((0.0, (start + end) / 2, 0.15), man)
+    assert underwear.colour_of(AvatarCustomization()) == tuple(c / 255.0 for c in underwear.COLORS["branco"])   # worn by default
+    assert underwear.colour_of(AvatarCustomization(underwear="sem")) is None
+    assert underwear.colour_of(AvatarCustomization(underwear="#102030")) == (16 / 255, 32 / 255, 48 / 255)
+
+
+def test_underwear_is_chosen_by_command_without_rebuilding_anything():
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: reloads.append(1), refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert handler.execute("/skin intima preto")[0] and custom.underwear == "preto"
+    assert handler.execute("/skin intima alternar")[0] and custom.underwear == "sem"
+    assert handler.execute("/skin intima alternar")[0] and custom.underwear == "preto"      # back in the colour it had
+    assert handler.execute("/skin intima sem")[0] and handler.execute("/skin intima sim")[0] and custom.underwear == "preto"
+    assert handler.execute("/skin intima #aabbcc")[0] and not handler.execute("/skin intima fluorescente")[0]
+    assert custom.underwear == "#aabbcc" and reloads == []                                  # paint: nothing is rebuilt
