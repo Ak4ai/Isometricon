@@ -915,24 +915,28 @@ def test_every_wing_model_has_the_same_triangles_and_its_own_shape():
     assert wings.styled_rows(root, "sem") is None and wings.styled_rows(root, "de_pegaso") is None
     made = {name: wings.styled_rows(root, name, skin=skin, hair=hair)[0] for name in wings.WING_STYLES}
     assert {rows.shape for rows in made.values()} == {(wings.TRIANGLES * 3, 11)}          # moved in place from one model to another
+    fan_rows = 2 * wings.FANS * (wings.OUTLINE - 1) * 3                                   # of one wing: its fans, then its ribs
     for name, rows in made.items():
         right, left = rows[:len(rows) // 2], rows[len(rows) // 2:]
         np.testing.assert_allclose(left[:, 0], -right[:, 0], atol=1e-6)                 # one on each side, mirrored
         assert np.isfinite(rows).all() and np.allclose(np.linalg.norm(rows[:, 3:6], axis=1), 1.0, atol=1e-5), name
         assert right[:, 0].max() > 0.3 and right[:, 2].min() < root[2] - 0.05, name       # out to the side, and back
-        assert right[:, 2].max() <= root[2] + 0.03, name                                 # behind the body
+        assert right[:, 2].max() <= root[2] + 0.03, name                                 # behind the body, not in front of it
+        ribs = right[fan_rows:].reshape(wings.RIBS, -1, 11)
+        assert sum(np.ptp(rib[:, :3], axis=0).max() > 1e-6 for rib in ribs) >= 4, name    # an arm and fingers, shafts, or veins
     span = lambda name: made[name][:, 0].max()
     assert span("dragao") > 1.3 * span("morcego") and span("anjo") > span("morcego")
-    panels = lambda name: sum(np.ptp(panel[:, :3], axis=0).max() > 1e-6 for panel in
-                              made[name][:len(made[name]) // 2].reshape(wings.PANELS, -1, 11))
-    assert [panels(n) for n in ("morcego", "anjo", "fada", "borboleta")] == [1, 1, 2, 2]  # one wing a side, or an upper and a lower one
+    fans = lambda name: sum(np.ptp(fan[:, :3], axis=0).max() > 1e-6 for fan in
+                            made[name][:fan_rows].reshape(wings.FANS, -1, 11))
+    assert [fans(n) for n in ("morcego", "anjo", "fada", "borboleta")] == [2, 2, 2, 2]
     assert made["fada"][:, 1].min() < made["morcego"][:, 1].min()
-    assert made["anjo"][:, 8:11].min() > 0.8 and made["morcego"][:, 8:11].max() < 0.35   # white; dark
-    assert np.allclose(made["dragao"][0, 8:11], np.array(skin) * wings.PANEL_TONES[0], atol=1e-6)   # the skin's colour
-    assert len({round(float(c), 3) for c in made["morcego"][:, 8]}) >= 3                  # the gores of the membrane
+    used = lambda name: made[name][np.repeat(np.ptp(made[name].reshape(-1, 3, 11)[:, :, :3], axis=1).max(axis=1) > 1e-7, 3)]
+    assert used("anjo")[:, 8:11].min() > 0.7 and used("morcego")[:, 8:11].max() < 0.4    # white; dark
+    assert np.allclose(made["dragao"][0, 8:11], np.array(skin) * wings.GORE_TONES[0], atol=1e-6)   # the membrane: the skin's colour
+    assert len({round(float(c), 3) for c in used("morcego")[:, 8]}) >= 4                  # the gores of the membrane, and the bones
     assert wings.WING_STYLES["fada"].alpha < 1.0 == wings.WING_STYLES["anjo"].alpha
     assert wings.alpha_of(AvatarCustomization(wing_style="fada")) < 1.0 == wings.alpha_of(AvatarCustomization())
-    red = wings.styled_rows(root, "anjo", coat=(0.8, 0.1, 0.1))[0]
+    red = used("anjo") * 0 + wings.styled_rows(root, "anjo", coat=(0.8, 0.1, 0.1))[0][:len(used("anjo"))]
     assert red[:, 8].max() > 0.79 and red[:, 9].max() < 0.11                             # or in a colour given
     bigger = wings.styled_rows(root, "morcego", {"asa_tamanho": 1.0}, skin, hair)[0]
     folded = wings.styled_rows(root, "morcego", {"asa_abertura": -1.0}, skin, hair)[0]
@@ -954,3 +958,18 @@ def test_wings_are_chosen_by_command_and_come_with_the_races_that_have_them():
                          ("elfo", "sem"), ("felino", "sem")):
         races.apply(custom, name)
         assert custom.wing_style == wanted, name
+
+
+@pytest.mark.parametrize("body", ["female", "male"])
+def test_wings_and_tail_leave_the_back_of_the_body_not_its_front(body):
+    import os
+    from src.clothing import character_model
+    from src.clothing.character_model import BODY_MESHES, MODELS_DIR, CharacterModel, parse_clean_obj_groups
+    path = os.path.join(MODELS_DIR, BODY_MESHES[body])
+    torso = parse_clean_obj_groups(path, ["Export_torso"])[0].reshape(-1, 11)[:, :3]
+    pelvis = parse_clean_obj_groups(path, ["Export_pelve"])[0].reshape(-1, 11)[:, :3]
+    wing, tail = CharacterModel._wing_root(None, path), CharacterModel._tail_root(None, path)
+    middle = (torso[:, 2].min() + torso[:, 2].max()) / 2.0
+    assert wing[0] == 0.0 and wing[2] < middle - 0.05 and wing[2] <= torso[:, 2].min() + 0.06   # on the back (the male's came out of the chest)
+    assert torso[:, 1].min() < wing[1] < torso[:, 1].max()
+    assert tail[0] == 0.0 and abs(tail[2] - pelvis[:, 2].min()) < 1e-6 and pelvis[:, 1].min() < tail[1] < pelvis[:, 1].max()

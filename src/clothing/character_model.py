@@ -1904,9 +1904,7 @@ class CharacterModel:
             return None
         points = pelvis[0].reshape(-1, 11)[:, :3]
         height = points[:, 1].min() + TAIL_HEIGHT * float(np.ptp(points[:, 1]))
-        near = points[np.abs(points[:, 1] - height) < 0.35 * float(np.ptp(points[:, 1]))]
-        near = near if len(near) else points
-        return 0.0, float(height), float(near[:, 2].min())
+        return 0.0, float(height), float(points[:, 2].min())  # the back of the pelvis, wherever its vertices are
 
     def _wing_root(self, clean_obj) -> Optional[Tuple[float, float, float]]:
         """Where the wings leave the body: the middle of the back of the torso, at the shoulder blades."""
@@ -1915,9 +1913,11 @@ class CharacterModel:
             return None
         points = torso[0].reshape(-1, 11)[:, :3]
         height = points[:, 1].min() + WING_HEIGHT * float(np.ptp(points[:, 1]))
-        near = points[np.abs(points[:, 1] - height) < 0.2 * float(np.ptp(points[:, 1]))]
-        near = near if len(near) else points
-        return 0.0, float(height), float(near[:, 2].min())
+        # The back of the upper torso. Its furthest point back, not the points at that height alone:
+        # a coarse body has, at one height, only the vertices of its chest, and the wings came out in front.
+        upper = points[points[:, 1] > (points[:, 1].min() + points[:, 1].max()) / 2.0]
+        back = upper[upper[:, 2] < upper[:, 2].min() + 0.25 * float(np.ptp(upper[:, 2]))]
+        return 0.0, float(height), float(np.median(back[:, 2]))
 
     def garment_edges(self) -> Dict[str, Tuple[float, float]]:
         """Lowest and highest point (y, in the fitting pose) of the top and of the pants worn,
