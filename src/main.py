@@ -352,7 +352,9 @@ def main() -> None:
             worn = dict(customization=char_customization, top_id=top_id, bottom_id=bottom_id, tool_id=tool_id)
             if saved_character is not None:
                 worn = character_save.model_arguments(saved_character)  # the character of the last time
-            avatar = CharacterModel(create_mesh=True, async_loading=True, **worn)
+            # Built off the main thread, so the window stays responsive; a screenshot run waits for the
+            # finished character instead (it was taken with the loading notice up and no character yet).
+            avatar = CharacterModel(create_mesh=True, async_loading=screenshot_path is None, **worn)
         player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0, avatar=avatar)
         player_token.position[1] = float(start_surface_y) + 1.0
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
