@@ -109,6 +109,28 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
 jaqueta é encaixada por cima de outra roupa.
 
+## 💇 Cabelos feitos à mão (nudred)
+
+Além dos cabelos do Roblox, o jogo veste cabelos feitos no Blender. O primeiro é o **nudred**: um afro baixo com
+"twists" de esponja, degradê nos lados e na nuca e a linha da testa reta (`/skin cabelo nudred`, e o botão "Nudred"
+no grupo "Estilo" da seção Cabelo).
+
+- **Formato que o jogo veste:** um OBJ no espaço do corpo (Y para cima, Z para a frente), só triângulos, com uma
+  coordenada de textura por vértice, chamado `assets/models/clothing/Hair_fitted_<id>_<corpo>.obj` (um por corpo,
+  porque as duas cabeças não têm o mesmo tamanho). Sem uma textura `*<id>*.png` ao lado, o cabelo é desenhado na cor
+  de cabelo do personagem, como o cabelo padrão. Os cabelos feitos à mão ficam em `character_model.HANDMADE_HAIR`
+  (nome -> id) e são escolhidos pelo nome, sem nada para baixar.
+- **Como o nudred é feito** (`scripts/blender_nudred_hair.py`, rodado dentro do Blender com `assets/models/123.blend`
+  aberto): uma calota em volta da cabeça, medida a partir da própria cabeça por raios do centro dela, justa (4 mm) na
+  linha do cabelo e cheia em cima, com a passagem de uma para a outra em 7 cm (o degradê); e sobre ela cerca de
+  seiscentos "twists", tubinhos curtos e grossos de três anéis que giram um pouco a cada passo, mais em pé do que
+  para fora, separados por 1,5 cm. São cerca de 18 mil triângulos (o cabelo padrão tem 3,9 mil).
+- No `.blend` o script cria a coleção "Nudred": `Cabelo_Nudred` sobre a cabeça masculina, `Cabelo_Nudred_feminino`
+  (oculto) sobre a feminina, e cópias de referência da cabeça e do cabelo padrão. Para mexer no cabelo à mão e levar
+  de volta ao jogo, edite o objeto e chame `export(objeto, caminho, título)` do mesmo script.
+- Os `.obj` são ignorados pelo git (`*.obj`); os dois do nudred foram adicionados à força (`git add -f`), como os
+  corpos.
+
 ## 🩲 Roupa de baixo e o personagem inicial
 
 Um personagem novo começa **sem roupas**, só com a roupa de baixo (`parse_character_cli_args`: nenhuma peça de cima

@@ -804,6 +804,10 @@ LAYER_PULL_MM = 15.0
 LAYER_GAP_MM = 5.0
 CULL_COVERED = True
 DEFAULT_HAIR_ID = "116773763268018"
+# Hairs made by hand (in Blender, see docs/wiki/Criacao-de-Personagem.md), not items of Roblox: the
+# name they are chosen by and the id of their files, Hair_fitted_<id>_<body>.obj. With no texture
+# of their own, they take the character's hair colour.
+HANDMADE_HAIR = {"nudred": "900000000001"}
 # Parts of the model that are skin (the head's texture has more than skin; the shader tells them apart).
 SKIN_PART_NAMES = ("head", "nose", "neck", "trunk_skin", "legs_skin", "feet_skin", "arm_", "forearm_", "hand_")
 # Head (with neck and hair) moved forward (m) on each body, plus head_z_offset.

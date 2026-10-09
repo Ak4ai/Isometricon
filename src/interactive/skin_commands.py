@@ -20,7 +20,7 @@ from src.clothing.body_shape import ADJUSTMENTS
 from src.clothing.eye_shapes import SHAPE_NAMES as EYE_SHAPE_NAMES
 from src.clothing.ears import STYLE_NAMES as EAR_STYLE_NAMES
 from src.clothing.nose import STYLE_NAMES as NOSE_STYLE_NAMES
-from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, OUTFIT_PRESETS, SKIN_PRESETS, CharacterModel
+from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, HANDMADE_HAIR, OUTFIT_PRESETS, SKIN_PRESETS, CharacterModel
 from src.clothing.customization import (
     AvatarCustomization,
     BodyType,
@@ -90,6 +90,9 @@ def item_name(asset_id) -> str:
     """Nome do item a partir dos arquivos baixados, ou o próprio id."""
     if asset_id in (None, "none", 0, "0"):
         return "nenhum"
+    for name, made in HANDMADE_HAIR.items():
+        if str(asset_id) == made:
+            return f"{name.capitalize()} ({asset_id})"
     for path in glob.glob(os.path.join(CLOTHING_DIR, f"*{asset_id}.rbxm")):
         base = os.path.basename(path)
         return f"{base[:-len(f'_{asset_id}.rbxm')].replace('_', ' ').strip()} ({asset_id})"
@@ -398,7 +401,7 @@ class SkinCommandHandler:
             return True, (f"[Cabelo] {item_name(getattr(m, 'hair_id', None))} | posição X {m.hair_offset_x*100:+.1f} "
                           f"Y {m.hair_offset_y*100:+.1f} Z {m.hair_offset_z*100:+.1f} cm | escala "
                           f"{m.hair_scale_x:.2f} {m.hair_scale_y:.2f} {m.hair_scale_z:.2f}\n"
-                          "Uso: /skin cabelo <id|cor|careca|raspado|padrao> | posicao <x|y|z> <cm> | escala [x|y|z] <fator> | reset"), GOLD
+                          "Uso: /skin cabelo <id|cor|careca|raspado|padrao|nudred> | posicao <x|y|z> <cm> | escala [x|y|z] <fator> | reset"), GOLD
         value, rest = args[0].lower(), args[1:]
         if value in ("posicao", "pos", "position"):
             return self._hair_position(rest)
@@ -407,6 +410,11 @@ class SkinCommandHandler:
         if value == "reset":
             m.reset_hair_adjustments()
             return True, "[Cabelo] Posição e escala restauradas.", GREEN
+        if value in HANDMADE_HAIR or value in HANDMADE_HAIR.values():  # a hair made by hand: nothing to download
+            name = value if value in HANDMADE_HAIR else next(k for k, v in HANDMADE_HAIR.items() if v == value)
+            m.update_customization(hair_id=HANDMADE_HAIR[name])
+            self._change(lambda c: setattr(c, "hair_style", HairStyle.ANIME_LONG))
+            return True, f"[Cabelo] {name.capitalize()}.", GREEN
         if value.isdigit() or "roblox.com" in value:
             return self._wear([value, "cabelo"])
         if value in ("careca", "bald"):

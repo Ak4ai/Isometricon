@@ -29,7 +29,7 @@ from src.clothing.wings import STYLE_NAMES as WING_STYLE_NAMES
 from src.clothing import underwear as underwear_models
 from src.clothing.races import RACES
 from src.clothing.customization import MAKEUP_COLORS
-from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
+from src.clothing.character_model import DEFAULT_HAIR_ID, HANDMADE_HAIR, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
 from src.interactive.skin_commands import (
@@ -403,7 +403,9 @@ class CharacterEditor:
                 Option("Padrão", "/skin cabelo padrao", selected=lambda m: style() == HairStyle.ANIME_LONG.value and (not hair_id(m) or _same(hair_id(m), DEFAULT_HAIR_ID))),
                 Option("Raspado", "/skin cabelo raspado", selected=lambda m: style() == HairStyle.BUZZ_CUT.value),
                 Option("Careca", "/skin cabelo careca", selected=lambda m: style() in (HairStyle.BALD.value, HairStyle.NONE.value)),
-            ]
+            ] + [Option(name.capitalize(), f"/skin cabelo {name}",
+                        selected=lambda m, made=made: _same(hair_id(m), made) and style() == HairStyle.ANIME_LONG.value)
+                 for name, made in HANDMADE_HAIR.items()]
             worn = [Option(item.name, f"/skin cabelo {item.asset_id}", image=item.image or "",
                            selected=lambda m, i=item.asset_id: _same(hair_id(m), i) and style() == HairStyle.ANIME_LONG.value)
                     for item in self._catalog.get("hair", []) if not _same(item.asset_id, DEFAULT_HAIR_ID)]

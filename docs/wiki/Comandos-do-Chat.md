@@ -11,7 +11,7 @@ execução, o autocompletar e a ajuda.
 | `/skin olhos <cor\|estilo>` | azul, verde, castanho, roxo, vermelho, dourado, ciano; anime, piscando, classico, sem |
 | `/skin boca <estilo>` | anime, sorriso, aberta, piscando, neutra, classica, gato, beicinho, vampiro (a anime com presas), sem |
 | `/skin cabeca <arredondada\|quadrada>` | formato da cabeça |
-| `/skin cabelo <id\|cor\|careca\|raspado\|padrao>` | troca ou pinta o cabelo |
+| `/skin cabelo <id\|cor\|careca\|raspado\|padrao>` | troca ou pinta o cabelo; `nudred` veste o cabelo nudred, feito à mão |
 | `/skin cabelo posicao <x\|y\|z> <cm>` · `escala [x\|y\|z] <fator>` · `reset` | ajusta o cabelo (como acessório no Roblox) |
 | `/skin vestir <id\|link\|nome> [tipo] [refazer]` | veste qualquer item do Roblox no lugar certo, pelo tipo do asset |
 | `/skin top <nome\|id\|none>` · `/skin calca ...` | roupa de cima e de baixo |
