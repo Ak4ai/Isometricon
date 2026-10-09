@@ -32,8 +32,12 @@ TIGHT, MIN_FULL = 0.003, 0.010                                        # metres o
 FADE, FADE_FRONT, BLEND = 0.040, 0.006, 0.045                         # metres of fade above the hairline at the sides and the nape (hair cut to the skin), at the forehead (none: the volume starts at the line), then of passing to the volume
 TWISTS, TWIST_GAP, TWIST_FROM = 300, 0.0250, 0.72                     # how many at most, metres between them, and how full the hair must be to have them (the top)
 TWIST_LENGTH, TWIST_RADIUS = (0.020, 0.018), 0.0160                   # metres long (the least, and more where the hair is fullest) and wide
-SQUARE, TOP, SIDE = 3.4, 0.048, 0.009                                           # how square the volume is (2 a dome, more a flat top with round corners), and metres of it over the top of the head and beside it (little: the sides go up, not out)
+SQUARE, TOP, SIDE = 3.4, 0.030, 0.009                                           # how square the volume is (2 a dome, more a flat top with round corners), and metres of it over the top of the head and beside it (little: the sides go up, not out)
 TWIST_ABOVE, TWIST_UP = 0.060, 0.80                                   # metres above the top of the fade for a twist to grow, and how much it stands up (the rest, out from the head)
+# The streak of another colour: across the hair from STREAK[0] to STREAK[1] of the way from its middle (0) to its
+# side (1), on the side STREAK_SIDE (+1 the character's left), and only this far to the front of the top.
+STREAK, STREAK_SIDE, STREAK_FRONT = (0.30, 0.70), 1.0, 0.50
+V_HAIR, V_STREAK = 0.25, 0.75                                         # where the hair's colour and the streak's are on the texture, down it
 OPACITY = "opacidade"                                                 # the UV layer that says how solid each vertex is (its u: 0 clear, 1 solid)
 U_CLEAR, U_SOLID = 0.02, 0.98                                         # where clear and solid are on the texture the game makes
 
@@ -96,6 +100,10 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         solid = smooth((point.z - z_low(theta)) / fade)                                      # the fade: clear at the hairline, solid at its top
         return point, d, full, solid
 
+    def in_streak(point, full):             # at the front of the top, between two lines beside the middle
+        across = STREAK_SIDE * point.x / rx
+        return full > 0.5 and STREAK[0] <= across <= STREAK[1] and (centre.y - point.y) / ry_front > STREAK_FRONT
+
     def phi_end(theta):                     # where the surface meets the hairline
         lo, hi = 0.3, math.radians(150)
         for _ in range(40):
@@ -109,12 +117,14 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     ends = [phi_end(2 * math.pi * i / RINGS_ROUND) for i in range(RINGS_ROUND)]
     verts = [centre + UP * (r_head(UP) + TIGHT + max(r_full(UP) - r_head(UP) - TIGHT, MIN_FULL))]
     solid = [1.0]                           # of each vertex: 0 clear, 1 solid
+    streak = [False]                        # of each vertex: of the streak's colour
     faces = []
     for i in range(RINGS_ROUND):
         for j in range(1, RING_POINTS + 1):
-            point, _, _, how_solid = surface(2 * math.pi * i / RINGS_ROUND, ends[i] * j / RING_POINTS)
+            point, _, full, how_solid = surface(2 * math.pi * i / RINGS_ROUND, ends[i] * j / RING_POINTS)
             verts.append(point)
             solid.append(how_solid)
+            streak.append(in_streak(point, full))
     index = lambda i, j: 1 + (i % RINGS_ROUND) * RING_POINTS + (j - 1)
     for i in range(RINGS_ROUND):
         faces.append((0, index(i, 1), index(i + 1, 1)))
@@ -153,6 +163,7 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
                 verts.append(middle + (side * math.cos(a) + other * math.sin(a)) * radius * wide)
         verts.append(p - d * 0.006 + axis * length * 1.10)
         solid += [1.0] * (len(verts) - len(solid))
+        streak += [in_streak(p, full)] * (len(verts) - len(streak))   # a whole twist, by where it grows
         tip = len(verts) - 1
         for k in range(len(rings) - 1):
             for s in range(SIDES):
@@ -182,7 +193,7 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         polygon.use_smooth = True
     layer = mesh.uv_layers.new(name=OPACITY)   # how solid each vertex is, for the game to fade the sides
     for loop in mesh.loops:
-        layer.data[loop.index].uv = (U_CLEAR + (U_SOLID - U_CLEAR) * solid[loop.vertex_index], 0.5)
+        layer.data[loop.index].uv = (U_CLEAR + (U_SOLID - U_CLEAR) * solid[loop.vertex_index], V_STREAK if streak[loop.vertex_index] else V_HAIR)
     hair = bpy.data.objects.new(name, mesh)
     collection.objects.link(hair)
     material = bpy.data.materials.get("Nudred_cabelo") or bpy.data.materials.new("Nudred_cabelo")
@@ -202,11 +213,11 @@ def export(hair, path: str, title: str) -> None:
         p = world @ vertex.co
         lines.append(f"v {p.x:.6f} {p.z:.6f} {-p.y:.6f}")
     layer = mesh.uv_layers.get(OPACITY)        # with it, u says how solid the vertex is; without, all of it is solid
-    u = [U_SOLID] * len(mesh.vertices)
+    uv = [(U_SOLID, V_HAIR)] * len(mesh.vertices)   # and v, whether it is of the hair's colour or of the streak's
     if layer is not None:
         for loop in mesh.loops:
-            u[loop.vertex_index] = layer.data[loop.index].uv[0]
-    lines += [f"vt {value:.6f} 0.500000" for value in u]
+            uv[loop.vertex_index] = tuple(layer.data[loop.index].uv)
+    lines += [f"vt {u:.6f} {v:.6f}" for u, v in uv]
     for polygon in mesh.polygons:
         assert len(polygon.vertices) == 3, "triangule a malha antes de exportar"
         a, b, c = (i + 1 for i in polygon.vertices)

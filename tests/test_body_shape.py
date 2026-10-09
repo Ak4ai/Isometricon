@@ -1037,12 +1037,18 @@ def test_the_handmade_nudred_hair_is_a_hair_the_game_can_wear(body):
     assert solid.min() < 0.05 and solid.max() > 0.95
     assert solid[height > top].min() > 0.95
     assert solid[np.argmin(height)] < 0.3
+    # A streak of another colour (v 0.75), only at the front of the top and on one side, off the middle.
+    coords = np.array([[float(t) for t in line.split()[1:4]] for line in lines if line.startswith("v ")])
+    streak = coords[np.array([float(line.split()[2]) for line in lines if line.startswith("vt ")]) > 0.5]
+    assert 50 < len(streak) < 0.2 * len(coords)
+    assert streak[:, 0].min() > 0.02 and streak[:, 2].min() > head[:, 2].mean() and streak[:, 1].min() > top - 0.08
 
 
 def test_a_fading_hair_has_a_texture_from_clear_to_solid():
-    from src.clothing.character_model import FADE_U, fade_texture
+    from src.clothing.character_model import FADE_U, STREAK_COLOR, fade_texture
     pixels = np.asarray(fade_texture((10, 20, 30), width=100))
-    assert pixels.shape[1] == 100 and (pixels[:, :, :3] == (10, 20, 30)).all()                # the colour all across: no dark fringe
+    assert pixels.shape[1] == 100 and (pixels[2:, :, :3] == (10, 20, 30)).all()               # the colour all across: no dark fringe
+    assert (pixels[:2, :, :3] == STREAK_COLOR).all()                                         # the streak's, in the other half
     alpha = pixels[0, :, 3].astype(int)
     assert alpha[0] == 0 and alpha[-1] == 255 and (np.diff(alpha) >= 0).all()
     assert abs(alpha[50] - 128) < 4 and FADE_U == (0.02, 0.98)                               # as the script in Blender writes it

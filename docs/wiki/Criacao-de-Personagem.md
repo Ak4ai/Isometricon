@@ -132,6 +132,10 @@ no grupo "Estilo" da seção Cabelo).
 - **Forma:** o volume não é uma cúpula, é um topo reto de cantos redondos (`SQUARE`: 2 seria uma cúpula), com
   pouco cabelo para os lados (`SIDE`), que sobem em vez de abrir. Os twists só nascem bem acima do degradê
   (`TWIST_ABOVE`) e ficam quase em pé (`TWIST_UP`): nos lados não há twists na diagonal.
+- **Mecha:** uma mecha branca só na frente do topo, de 30% a 70% do caminho entre o meio do cabelo e o lado dele,
+  no lado esquerdo do personagem (`STREAK`, `STREAK_SIDE`, `STREAK_FRONT` no script). O `v` da coordenada de textura
+  diz a cor de cada vértice (0,25 a do cabelo, 0,75 a da mecha), e a textura que o jogo faz tem as duas
+  (`character_model.STREAK_COLOR`).
 - **Degradê de opacidade:** o `u` da coordenada de textura de cada vértice diz o quanto o cabelo é opaco ali (a camada
   de UV `opacidade` no Blender): transparente na linha do cabelo, opaco no alto do degradê e em todo o volume. Para um
   cabelo feito à mão sem textura, o jogo faz uma textura da cor do cabelo que vai de transparente a opaca
