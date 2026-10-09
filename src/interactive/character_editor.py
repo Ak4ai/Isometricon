@@ -21,14 +21,14 @@ import time
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, HORNS, TAILS, WINGS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.body_shape import EYE_SLIDERS, BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, HORNS, TAILS, WINGS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.ears import EAR_COLORS
 from src.clothing.horns import HORN_COLORS, STYLE_NAMES as HORN_STYLE_NAMES
 from src.clothing.tails import STYLE_NAMES as TAIL_STYLE_NAMES
 from src.clothing.wings import STYLE_NAMES as WING_STYLE_NAMES
 from src.clothing import underwear as underwear_models
 from src.clothing.races import RACES
-from src.clothing.customization import MAKEUP_COLORS
+from src.clothing.customization import IRIS_PALETTES, MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, HANDMADE_HAIR, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
@@ -62,6 +62,10 @@ SWATCH = 32        # a colour (seven to a row)
 GAP = 8
 SWATCHES_PER_ROW = 7
 SLIDER_TILE = 46   # height of an adjustment: its name, its value and the track
+PICKER_TILE = 104  # height of a picker of any colour: the hues by how light, and under them how vivid
+PICKER_MAP = (8, 8, 72)   # the margin of the picker's map in its tile, its top and its bottom
+PICKER_BAR = (80, 94)     # the top and the bottom of the bar of how vivid
+PICKER_REDRAW = 0.10      # seconds between two colours sent while the picker is dragged
 SLIDER_SNAP = 5    # this close to the middle, a slider goes back to 0
 FACE_REDRAW = 0.06 # seconds between two redraws of the face while one of its sliders is dragged
 SCROLL_STEP = 60
@@ -95,6 +99,7 @@ SHOE_WORDS = ("shoe", "boots", "sneakers", "cal_ado", "calcado")
 
 EYE_RGB = {"azul": (70, 130, 235), "verde": (70, 190, 110), "castanho": (120, 80, 50), "roxo": (150, 90, 220),
            "vermelho": (220, 60, 60), "dourado": (230, 185, 60), "ciano": (70, 215, 225)}
+EYE_RGB.update({n: IRIS_PALETTES[n] for n in ("rosa", "laranja", "ambar", "turquesa", "lilas", "cinza", "branco", "preto")})
 HAIR_RGB = {"castanho": (105, 70, 45), "loiro": (235, 205, 120), "preto": (30, 30, 34), "rosa": (245, 160, 195),
             "prata": (215, 218, 225), "ruivo": (170, 75, 40), "ciano": (80, 210, 225)}
 PORTUGUESE_EYE_STYLES = ("anime", "piscando", "classico", "sem")
@@ -111,11 +116,14 @@ class Option:
     selected: Callable[[Any], bool] = lambda model: False
     slider: Optional[str] = None                  # an adjustment of body_shape, set from -100 to 100
     check: bool = False                           # drawn with a box that is ticked when selected
+    picker: Optional[str] = None                  # a command that takes "#rrggbb": drawn as a picker of any colour
 
     @property
     def kind(self) -> str:
         if self.slider is not None:
             return "slider"
+        if self.picker is not None:
+            return "picker"
         return "card" if self.image is not None or self.command.startswith(CARD_COMMANDS) else \
             "swatch" if self.color is not None else "text"
 
@@ -128,6 +136,18 @@ RACE_THUMBS = os.path.join(CLOTHING_DIR, "thumbs", "racas")  # <race>_<body>.png
 class Group:
     title: str
     options: List[Option]
+
+
+def with_pickers(groups: List[Group]) -> List[Group]:
+    """The groups, and under each one of colours a picker of any colour for the same command."""
+    out: List[Group] = []
+    for group in groups:
+        out.append(group)
+        swatches = [o for o in group.options if o.color is not None and o.kind == "swatch"]
+        if swatches:
+            command = swatches[0].command.rsplit(" ", 1)[0]
+            out.append(Group(f"{group.title}: qualquer cor", [Option(group.title, "", picker=command)]))
+    return out
 
 
 @dataclass
@@ -220,6 +240,9 @@ class CharacterEditor:
         self._slider: Optional[Tuple[Option, int, int]] = None  # the adjustment being dragged and its track
         self._slider_value = 0
         self._slider_sent = 0.0
+        self._picker: Optional[Tuple[Option, str]] = None             # the picker being dragged and where: "map" or "bar"
+        self._picked: Dict[str, Tuple[float, float, float]] = {}      # of each picker, by its command: hue, how light, how vivid
+        self._picker_maps: Dict[Tuple[int, int, int], Image.Image] = {}
         self._was_spinning = True
         self._hits: List[Tuple[Rect, str, Any]] = []
         self._content_height = 0
@@ -324,6 +347,13 @@ class CharacterEditor:
                 Group("Pele", [Option(label, "", slider=name) for name, label in SKIN.items()]),
             ]
 
+        def eye_colours(title: str, command: str, eye: str, worn) -> List[Group]:
+            """As cores prontas de um olho (ou dos dois) e os controles que levam a qualquer outra cor."""
+            is_worn = lambda v: custom() is not None and all(w is None or _value(w) == _value(v) for w in worn()) \
+                and any(w is not None for w in worn())
+            return [Group(title, [Option(n.capitalize(), f"{command} {n}", color=EYE_RGB[n], selected=lambda m, v=EYE_COLORS[n]: is_worn(v))
+                                  for n in EYE_COLORS])]
+
         def eyes() -> List[Group]:
             return [
                 Group("Olhos", [Option(n.capitalize(), f"/skin olhos {n}", selected=lambda m, v=EYE_STYLES[n]: custom() is not None and custom().resolved_eye_style == _value(v))
@@ -333,16 +363,10 @@ class CharacterEditor:
                            selected=lambda m, n=n: custom() is not None and getattr(custom(), "eye_shape", "padrao") == n
                            and custom().resolved_eye_style not in ("classic", "blank"))
                     for n in EYE_SHAPE_NAMES]),
-                Group("Cor dos olhos", [Option(n.capitalize(), f"/skin olhos {n}", color=EYE_RGB[n],
-                                               selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(custom().iris_color) == _value(v))
-                                        for n in EYE_COLORS]),
-                Group("Olho direito", [Option(n.capitalize(), f"/skin olho direito {n}", color=EYE_RGB[n],
-                                              selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(custom().iris_color) == _value(v))
-                                       for n in EYE_COLORS]),
-                Group("Olho esquerdo", [Option(n.capitalize(), f"/skin olho esquerdo {n}", color=EYE_RGB[n],
-                                               selected=lambda m, v=EYE_COLORS[n]: custom() is not None and _value(
-                                                   custom().iris_color_other if custom().iris_color_other is not None else custom().iris_color) == _value(v))
-                                        for n in EYE_COLORS]),
+                *eye_colours("Cor dos olhos (os dois)", "/skin olhos", "olhos", lambda: (custom().iris_color, custom().iris_color_other)),
+                *eye_colours("Olho direito", "/skin olho direito", "olho_direito", lambda: (custom().iris_color,)),
+                *eye_colours("Olho esquerdo", "/skin olho esquerdo", "olho_esquerdo", lambda: (
+                    custom().iris_color_other if custom().iris_color_other is not None else custom().iris_color,)),
                 Group("Ajustes dos olhos", [Option(label, "", slider=name) for name, label in EYES.items()]),
             ]
 
@@ -545,7 +569,7 @@ class CharacterEditor:
 
     def groups(self) -> List[Group]:
         if self._groups is None:
-            self._groups = self.sections[self.active].groups()
+            self._groups = with_pickers(self.sections[self.active].groups())
         return self._groups
 
     # ------------------------------------------------------------------ abrir, fechar, girar
@@ -660,6 +684,8 @@ class CharacterEditor:
                 columns, (w, h) = SWATCHES_PER_ROW, (SWATCH, SWATCH)
             elif kind == "slider":
                 columns, (w, h) = 1, (right - left, SLIDER_TILE)
+            elif kind == "picker":
+                columns, (w, h) = 1, (right - left, PICKER_TILE)
             else:
                 columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
             for k, option in enumerate(group.options):
@@ -715,6 +741,10 @@ class CharacterEditor:
                 if option.slider in GARMENTS and hasattr(self.handler, "recut_skin"):
                     self.handler.recut_skin()                # and the skin under a moved edge is cut
                 return True
+            if self._picker is not None:
+                option, self._picker = self._picker[0], None
+                self.choose(Option(option.label, f"{option.picker} {self.picked_colour(option)}"))  # the last colour, whatever was sent
+                return True
             if self._dragging:
                 self._dragging = False
                 self.turntable["active"] = self._was_spinning
@@ -746,6 +776,12 @@ class CharacterEditor:
             pass
         elif kind == "tab":
             self.select_section(payload)
+        elif kind == "option" and payload.picker is not None:
+            zone = self._picker_zone(payload, y)
+            if zone is not None:
+                self._picker = (payload, zone)
+                self._slider_sent = 0.0
+                self._drag_picker(x, y)
         elif kind == "option" and payload.slider is not None:
             x0, x1 = TAB_WIDTH + PAD + 10, PANEL_WIDTH - PAD - 10
             self._slider = (payload, x0, x1)
@@ -758,6 +794,65 @@ class CharacterEditor:
         elif payload == "done":
             self.close()
         return True
+
+    # ------------------------------------------------------------------ qualquer cor
+    def _picker_rect(self, option: Option) -> Optional[Rect]:
+        """Where a picker's tile is in the window, whole (the grid may be cutting it)."""
+        for kind, (x0, y0, x1, y1), payload in self._tiles():
+            if kind == "option" and payload.picker == option.picker:
+                return (x0, y0 + PAD - self.scroll, x1, y1 + PAD - self.scroll)
+        return None
+
+    def _picker_zone(self, option: Option, y: float) -> Optional[str]:
+        rect = self._picker_rect(option)
+        if rect is None:
+            return None
+        return "bar" if y - rect[1] >= (PICKER_MAP[2] + PICKER_BAR[0]) / 2 else "map"
+
+    def picked(self, option: Option) -> Tuple[float, float, float]:
+        """What a picker is at: the hue, how light and how vivid, each from 0 to 1."""
+        return self._picked.get(option.picker, (0.0, 0.5, 1.0))
+
+    def picked_colour(self, option: Option) -> str:
+        import colorsys
+        hue, light, vivid = self.picked(option)
+        return "#%02x%02x%02x" % tuple(int(round(c * 255)) for c in colorsys.hls_to_rgb(hue, light, vivid))
+
+    def _drag_picker(self, x: float, y: float) -> None:
+        option, zone = self._picker
+        rect = self._picker_rect(option)
+        if rect is None:
+            return
+        x0, x1 = rect[0] + PICKER_MAP[0], rect[2] - PICKER_MAP[0]
+        across = (min(max(x, x0), x1 - 1) - x0) / max(x1 - 1 - x0, 1)
+        hue, light, vivid = self.picked(option)
+        if zone == "bar":
+            vivid = across
+        else:
+            top, bottom = rect[1] + PICKER_MAP[1], rect[1] + PICKER_MAP[2]
+            hue, light = min(across, 0.999), 1.0 - (min(max(y, top), bottom - 1) - top) / max(bottom - 1 - top, 1)
+        self._picked[option.picker], self.dirty = (hue, light, vivid), True
+        now = time.monotonic()
+        if now - self._slider_sent >= PICKER_REDRAW:  # the character follows a few times a second
+            self._slider_sent = now
+            self.choose(Option(option.label, f"{option.picker} {self.picked_colour(option)}"))
+
+    def _picker_map(self, width: int, height: int, vivid: float) -> Image.Image:
+        """Every hue (across) by how light (from white at the top to black at the bottom), at one vividness."""
+        import colorsys
+        from PIL import Image
+        key = (width, height, int(round(vivid * 20)))
+        if key not in self._picker_maps:
+            if len(self._picker_maps) > 40:
+                self._picker_maps.clear()
+            pixels = np.zeros((height, width, 4), dtype=np.uint8)
+            pixels[:, :, 3] = 255
+            for column in range(width):
+                for row in range(height):
+                    rgb = colorsys.hls_to_rgb(column / width, 1.0 - row / max(height - 1, 1), key[2] / 20.0)
+                    pixels[row, column, :3] = [int(round(c * 255)) for c in rgb]
+            self._picker_maps[key] = Image.fromarray(pixels, "RGBA")
+        return self._picker_maps[key]
 
     def slider_value(self, option: Option) -> int:
         """O valor de um ajuste, de -100 a 100 (o que está sendo arrastado, enquanto é arrastado)."""
@@ -826,6 +921,9 @@ class CharacterEditor:
             return
         if self._slider is not None:
             self._drag_slider(x)
+            return
+        if self._picker is not None:
+            self._drag_picker(x, y)
             return
         if self._dragging:
             self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + (x - self._drag_x) * DRAG_DEGREES) % 360.0
@@ -966,6 +1064,23 @@ class CharacterEditor:
                 pen.line(((t0 + t1) / 2, ty, knob, ty), fill=ACCENT, width=4)
                 pen.line(((t0 + t1) / 2, ty - 5, (t0 + t1) / 2, ty + 5), fill=MUTED, width=1)
                 pen.ellipse((knob - 7, ty - 7, knob + 7, ty + 7), fill=TEXT)
+                continue
+            if payload.kind == "picker":
+                import colorsys
+                hue, light, vivid = self.picked(payload)
+                m0, m1 = x0 + PICKER_MAP[0], x1 - PICKER_MAP[0]
+                map_top, map_low = y0 + PICKER_MAP[1], y0 + PICKER_MAP[2]
+                grid.paste(self._picker_map(m1 - m0, map_low - map_top, vivid), (m0, map_top))
+                b0, b1 = y0 + PICKER_BAR[0], y0 + PICKER_BAR[1]
+                for column in range(m0, m1):  # from grey to the hue at its most vivid
+                    rgb = colorsys.hls_to_rgb(hue, 0.5, (column - m0) / max(m1 - m0 - 1, 1))
+                    pen.line((column, b0, column, b1), fill=tuple(int(round(c * 255)) for c in rgb) + (255,))
+                if payload.picker in self._picked:  # where it is: a ring on the map and a mark on the bar
+                    px, py = m0 + hue * (m1 - m0 - 1), map_top + (1.0 - light) * (map_low - map_top - 1)
+                    pen.ellipse((px - 5, py - 5, px + 5, py + 5), outline=(255, 255, 255, 255), width=2)
+                    pen.ellipse((px - 6, py - 6, px + 6, py + 6), outline=(0, 0, 0, 255), width=1)
+                    bx = m0 + vivid * (m1 - m0 - 1)
+                    pen.rectangle((bx - 2, b0 - 2, bx + 2, b1 + 2), outline=(255, 255, 255, 255), width=1)
                 continue
             if payload.kind == "swatch":
                 pen.rounded_rectangle((x0 + 4, y0 + 4, x1 - 5, y1 - 5), 5, fill=payload.color + (255,))

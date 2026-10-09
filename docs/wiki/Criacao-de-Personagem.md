@@ -109,6 +109,30 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
 jaqueta é encaixada por cima de outra roupa.
 
+## 🎨 Qualquer cor
+
+Todo grupo de cores do editor (tom de pele, olhos, cada olho, cabelo, orelhas, chifres, cauda, asas, roupa de baixo,
+batom, sombra, blush) tem embaixo dele um **seletor de qualquer cor** ("<grupo>: qualquer cor"):
+
+- O mapa tem todos os matizes na horizontal e, na vertical, do branco (em cima) ao preto (embaixo); a barra debaixo
+  dele diz o quanto a cor é viva, do cinza ao matiz puro. Os três juntos cobrem todas as cores RGB.
+- Clicar ou arrastar manda o mesmo comando das cores prontas com `#rrggbb` (`Option.picker`, o comando sem a cor;
+  `character_editor.with_pickers` põe um seletor sob cada grupo de amostras). Enquanto arrasta, o personagem
+  acompanha algumas vezes por segundo (`PICKER_REDRAW`), e ao soltar vale a última cor.
+- Pelo chat, os comandos de cor aceitam `#rrggbb` e `r,g,b`: `/skin olhos`, `/skin olho <direito|esquerdo>`,
+  `/skin pele`, `/skin cabelo`, `/skin maquiagem <item>`, `/skin intima`, `/skin orelha|chifre|cauda|asa cor`.
+- Os olhos ganharam mais cores prontas (rosa, laranja, âmbar, turquesa, lilás, cinza, branco, preto) e ajustes de
+  matiz, saturação e brilho dos dois e de cada um (`/skin ajuste olhos_matiz`, `olho_direito_brilho`…), que voltam a 0
+  quando uma cor nova é escolhida.
+
+## ✂️ Cabelo raspado
+
+O estilo "Raspado" (`HairStyle.BUZZ_CUT`) era uma pintura no couro cabeludo que nunca chegava à cabeça: o personagem
+ficava careca. Agora é um cabelo como os outros, feito pelo mesmo script do nudred (`shaved=True`): a mesma calota,
+justa na cabeça inteira (3 mm), sem volume nem twists, com a mesma linha do cabelo e um degradê curto nela, um pouco
+transparente em cima para a pele aparecer como num cabelo raspado. Fica em
+`Hair_fitted_900000000002_<corpo>.obj` (`character_model.SHAVED_HAIR_ID`) e usa a cor de cabelo do personagem.
+
 ## 💇 Cabelos feitos à mão (nudred)
 
 Além dos cabelos do Roblox, o jogo veste cabelos feitos no Blender. O primeiro é o **nudred**: um afro baixo com

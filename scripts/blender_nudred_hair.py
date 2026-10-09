@@ -22,6 +22,8 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 HAIR_ID = "900000000001"
+SHAVED_ID = "900000000002"                                            # the shaved hair: the same cap with no volume
+SHAVED_FADE, SHAVED_SOLID = (0.022, 0.008), 0.93                      # metres of its fade at the sides and the nape and at the forehead, and how solid it is at most (stubble: a little of the skin shows)
 # The heads the game itself draws: the object "Export_cabeca" of each body's file (the heads in
 # the .blend are not always these: its male one is 2 cm wider, and the hair came out as a helmet).
 BODIES = {"male": "character_male_clean_apose.obj", "female": "character_female_clean_apose_stage2.obj"}
@@ -58,8 +60,10 @@ def game_head(path: str):
     return [points[i] for i in used], [[order[i] for i in face] for face in faces]
 
 
-def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
-    """The nudred hair on a head (points and faces of it, in world space), as a new object."""
+def nudred(name: str, head_points, head_faces, collection, seed: int = 7, shaved: bool = False):
+    """The nudred hair on a head (points and faces of it, in world space), as a new object. ``shaved``: only
+    the cap, tight on the head all over, with a short fade at its line: a shaved head."""
+    fade_side, fade_front = SHAVED_FADE if shaved else (FADE, FADE_FRONT)
     bvh = BVHTree.FromPolygons(head_points, head_faces)
     pts = np.array(head_points)
     top, bottom = pts[:, 2].max(), pts[:, 2].min()
@@ -94,10 +98,10 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     def surface(theta, phi):
         d = direction(theta, phi)
         rh, rf = r_head(d), r_full(d)
-        fade = FADE_FRONT + (FADE - FADE_FRONT) * (1.0 - max(math.cos(theta), 0.0) ** 1.2)   # none over the forehead
-        full = smooth((centre.z + (rh + rf) / 2 * d.z - z_low(theta) - fade) / BLEND)        # 0 in the fade, 1 in the volume
+        fade = fade_front + (fade_side - fade_front) * (1.0 - max(math.cos(theta), 0.0) ** 1.2)   # none over the forehead
+        full = 0.0 if shaved else smooth((centre.z + (rh + rf) / 2 * d.z - z_low(theta) - fade) / BLEND)   # 0 in the fade, 1 in the volume
         point = centre + d * (rh + TIGHT + full * max(rf - rh - TIGHT, MIN_FULL))
-        solid = smooth((point.z - z_low(theta)) / fade)                                      # the fade: clear at the hairline, solid at its top
+        solid = smooth((point.z - z_low(theta)) / fade) * (SHAVED_SOLID if shaved else 1.0)  # the fade: clear at the hairline, solid at its top
         return point, d, full, solid
 
     def in_streak(point, full):             # at the front of the top, between two lines beside the middle
@@ -115,8 +119,8 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         return (lo + hi) / 2
 
     ends = [phi_end(2 * math.pi * i / RINGS_ROUND) for i in range(RINGS_ROUND)]
-    verts = [centre + UP * (r_head(UP) + TIGHT + max(r_full(UP) - r_head(UP) - TIGHT, MIN_FULL))]
-    solid = [1.0]                           # of each vertex: 0 clear, 1 solid
+    verts = [centre + UP * (r_head(UP) + TIGHT + (0.0 if shaved else max(r_full(UP) - r_head(UP) - TIGHT, MIN_FULL)))]
+    solid = [SHAVED_SOLID if shaved else 1.0]                           # of each vertex: 0 clear, 1 solid
     streak = [False]                        # of each vertex: of the streak's colour
     faces = []
     for i in range(RINGS_ROUND):
@@ -139,6 +143,8 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         theta = rng.uniform(0, 2 * math.pi)
         end = ends[int(theta / (2 * math.pi) * RINGS_ROUND) % RINGS_ROUND]
         p, d, full, _ = surface(theta, math.acos(1 - rng.uniform(0, 1) * (1 - math.cos(end))))
+        if shaved:
+            break
         low = z_low(theta) + FADE_FRONT + (FADE - FADE_FRONT) * (1.0 - max(math.cos(theta), 0.0) ** 1.2)
         if full < TWIST_FROM or (p.z < low + TWIST_ABOVE and math.cos(theta) < 0.5):   # the sides and the nape are a fade: no twists there, nor just over it
             continue
@@ -244,6 +250,9 @@ def main() -> None:
         collection.objects.link(bpy.data.objects.new(name, mesh))
         hair = nudred("Cabelo_Nudred" if body == "male" else f"Cabelo_Nudred_{body}", points, faces, collection)
         export(hair, os.path.join(CLOTHING, f"Hair_fitted_{HAIR_ID}_{body}.obj"), f"{HAIR_ID} (Nudred)")
+        hair = nudred(f"Cabelo_Raspado_{body}", points, faces, collection, shaved=True)
+        hair.hide_set(True)
+        export(hair, os.path.join(CLOTHING, f"Hair_fitted_{SHAVED_ID}_{body}.obj"), f"{SHAVED_ID} (Raspado)")
 
 
 if __name__ == "__main__":

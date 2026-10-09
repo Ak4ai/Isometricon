@@ -142,7 +142,33 @@ IRIS_PALETTES: Dict[str, Tuple[int, int, int]] = {
     "red": (210, 50, 55),
     "gold": (230, 180, 40),
     "cyan": (40, 200, 220),
+    # More of them, by the name the editor shows.
+    "rosa": (235, 110, 170),
+    "laranja": (235, 130, 40),
+    "ambar": (200, 140, 50),
+    "turquesa": (40, 190, 160),
+    "lilas": (185, 150, 235),
+    "cinza": (140, 150, 160),
+    "branco": (235, 238, 242),
+    "preto": (35, 35, 40),
 }
+
+
+def parse_iris_colour(value: Any) -> Optional[Tuple[int, int, int]]:
+    """The colour of an iris from what the character keeps: one of IrisColor, a name of IRIS_PALETTES,
+    "#rrggbb", "r,g,b" or three numbers; None when it is none of them."""
+    if isinstance(value, (tuple, list)):
+        return tuple(int(c) for c in value[:3]) if len(value) >= 3 else None
+    text = str(getattr(value, "value", value) or "").strip().lower()
+    if text in IRIS_PALETTES:
+        return IRIS_PALETTES[text]
+    try:
+        if text.startswith("#") and len(text) == 7:
+            return tuple(int(text[k:k + 2], 16) for k in (1, 3, 5))
+        parts = [int(p) for p in text.split(",")]
+        return tuple(parts) if len(parts) == 3 and all(0 <= p <= 255 for p in parts) else None
+    except ValueError:
+        return None
 
 
 @dataclass
@@ -292,14 +318,22 @@ class AvatarCustomization:
             return "anime_wink"
         return "anime"
 
+    def _eye_tone(self, rgb: Tuple[int, int, int], eye: str) -> Tuple[int, int, int]:
+        """A colour of an iris moved by the adjustments of both eyes and of that one (body_shape.EYE_SLIDERS)."""
+        adjust = self.body_adjust or {}
+        move = [max(-1.0, min(1.0, float(adjust.get(f"olhos_{tone}", 0.0)) + float(adjust.get(f"{eye}_{tone}", 0.0))))
+                for tone in ("matiz", "saturacao", "brilho")]
+        return shift_colour(rgb, *move) if any(move) else rgb
+
     @property
     def resolved_iris_color(self) -> Tuple[int, int, int]:
-        """Cor da íris resolvida em inteiros 0..255."""
+        """Cor da íris (do olho direito) em inteiros 0..255, com os ajustes de cor dela."""
+        return self._eye_tone(self._iris_base, "olho_direito")
+
+    @property
+    def _iris_base(self) -> Tuple[int, int, int]:
         if self.iris_color is not None:
-            if isinstance(self.iris_color, tuple) and len(self.iris_color) >= 3:
-                return (int(self.iris_color[0]), int(self.iris_color[1]), int(self.iris_color[2]))
-            val = self.iris_color.value if hasattr(self.iris_color, "value") else str(self.iris_color)
-            return IRIS_PALETTES.get(val.lower(), IRIS_PALETTES["blue"])
+            return parse_iris_colour(self.iris_color) or IRIS_PALETTES["blue"]
         # Deduz do face_str legado
         f = self.face_str
         if "green" in f:
@@ -364,7 +398,7 @@ class AvatarCustomization:
         if self.is_bald:
             return "bald"
         if self.hair_style_str == "buzz_cut":
-            return "buzz"
+            return "bald"  # the shaved hair is a mesh of its own (character_model.SHAVED_HAIR_ID), not paint on the scalp
         return "standard"
 
     @property
@@ -393,12 +427,8 @@ class AvatarCustomization:
     @property
     def resolved_iris_color_other(self) -> Tuple[int, int, int]:
         """Cor da íris do outro olho (a mesma do primeiro quando não foi escolhida)."""
-        other = self.iris_color_other
-        if other is None:
-            return self.resolved_iris_color
-        if isinstance(other, (tuple, list)) and len(other) >= 3:
-            return (int(other[0]), int(other[1]), int(other[2]))
-        return IRIS_PALETTES.get(str(getattr(other, "value", other)).lower(), self.resolved_iris_color)
+        other = parse_iris_colour(self.iris_color_other) if self.iris_color_other is not None else None
+        return self._eye_tone(other or self._iris_base, "olho_esquerdo")
 
     def makeup_color(self, what: str) -> Optional[Tuple[int, int, int]]:
         """A cor de um item de maquiagem ("batom", "sombra", "blush"), ou None se não é usado: a
