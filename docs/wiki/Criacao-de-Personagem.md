@@ -142,6 +142,13 @@ Os olhos são um desenho só, azul; a cor escolhida é posta na íris dele (`cus
   (`IRIS_SOFT_SHINE`). O desenho tem neles furos (pixels meio transparentes, por onde aparecia o que está embaixo:
   os pontinhos escuros) e bordas azuladas, que apareciam como sujeira em qualquer cor.
 
+- **Os cílios são uma camada à parte:** os formatos de olho (`eye_shapes.py`) cortam, descem e acrescentam cílios.
+  Antes eles achavam os cílios pelo quanto o pixel é escuro, e uma íris pintada de cor escura era tomada por cílio
+  (e cortada junto: buracos na íris nos formatos sério, afiado, cansado…). Agora cada pixel leva ao lado da cor o
+  que ele é (`eye_kinds`: cílio, globo ou nada), dito pelo desenho original, com a íris e os reflexos já conhecidos;
+  os formatos trabalham por isso. A pálpebra que desce (`_lid`) leva os cílios inteiros, esconde o globo da borda de
+  baixo deles para cima em toda a largura, e desenha os cílios por cima do que sobra.
+
 ## ✂️ Cabelo raspado
 
 O estilo "Raspado" (`HairStyle.BUZZ_CUT`) era uma pintura no couro cabeludo que nunca chegava à cabeça: o personagem

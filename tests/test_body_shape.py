@@ -1145,3 +1145,29 @@ def test_the_iris_is_cut_clean_and_keeps_its_light_in_any_colour():
     assert (red[whole][:, 3] == 255).all()
     black = tint_iris(eyes, (0, 0, 0), (0, 0, 0))[mask][:, :3]
     assert black.min() == 0 and black.max() > 90                                  # even a black iris has its light
+
+
+@pytest.mark.parametrize("shape", ["suave", "serio", "afiado", "cansado", "masculino", "felino"])
+def test_the_lashes_are_told_from_the_drawing_and_not_from_how_dark_the_iris_is(shape):
+    from src.clothing.customization import HeadAtlasBuilder
+    # The same shape with a nearly black iris and with a light one: the same pixels are eye, whatever the colour
+    # (a dark iris used to be taken for lashes, and was cut with them).
+    atlases = [np.asarray(HeadAtlasBuilder().build_atlas(AvatarCustomization(iris_color=colour, eye_shape=shape)).convert("RGB")).astype(int)
+               for colour in ("#18181c", "#f0d020")]
+    skin = np.asarray(HeadAtlasBuilder().build_atlas(AvatarCustomization(eye_style="blank", eye_shape=shape)).convert("RGB")).astype(int)
+    drawn = [np.abs(atlas - skin).sum(axis=2) > 0 for atlas in atlases]
+    assert drawn[0].sum() > 2000 and (drawn[0] == drawn[1]).all()
+
+
+def test_the_eye_kinds_tell_lash_from_eyeball():
+    import os
+    from PIL import Image
+    from src.clothing.customization import iris_mask
+    from src.clothing.eye_shapes import BALL, LASH, NOTHING, eye_kinds
+    layers = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "models", "textures", "layers")
+    eyes = np.array(Image.open(os.path.join(layers, "eyes", "eye_anime_blue.png")).convert("RGBA"))
+    iris = iris_mask(eyes)
+    kinds = eye_kinds(eyes, iris)
+    assert (kinds[iris] == BALL).all() and (kinds[eyes[:, :, 3] == 0] == NOTHING).all()      # the dark rim of the iris too
+    assert (kinds == LASH).sum() > 1500 and (eyes[kinds == LASH][:, :3].astype(int).mean(axis=1) < 150).all()
+    assert (eye_kinds(eyes)[iris] == LASH).any()                                              # by darkness alone, it is mistaken
