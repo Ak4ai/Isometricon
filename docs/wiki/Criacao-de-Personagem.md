@@ -269,13 +269,18 @@ Opcionais (`/skin asa <modelo>`, grupo "Asas" na seção Corpo, "sem" por padrã
 | `fada` | duas asas finas e translúcidas de cada lado |
 | `borboleta` | duas asas largas de cada lado, laranja com a borda escura |
 
-- Cada asa (`Wing`) é um ou dois painéis; cada painel é um leque de triângulos da raiz até um contorno de doze pontos
-  no plano da asa, que abre para os lados e para trás (`sweep`). A membrana tem frente e verso, a 4 mm um do outro. A
-  cor vai da raiz à borda, e num morcego os gomos alternam de tom (`gores`).
+- Cada asa (`Wing`) é feita de leques e de hastes no plano da asa, que abre para os lados e para trás (`sweep`). Um
+  leque (`Fan`) são triângulos de um centro até um contorno: a membrana do morcego parte do pulso, de onde saem os
+  dedos, com a borda de trás recortada entre eles e um segundo leque entre o braço e o corpo; as penas do anjo vêm em
+  duas fileiras, as longas embaixo e as curtas por cima. Uma haste (`Rib`) é uma tira estreita sobre a membrana, dos
+  dois lados: o braço e os dedos do morcego, as hastes das penas, as nervuras das asas de fada e de borboleta. A
+  membrana tem frente e verso, a 4 mm um do outro.
+- **De onde saem** (`CharacterModel._wing_root`): do ponto mais atrás da metade de cima do tronco, na altura das
+  omoplatas. A primeira versão olhava só os vértices daquela altura; o corpo masculino, de poucos vértices, tem ali
+  só os do peito, e as asas saíam pela frente. A cauda sai do ponto mais atrás da pelve (`_tail_root`).
 - **A de fada é translúcida** (`Wing.alpha`): as asas assim são desenhadas por último, com mistura
   (`CharacterModel.draw`, o uniforme `u_Alpha`), sobre o que está atrás delas.
-- Saem do alto das costas (`CharacterModel._wing_root`: atrás do tronco, na altura das omoplatas), presas ao osso do
-  tronco: acompanham o corpo, mas não batem. Atravessam a roupa, como a cauda.
+- Ficam presas ao osso do tronco: acompanham o corpo, mas não batem. Atravessam a roupa, como a cauda.
 - **Cor** (`/skin asa cor <auto|pele|cabelo|nome|#rrggbb>`) e **ajustes** (`body_shape.WINGS`): tamanho e abertura
   (mais abertas para os lados, ou recolhidas para trás).
 - Todos os modelos têm os mesmos triângulos: trocar de modelo, de cor ou mexer num ajuste só move os vértices. Um
