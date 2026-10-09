@@ -37,7 +37,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 
 | Seção | Opções | Comando |
 |---|---|---|
-| Corpo | cauda (onze modelos, cor e ajustes); raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin cauda`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
+| Corpo | asas (cinco modelos, cor e ajustes); cauda (onze modelos, cor e ajustes); raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin asa`, `/skin cauda`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
 | Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D e chifres 3D, com cor e ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin chifre`, `/skin ajuste` |
@@ -133,9 +133,11 @@ corpo feminino ou masculino em uso. Depois de aplicada, tudo continua ajustável
 | Coelho | clara | coelho | pequeno, pés grandes, olhos vermelhos |
 | Draconato | vermelho-escura | dragão | alto e largo, nariz achatado |
 | Reptiliano | verde | réptil | pescoço longo, olhos afastados, sem nariz |
+| Anjo | clara | humana | um pouco mais alto, com asas de penas |
 
 - O demônio e o draconato vêm com chifres, e o vampiro com a boca de presas (que sai ao trocar de raça). Vêm com
-  cauda o demônio, o felino, o lupino, a kitsune, o coelho, o draconato e o reptiliano.
+  cauda o demônio, o felino, o lupino, a kitsune, o coelho, o draconato e o reptiliano, e com asas a fada, o demônio,
+  o draconato e o anjo.
 - Cada raça dá a cor da pele, o modelo de orelha, a cor dos olhos, o formato do nariz (ou nenhum) e os ajustes de
   proporção (`Race`). Escolher outra raça tira os ajustes que uma raça decide (`RACE_ADJUSTMENTS`: as proporções do
   corpo, as orelhas, o tamanho e a posição dos olhos) e mantém o resto: maquiagem, bordas das roupas, detalhes do
@@ -254,6 +256,30 @@ Opcionais (`/skin cauda <modelo>`, grupo "Cauda" na seção Corpo, "sem" por pad
   tamanho e curva.
 - Todos os modelos têm os mesmos triângulos: trocar de modelo, de cor ou mexer num ajuste só move os vértices. Só
   pôr ou tirar a cauda reconstrói o personagem. Um modelo novo é uma entrada em `TAIL_STYLES`.
+
+## 🪽 Asas
+
+Opcionais (`/skin asa <modelo>`, grupo "Asas" na seção Corpo, "sem" por padrão), geradas em `src/clothing/wings.py`:
+
+| Modelo | Como é |
+|---|---|
+| `morcego` | membrana escura entre dedos longos, recortada atrás (demônio, vampiro) |
+| `dragao` | a mesma, maior, da cor da pele |
+| `anjo` | branca, com penas ao longo da borda de baixo |
+| `fada` | duas asas finas e translúcidas de cada lado |
+| `borboleta` | duas asas largas de cada lado, laranja com a borda escura |
+
+- Cada asa (`Wing`) é um ou dois painéis; cada painel é um leque de triângulos da raiz até um contorno de doze pontos
+  no plano da asa, que abre para os lados e para trás (`sweep`). A membrana tem frente e verso, a 4 mm um do outro. A
+  cor vai da raiz à borda, e num morcego os gomos alternam de tom (`gores`).
+- **A de fada é translúcida** (`Wing.alpha`): as asas assim são desenhadas por último, com mistura
+  (`CharacterModel.draw`, o uniforme `u_Alpha`), sobre o que está atrás delas.
+- Saem do alto das costas (`CharacterModel._wing_root`: atrás do tronco, na altura das omoplatas), presas ao osso do
+  tronco: acompanham o corpo, mas não batem. Atravessam a roupa, como a cauda.
+- **Cor** (`/skin asa cor <auto|pele|cabelo|nome|#rrggbb>`) e **ajustes** (`body_shape.WINGS`): tamanho e abertura
+  (mais abertas para os lados, ou recolhidas para trás).
+- Todos os modelos têm os mesmos triângulos: trocar de modelo, de cor ou mexer num ajuste só move os vértices. Um
+  modelo novo é uma entrada em `WING_STYLES`.
 
 ## 🖌️ Ajuste fino: a pele sob a roupa
 

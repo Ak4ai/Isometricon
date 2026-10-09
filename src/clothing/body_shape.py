@@ -77,7 +77,8 @@ EARS = {"orelha_tamanho": "Tamanho das orelhas", "orelha_altura": "Altura das or
         "orelha_brilho": "Cor: brilho"}
 HORNS = {"chifre_tamanho": "Tamanho dos chifres", "chifre_curva": "Curva dos chifres"}
 TAILS = {"cauda_tamanho": "Tamanho da cauda", "cauda_curva": "Curva da cauda"}
-ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS, **HORNS, **TAILS}
+WINGS = {"asa_tamanho": "Tamanho das asas", "asa_abertura": "Abertura das asas"}
+ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS, **HORNS, **TAILS, **WINGS}
 # What an adjustment is on a body when it was never set: the female face has no shading under it.
 DEFAULTS = {"female": {"rosto_sombra": -1.0}}
 
