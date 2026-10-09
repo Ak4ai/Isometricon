@@ -121,14 +121,21 @@ no grupo "Estilo" da seção Cabelo).
   de cabelo do personagem, como o cabelo padrão. Os cabelos feitos à mão ficam em `character_model.HANDMADE_HAIR`
   (nome -> id) e são escolhidos pelo nome, sem nada para baixar.
 - **Como o nudred é feito** (`scripts/blender_nudred_hair.py`, rodado dentro do Blender com `assets/models/123.blend`
-  aberto): uma calota em volta da cabeça, medida a partir da própria cabeça por raios do centro dela. Nos lados e na
+  aberto): uma calota em volta da cabeça, medida a partir da própria cabeça por raios do centro dela. As cabeças são
+  lidas dos arquivos de corpo do jogo (`BODIES`, o objeto `Export_cabeca`), não dos objetos do `.blend`: a cabeça
+  masculina de lá é 2 cm mais larga, e o cabelo feito nela ficava no jogo como um capacete. Nos lados e na
   nuca ela é um **degradê**: cabelo rente (3 mm), sem twists, nos 4 cm acima da linha do cabelo (`FADE`), e só então
   enche; sobre a testa não há degradê, o volume começa na linha. No alto ficam cerca de cento e sessenta "twists"
   compridos e largos (`TWIST_LENGTH`, `TWIST_RADIUS`), tubinhos de quatro anéis que giram um pouco a cada passo, mais
   em pé do que para fora, só onde o cabelo está cheio (`TWIST_FROM`). São cerca de 10 mil triângulos (o cabelo padrão
   tem 3,9 mil). A primeira versão tinha seiscentos twists curtos pela cabeça toda, lados incluídos.
+- **Degradê de opacidade:** o `u` da coordenada de textura de cada vértice diz o quanto o cabelo é opaco ali (a camada
+  de UV `opacidade` no Blender): transparente na linha do cabelo, opaco no alto do degradê e em todo o volume. Para um
+  cabelo feito à mão sem textura, o jogo faz uma textura da cor do cabelo que vai de transparente a opaca
+  (`character_model.fade_texture`, `FADE_U`) e desenha o cabelo com mistura (`hair_fades`), depois de tudo o que é
+  opaco, para a pele aparecer por baixo. Um cabelo sem essa camada sai todo opaco.
 - No `.blend` o script cria a coleção "Nudred": `Cabelo_Nudred` sobre a cabeça masculina, `Cabelo_Nudred_female`
-  (oculto) sobre a feminina, e cópias de referência da cabeça e do cabelo padrão. Para mexer no cabelo à mão e levar
+  (oculto) sobre a feminina, as cabeças do jogo (`Nudred_ref_cabeca_male` e `_female`) e uma cópia do cabelo padrão. Para mexer no cabelo à mão e levar
   de volta ao jogo, edite o objeto e chame `export(objeto, caminho, título)` do mesmo script.
 - Os `.obj` são ignorados pelo git (`*.obj`); os dois do nudred foram adicionados à força (`git add -f`), como os
   corpos.

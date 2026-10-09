@@ -1,15 +1,15 @@
 """Cabelo nudred (afro com "twists" de esponja), feito no Blender para o jogo.
 
-Para rodar: abra no Blender o arquivo com as cabeças do jogo (``assets/models/123.blend``: a
-masculina é o objeto ``cabeca``, a feminina ``cabeca.001``), cole este script no editor de texto
-e execute. Ele cria a coleção "Nudred" com o cabelo sobre cada cabeça e grava
+Para rodar: abra no Blender um arquivo salvo em ``assets/models`` (``123.blend``), cole este
+script no editor de texto e execute. As cabeças são lidas dos arquivos de corpo do próprio jogo
+(``BODIES``), não dos objetos da cena. Ele cria a coleção "Nudred" com o cabelo sobre cada cabeça e grava
 ``assets/models/clothing/Hair_fitted_900000000001_<corpo>.obj``, o formato de cabelo que o jogo
 veste (``/skin cabelo nudred``).
 
 Para só exportar de novo um cabelo editado à mão no Blender, chame ``export`` com o objeto.
 
 Como é feito: uma calota em volta da cabeça, justa na linha do cabelo (o degradê dos lados e da
-nuca: cabelo rente, sem twists) e cheia em cima, medida a partir da própria cabeça; e no alto dela
+nuca: cabelo rente, sem twists, de transparente na linha a opaco no alto dele) e cheia em cima, medida a partir da própria cabeça; e no alto dela
 os "twists", compridos e largos, cada um um tubinho de quatro anéis que giram um pouco a cada passo.
 """
 import math
@@ -22,7 +22,9 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 HAIR_ID = "900000000001"
-HEADS = {"male": "cabeca", "female": "cabeca.001"}                    # body of the game -> head object in the file
+# The heads the game itself draws: the object "Export_cabeca" of each body's file (the heads in
+# the .blend are not always these: its male one is 2 cm wider, and the hair came out as a helmet).
+BODIES = {"male": "character_male_clean_apose.obj", "female": "character_female_clean_apose_stage2.obj"}
 CLOTHING = os.path.join(os.path.dirname(bpy.data.filepath), "clothing")  # assets/models/clothing, beside the .blend
 UP = Vector((0, 0, 1))
 RING_POINTS, RINGS_ROUND, SIDES = 22, 72, 6                           # the cap's grid, and corners around a twist
@@ -30,6 +32,24 @@ TIGHT, MIN_FULL = 0.003, 0.010                                        # metres o
 FADE, FADE_FRONT, BLEND = 0.040, 0.006, 0.045                         # metres of fade above the hairline at the sides and the nape (hair cut to the skin), at the forehead (none: the volume starts at the line), then of passing to the volume
 TWISTS, TWIST_GAP, TWIST_FROM = 300, 0.0250, 0.72                     # how many at most, metres between them, and how full the hair must be to have them (the top)
 TWIST_LENGTH, TWIST_RADIUS = (0.020, 0.018), 0.0160                   # metres long (the least, and more where the hair is fullest) and wide
+OPACITY = "opacidade"                                                 # the UV layer that says how solid each vertex is (its u: 0 clear, 1 solid)
+U_CLEAR, U_SOLID = 0.02, 0.98                                         # where clear and solid are on the texture the game makes
+
+
+def game_head(path: str):
+    """(points, faces) of the head in one of the game's body files, in Blender's axes (the game's x, y, z -> x, -z, y)."""
+    points, faces, inside = [], [], False
+    for line in open(path, encoding="utf-8", errors="ignore"):
+        if line.startswith("v "):
+            x, y, z = (float(t) for t in line.split()[1:4])
+            points.append(Vector((x, -z, y)))
+        elif line.startswith(("o ", "g ")):
+            inside = line.split(maxsplit=1)[1].strip().startswith("Export_cabeca")
+        elif line.startswith("f ") and inside:
+            faces.append([int(t.split("/")[0]) - 1 for t in line.split()[1:]])
+    used = sorted({i for face in faces for i in face})
+    order = {old: new for new, old in enumerate(used)}
+    return [points[i] for i in used], [[order[i] for i in face] for face in faces]
 
 
 def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
@@ -70,7 +90,9 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         rh, rf = r_head(d), r_full(d)
         fade = FADE_FRONT + (FADE - FADE_FRONT) * (1.0 - max(math.cos(theta), 0.0) ** 1.2)   # none over the forehead
         full = smooth((centre.z + (rh + rf) / 2 * d.z - z_low(theta) - fade) / BLEND)        # 0 in the fade, 1 in the volume
-        return centre + d * (rh + TIGHT + full * max(rf - rh - TIGHT, MIN_FULL)), d, full
+        point = centre + d * (rh + TIGHT + full * max(rf - rh - TIGHT, MIN_FULL))
+        solid = smooth((point.z - z_low(theta)) / fade)                                      # the fade: clear at the hairline, solid at its top
+        return point, d, full, solid
 
     def phi_end(theta):                     # where the surface meets the hairline
         lo, hi = 0.3, math.radians(150)
@@ -84,10 +106,13 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
 
     ends = [phi_end(2 * math.pi * i / RINGS_ROUND) for i in range(RINGS_ROUND)]
     verts = [centre + UP * (r_head(UP) + TIGHT + max(r_full(UP) - r_head(UP) - TIGHT, MIN_FULL))]
+    solid = [1.0]                           # of each vertex: 0 clear, 1 solid
     faces = []
     for i in range(RINGS_ROUND):
         for j in range(1, RING_POINTS + 1):
-            verts.append(surface(2 * math.pi * i / RINGS_ROUND, ends[i] * j / RING_POINTS)[0])
+            point, _, _, how_solid = surface(2 * math.pi * i / RINGS_ROUND, ends[i] * j / RING_POINTS)
+            verts.append(point)
+            solid.append(how_solid)
     index = lambda i, j: 1 + (i % RINGS_ROUND) * RING_POINTS + (j - 1)
     for i in range(RINGS_ROUND):
         faces.append((0, index(i, 1), index(i + 1, 1)))
@@ -101,7 +126,7 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         tries += 1
         theta = rng.uniform(0, 2 * math.pi)
         end = ends[int(theta / (2 * math.pi) * RINGS_ROUND) % RINGS_ROUND]
-        p, d, full = surface(theta, math.acos(1 - rng.uniform(0, 1) * (1 - math.cos(end))))
+        p, d, full, _ = surface(theta, math.acos(1 - rng.uniform(0, 1) * (1 - math.cos(end))))
         if full < TWIST_FROM:               # the sides and the nape are a fade: no twists there
             continue
         gap = TWIST_GAP * (0.80 + 0.20 * full)
@@ -124,6 +149,7 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
                 a = turn + 2 * math.pi * s / SIDES + coil * 0.6 * k
                 verts.append(middle + (side * math.cos(a) + other * math.sin(a)) * radius * wide)
         verts.append(p - d * 0.006 + axis * length * 1.10)
+        solid += [1.0] * (len(verts) - len(solid))
         tip = len(verts) - 1
         for k in range(len(rings) - 1):
             for s in range(SIDES):
@@ -151,6 +177,9 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     bm.free()
     for polygon in mesh.polygons:
         polygon.use_smooth = True
+    layer = mesh.uv_layers.new(name=OPACITY)   # how solid each vertex is, for the game to fade the sides
+    for loop in mesh.loops:
+        layer.data[loop.index].uv = (U_CLEAR + (U_SOLID - U_CLEAR) * solid[loop.vertex_index], 0.5)
     hair = bpy.data.objects.new(name, mesh)
     collection.objects.link(hair)
     material = bpy.data.materials.get("Nudred_cabelo") or bpy.data.materials.new("Nudred_cabelo")
@@ -162,14 +191,19 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
 
 def export(hair, path: str, title: str) -> None:
     """Write a mesh as the game's fitted hair: Y up and Z to the front (Blender x, y, z -> x, z, -y),
-    triangles (triangulate it first), one texture coordinate a vertex. With no texture beside it, the
-    game draws the hair in the character's hair colour."""
+    triangles (triangulate it first), one texture coordinate a vertex: its u says how solid the hair is
+    there (the UV layer OPACITY), and the game draws it in the character's hair colour, fading where it is clear."""
     mesh, world = hair.data, hair.matrix_world
     lines = [f"# Isometricon Native Fitted Hair: {title}"]
     for vertex in mesh.vertices:
         p = world @ vertex.co
         lines.append(f"v {p.x:.6f} {p.z:.6f} {-p.y:.6f}")
-    lines += ["vt 0.500000 0.500000"] * len(mesh.vertices)
+    layer = mesh.uv_layers.get(OPACITY)        # with it, u says how solid the vertex is; without, all of it is solid
+    u = [U_SOLID] * len(mesh.vertices)
+    if layer is not None:
+        for loop in mesh.loops:
+            u[loop.vertex_index] = layer.data[loop.index].uv[0]
+    lines += [f"vt {value:.6f} 0.500000" for value in u]
     for polygon in mesh.polygons:
         assert len(polygon.vertices) == 3, "triangule a malha antes de exportar"
         a, b, c = (i + 1 for i in polygon.vertices)
@@ -183,10 +217,17 @@ def main() -> None:
     collection = bpy.data.collections.get("Nudred") or bpy.data.collections.new("Nudred")
     if collection.name not in bpy.context.scene.collection.children:
         bpy.context.scene.collection.children.link(collection)
-    for body, head_name in HEADS.items():
-        head = bpy.data.objects[head_name]
-        points = [head.matrix_world @ v.co for v in head.data.vertices]
-        faces = [list(p.vertices) for p in head.data.polygons]
+    models = os.path.dirname(bpy.data.filepath)
+    for body, file in BODIES.items():
+        points, faces = game_head(os.path.join(models, file))
+        name = f"Nudred_ref_cabeca_{body}"       # the game's head, to see the hair on
+        old = bpy.data.objects.get(name)
+        if old:
+            bpy.data.objects.remove(old, do_unlink=True)
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata([tuple(p) for p in points], [], faces)
+        mesh.update()
+        collection.objects.link(bpy.data.objects.new(name, mesh))
         hair = nudred("Cabelo_Nudred" if body == "male" else f"Cabelo_Nudred_{body}", points, faces, collection)
         export(hair, os.path.join(CLOTHING, f"Hair_fitted_{HAIR_ID}_{body}.obj"), f"{HAIR_ID} (Nudred)")
 
