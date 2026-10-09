@@ -941,6 +941,34 @@ class SkinCommandHandler:
             self.character_model.reload()  # the tail is a mesh the model has or has not; between models it is moved in place
         return True, f"[Cauda] {value.replace('_', ' ').capitalize()}.", GREEN
 
+    def wings(self, args: List[str]) -> Result:
+        """/skin asa <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>: as asas 3D e a cor delas."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing import ears, wings
+        custom = self.character_model.customization
+        value = args[0].lower() if args else ""
+        if value in ("cor", "color"):
+            wanted = args[1].lower() if len(args) > 1 else ""
+            toggled = len(args) > 2 and args[2].lower() == "alternar"  # a check of the editor: again takes it off
+            names = (ears.SKIN_COAT, ears.HAIR_COAT) + tuple(ears.EAR_COLORS)
+            if wanted in ("auto", "automatica", "automática") + NONE_WORDS or (toggled and getattr(custom, "wing_color", "") == wanted):
+                custom.wing_color = ""
+                return True, "[Asas] Cor: a do modelo.", GREEN
+            if wanted not in names and not (wanted.startswith("#") and len(wanted) == 7):
+                return False, f"[Erro] Uso: /skin asa cor <auto|{'|'.join(names)}|#rrggbb>", RED
+            custom.wing_color = wanted
+            return True, f"[Asas] Cor: {wanted}.", GREEN
+        value = "sem" if value in NONE_WORDS else value
+        if value not in wings.STYLE_NAMES:
+            return False, f"[Erro] Uso: /skin asa <{'|'.join(wings.STYLE_NAMES)}> | cor <auto|pele|cabelo|nome|#rrggbb>", RED
+        before = getattr(custom, "wing_style", "sem")
+        custom.wing_style = value
+        if (before == "sem") != (value == "sem"):
+            self.character_model.reload()  # the wings are a mesh the model has or has not; between models they are moved in place
+        return True, f"[Asas] {value.replace('_', ' ').capitalize()}.", GREEN
+
     def recut_skin(self) -> None:
         """Recorta de novo a pele sob as roupas (rápido), ou reconstrói o personagem se não der."""
         model = self.character_model
@@ -1048,6 +1076,10 @@ SKIN_COMMANDS: List[Command] = [
             SkinCommandHandler.nose, ["sim", "nao", "sombra"] + list(NOSE_STYLE_NAMES), "Aparência"),
     Command(("raca", "raça", "race"), "/skin raca <nome>", "corpo pronto de uma raça: pele, orelhas, olhos, nariz e proporções",
             SkinCommandHandler.race, lambda: list(__import__("src.clothing.races", fromlist=["RACES"]).RACES), "Aparência"),
+    Command(("asa", "asas", "wings"), "/skin asa <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>",
+            "asas 3D e a cor delas (ajustes em /skin ajuste asa_...)",
+            SkinCommandHandler.wings, lambda: list(__import__("src.clothing.wings", fromlist=["STYLE_NAMES"]).STYLE_NAMES) + ["cor"],
+            "Aparência"),
     Command(("cauda", "rabo", "tail"), "/skin cauda <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>",
             "cauda 3D e a cor dela (ajustes em /skin ajuste cauda_...)",
             SkinCommandHandler.tail, lambda: list(__import__("src.clothing.tails", fromlist=["STYLE_NAMES"]).STYLE_NAMES) + ["cor"],

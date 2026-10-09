@@ -821,6 +821,7 @@ class CharacterPart:
     source_obj: Optional[str] = None  # fitted garment OBJ, for the animation's bone binding
 
 
+WING_HEIGHT = 0.72  # where the wings leave the torso, from its bottom (0) to its top (1)
 TAIL_HEIGHT = 0.72  # where a tail leaves the pelvis, from its bottom (0) to its top (1)
 HSR_HIDDEN = 0.9  # the share of the mask at a skin vertex past which it is hidden (as hsr.cull_hidden_triangles)
 EDIT_CLOTH_ALPHA = 0.28  # how solid the clothes are drawn while the skin under them is edited
@@ -1745,6 +1746,13 @@ class CharacterModel:
         if tail is not None:
             self.parts.append(CharacterPart("tail", TexturedMesh(tail[0].flatten(), tail[1].flatten()), self.white_tex_id))
 
+        # As asas (nenhuma por padrão): saem do alto das costas, e vão com o tronco.
+        self.wing_root = self._wing_root(clean_obj)
+        from .wings import rows_for as wing_rows
+        wings = wing_rows(self.wing_root, self.customization) if self.wing_root is not None else None
+        if wings is not None:
+            self.parts.append(CharacterPart("wings", TexturedMesh(wings[0].flatten(), wings[1].flatten()), self.white_tex_id))
+
         # 9.0 Peça por cima do top (jaqueta sobre camisa): fica por fora de tudo, e o
         # que as peças de baixo tiverem furando é puxado para baixo dela.
         outer_obj_path = self._add_outer_top(None)
@@ -1822,7 +1830,11 @@ class CharacterModel:
             shader.set_vec3("u_SkinTone", *[float(c) for c in self.customization.skin_color_rgb[:3]])
         # While the skin's mask is edited the clothes are drawn last and see-through, over the painted skin.
         edit = bool(getattr(self, "hsr_edit", False))
-        parts = sorted(self.parts, key=lambda part: part.source_obj is not None) if edit else self.parts
+        # Clear wings (a fairy's) are drawn last too, over what is behind them.
+        from .wings import alpha_of
+        wing_alpha = alpha_of(self.customization)
+        see_through = lambda part: (edit and part.source_obj is not None) or (part.name == "wings" and wing_alpha < 1.0)
+        parts = sorted(self.parts, key=see_through) if edit or wing_alpha < 1.0 else self.parts
         for part in parts:
             part_model = base_model if part.transform is None else base_model @ part.transform
             shader.set_mat4("u_Model", part_model)
@@ -1830,12 +1842,12 @@ class CharacterModel:
             shader.set_float("u_Vitiligo", vitiligo if part.name.startswith(SKIN_PART_NAMES) and not edit else 0.0)
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, part.texture_id)
-            clear = edit and part.source_obj is not None
+            clear = see_through(part)
             if clear:
                 gl.glEnable(gl.GL_BLEND)
                 gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
                 gl.glDepthMask(gl.GL_FALSE)
-                shader.set_float("u_Alpha", EDIT_CLOTH_ALPHA)
+                shader.set_float("u_Alpha", wing_alpha if part.name == "wings" else EDIT_CLOTH_ALPHA)
             part.mesh.draw()
             if clear:
                 shader.set_float("u_Alpha", 1.0)
@@ -1893,6 +1905,17 @@ class CharacterModel:
         points = pelvis[0].reshape(-1, 11)[:, :3]
         height = points[:, 1].min() + TAIL_HEIGHT * float(np.ptp(points[:, 1]))
         near = points[np.abs(points[:, 1] - height) < 0.35 * float(np.ptp(points[:, 1]))]
+        near = near if len(near) else points
+        return 0.0, float(height), float(near[:, 2].min())
+
+    def _wing_root(self, clean_obj) -> Optional[Tuple[float, float, float]]:
+        """Where the wings leave the body: the middle of the back of the torso, at the shoulder blades."""
+        torso = parse_clean_obj_groups(clean_obj, ["Export_torso"])
+        if not torso:
+            return None
+        points = torso[0].reshape(-1, 11)[:, :3]
+        height = points[:, 1].min() + WING_HEIGHT * float(np.ptp(points[:, 1]))
+        near = points[np.abs(points[:, 1] - height) < 0.2 * float(np.ptp(points[:, 1]))]
         near = near if len(near) else points
         return 0.0, float(height), float(near[:, 2].min())
 
@@ -1979,7 +2002,7 @@ class CharacterModel:
                 self._hide_feet = getattr(builder, "_hide_feet", False)
                 # What the build found out about itself, which the corrections made without rebuilding
                 # go by: the mask of hidden skin, the edges of the clothes, the style of the nose's mesh.
-                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style", "tail_root"):
+                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style", "tail_root", "wing_root"):
                     if hasattr(builder, name):
                         setattr(self, name, getattr(builder, name))
         if not self._dirty:

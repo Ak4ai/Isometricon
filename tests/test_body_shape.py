@@ -906,3 +906,51 @@ def test_a_tail_is_chosen_by_command_and_comes_with_some_races():
     for name, tail in (("felino", "felino"), ("demonio", "diabo"), ("draconato", "dragao"), ("humano", "sem"), ("elfo", "sem")):
         races.apply(custom, name)
         assert custom.tail_style == tail, name
+
+
+def test_every_wing_model_has_the_same_triangles_and_its_own_shape():
+    from src.clothing import wings
+    assert {"morcego", "dragao", "anjo", "fada", "borboleta"} <= set(wings.STYLE_NAMES) and wings.STYLE_NAMES[0] == "sem"
+    root, skin, hair = (0.0, 1.35, -0.09), (0.9, 0.7, 0.6), (0.5, 0.3, 0.2)
+    assert wings.styled_rows(root, "sem") is None and wings.styled_rows(root, "de_pegaso") is None
+    made = {name: wings.styled_rows(root, name, skin=skin, hair=hair)[0] for name in wings.WING_STYLES}
+    assert {rows.shape for rows in made.values()} == {(wings.TRIANGLES * 3, 11)}          # moved in place from one model to another
+    for name, rows in made.items():
+        right, left = rows[:len(rows) // 2], rows[len(rows) // 2:]
+        np.testing.assert_allclose(left[:, 0], -right[:, 0], atol=1e-6)                 # one on each side, mirrored
+        assert np.isfinite(rows).all() and np.allclose(np.linalg.norm(rows[:, 3:6], axis=1), 1.0, atol=1e-5), name
+        assert right[:, 0].max() > 0.3 and right[:, 2].min() < root[2] - 0.05, name       # out to the side, and back
+        assert right[:, 2].max() <= root[2] + 0.03, name                                 # behind the body
+    span = lambda name: made[name][:, 0].max()
+    assert span("dragao") > 1.3 * span("morcego") and span("anjo") > span("morcego")
+    panels = lambda name: sum(np.ptp(panel[:, :3], axis=0).max() > 1e-6 for panel in
+                              made[name][:len(made[name]) // 2].reshape(wings.PANELS, -1, 11))
+    assert [panels(n) for n in ("morcego", "anjo", "fada", "borboleta")] == [1, 1, 2, 2]  # one wing a side, or an upper and a lower one
+    assert made["fada"][:, 1].min() < made["morcego"][:, 1].min()
+    assert made["anjo"][:, 8:11].min() > 0.8 and made["morcego"][:, 8:11].max() < 0.35   # white; dark
+    assert np.allclose(made["dragao"][0, 8:11], np.array(skin) * wings.PANEL_TONES[0], atol=1e-6)   # the skin's colour
+    assert len({round(float(c), 3) for c in made["morcego"][:, 8]}) >= 3                  # the gores of the membrane
+    assert wings.WING_STYLES["fada"].alpha < 1.0 == wings.WING_STYLES["anjo"].alpha
+    assert wings.alpha_of(AvatarCustomization(wing_style="fada")) < 1.0 == wings.alpha_of(AvatarCustomization())
+    red = wings.styled_rows(root, "anjo", coat=(0.8, 0.1, 0.1))[0]
+    assert red[:, 8].max() > 0.79 and red[:, 9].max() < 0.11                             # or in a colour given
+    bigger = wings.styled_rows(root, "morcego", {"asa_tamanho": 1.0}, skin, hair)[0]
+    folded = wings.styled_rows(root, "morcego", {"asa_abertura": -1.0}, skin, hair)[0]
+    assert bigger[:, 0].max() > span("morcego") > folded[:, 0].max() and folded[:, 2].min() < made["morcego"][:, 2].min()
+    assert set(wings.ADJUSTMENTS) == set(body_shape.WINGS) <= set(body_shape.ADJUSTMENTS)
+
+
+def test_wings_are_chosen_by_command_and_come_with_the_races_that_have_them():
+    from src.clothing import races
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: reloads.append(1), refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert custom.wing_style == "sem" and handler.execute("/skin asa morcego")[0] and custom.wing_style == "morcego" and len(reloads) == 1
+    assert handler.execute("/skin asa borboleta")[0] and len(reloads) == 1               # another model: moved in place
+    assert handler.execute("/skin asa cor rosa")[0] and custom.wing_color == "rosa" and len(reloads) == 1
+    assert handler.execute("/skin asa cor cabelo alternar")[0] and handler.execute("/skin asa cor cabelo alternar")[0] and custom.wing_color == ""
+    assert not handler.execute("/skin asa de_pegaso")[0] and handler.execute("/skin asa sem")[0] and len(reloads) == 2
+    for name, wanted in (("fada", "fada"), ("demonio", "morcego"), ("draconato", "dragao"), ("anjo", "anjo"), ("humano", "sem"),
+                         ("elfo", "sem"), ("felino", "sem")):
+        races.apply(custom, name)
+        assert custom.wing_style == wanted, name

@@ -27,6 +27,7 @@ class Race:
     adjust: Dict[str, int] = field(default_factory=dict)
     horns: str = "sem"
     tail: str = "sem"
+    wings: str = "sem"
     mouth: Optional[str] = None  # a mouth of the race's own (MouthStyle); None: the one the character has
 
 
@@ -50,7 +51,7 @@ RACES: Dict[str, Race] = {
                     "orelha_tamanho": 60, "olhos_tamanho": 40}),
     # Red skin, golden eyes, ears like a bat's.
     "demonio": Race("Demônio", (190, 62, 58), "morcego", IrisColor.GOLD, "aquilino",
-                    {"altura": 25, "ombros": 35, "cintura": -15, "orelha_tamanho": -20}, horns="demonio", tail="diabo"),
+                    {"altura": 25, "ombros": 35, "cintura": -15, "orelha_tamanho": -20}, horns="demonio", tail="diabo", wings="morcego"),
     # Ashen, red-eyed, a little taller and thinner than a human.
     "vampiro": Race("Vampiro", (214, 214, 224), "elfo_asa", IrisColor.RED, "fino",
                     {"altura": 15, "pescoco": 15, "cintura": -20, "orelha_tamanho": -40}, mouth="vampire"),
@@ -64,7 +65,9 @@ RACES: Dict[str, Race] = {
     # Tiny and slight, with wing-like ears.
     "fada": Race("Fada", (250, 224, 226), "elfo_asa", IrisColor.PURPLE, "botao",
                  {"altura": -75, "cabeca": 15, "ombros": -35, "cintura": -30, "bracos": -30, "pernas": -25,
-                  "orelha_tamanho": 20}),
+                  "orelha_tamanho": 20}, wings="fada"),
+    # An angel: a person with white feathered wings.
+    "anjo": Race("Anjo", (248, 226, 210), "humana", IrisColor.BLUE, "fino", {"altura": 10}, wings="anjo"),
     # Beast folk: a person's body with the ears of the animal, in the colour of the hair.
     "felino": Race("Felino", (244, 214, 196), "gato", IrisColor.GOLD, "botao",
                    {"altura": -15, "cintura": -15, "olhos_tamanho": 25}, tail="felino"),
@@ -76,14 +79,14 @@ RACES: Dict[str, Race] = {
                    {"altura": -30, "cabeca": 15, "pes": 40, "olhos_tamanho": 25}, tail="coelho"),
     # Dragon kin and lizard folk: scaly ears, strong colours.
     "draconato": Race("Draconato", (150, 70, 60), "dragao", IrisColor.GOLD, "achatado",
-                      {"altura": 35, "ombros": 50, "peito": 30, "pescoco": 20, "maos": 30, "pes": 30}, horns="dois", tail="dragao"),
+                      {"altura": 35, "ombros": 50, "peito": 30, "pescoco": 20, "maos": 30, "pes": 30}, horns="dois", tail="dragao", wings="dragao"),
     "reptiliano": Race("Reptiliano", (110, 150, 96), "reptil", IrisColor.GOLD, None,
                        {"pescoco": 35, "ombros": -10, "cintura": -10, "olhos_distancia": 30}, tail="reptil"),
 }
 RACE_NAMES = tuple(RACES)
 # The adjustments a race decides: choosing another race takes these back and keeps the rest
 # (makeup, the edges of the clothes, the details of the nose).
-RACE_ADJUSTMENTS = (set(BODY) - {"folga"}) | set(EARS) | {"chifre_tamanho", "chifre_curva", "cauda_tamanho", "cauda_curva"} | {"olhos_tamanho", "olhos_distancia", "olhos_altura"}
+RACE_ADJUSTMENTS = (set(BODY) - {"folga"}) | set(EARS) | {"chifre_tamanho", "chifre_curva", "cauda_tamanho", "cauda_curva", "asa_tamanho", "asa_abertura"} | {"olhos_tamanho", "olhos_distancia", "olhos_altura"}
 
 
 def apply(custom: Any, name: str) -> None:
@@ -95,6 +98,7 @@ def apply(custom: Any, name: str) -> None:
     custom.ear_style = race.ears
     custom.horn_style = race.horns
     custom.tail_style = race.tail
+    custom.wing_style = race.wings
     was = custom.resolved_mouth_style
     if race.mouth is not None:
         custom.mouth_style = MouthStyle(race.mouth)
