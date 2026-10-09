@@ -142,10 +142,11 @@ def _amount(adjust: Optional[Mapping[str, float]], name: str) -> float:
         return 0.0
 
 
-def coat_of(custom: Any) -> Optional[Tuple[float, float, float]]:
+def coat_of(custom: Any, field: str = "ear_color") -> Optional[Tuple[float, float, float]]:
     """A cor que o personagem deu às orelhas (0 a 1), ou None para a de cada modelo: "pele",
-    "cabelo", um nome de EAR_COLORS ou "#rrggbb" em ``AvatarCustomization.ear_color``."""
-    value = str(getattr(custom, "ear_color", "") or "").strip().lower()
+    "cabelo", um nome de EAR_COLORS ou "#rrggbb" em ``AvatarCustomization.ear_color`` (ou em
+    outro campo, ``field``: a cauda guarda a dela do mesmo jeito)."""
+    value = str(getattr(custom, field, "") or "").strip().lower()
     if value == SKIN_COAT:
         return tuple(float(c) for c in custom.skin_color_rgb[:3])
     if value == HAIR_COAT:

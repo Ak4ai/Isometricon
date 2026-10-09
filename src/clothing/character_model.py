@@ -821,6 +821,7 @@ class CharacterPart:
     source_obj: Optional[str] = None  # fitted garment OBJ, for the animation's bone binding
 
 
+TAIL_HEIGHT = 0.72  # where a tail leaves the pelvis, from its bottom (0) to its top (1)
 HSR_HIDDEN = 0.9  # the share of the mask at a skin vertex past which it is hidden (as hsr.cull_hidden_triangles)
 EDIT_CLOTH_ALPHA = 0.28  # how solid the clothes are drawn while the skin under them is edited
 
@@ -1737,6 +1738,13 @@ class CharacterModel:
                 mesh = TexturedMesh(legs_data[0], legs_data[1])
                 self.parts.append(CharacterPart("legs_skin", mesh, self.white_tex_id))
 
+        # A cauda (nenhuma por padrão): sai do meio da base das costas, e vai com a pelve.
+        self.tail_root = self._tail_root(clean_obj)
+        from .tails import rows_for as tail_rows
+        tail = tail_rows(self.tail_root, self.customization) if self.tail_root is not None else None
+        if tail is not None:
+            self.parts.append(CharacterPart("tail", TexturedMesh(tail[0].flatten(), tail[1].flatten()), self.white_tex_id))
+
         # 9.0 Peça por cima do top (jaqueta sobre camisa): fica por fora de tudo, e o
         # que as peças de baixo tiverem furando é puxado para baixo dela.
         outer_obj_path = self._add_outer_top(None)
@@ -1877,6 +1885,17 @@ class CharacterModel:
         if self.create_mesh:
             self._build()
 
+    def _tail_root(self, clean_obj) -> Optional[Tuple[float, float, float]]:
+        """Where a tail leaves the body: the middle of the back of the pelvis, a little under its top."""
+        pelvis = parse_clean_obj_groups(clean_obj, ["Export_pelve"])
+        if not pelvis:
+            return None
+        points = pelvis[0].reshape(-1, 11)[:, :3]
+        height = points[:, 1].min() + TAIL_HEIGHT * float(np.ptp(points[:, 1]))
+        near = points[np.abs(points[:, 1] - height) < 0.35 * float(np.ptp(points[:, 1]))]
+        near = near if len(near) else points
+        return 0.0, float(height), float(near[:, 2].min())
+
     def garment_edges(self) -> Dict[str, Tuple[float, float]]:
         """Lowest and highest point (y, in the fitting pose) of the top and of the pants worn,
         their sleeves aside: where the hem and the waist are, for the adjustments that move them."""
@@ -1960,7 +1979,7 @@ class CharacterModel:
                 self._hide_feet = getattr(builder, "_hide_feet", False)
                 # What the build found out about itself, which the corrections made without rebuilding
                 # go by: the mask of hidden skin, the edges of the clothes, the style of the nose's mesh.
-                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style"):
+                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style", "tail_root"):
                     if hasattr(builder, name):
                         setattr(self, name, getattr(builder, name))
         if not self._dirty:
