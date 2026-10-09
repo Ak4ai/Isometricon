@@ -137,6 +137,11 @@ Os olhos são um desenho só, azul; a cor escolhida é posta na íris dele (`cus
   (`IRIS_DARKEST`), e as mais claras vão da cor para o branco (`IRIS_LIGHT`), a luz do olho. Antes a cor era só
   multiplicada, e o brilho de baixo virava uma mancha chapada.
 
+- **Os reflexos:** os pingos de luz dentro da íris (`iris_shines`: o que a íris cerca, e o que é do creme deles na
+  borda dela) são pintados lisos, quase brancos os nítidos (`IRIS_SHINE`) e mais da cor o suave de baixo
+  (`IRIS_SOFT_SHINE`). O desenho tem neles furos (pixels meio transparentes, por onde aparecia o que está embaixo:
+  os pontinhos escuros) e bordas azuladas, que apareciam como sujeira em qualquer cor.
+
 ## ✂️ Cabelo raspado
 
 O estilo "Raspado" (`HairStyle.BUZZ_CUT`) era uma pintura no couro cabeludo que nunca chegava à cabeça: o personagem
