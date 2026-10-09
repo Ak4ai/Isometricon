@@ -32,8 +32,8 @@ def test_parse_character_cli_args_defaults():
     assert customization.head_type == HeadType.ROUNDED
     assert customization.resolved_mouth_style == "anime_original"
     assert customization.resolved_eye_style == "anime"
-    assert top_id == OUTFIT_PRESETS["sweater"]
-    assert bottom_id == 109837605892174
+    assert top_id is None and bottom_id is None   # no clothes: the underwear painted on the skin
+    assert customization.underwear == "branco"
     assert tool_id is None
     assert auto_spin is True
 

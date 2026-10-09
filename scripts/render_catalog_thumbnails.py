@@ -100,11 +100,11 @@ RACE_FRAME = (1.47, 1.00)  # the middle (height from the ground) and the height 
 
 
 def render_race(shader, name: str, body: str) -> Image.Image:
-    """A race on a body, in the clothes the character starts with, hair cut short to show the ears."""
+    """A race on a body, as the character starts (no clothes, the underwear on the skin), hair cut short to show the ears."""
     from src.clothing import races
     custom = AvatarCustomization(body_type=BodyType(body), hair_style=HairStyle.BUZZ_CUT)
     races.apply(custom, name)
-    model = CharacterModel(customization=custom)
+    model = CharacterModel(customization=custom, top_id=None, bottom_id=None)  # as a character starts: in its underwear
     animator = CharacterAnimator(model, walking=False)
     animator.update(0.0)
     aspect = SIZE[0] / SIZE[1]

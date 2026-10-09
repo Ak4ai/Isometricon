@@ -969,6 +969,28 @@ class SkinCommandHandler:
             self.character_model.reload()  # the wings are a mesh the model has or has not; between models they are moved in place
         return True, f"[Asas] {value.replace('_', ' ').capitalize()}.", GREEN
 
+    def underwear(self, args: List[str]) -> Result:
+        """/skin intima <sem|cor|#rrggbb>: a roupa de baixo pintada na pele."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing import underwear
+        custom = self.character_model.customization
+        value = args[0].lower() if args else ""
+        if value in ("alternar",):  # a check of the editor: on in the colour it had last, or off
+            value = "sem" if underwear.colour_of(custom) is not None else (getattr(self, "_underwear_before", "") or underwear.DEFAULT)
+        if value in NONE_WORDS + ("nao", "não"):
+            if underwear.colour_of(custom) is not None:
+                self._underwear_before = custom.underwear
+            custom.underwear = "sem"
+            return True, "[Skin] Sem roupa de baixo.", GREEN
+        if value in ("sim", "on"):
+            value = getattr(self, "_underwear_before", "") or underwear.DEFAULT
+        if value not in underwear.COLORS and not (value.startswith("#") and len(value) == 7):
+            return False, f"[Erro] Uso: /skin intima <sem|sim|{'|'.join(underwear.COLORS)}|#rrggbb>", RED
+        custom.underwear = value
+        return True, f"[Skin] Roupa de baixo: {value}.", GREEN
+
     def recut_skin(self) -> None:
         """Recorta de novo a pele sob as roupas (rápido), ou reconstrói o personagem se não der."""
         model = self.character_model
@@ -1076,6 +1098,10 @@ SKIN_COMMANDS: List[Command] = [
             SkinCommandHandler.nose, ["sim", "nao", "sombra"] + list(NOSE_STYLE_NAMES), "Aparência"),
     Command(("raca", "raça", "race"), "/skin raca <nome>", "corpo pronto de uma raça: pele, orelhas, olhos, nariz e proporções",
             SkinCommandHandler.race, lambda: list(__import__("src.clothing.races", fromlist=["RACES"]).RACES), "Aparência"),
+    Command(("intima", "íntima", "roupa_intima", "underwear"), "/skin intima <sem|sim|cor|#rrggbb>",
+            "roupa de baixo pintada na pele: cueca, ou calcinha e sutiã",
+            SkinCommandHandler.underwear, lambda: ["sem", "sim"] + list(__import__("src.clothing.underwear", fromlist=["COLORS"]).COLORS),
+            "Roupas"),
     Command(("asa", "asas", "wings"), "/skin asa <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>",
             "asas 3D e a cor delas (ajustes em /skin ajuste asa_...)",
             SkinCommandHandler.wings, lambda: list(__import__("src.clothing.wings", fromlist=["STYLE_NAMES"]).STYLE_NAMES) + ["cor"],

@@ -27,6 +27,7 @@ execução, o autocompletar e a ajuda.
 | `/skin hsr espelhar <sim\|nao>` · `<esconder\|mostrar\|apagar> <pontos>` · `limpar` · `desfazer` · `refazer` | a pele escondida sob a roupa: espelhar os dois lados do corpo, ou corrigir à mão os pontos da cage (o pincel da seção Ajuste fino) |
 | `/skin extra <nome\|id\|none>` | veste ou tira uma peça a mais, junto com as outras |
 | `/skin raca <humano\|elfo\|anao\|orc\|goblin\|demonio\|vampiro\|tritao\|marciano\|fada\|felino\|lupino\|kitsune\|coelho\|draconato\|reptiliano\|anjo>` | corpo pronto de uma raça sobre o corpo em uso: pele, orelhas, olhos, nariz e proporções |
+| `/skin intima <sem\|sim\|branco\|preto\|cinza\|nude\|rosa\|vermelho\|azul\|roxo\|#rrggbb>` | roupa de baixo pintada na pele: cueca no corpo masculino, calcinha e sutiã no feminino |
 | `/skin asa <sem\|morcego\|dragao\|anjo\|fada\|borboleta>` · `cor <auto\|pele\|cabelo\|nome\|#rrggbb>` | asas 3D e a cor delas (ajustes em `/skin ajuste`: `asa_tamanho`, `asa_abertura`) |
 | `/skin cauda <sem\|felino\|diabo\|tigre\|leao\|lobo\|raposa\|cachorro\|cavalo\|coelho\|reptil\|dragao>` · `cor <auto\|pele\|cabelo\|nome\|#rrggbb>` | cauda 3D e a cor dela (ajustes em `/skin ajuste`: `cauda_tamanho`, `cauda_curva`) |
 | `/skin chifre <sem\|demonio\|bode\|carneiro\|touro\|boi\|cervo\|unicornio\|um\|dois\|tres\|um_quebrado>` · `cor <auto\|marfim\|osso\|branco\|cinza\|marrom\|preto\|vermelho\|dourado\|#rrggbb>` | chifres 3D e a cor deles (ajustes em `/skin ajuste`: `chifre_tamanho`, `chifre_curva`) |

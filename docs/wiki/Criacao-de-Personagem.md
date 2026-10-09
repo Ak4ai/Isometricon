@@ -37,7 +37,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 
 | Seção | Opções | Comando |
 |---|---|---|
-| Corpo | asas (cinco modelos, cor e ajustes); cauda (onze modelos, cor e ajustes); raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin asa`, `/skin cauda`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
+| Corpo | roupa de baixo (usar ou não, cor); asas (cinco modelos, cor e ajustes); cauda (onze modelos, cor e ajustes); raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin intima`, `/skin asa`, `/skin cauda`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
 | Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D e chifres 3D, com cor e ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin chifre`, `/skin ajuste` |
@@ -109,6 +109,24 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
 saia, cinto, adesivos, luvas. Duas peças que ocupam o mesmo lugar (duas calças inteiras) se atravessam: só a
 jaqueta é encaixada por cima de outra roupa.
 
+## 🩲 Roupa de baixo e o personagem inicial
+
+Um personagem novo começa **sem roupas**, só com a roupa de baixo (`parse_character_cli_args`: nenhuma peça de cima
+nem de baixo). Um personagem gravado continua com o que vestia.
+
+A roupa de baixo não é uma peça 3D: é pintada na pele (`src/clothing/underwear.py`, `world_textured.frag`). O shader
+decide por onde cada ponto fica no corpo sem pose (`v_BindPos`), só na pele do tronco e das pernas:
+
+- **Corpo masculino:** cueca, uma faixa na pelve que desce um pouco pelas coxas.
+- **Corpo feminino:** calcinha, cavada dos lados, e sutiã, uma faixa no peito com duas alças, na frente e atrás.
+- As medidas de cada corpo (`underwear.CUTS`) são partes da pelve e do tronco dele, lidas do arquivo do corpo
+  (`underwear.regions`); o cós, as bordas das pernas e as da faixa são um pouco mais escuros.
+- Fica por baixo de qualquer roupa vestida: onde a roupa esconde a pele ela some junto, e pode aparecer onde a pele
+  aparece (acima do cós de uma calça baixa).
+- `/skin intima <sem|sim|cor|#rrggbb>` e o grupo "Roupa de baixo" na seção Corpo: a caixa "Usar" e oito cores
+  (`underwear.COLORS`). Trocar a cor ou tirá-la não reconstrói nada. Fica em `AvatarCustomization.underwear`.
+- No modo de edição da pele (transparência) ela não é desenhada: ali a pele mostra a máscara.
+
 ## 🧝 Raças
 
 Na seção Corpo, logo abaixo de feminino e masculino, há cartões com corpos prontos de raça (`/skin raca <nome>`).
@@ -144,7 +162,7 @@ corpo feminino ou masculino em uso. Depois de aplicada, tudo continua ajustável
   nariz, cabelo, roupas e o corpo escolhido.
 - A raça escolhida fica em `AvatarCustomization.race`, só para marcar o cartão: mexer num ajuste depois não a desfaz.
 - **Cartões:** as miniaturas são desenhadas por `scripts/render_catalog_thumbnails.py` (o mesmo das roupas), cada
-  raça em cada corpo, com a roupa inicial e o cabelo raspado, todas com o mesmo enquadramento para os tamanhos se
+  raça em cada corpo, como o personagem começa (sem roupas, com a roupa de baixo) e o cabelo raspado, todas com o mesmo enquadramento para os tamanhos se
   compararem (`thumbs/racas/<raça>_<corpo>.png`, fora do git). A tela pede as que faltam ao abrir; até ficarem
   prontas o cartão mostra um X. O cartão mostra a raça no corpo em uso.
 - Uma raça nova é uma entrada em `RACES`.
