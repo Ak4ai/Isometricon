@@ -1113,3 +1113,24 @@ def test_the_shaved_style_is_a_hair_and_not_a_bald_head(body):
     assert hair[:, 1].max() < head[:, 1].max() + 0.01 and abs(hair[:, 0]).max() < abs(head[:, 0]).max() + 0.01
     assert solid.min() < 0.05 and 0.85 < solid.max() < 0.97
     assert AvatarCustomization(hair_style=HairStyle.BUZZ_CUT).resolved_hair_2d_style == "bald"   # nothing painted under it
+
+
+def test_the_iris_is_cut_clean_and_keeps_its_light_in_any_colour():
+    import os
+    from PIL import Image
+    from src.clothing.customization import iris_mask, tint_iris
+    layers = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "models", "textures", "layers")
+    eyes = np.array(Image.open(os.path.join(layers, "eyes", "eye_anime_blue.png")).convert("RGBA"))
+    mask = iris_mask(eyes)
+    from scipy import ndimage
+    assert ndimage.label(mask)[1] <= 4 and mask.sum() > 1500                    # the two irises, not specks about them
+    red = tint_iris(eyes, (255, 0, 0), (0, 255, 0))
+    assert (red[~mask] == eyes[~mask]).all()                                      # the white, its shadow and the lashes: as drawn
+    changed = red[mask][:, :3].astype(int)
+    assert ((changed[:, 2] <= changed[:, 0]) | (changed[:, 2] <= changed[:, 1])).all()   # no blue left in either
+    columns = np.nonzero(mask.any(axis=0))[0]
+    half = (columns.min() + columns.max()) // 2          # between the two eyes
+    left = red[:, :half][mask[:, :half]][:, :3].astype(int)
+    assert (left[:, 0] >= left[:, 1]).all() and left[:, 0].min() < 110 and left[:, 1].max() > 80   # shades of red, and red towards white
+    black = tint_iris(eyes, (0, 0, 0), (0, 0, 0))[mask][:, :3]
+    assert black.min() == 0 and black.max() > 90                                  # even a black iris has its light
