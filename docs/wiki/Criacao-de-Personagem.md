@@ -40,7 +40,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 | Corpo | raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
-| Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D (seis modelos) e seus ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin ajuste` |
+| Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D e chifres 3D, com cor e ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin chifre`, `/skin ajuste` |
 | Nariz | com ou sem, o formato e os ajustes de cada parte, a cor da ponta e a sombra | `/skin nariz`, `/skin ajuste` |
 | Maquiagem | batom, sombra dos olhos e blush (dezesseis cores, com matiz, saturação e brilho ajustáveis; a sombra e o blush com intensidade, tamanho e esfumado), contorno, sombras do queixo e do maxilar, sardas | `/skin maquiagem`, `/skin ajuste rosto_sombra` |
 | Cabelo | padrão, raspado, careca; cor; cabelos do Roblox baixados | `/skin cabelo` |
@@ -82,6 +82,8 @@ lido do item já encaixado em qualquer corpo; sem isso, do nome do arquivo. Um i
   do vértice e a faixa escurece. A frente do rosto não muda.
   **No corpo feminino o padrão é -100** (`body_shape.DEFAULTS`, lido por `resolved_body_adjust`): vale enquanto o
   controle não for mexido, um zero escolhido fica guardado, e `/skin ajuste reset` volta ao padrão do corpo.
+- **Boca de vampiro** (`/skin boca vampiro`): a boca anime com uma presa sob cada lado dela, desenhadas por cima em
+  degraus de dois pixels (`FANGS_AT`, `FANG_ROWS`), depois do batom, que elas não pegam.
 - **Maquiagem** (`customization.makeup`): batom, sombra dos olhos e blush, cada um com uma cor, e as sardas. Tudo é
   refeito na textura da cabeça, sem recarregar o personagem.
   - **Cor:** dezesseis cores prontas (`MAKEUP_COLORS`) ou qualquer outra pelo chat (`/skin maquiagem blush #ff8899`,
@@ -132,6 +134,7 @@ corpo feminino ou masculino em uso. Depois de aplicada, tudo continua ajustável
 | Draconato | vermelho-escura | dragão | alto e largo, nariz achatado |
 | Reptiliano | verde | réptil | pescoço longo, olhos afastados, sem nariz |
 
+- O demônio e o draconato vêm com chifres, e o vampiro com a boca de presas (que sai ao trocar de raça).
 - Cada raça dá a cor da pele, o modelo de orelha, a cor dos olhos, o formato do nariz (ou nenhum) e os ajustes de
   proporção (`Race`). Escolher outra raça tira os ajustes que uma raça decide (`RACE_ADJUSTMENTS`: as proporções do
   corpo, as orelhas, o tamanho e a posição dos olhos) e mantém o resto: maquiagem, bordas das roupas, detalhes do
@@ -188,6 +191,35 @@ por padrão). São malhas 3D geradas em `src/clothing/ears.py`, uma de cada lado
   se inclinam).
 - Não há nada que as esconda sob o cabelo: num cabelo cheio a orelha humana some dentro dele, e as longas saem
   por ele. Um modelo novo é uma entrada em `EAR_STYLES` com dez pontos.
+
+## 🦌 Chifres
+
+Opcionais, como as orelhas (`/skin chifre <modelo>`, grupo "Chifres" na seção Rosto, "sem" por padrão), gerados em
+`src/clothing/horns.py`:
+
+| Modelo | Como é |
+|---|---|
+| `demonio` | curtos e grossos, curvando para cima e para dentro, escuros |
+| `bode` | longos, para trás e curvando para baixo, com anéis |
+| `carneiro` | grossos, enrolando ao lado da cabeça |
+| `touro` | para os lados e depois para cima e para a frente |
+| `boi` | mais longos e abertos, com curva suave |
+| `cervo` | galhada: uma haste com três pontas de cada lado |
+| `unicornio` | um só, longo e reto, na testa, com sulco em espiral |
+| `um` · `dois` · `tres` | um no meio da testa; um par; o par e o do meio |
+| `um_quebrado` | um par com um dos chifres quebrado |
+
+- Cada chifre (`Horn`) é uma linha que sai da cabeça numa direção (`rise`, `out`) e muda de direção ao longo do
+  comprimento (`curl`, `sweep`), com oito anéis de seis lados em volta que afinam até a ponta. Uma ponta de galhada
+  nasce de outro chifre (`parent`, `at`); um quebrado termina antes (`cut`), com a borda irregular.
+- Um modelo (`HornSet`) é um conjunto deles, com a cor da base e a da ponta; um par é espelhado, e `side` põe um
+  chifre no meio ou só de um lado.
+- Todos os modelos têm os mesmos triângulos (oito tubos, os que sobram vazios): trocar de modelo, de cor ou mexer num
+  ajuste só move os vértices (`CharacterAnimator._styled_part`). Só pôr ou tirar os chifres reconstrói o personagem.
+- **Cor** (`/skin chifre cor <auto|nome|#rrggbb>`, grupo "Cor dos chifres"): a do modelo, uma de oito prontas
+  (`HORN_COLORS`) ou qualquer outra pelo chat. **Ajustes** (`body_shape.HORNS`): tamanho e curva.
+- Ficam presos à cabeça e giram com ela; não há nada que os ajuste ao cabelo. Um modelo novo é uma entrada em
+  `HORN_STYLES`.
 
 ## 🖌️ Ajuste fino: a pele sob a roupa
 

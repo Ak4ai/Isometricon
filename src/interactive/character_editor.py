@@ -21,8 +21,9 @@ import time
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, HORNS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.ears import EAR_COLORS
+from src.clothing.horns import HORN_COLORS, STYLE_NAMES as HORN_STYLE_NAMES
 from src.clothing.races import RACES
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
@@ -94,7 +95,7 @@ EYE_RGB = {"azul": (70, 130, 235), "verde": (70, 190, 110), "castanho": (120, 80
 HAIR_RGB = {"castanho": (105, 70, 45), "loiro": (235, 205, 120), "preto": (30, 30, 34), "rosa": (245, 160, 195),
             "prata": (215, 218, 225), "ruivo": (170, 75, 40), "ciano": (80, 210, 225)}
 PORTUGUESE_EYE_STYLES = ("anime", "piscando", "classico", "sem")
-PORTUGUESE_MOUTHS = ("anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem")
+PORTUGUESE_MOUTHS = ("anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "vampiro", "sem")
 
 
 @dataclass
@@ -332,6 +333,15 @@ class CharacterEditor:
                               selected=lambda m, n=n: custom() is not None and getattr(custom(), "ear_color", "") == n)
                        for n in EAR_COLORS]),
                 Group("Ajustes das orelhas", [Option(label, "", slider=name) for name, label in EARS.items()]),
+                Group("Chifres", [Option("Sem chifres" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin chifre {n}",
+                                         selected=lambda m, n=n: custom() is not None and getattr(custom(), "horn_style", "sem") == n)
+                                  for n in HORN_STYLE_NAMES]),
+                Group("Cor dos chifres", [Option("Do modelo", "/skin chifre cor auto",
+                                                 selected=lambda m: custom() is not None and not getattr(custom(), "horn_color", ""))]
+                      + [Option(n.capitalize(), f"/skin chifre cor {n}", color=HORN_COLORS[n],
+                                selected=lambda m, n=n: custom() is not None and getattr(custom(), "horn_color", "") == n)
+                         for n in HORN_COLORS]),
+                Group("Ajustes dos chifres", [Option(label, "", slider=name) for name, label in HORNS.items()]),
             ]
 
         def nose() -> List[Group]:

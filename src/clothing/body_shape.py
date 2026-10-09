@@ -75,7 +75,8 @@ MAKEUP = {name: f"{item.capitalize()}: {label[0].lower()}{label[1:]}" for item, 
 EARS = {"orelha_tamanho": "Tamanho das orelhas", "orelha_altura": "Altura das orelhas",
         "orelha_abertura": "Abertura das orelhas", "orelha_matiz": "Cor: matiz", "orelha_saturacao": "Cor: saturação",
         "orelha_brilho": "Cor: brilho"}
-ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS}
+HORNS = {"chifre_tamanho": "Tamanho dos chifres", "chifre_curva": "Curva dos chifres"}
+ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS, **HORNS}
 # What an adjustment is on a body when it was never set: the female face has no shading under it.
 DEFAULTS = {"female": {"rosto_sombra": -1.0}}
 

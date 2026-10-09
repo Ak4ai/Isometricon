@@ -21,7 +21,7 @@ from . import body_shape
 from .skeleton import CAGE_PART_BONES, Skeleton, partial_rotation, rest_arm_angle, rest_rotations, skin, walk_rotations
 
 # Model parts that follow one bone as a whole.
-RIGID_PARTS = {"head": "Head", "hair_3d": "Head", "hair": "Head", "nose": "Head", "ears": "Head"}
+RIGID_PARTS = {"head": "Head", "hair_3d": "Head", "hair": "Head", "nose": "Head", "ears": "Head", "horns": "Head"}
 # Skin parts that name their body part (they still blend at the joints).
 SKIN_PARTS = {"neck": "Neck", "arm_left": "UpperArm_L", "forearm_left": "LowerArm_L", "hand_left": "Hand_L",
               "arm_right": "UpperArm_R", "forearm_right": "LowerArm_R", "hand_right": "Hand_R"}
@@ -660,7 +660,8 @@ class CharacterAnimator:
         if abs(self.stride - target) < 1e-3:
             self.stride = target
         custom = getattr(self.model, "customization", None)
-        shape = (self._nose_style(), (getattr(custom, "ear_style", None), getattr(custom, "ear_color", ""))) + tuple(sorted((getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}).items()))
+        shape = (self._nose_style(), (getattr(custom, "ear_style", None), getattr(custom, "ear_color", ""), getattr(custom, "horn_style", None),
+                                     getattr(custom, "horn_color", ""))) + tuple(sorted((getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}).items()))
         if shape != self._shape:
             self._reshape(shape)
         if self.arms_out != self._arms_shown:
@@ -684,19 +685,18 @@ class CharacterAnimator:
         custom = getattr(self.model, "customization", None)
         return getattr(custom, "nose_style", None), getattr(custom, "nose_shadow", "legado") == "calculada"
 
-    def _styled_ears(self, adjust):
-        """Vertex rows of the ears as the character has them now (model, adjustments, colour), on
-        the bound head, when the model has ears of the same vertices (None otherwise: no ears, or
-        none wanted)."""
-        from . import ears
+    def _styled_part(self, name, models, adjust):
+        """Vertex rows of the ears or the horns (``models``: the module that makes them) as the
+        character has them now (model, adjustments, colour), on the bound head, when the model has
+        that part with the same vertices (None otherwise: it has none, or none is wanted)."""
         named = {part.name: k for k, (part, *_) in enumerate(self._bindings)}
-        if "ears" not in named or "head" not in named:
+        if name not in named or "head" not in named:
             return None
         custom = getattr(self.model, "customization", None)
-        made = ears.rows_for(self._bound_rows[named["head"]], custom, adjust)
-        if made is None or made[0].shape != self._bound_rows[named["ears"]].shape:
+        made = models.rows_for(self._bound_rows[named["head"]], custom, adjust)
+        if made is None or made[0].shape != self._bound_rows[named[name]].shape:
             return None
-        return made[0] if not np.array_equal(made[0], self._bound_rows[named["ears"]]) else None
+        return made[0] if not np.array_equal(made[0], self._bound_rows[named[name]]) else None
 
     def _styled_nose(self, style, adjust):
         """Vertex rows of the nose in ``style`` with the adjustments of its parts, on the bound
@@ -732,8 +732,10 @@ class CharacterAnimator:
                  for name, (slot, which, lower) in body_shape.GARMENT_EDGES.items()
                  if slot in edges and body_shape.garment_shift(adjust, name)]
         # The ears in another style, or adjusted: every style has the same triangles, so they are moved in place.
-        eared = self._styled_ears(adjust)
-        warped = bulges or bool(loose) or nose or styled is not None or tinted or shaded or bool(moved) or eared is not None
+        from . import ears as ear_models, horns as horn_models
+        eared, horned = self._styled_part("ears", ear_models, adjust), self._styled_part("horns", horn_models, adjust)
+        warped = (bulges or bool(loose) or nose or styled is not None or tinted or shaded or bool(moved)
+                  or eared is not None or horned is not None)
         if warped or self._warped:
             surface = self._cage_binding[0]
             for k, (part, _, indices, weights) in enumerate(self._bindings):
@@ -742,6 +744,8 @@ class CharacterAnimator:
                     rows = styled.copy()
                 if eared is not None and part.name == "ears":
                     rows = eared.copy()
+                if horned is not None and part.name == "horns":
+                    rows = horned.copy()
                 if nose and part.name == "nose":
                     rows[:, :3] = body_shape.nose_shape(rows[:, :3], adjust)
                 for slot, edge, shift, lower in moved:
