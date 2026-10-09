@@ -32,6 +32,8 @@ TIGHT, MIN_FULL = 0.003, 0.010                                        # metres o
 FADE, FADE_FRONT, BLEND = 0.040, 0.006, 0.045                         # metres of fade above the hairline at the sides and the nape (hair cut to the skin), at the forehead (none: the volume starts at the line), then of passing to the volume
 TWISTS, TWIST_GAP, TWIST_FROM = 300, 0.0250, 0.72                     # how many at most, metres between them, and how full the hair must be to have them (the top)
 TWIST_LENGTH, TWIST_RADIUS = (0.020, 0.018), 0.0160                   # metres long (the least, and more where the hair is fullest) and wide
+SQUARE, TOP, SIDE = 3.4, 0.048, 0.009                                           # how square the volume is (2 a dome, more a flat top with round corners), and metres of it over the top of the head and beside it (little: the sides go up, not out)
+TWIST_ABOVE, TWIST_UP = 0.060, 0.80                                   # metres above the top of the fade for a twist to grow, and how much it stands up (the rest, out from the head)
 OPACITY = "opacidade"                                                 # the UV layer that says how solid each vertex is (its u: 0 clear, 1 solid)
 U_CLEAR, U_SOLID = 0.02, 0.98                                         # where clear and solid are on the texture the game makes
 
@@ -60,8 +62,8 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     tall = top - bottom
     face_y, back_y, half = pts[:, 1].min(), pts[:, 1].max(), np.abs(pts[:, 0]).max()
     centre = Vector((0.0, (face_y + back_y) / 2 + 0.0025, bottom + 0.656 * tall))
-    rx, rz_up, rz_down = half + 0.020, (top - centre.z) + 0.060, 0.150
-    ry_front, ry_back = (centre.y - face_y) + 0.032, (back_y - centre.y) + 0.032
+    rx, rz_up, rz_down = half + SIDE, (top - centre.z) + TOP, 0.150
+    ry_front, ry_back = (centre.y - face_y) + 0.032, (back_y - centre.y) + 0.022
     line = bottom + 0.500 * tall            # the hairline at the sides
 
     def direction(theta, phi):              # theta: 0 at the front (-y); phi: from straight up
@@ -75,7 +77,7 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     def r_full(d):
         ry = ry_front if d.y < 0 else ry_back
         rz = rz_up if d.z > 0 else rz_down
-        return 1.0 / math.sqrt((d.x / rx) ** 2 + (d.y / ry) ** 2 + (d.z / rz) ** 2)
+        return (abs(d.x / rx) ** SQUARE + abs(d.y / ry) ** SQUARE + abs(d.z / rz) ** SQUARE) ** (-1.0 / SQUARE)
 
     def z_low(theta):                       # level at the forehead, a step down at the temples, a taper at the nape
         c = math.cos(theta)
@@ -127,14 +129,15 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         theta = rng.uniform(0, 2 * math.pi)
         end = ends[int(theta / (2 * math.pi) * RINGS_ROUND) % RINGS_ROUND]
         p, d, full, _ = surface(theta, math.acos(1 - rng.uniform(0, 1) * (1 - math.cos(end))))
-        if full < TWIST_FROM:               # the sides and the nape are a fade: no twists there
+        low = z_low(theta) + FADE_FRONT + (FADE - FADE_FRONT) * (1.0 - max(math.cos(theta), 0.0) ** 1.2)
+        if full < TWIST_FROM or (p.z < low + TWIST_ABOVE and math.cos(theta) < 0.5):   # the sides and the nape are a fade: no twists there, nor just over it
             continue
         gap = TWIST_GAP * (0.80 + 0.20 * full)
         if any((p - q).length < gap for q, _, _ in spots):
             continue
         spots.append((p, d, full))
     for p, d, full in spots:
-        axis = (d * 0.62 + UP * 0.38 + Vector(rng.normal(0, 0.13, 3))).normalized()   # standing up more than out
+        axis = (d * (1.0 - TWIST_UP) + UP * TWIST_UP + Vector(rng.normal(0, 0.11, 3))).normalized()   # standing up more than out
         side = axis.cross(UP if abs(axis.z) < 0.9 else Vector((1, 0, 0))).normalized()
         other = axis.cross(side)
         length = (TWIST_LENGTH[0] + TWIST_LENGTH[1] * full) * rng.uniform(0.85, 1.2)
