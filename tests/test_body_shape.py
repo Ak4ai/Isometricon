@@ -854,3 +854,55 @@ def test_horns_and_the_vampire_s_mouth_are_chosen_by_command():
     custom.mouth_style = "smile"
     races.apply(custom, "humano")
     assert custom.resolved_mouth_style == "smile" and custom.horn_style == "sem"        # a mouth chosen by hand stays
+
+
+def test_every_tail_model_has_the_same_triangles_and_its_own_shape():
+    from src.clothing import tails
+    wanted = {"felino", "diabo", "tigre", "leao", "lobo", "raposa", "cachorro", "cavalo", "reptil", "dragao"}
+    assert wanted <= set(tails.STYLE_NAMES) and tails.STYLE_NAMES[0] == "sem"
+    root, skin, hair = (0.0, 0.9, -0.08), (0.9, 0.7, 0.6), (0.5, 0.3, 0.2)
+    assert tails.styled_rows(root, "sem") is None and tails.styled_rows(root, "de_pavao") is None
+    made = {name: tails.styled_rows(root, name, skin=skin, hair=hair)[0] for name in tails.TAIL_STYLES}
+    assert len({rows.shape for rows in made.values()}) == 1                             # moved in place from one model to another
+    main = lambda name: made[name][:tails.MAIN * 3]
+    for name, rows in made.items():
+        assert np.isfinite(rows).all() and np.allclose(np.linalg.norm(rows[:, 3:6], axis=1), 1.0, atol=1e-4), name
+        assert main(name)[:, 2].min() < root[2] - 0.03 and abs(main(name)[:, 0]).max() < 0.12, name   # out of the back, in the middle
+        assert main(name)[:, 2].max() > root[2], name                                   # its base inside the body
+    reach = lambda name: root[2] - main(name)[:, 2].min()
+    thick = lambda name: np.ptp(main(name)[:, 0])
+    assert reach("coelho") < 0.12 < reach("cachorro") < reach("dragao")                 # a ball of fluff; a short one; a long one
+    assert thick("raposa") > thick("lobo") > thick("felino") > thick("diabo") * 0.5
+    assert main("cavalo")[:, 1].min() < 0.6 and main("felino")[:, 1].max() > 1.0        # hanging down; curving up
+    assert main("cachorro")[:, 1].max() > 1.0
+    tones = lambda name: {tuple(np.round(c, 2)) for c in main(name)[:, 8:11].tolist()}
+    assert tuple(np.round(hair, 2)) in tones("felino") and tuple(np.round(skin, 2)) in tones("diabo")   # fur: the hair's; a devil's: the skin's
+    assert len(tones("tigre")) == 2 and max(max(t) for t in tones("raposa")) > 0.9      # orange and its dark rings; a white tip
+    assert tuple(np.round(hair, 2)) in tones("leao") and tuple(np.round(skin, 2)) in tones("leao")   # skin, with a tuft of hair
+    spikes = lambda name: made[name][tails.MAIN * 3:]
+    assert np.ptp(spikes("dragao")[:, :3], axis=0).max() > 0.1 and np.ptp(spikes("reptil")[:, :3], axis=0).max() < 1e-6   # spines on the dragon only
+    top = main("dragao")[:, 1].max()
+    assert spikes("dragao")[:, 1].max() > top - 0.02                                    # standing on top of it
+    white = tails.styled_rows(root, "lobo", skin=skin, hair=hair, coat=(1.0, 1.0, 1.0))[0]
+    assert white[:tails.MAIN * 3, 8:11].min() > 0.99                                    # or in a colour given
+    bigger = tails.styled_rows(root, "felino", {"cauda_tamanho": 1.0}, skin, hair)[0]
+    curlier = tails.styled_rows(root, "felino", {"cauda_curva": 1.0}, skin, hair)[0]
+    assert root[2] - bigger[:, 2].min() > reach("felino") and not np.allclose(curlier, made["felino"])
+    assert set(tails.ADJUSTMENTS) == set(body_shape.TAILS) <= set(body_shape.ADJUSTMENTS)
+
+
+def test_a_tail_is_chosen_by_command_and_comes_with_some_races():
+    from src.clothing import races
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: reloads.append(1), refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert custom.tail_style == "sem" and handler.execute("/skin cauda raposa")[0] and custom.tail_style == "raposa" and len(reloads) == 1
+    assert handler.execute("/skin cauda tigre")[0] and len(reloads) == 1                # another model: moved in place
+    assert handler.execute("/skin cauda cor pele alternar")[0] and custom.tail_color == "pele"
+    assert handler.execute("/skin cauda cor pele alternar")[0] and custom.tail_color == ""
+    assert handler.execute("/skin cauda cor branco")[0] and custom.tail_color == "branco" and len(reloads) == 1
+    assert not handler.execute("/skin cauda cor fluorescente")[0] and not handler.execute("/skin cauda de_pavao")[0]
+    assert handler.execute("/skin cauda sem")[0] and custom.tail_style == "sem" and len(reloads) == 2
+    for name, tail in (("felino", "felino"), ("demonio", "diabo"), ("draconato", "dragao"), ("humano", "sem"), ("elfo", "sem")):
+        races.apply(custom, name)
+        assert custom.tail_style == tail, name

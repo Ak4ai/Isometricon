@@ -37,7 +37,7 @@ que estava antes (`CharacterEditor.focus`, tratado no laço principal).
 
 | Seção | Opções | Comando |
 |---|---|---|
-| Corpo | raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
+| Corpo | cauda (onze modelos, cor e ajustes); raças (corpos prontos, em cartões); feminino/masculino, tom de pele, formato da cabeça, vitiligo (quantidade e desenho das manchas) | `/skin corpo`, `/skin cauda`, `/skin raca`, `/skin pele`, `/skin cabeca`, `/skin ajuste vitiligo` |
 | Ajustes | altura, cabeça, pescoço; ombros, peito, cintura, pelve, quadril, bunda; comprimento e grossura dos braços, mãos; comprimento e grossura das pernas, pés; folga das roupas | `/skin ajuste <nome> <-100 a 100>` |
 | Olhos | estilo, formato e cor dos olhos (os dois ou cada um); tamanho, altura e distância dos olhos | `/skin olhos`, `/skin olho`, `/skin ajuste` |
 | Rosto | boca e sobrancelhas; tamanho, altura e distância das sobrancelhas, que não acompanham os olhos; orelhas 3D e chifres 3D, com cor e ajustes | `/skin boca`, `/skin sobrancelha`, `/skin orelha`, `/skin chifre`, `/skin ajuste` |
@@ -134,7 +134,8 @@ corpo feminino ou masculino em uso. Depois de aplicada, tudo continua ajustável
 | Draconato | vermelho-escura | dragão | alto e largo, nariz achatado |
 | Reptiliano | verde | réptil | pescoço longo, olhos afastados, sem nariz |
 
-- O demônio e o draconato vêm com chifres, e o vampiro com a boca de presas (que sai ao trocar de raça).
+- O demônio e o draconato vêm com chifres, e o vampiro com a boca de presas (que sai ao trocar de raça). Vêm com
+  cauda o demônio, o felino, o lupino, a kitsune, o coelho, o draconato e o reptiliano.
 - Cada raça dá a cor da pele, o modelo de orelha, a cor dos olhos, o formato do nariz (ou nenhum) e os ajustes de
   proporção (`Race`). Escolher outra raça tira os ajustes que uma raça decide (`RACE_ADJUSTMENTS`: as proporções do
   corpo, as orelhas, o tamanho e a posição dos olhos) e mantém o resto: maquiagem, bordas das roupas, detalhes do
@@ -220,6 +221,39 @@ Opcionais, como as orelhas (`/skin chifre <modelo>`, grupo "Chifres" na seção 
   (`HORN_COLORS`) ou qualquer outra pelo chat. **Ajustes** (`body_shape.HORNS`): tamanho e curva.
 - Ficam presos à cabeça e giram com ela; não há nada que os ajuste ao cabelo. Um modelo novo é uma entrada em
   `HORN_STYLES`.
+
+## 🐾 Caudas
+
+Opcionais (`/skin cauda <modelo>`, grupo "Cauda" na seção Corpo, "sem" por padrão), geradas em
+`src/clothing/tails.py`:
+
+| Modelo | Como é |
+|---|---|
+| `felino` | longa, fina e igual, curvando para cima |
+| `diabo` | um chicote fino da cor da pele, com a seta na ponta |
+| `tigre` | longa e grossa, laranja com anéis escuros (tigre, onça) |
+| `leao` | fina, da cor da pele, com um tufo de cabelo na ponta |
+| `lobo` | cheia, caída |
+| `raposa` | muito cheia, com a ponta branca |
+| `cachorro` | mais curta, enrolada para cima |
+| `cavalo` | um feixe longo de cabelo, caído |
+| `coelho` | uma bolinha de pelo branca |
+| `reptil` | grossa na base, afinando até a ponta, em escamas |
+| `dragao` | a mesma, maior, com espinhos em cima |
+
+- A cauda (`Tail`) é uma linha que sai para trás (`rise`) e muda de direção ao longo do comprimento (`curl`), com
+  quinze anéis de oito lados cujo raio segue um perfil (`profile`): é o perfil que faz o tufo do leão, a seta do
+  diabo (achatada dos lados, `flat`) e o volume do lobo e da raposa. A cor vem em faixas (`bands`: a ponta branca,
+  o tufo de cabelo), listras em volta (`stripes`) ou escamas (`scaly`). Os espinhos do dragão são pontas de quatro
+  lados em cima dela (`spikes`).
+- Sai do meio da base das costas (`CharacterModel._tail_root`: atrás da pelve, um pouco abaixo do topo dela), presa
+  ao osso da pelve: acompanha o corpo, mas não balança ao andar. Ela atravessa a roupa: não há furo na calça nem
+  nada que a esconda sob uma saia.
+- **Cor** (`/skin cauda cor <auto|pele|cabelo|nome|#rrggbb>`): a do modelo (a do cabelo nas de pelo, a da pele nas
+  outras, cores próprias no tigre e no coelho), ou as mesmas opções das orelhas. **Ajustes** (`body_shape.TAILS`):
+  tamanho e curva.
+- Todos os modelos têm os mesmos triângulos: trocar de modelo, de cor ou mexer num ajuste só move os vértices. Só
+  pôr ou tirar a cauda reconstrói o personagem. Um modelo novo é uma entrada em `TAIL_STYLES`.
 
 ## 🖌️ Ajuste fino: a pele sob a roupa
 

@@ -21,9 +21,10 @@ import time
 import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, HORNS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.body_shape import BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, HORNS, TAILS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
 from src.clothing.ears import EAR_COLORS
 from src.clothing.horns import HORN_COLORS, STYLE_NAMES as HORN_STYLE_NAMES
+from src.clothing.tails import STYLE_NAMES as TAIL_STYLE_NAMES
 from src.clothing.races import RACES
 from src.clothing.customization import MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, MODELS_DIR, SKIN_PRESETS
@@ -282,6 +283,18 @@ class CharacterEditor:
                     Option(race.label, f"/skin raca {name}", image=self._race_picture(name),
                            selected=lambda m, name=name: custom() is not None and getattr(custom(), "race", "") == name)
                     for name, race in RACES.items()]),
+                Group("Cauda", [Option("Sem cauda" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin cauda {n}",
+                                       selected=lambda m, n=n: custom() is not None and getattr(custom(), "tail_style", "sem") == n)
+                                for n in TAIL_STYLE_NAMES]),
+                Group("Cor da cauda", [
+                    Option("Cor da pele", "/skin cauda cor pele alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "tail_color", "") == "pele"),
+                    Option("Cor do cabelo", "/skin cauda cor cabelo alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "tail_color", "") == "cabelo")]
+                    + [Option(n.capitalize(), f"/skin cauda cor {n}", color=EAR_COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "tail_color", "") == n)
+                       for n in EAR_COLORS]),
+                Group("Ajustes da cauda", [Option(label, "", slider=name) for name, label in TAILS.items()]),
                 Group("Tom de pele", [Option(n.capitalize(), f"/skin pele {n}", color=tone_rgb(n),
                                              selected=lambda m, n=n: custom() is not None and all(
                                                  abs(a - b) < 0.02 for a, b in zip(custom().skin_color_rgb, SKIN_PRESETS[SKIN_TONES[n]])))
