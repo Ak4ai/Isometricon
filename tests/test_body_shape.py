@@ -1006,3 +1006,38 @@ def test_underwear_is_chosen_by_command_without_rebuilding_anything():
     assert handler.execute("/skin intima sem")[0] and handler.execute("/skin intima sim")[0] and custom.underwear == "preto"
     assert handler.execute("/skin intima #aabbcc")[0] and not handler.execute("/skin intima fluorescente")[0]
     assert custom.underwear == "#aabbcc" and reloads == []                                  # paint: nothing is rebuilt
+
+
+@pytest.mark.parametrize("body", ["male", "female"])
+def test_the_handmade_nudred_hair_is_a_hair_the_game_can_wear(body):
+    import os
+    from src.clothing.character_model import BODY_MESHES, HANDMADE_HAIR, MODELS_DIR, find_clothing_texture, parse_clean_obj_groups
+    from src.clothing.wear_engine import hair_fitted_path
+    path = hair_fitted_path(HANDMADE_HAIR["nudred"], body)
+    assert os.path.exists(path)
+    assert find_clothing_texture(HANDMADE_HAIR["nudred"]) is None                           # no texture: the character's hair colour
+    lines = open(path, encoding="utf-8").read().splitlines()
+    assert lines[0].startswith("# Isometricon Native Fitted Hair: ")
+    counts = {tag: sum(line.startswith(tag + " ") for line in lines) for tag in ("v", "vt", "f")}
+    assert counts["v"] == counts["vt"] > 5000 and counts["f"] > 10000
+    assert all(len(line.split()) == 4 for line in lines if line.startswith("f "))            # triangles
+    hair = parse_clean_obj_groups(path, [""])[0].reshape(-1, 11)[:, :3]
+    head = parse_clean_obj_groups(os.path.join(MODELS_DIR, BODY_MESHES[body]), ["Export_cabeca"])[0].reshape(-1, 11)[:, :3]
+    top, tall = head[:, 1].max(), float(np.ptp(head[:, 1]))
+    assert top + 0.05 < hair[:, 1].max() < top + 0.12                                        # a full top, over the head
+    assert hair[:, 1].min() > head[:, 1].min() + 0.35 * tall                                 # cut short at the sides and the nape
+    assert abs(hair[:, 0]).max() < abs(head[:, 0]).max() + 0.06 and abs(hair[:, 0].mean()) < 0.01
+    assert hair[:, 2].max() > head[:, 2].max() and hair[:, 2].min() < head[:, 2].min()        # over the forehead and the back of the head
+
+
+def test_a_handmade_hair_is_chosen_by_name_without_a_download():
+    from src.clothing.character_model import HANDMADE_HAIR
+    worn = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: None, refresh_face=lambda: True,
+                            update_customization=lambda **fields: worn.append(fields), hair_id=None)
+    handler = SkinCommandHandler(character_model=model)
+    handler._wear = lambda args: (_ for _ in ()).throw(AssertionError("nothing to download"))
+    assert handler.execute("/skin cabelo nudred")[0] and worn[-1] == {"hair_id": HANDMADE_HAIR["nudred"]}
+    assert handler.execute(f"/skin cabelo {HANDMADE_HAIR['nudred']}")[0] and len(worn) == 2    # by its id too
+    from src.interactive.skin_commands import item_name
+    assert item_name(HANDMADE_HAIR["nudred"]).startswith("Nudred")
