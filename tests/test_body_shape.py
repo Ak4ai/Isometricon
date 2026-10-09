@@ -1028,6 +1028,24 @@ def test_the_handmade_nudred_hair_is_a_hair_the_game_can_wear(body):
     assert hair[:, 1].min() > head[:, 1].min() + 0.35 * tall                                 # cut short at the sides and the nape
     assert abs(hair[:, 0]).max() < abs(head[:, 0]).max() + 0.06 and abs(hair[:, 0].mean()) < 0.01
     assert hair[:, 2].max() > head[:, 2].max() and hair[:, 2].min() < head[:, 2].min()        # over the forehead and the back of the head
+    # It is fitted to the head the game draws: at its hairline it is on the skin, not round it as a helmet.
+    low = hair[hair[:, 1] < hair[:, 1].min() + 0.03]
+    assert abs(low[:, 0]).max() < abs(head[:, 0]).max() + 0.006
+    # Its texture coordinate says how solid it is: clear at the hairline of the sides and the nape, solid on top.
+    solid = np.array([float(line.split()[1]) for line in lines if line.startswith("vt ")])
+    height = np.array([float(line.split()[2]) for line in lines if line.startswith("v ")])
+    assert solid.min() < 0.05 and solid.max() > 0.95
+    assert solid[height > top].min() > 0.95
+    assert solid[np.argmin(height)] < 0.3
+
+
+def test_a_fading_hair_has_a_texture_from_clear_to_solid():
+    from src.clothing.character_model import FADE_U, fade_texture
+    pixels = np.asarray(fade_texture((10, 20, 30), width=100))
+    assert pixels.shape[1] == 100 and (pixels[:, :, :3] == (10, 20, 30)).all()                # the colour all across: no dark fringe
+    alpha = pixels[0, :, 3].astype(int)
+    assert alpha[0] == 0 and alpha[-1] == 255 and (np.diff(alpha) >= 0).all()
+    assert abs(alpha[50] - 128) < 4 and FADE_U == (0.02, 0.98)                               # as the script in Blender writes it
 
 
 def test_a_handmade_hair_is_chosen_by_name_without_a_download():

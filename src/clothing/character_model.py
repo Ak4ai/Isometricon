@@ -769,6 +769,19 @@ def create_solid_texture(color_rgb_255: Tuple[int, int, int], alpha: int = 255) 
     return upload_texture_rgba(img)
 
 
+FADE_U = (0.02, 0.98)  # where a faded hair's texture is clear and where it is solid, across it
+
+
+def fade_texture(color_rgb_255: Tuple[int, int, int], width: int = 256) -> Image.Image:
+    """One colour from clear (at the left) to solid (at the right): the texture of a hair that fades."""
+    across = (np.arange(width) + 0.5) / width
+    alpha = np.clip((across - FADE_U[0]) / (FADE_U[1] - FADE_U[0]), 0.0, 1.0)
+    pixels = np.zeros((4, width, 4), dtype=np.uint8)
+    pixels[:, :, :3] = color_rgb_255
+    pixels[:, :, 3] = np.round(alpha * 255)
+    return Image.fromarray(pixels, "RGBA")
+
+
 def find_clothing_texture(asset_id: Union[int, str]) -> Optional[str]:
     """Localiza a textura PNG de uma peça de roupa a partir do seu ID numérico."""
     id_str = str(asset_id)
@@ -891,6 +904,7 @@ class CharacterModel:
         self.hair_scale_z: float = float(hair_scale_z) if hair_scale_z is not None else float(getattr(self.customization, "hair_scale_z", 1.0))
 
         self.parts: List[CharacterPart] = []
+        self.hair_fades = False  # the hair is blended over what is behind it (a hair made by hand, clear at its fade)
         self.hsr_edit = False  # the skin's mask is being edited: all the skin, painted by its state, and clear clothes
         self._edges: Dict[str, Any] = {}  # where the hem and the waist of the top and the pants are (garment_edges)
         self.textures: List[int] = []
@@ -1571,11 +1585,15 @@ class CharacterModel:
             hair_data = parse_clean_obj_groups(self.customization.custom_hair_obj, [""], vertex_transform=hair_custom_tf)
             if hair_data:
                 hair_tex_path = getattr(self.customization, "custom_hair_tex", None)
+                self.hair_fades = False
                 if hair_tex_path and os.path.exists(hair_tex_path):
                     hair_tex_id = upload_texture_rgba(Image.open(hair_tex_path))
                 else:
                     hair_rgb = getattr(self.customization, "hair_rgb_255", (92, 62, 54))
-                    hair_tex_id = create_solid_texture(hair_rgb)
+                    # A hair made by hand says in its texture coordinate how solid it is at each
+                    # vertex: its texture is the hair's colour from clear to solid, and it is blended.
+                    self.hair_fades = str(self.hair_id) in HANDMADE_HAIR.values()
+                    hair_tex_id = upload_texture_rgba(fade_texture(hair_rgb)) if self.hair_fades else create_solid_texture(hair_rgb)
                 self.textures.append(hair_tex_id)
                 mesh = TexturedMesh(hair_data[0], hair_data[1])
                 self.parts.append(CharacterPart("hair_3d", mesh, hair_tex_id))
@@ -1850,7 +1868,10 @@ class CharacterModel:
             if top is not None:
                 shader.set_vec4("u_UnderTop", top[:4])
                 shader.set_float("u_UnderShoulder", top[4])
-        parts = sorted(self.parts, key=see_through) if edit or wing_alpha < 1.0 else self.parts
+        # A fading hair is drawn after all that is solid (the skin shows through its fade), before what is clear.
+        fading = lambda part: part.name == "hair_3d" and getattr(self, "hair_fades", False)
+        last = lambda part: 2 if see_through(part) else 1 if fading(part) else 0
+        parts = sorted(self.parts, key=last) if edit or wing_alpha < 1.0 or getattr(self, "hair_fades", False) else self.parts
         for part in parts:
             part_model = base_model if part.transform is None else base_model @ part.transform
             shader.set_mat4("u_Model", part_model)
@@ -1860,6 +1881,13 @@ class CharacterModel:
                            if under is not None and part.name.startswith(UNDERWEAR_PARTS) else 0)
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, part.texture_id)
+            if fading(part):
+                # A fading hair: blended, but written to the depth as it is drawn (it is one thin layer where it fades).
+                gl.glEnable(gl.GL_BLEND)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                part.mesh.draw()
+                gl.glDisable(gl.GL_BLEND)
+                continue
             clear = see_through(part)
             if clear:
                 gl.glEnable(gl.GL_BLEND)
@@ -2021,7 +2049,7 @@ class CharacterModel:
                 self._hide_feet = getattr(builder, "_hide_feet", False)
                 # What the build found out about itself, which the corrections made without rebuilding
                 # go by: the mask of hidden skin, the edges of the clothes, the style of the nose's mesh.
-                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style", "tail_root", "wing_root"):
+                for name in ("hsr_cage", "hsr_hidden", "hsr_skin", "_hsr_call", "_edges", "built_nose_style", "tail_root", "wing_root", "hair_fades"):
                     if hasattr(builder, name):
                         setattr(self, name, getattr(builder, name))
         if not self._dirty:
