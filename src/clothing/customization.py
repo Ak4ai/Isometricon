@@ -154,6 +154,55 @@ IRIS_PALETTES: Dict[str, Tuple[int, int, int]] = {
 }
 
 
+# The iris in the drawn eyes (which are blue): the hues it is of and the least saturation it has (the shadow on the
+# white of the eye is of the same hue, but nearly grey), the fewest pixels of a patch of it (smaller are specks at
+# an edge), the darkest and the lightest it is drawn, the share of that range painted in shades of the colour
+# (above it the colour goes towards white: the light of the eye), the darkest shade and how far towards white.
+IRIS_HUES, IRIS_SATURATION, IRIS_PATCH = (0.48, 0.70), 0.22, 12
+IRIS_VALUES, IRIS_SHADES, IRIS_DARKEST, IRIS_LIGHT = (0.24, 0.85), 0.70, 0.30, 0.45
+
+
+def iris_mask(pixels: np.ndarray) -> np.ndarray:
+    """Which pixels of the eyes' drawing (RGBA) are the iris: the blue ones, in patches and not specks."""
+    rgb = pixels[:, :, :3].astype(float) / 255.0
+    high, low = rgb.max(axis=2), rgb.min(axis=2)
+    spread = high - low
+    saturation = np.where(high > 0, spread / np.maximum(high, 1e-6), 0.0)
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    safe = np.maximum(spread, 1e-6)
+    hue = np.where(high == r, ((g - b) / safe) % 6.0, np.where(high == g, (b - r) / safe + 2.0, (r - g) / safe + 4.0)) / 6.0
+    mask = (pixels[:, :, 3] > 0) & (saturation > IRIS_SATURATION) & (hue >= IRIS_HUES[0]) & (hue <= IRIS_HUES[1])
+    try:
+        from scipy import ndimage
+        patches, count = ndimage.label(mask)
+        sizes = ndimage.sum(mask, patches, index=np.arange(1, count + 1))
+        mask = np.isin(patches, 1 + np.nonzero(sizes >= IRIS_PATCH)[0])
+    except ImportError:
+        pass
+    return mask
+
+
+def tint_iris(pixels: np.ndarray, first_rgb: Tuple[int, int, int], other_rgb: Tuple[int, int, int]) -> np.ndarray:
+    """The eyes' drawing with each iris in its colour (the eye at the left of the drawing in the first). The
+    drawing's light and dark are kept, whatever the colour: its dark parts are shades of the colour, and its
+    lightest go from the colour towards white."""
+    out = pixels.copy()
+    mask = iris_mask(pixels)
+    columns = np.nonzero(mask.any(axis=0))[0]
+    middle = (int(columns.min()) + int(columns.max())) // 2 if len(columns) else pixels.shape[1] // 2
+    first = np.arange(pixels.shape[1])[None, :] <= middle
+    value = pixels[:, :, :3].max(axis=2).astype(float) / 255.0
+    light = np.clip((value - IRIS_VALUES[0]) / (IRIS_VALUES[1] - IRIS_VALUES[0]), 0.0, 1.0)
+    shade = IRIS_DARKEST + (1.0 - IRIS_DARKEST) * np.clip(light / IRIS_SHADES, 0.0, 1.0)
+    white = IRIS_LIGHT * np.clip((light - IRIS_SHADES) / (1.0 - IRIS_SHADES), 0.0, 1.0)
+    for half, colour in ((first, first_rgb), (~first, other_rgb)):
+        tinted = mask & half
+        for channel in range(3):
+            painted = colour[channel] * shade[tinted]
+            out[tinted, channel] = np.clip(painted + (255.0 - painted) * white[tinted], 0, 255).astype(np.uint8)
+    return out
+
+
 def parse_iris_colour(value: Any) -> Optional[Tuple[int, int, int]]:
     """The colour of an iris from what the character keeps: one of IrisColor, a name of IRIS_PALETTES,
     "#rrggbb", "r,g,b" or three numbers; None when it is none of them."""
@@ -760,20 +809,7 @@ class LayeredHeadCompositor:
                     eye_img = self._load_layer("layer_eyes_anime_blue.png")
 
                 if eye_img is not None:
-                    arr_e = np.array(eye_img)
-                    is_iris = (arr_e[:, :, 3] > 0) & (
-                        (arr_e[:, :, 2].astype(int) - arr_e[:, :, 0].astype(int) > 15) & (arr_e[:, :, 2] > 80)
-                    )
-                    # Each eye takes its own colour: the layer is split between the two eyes.
-                    columns = np.nonzero(is_iris.any(axis=0))[0]
-                    middle = (int(columns.min()) + int(columns.max())) // 2 if len(columns) else arr_e.shape[1] // 2
-                    first = np.arange(arr_e.shape[1])[None, :] <= middle
-                    for half, iris_rgb in ((first, cust.resolved_iris_color), (~first, cust.resolved_iris_color_other)):
-                        tinted = is_iris & half
-                        intensity = np.clip((arr_e[tinted, 2].astype(float) - 50.0) / 190.0, 0.0, 1.0)
-                        for ch in range(3):
-                            arr_e[tinted, ch] = np.clip(iris_rgb[ch] * (0.35 + 0.95 * intensity), 0, 255).astype(np.uint8)
-
+                    arr_e = tint_iris(np.array(eye_img), cust.resolved_iris_color, cust.resolved_iris_color_other)
                     eye_img = Image.fromarray(arr_e)
 
             if eye_img is not None and eye_style != "classic":

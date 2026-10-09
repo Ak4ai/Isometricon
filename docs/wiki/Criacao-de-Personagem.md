@@ -125,6 +125,18 @@ batom, sombra, blush) tem embaixo dele um **seletor de qualquer cor** ("<grupo>:
   matiz, saturação e brilho dos dois e de cada um (`/skin ajuste olhos_matiz`, `olho_direito_brilho`…), que voltam a 0
   quando uma cor nova é escolhida.
 
+### Como a íris é pintada
+
+Os olhos são um desenho só, azul; a cor escolhida é posta na íris dele (`customization.iris_mask`, `tint_iris`):
+
+- **O recorte:** a íris são os pixels de matiz azul e com saturação (`IRIS_HUES`, `IRIS_SATURATION`), em manchas de
+  pelo menos `IRIS_PATCH` pixels. A sombra no branco do olho tem o mesmo matiz mas é quase cinza, e fica de fora; antes
+  o recorte era "mais azul do que vermelho", pegava essa sombra (respingos de cor no branco) e deixava de fora o
+  contorno escuro da íris (que continuava azul).
+- **A cor:** o claro e o escuro do desenho são mantidos em qualquer cor: as partes escuras são tons da cor
+  (`IRIS_DARKEST`), e as mais claras vão da cor para o branco (`IRIS_LIGHT`), a luz do olho. Antes a cor era só
+  multiplicada, e o brilho de baixo virava uma mancha chapada.
+
 ## ✂️ Cabelo raspado
 
 O estilo "Raspado" (`HairStyle.BUZZ_CUT`) era uma pintura no couro cabeludo que nunca chegava à cabeça: o personagem
