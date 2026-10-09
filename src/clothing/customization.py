@@ -837,6 +837,7 @@ class LayeredHeadCompositor:
         # 4. OLHOS & TINGIMENTO DA ÍRIS (Eyes & Iris Tint)
         # ---------------------------------------------------------
         eye_style = cust.resolved_eye_style
+        eye_parts = None  # what each pixel of the eyes' drawing is (eye_shapes.eye_kinds), when it is known
         if eye_style not in ("blank", "none"):
             if eye_style == "classic":
                 eye_img = self._load_layer("eyes/eye_classic.png")
@@ -849,12 +850,20 @@ class LayeredHeadCompositor:
                     eye_img = self._load_layer("layer_eyes_anime_blue.png")
 
                 if eye_img is not None:
-                    arr_e = tint_iris(np.array(eye_img), cust.resolved_iris_color, cust.resolved_iris_color_other)
+                    drawn = np.array(eye_img)
+                    # What is lash and what is eyeball, told from the drawing as it was made: the shapes are
+                    # cut by it, whatever colour the iris is painted (a dark one is not a lash).
+                    from .eye_shapes import eye_kinds
+                    iris = iris_mask(drawn)
+                    for patch, _ in iris_shines(drawn, iris):
+                        iris = iris | patch
+                    eye_parts = eye_kinds(drawn, iris)
+                    arr_e = tint_iris(drawn, cust.resolved_iris_color, cust.resolved_iris_color_other)
                     eye_img = Image.fromarray(arr_e)
 
             if eye_img is not None and eye_style != "classic":
                 from .eye_shapes import shape_eyes
-                eye_img = shape_eyes(eye_img, getattr(cust, "eye_shape", "padrao"))
+                eye_img = shape_eyes(eye_img, getattr(cust, "eye_shape", "padrao"), eye_parts)
             if eye_img is not None:
                 placed = place_face_layer(
                     eye_img, 1.0 + EYE_SIZE * cust.face_adjust("olhos_tamanho"), EYE_LIFT * cust.face_adjust("olhos_altura"),
