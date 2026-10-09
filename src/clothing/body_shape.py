@@ -72,13 +72,17 @@ MAKEUP_SLIDERS = {item: tuple((f"{item}_{name}", label) for name, label in contr
                   for item, controls in MAKEUP_ITEMS.items()}
 MAKEUP = {name: f"{item.capitalize()}: {label[0].lower()}{label[1:]}" for item, sliders in MAKEUP_SLIDERS.items()
           for name, label in sliders}
+# The colour of the eyes moved from the one chosen: of both, and of each on top of that.
+EYE_TONES = {"olhos": "Cor dos olhos", "olho_direito": "Olho direito", "olho_esquerdo": "Olho esquerdo"}
+EYE_SLIDERS = {eye: tuple((f"{eye}_{name}", label) for name, label in TONES) for eye in EYE_TONES}
+EYE_COLOUR = {name: f"{EYE_TONES[eye]}: {label[5:]}" for eye, sliders in EYE_SLIDERS.items() for name, label in sliders}
 EARS = {"orelha_tamanho": "Tamanho das orelhas", "orelha_altura": "Altura das orelhas",
         "orelha_abertura": "Abertura das orelhas", "orelha_matiz": "Cor: matiz", "orelha_saturacao": "Cor: saturação",
         "orelha_brilho": "Cor: brilho"}
 HORNS = {"chifre_tamanho": "Tamanho dos chifres", "chifre_curva": "Curva dos chifres"}
 TAILS = {"cauda_tamanho": "Tamanho da cauda", "cauda_curva": "Curva da cauda"}
 WINGS = {"asa_tamanho": "Tamanho das asas", "asa_abertura": "Abertura das asas"}
-ADJUSTMENTS = {**BODY, **FACE, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS, **HORNS, **TAILS, **WINGS}
+ADJUSTMENTS = {**BODY, **FACE, **EYE_COLOUR, **NOSE, **SKIN, **SHADING, **GARMENTS, **MAKEUP, **EARS, **HORNS, **TAILS, **WINGS}
 # What an adjustment is on a body when it was never set: the female face has no shading under it.
 DEFAULTS = {"female": {"rosto_sombra": -1.0}}
 
@@ -87,7 +91,7 @@ def resolved(adjust: Optional[Mapping[str, float]], body: str) -> Dict[str, floa
     """Os ajustes como valem num corpo: os que foram dados e, para os outros, o padrão desse corpo."""
     return {**DEFAULTS.get(str(body).lower(), {}), **(adjust or {})}
 # The adjustments drawn on the head's texture (the nose's shadow follows its size and place).
-REDRAWS_FACE = set(FACE) | set(SHADING) | set(MAKEUP) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
+REDRAWS_FACE = set(FACE) | set(EYE_COLOUR) | set(SHADING) | set(MAKEUP) | {"nariz_tamanho", "nariz_largura", "nariz_altura", "nariz_sombra"}
 # With the shadow computed from the nose (customization.nose_shadow), every adjustment of the nose redraws it.
 REDRAWS_SHADOW = set(NOSE)
 

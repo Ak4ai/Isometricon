@@ -48,7 +48,37 @@ KATANA_ID = 12187348
 
 # Valores aceitos (português primeiro; o inglês do próprio enum também vale).
 EYE_COLORS = {"azul": IrisColor.BLUE, "verde": IrisColor.GREEN, "castanho": IrisColor.BROWN, "roxo": IrisColor.PURPLE,
-              "vermelho": IrisColor.RED, "dourado": IrisColor.GOLD, "ciano": IrisColor.CYAN}
+              "vermelho": IrisColor.RED, "dourado": IrisColor.GOLD, "ciano": IrisColor.CYAN,
+              "rosa": "rosa", "laranja": "laranja", "ambar": "ambar", "turquesa": "turquesa", "lilas": "lilas",
+              "cinza": "cinza", "branco": "branco", "preto": "preto"}
+
+
+def eye_colour(words: List[str]):
+    """The colour of an eye from the words of a command: a name, "#rrggbb" or "r,g,b" (which may come in
+    pieces); None when it is none. A colour of its own is kept as "#rrggbb"."""
+    from src.clothing.customization import parse_iris_colour
+    text = "".join(words).lower()
+    if not text:
+        return None
+    named = EYE_COLORS.get(text) or _english(IrisColor).get(text)
+    if named is not None:
+        return named
+    rgb = parse_iris_colour(text) if text.startswith("#") or "," in text else None
+    return "#%02x%02x%02x" % rgb if rgb is not None else None
+
+
+def free_colour(words: List[str]) -> Optional[Tuple[int, int, int]]:
+    """A colour written as "#rrggbb" or "r,g,b" (which may come in pieces), or None."""
+    from src.clothing.customization import parse_makeup_colour
+    text = "".join(words).lower()
+    return parse_makeup_colour(text) if text.startswith("#") or "," in text else None
+
+
+def reset_eye_tones(custom, *eyes: str) -> None:
+    """A colour newly chosen is the one shown: the adjustments that moved the old one go back to 0."""
+    custom.body_adjust = {name: value for name, value in (custom.body_adjust or {}).items()
+                          if not name.startswith(tuple(f"{eye}_" for eye in eyes))
+                          or name.split("_")[-1] not in ("matiz", "saturacao", "brilho")}
 EYE_STYLES = {"anime": EyeStyle.ANIME, "piscando": EyeStyle.ANIME_WINK, "classico": EyeStyle.CLASSIC,
               "sem": EyeStyle.BLANK, "wink": EyeStyle.ANIME_WINK, "classic": EyeStyle.CLASSIC, "blank": EyeStyle.BLANK}
 MOUTHS = {"anime": MouthStyle.ANIME_ORIGINAL, "sorriso": MouthStyle.SMILE, "aberta": MouthStyle.OPEN,
@@ -272,8 +302,12 @@ class SkinCommandHandler:
     def tone(self, args: List[str]) -> Result:
         value = args[0].lower() if args else ""
         tone = SKIN_TONES.get(value, value)
+        own = free_colour(args)
+        if own is not None:  # a tone of its own
+            self._change(lambda c: setattr(c, "skin_color_rgb", tuple(round((v + 0.25) / 255.0, 5) for v in own)))  # read back cut to whole numbers
+            return True, "[Skin] Tom de pele: #%02x%02x%02x." % own, GREEN
         if tone not in SKIN_PRESETS:
-            return False, f"Uso: /skin pele <{'|'.join(SKIN_TONES)}>", GOLD
+            return False, f"Uso: /skin pele <{'|'.join(SKIN_TONES)}|#rrggbb|r,g,b>", GOLD
         self._change(lambda c: setattr(c, "skin_color_rgb", SKIN_PRESETS[tone]))
         return True, f"[Skin] Tom de pele: {value}.", GREEN
 
@@ -292,14 +326,18 @@ class SkinCommandHandler:
         if value in EYE_STYLES:
             self._change(lambda c: setattr(c, "eye_style", EYE_STYLES[value]), face=True)
             return True, f"[Skin] Olhos: estilo {value}.", GREEN
-        color = EYE_COLORS.get(value) or _english(IrisColor).get(value)
+        if value in ("cor", "color") and len(args) > 1:
+            args = args[1:]
+        color = eye_colour(args)
+        value = "".join(args).lower()
         if color is None:
-            return False, (f"Uso: /skin olhos <cor: {', '.join(EYE_COLORS)} | estilo: anime, piscando, classico, sem | "
+            return False, (f"Uso: /skin olhos <cor: {', '.join(EYE_COLORS)}, #rrggbb ou r,g,b | estilo: anime, piscando, classico, sem | "
                            f"formato: {', '.join(SHAPE_NAMES)}>"), GOLD
 
         def apply(c):
             c.iris_color = color
             c.iris_color_other = None  # os dois olhos da mesma cor
+            reset_eye_tones(c, "olhos", "olho_direito", "olho_esquerdo")
             if c.resolved_eye_style in ("classic", "blank"):
                 c.eye_style = EyeStyle.ANIME  # a cor só aparece nos olhos anime
         self._change(apply, face=True)
@@ -311,20 +349,21 @@ class SkinCommandHandler:
         if missing:
             return missing
         side = args[0].lower() if args else ""
-        color = EYE_COLORS.get(args[1].lower()) if len(args) > 1 else None
+        color = eye_colour(args[1:])
         if side not in ("direito", "esquerdo") or color is None:
-            return False, f"[Erro] Uso: /skin olho <direito|esquerdo> <{'|'.join(EYE_COLORS)}>", RED
+            return False, f"[Erro] Uso: /skin olho <direito|esquerdo> <{'|'.join(EYE_COLORS)}|#rrggbb|r,g,b>", RED
 
         def apply(c):
+            base = c.iris_color if c.iris_color is not None else "#%02x%02x%02x" % c._iris_base
             if c.iris_color_other is None:
-                c.iris_color_other = c.iris_color if c.iris_color is not None else c.resolved_iris_color
-            if c.iris_color is None:
-                c.iris_color = c.resolved_iris_color
+                c.iris_color_other = base
+            c.iris_color = base
             setattr(c, "iris_color" if side == "direito" else "iris_color_other", color)
+            reset_eye_tones(c, f"olho_{side}")
             if c.resolved_eye_style in ("classic", "blank"):
                 c.eye_style = EyeStyle.ANIME
         self._change(apply, face=True)
-        return True, f"[Skin] Olho {side}: {args[1].lower()}.", GREEN
+        return True, f"[Skin] Olho {side}: {''.join(args[1:]).lower()}.", GREEN
 
     def makeup(self, args: List[str]) -> Result:
         """/skin maquiagem <batom|sombra|blush> <cor|#rrggbb|sem> | contorno <suave|marcado|sem> | sardas <sim|nao> | sem"""
@@ -429,7 +468,7 @@ class SkinCommandHandler:
             m.update_customization(hair_id=str(DEFAULT_HAIR_ID))
             self._change(lambda c: setattr(c, "hair_style", HairStyle.ANIME_LONG))
             return True, "[Cabelo] Cabelo padrão.", GREEN
-        color = HAIR_COLORS.get(value) or _english(HairColor).get(value)
+        color = HAIR_COLORS.get(value) or _english(HairColor).get(value) or free_colour(args)  # or one of its own, kept as three numbers
         if color is None:
             return False, f"[Erro] Opção de cabelo '{value}' não existe. Cores: {', '.join(HAIR_COLORS)}.", RED
 
@@ -1092,10 +1131,10 @@ def _catalog_options() -> List[str]:
 SKIN_COMMANDS: List[Command] = [
     Command(("corpo", "body"), "/skin corpo <feminino|masculino>", "troca o corpo", SkinCommandHandler.body,
             ["feminino", "masculino"], "Aparência"),
-    Command(("pele", "tone"), "/skin pele <tom>", "tom de pele", SkinCommandHandler.tone, list(SKIN_TONES), "Aparência"),
-    Command(("olhos", "eyes"), "/skin olhos <cor|estilo|formato>", "cor, estilo ou formato dos olhos", SkinCommandHandler.eyes,
+    Command(("pele", "tone"), "/skin pele <tom|#rrggbb|r,g,b>", "tom de pele", SkinCommandHandler.tone, list(SKIN_TONES), "Aparência"),
+    Command(("olhos", "eyes"), "/skin olhos <cor|#rrggbb|r,g,b|estilo|formato>", "cor, estilo ou formato dos olhos", SkinCommandHandler.eyes,
             list(EYE_COLORS) + ["anime", "piscando", "classico", "sem"] + list(EYE_SHAPE_NAMES), "Aparência"),
-    Command(("olho", "eye"), "/skin olho <direito|esquerdo> <cor>", "cor de um olho só", SkinCommandHandler.eye,
+    Command(("olho", "eye"), "/skin olho <direito|esquerdo> <cor|#rrggbb|r,g,b>", "cor de um olho só", SkinCommandHandler.eye,
             {"direito": list(EYE_COLORS), "esquerdo": list(EYE_COLORS)}, "Aparência"),
     Command(("maquiagem", "makeup"), "/skin maquiagem <batom|sombra|blush> <cor|#rrggbb|sem> | contorno <suave|marcado|sem> | sardas <sim|nao> | sem",
             "batom, sombra, contorno, blush e sardas", SkinCommandHandler.makeup, ["batom", "sombra", "contorno", "blush", "sardas", "sem"],

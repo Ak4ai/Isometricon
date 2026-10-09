@@ -7,11 +7,11 @@ execução, o autocompletar e a ajuda.
 | Comando | O que faz |
 |---|---|
 | `/skin corpo <feminino\|masculino>` | troca o corpo |
-| `/skin pele <palida\|clara\|bronzeada\|morena\|negra>` | tom de pele |
-| `/skin olhos <cor\|estilo>` | azul, verde, castanho, roxo, vermelho, dourado, ciano; anime, piscando, classico, sem |
+| `/skin pele <palida\|clara\|bronzeada\|morena\|negra\|#rrggbb\|r,g,b>` | tom de pele, pronto ou qualquer cor |
+| `/skin olhos <cor\|#rrggbb\|r,g,b\|estilo>` | azul, verde, castanho, roxo, vermelho, dourado, ciano, rosa, laranja, ambar, turquesa, lilas, cinza, branco, preto, ou qualquer cor; anime, piscando, classico, sem |
 | `/skin boca <estilo>` | anime, sorriso, aberta, piscando, neutra, classica, gato, beicinho, vampiro (a anime com presas), sem |
 | `/skin cabeca <arredondada\|quadrada>` | formato da cabeça |
-| `/skin cabelo <id\|cor\|careca\|raspado\|padrao>` | troca ou pinta o cabelo; `nudred` veste o cabelo nudred, feito à mão |
+| `/skin cabelo <id\|cor\|careca\|raspado\|padrao>` | troca ou pinta o cabelo (a cor também como `#rrggbb` ou `r,g,b`); `raspado` é um cabelo rente, não a cabeça careca; `nudred` veste o cabelo nudred, feito à mão |
 | `/skin cabelo posicao <x\|y\|z> <cm>` · `escala [x\|y\|z] <fator>` · `reset` | ajusta o cabelo (como acessório no Roblox) |
 | `/skin vestir <id\|link\|nome> [tipo] [refazer]` | veste qualquer item do Roblox no lugar certo, pelo tipo do asset |
 | `/skin top <nome\|id\|none>` · `/skin calca ...` | roupa de cima e de baixo |
@@ -22,7 +22,7 @@ execução, o autocompletar e a ajuda.
 | `/skin roupas` | lista o que está vestido |
 | `/skin preset <padrao\|gato_loiro\|cavaleiro\|rosa\|classico>` · `/skin reset` | aparência pronta (mantém o corpo) |
 | `/skin olhos <formato>` | formato dos olhos: padrao, arredondado, grande, feminino, fechado, sonolento, estreito, puxado, caido, suave, suave_redondo; outros modelos: serio, masculino, afiado, redondo, retro, cansado, felino |
-| `/skin olho <direito\|esquerdo> <cor>` | cor de um olho só (`/skin olhos <cor>` volta os dois à mesma) |
+| `/skin olho <direito\|esquerdo> <cor\|#rrggbb\|r,g,b>` | cor de um olho só (`/skin olhos <cor>` volta os dois à mesma) |
 | `/skin maquiagem <batom\|sombra\|blush> <cor\|#rrggbb\|sem>` · `contorno <suave\|marcado\|sem>` · `sardas <sim\|nao>` · `sem` | maquiagem; cores: vermelho, rosa, nude, vinho, roxo, azul, verde, dourado, marrom, preto, coral, pessego, laranja, lilas, turquesa, prata, ou qualquer uma em `#rrggbb` ou `r,g,b`. Os controles de cada item ficam em `/skin ajuste`: `blush_intensidade`, `blush_tamanho`, `blush_esfumado`, `blush_altura`, `sombra_intensidade`, `sombra_tamanho`, `sombra_esfumado`, e `<item>_matiz`, `<item>_saturacao`, `<item>_brilho`; as sombras do queixo, em `rosto_sombra` |
 | `/skin hsr espelhar <sim\|nao>` · `<esconder\|mostrar\|apagar> <pontos>` · `limpar` · `desfazer` · `refazer` | a pele escondida sob a roupa: espelhar os dois lados do corpo, ou corrigir à mão os pontos da cage (o pincel da seção Ajuste fino) |
 | `/skin extra <nome\|id\|none>` | veste ou tira uma peça a mais, junto com as outras |

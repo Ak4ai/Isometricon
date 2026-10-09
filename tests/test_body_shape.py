@@ -1065,3 +1065,51 @@ def test_a_handmade_hair_is_chosen_by_name_without_a_download():
     assert handler.execute(f"/skin cabelo {HANDMADE_HAIR['nudred']}")[0] and len(worn) == 2    # by its id too
     from src.interactive.skin_commands import item_name
     assert item_name(HANDMADE_HAIR["nudred"]).startswith("Nudred")
+
+
+def test_the_eyes_take_any_colour_each_and_both():
+    from src.clothing.customization import IRIS_PALETTES, IrisColor
+    model = SimpleNamespace(customization=AvatarCustomization(iris_color=IrisColor.BLUE), reload=lambda: None)
+    handler = SkinCommandHandler(character_model=model)
+    custom = model.customization
+    assert handler.execute("/skin olho direito #ff8800")[0] and custom.resolved_iris_color == (255, 136, 0)
+    assert custom.resolved_iris_color_other == IRIS_PALETTES["blue"]                       # the other keeps its own
+    assert handler.execute("/skin olho esquerdo 20, 220, 120")[0] and custom.resolved_iris_color_other == (20, 220, 120)
+    assert handler.execute("/skin olhos #102030")[0]
+    assert custom.resolved_iris_color == custom.resolved_iris_color_other == (16, 32, 48)
+    assert handler.execute("/skin olhos rosa")[0] and custom.resolved_iris_color == IRIS_PALETTES["rosa"]
+    assert handler.execute("/skin olhos #12345")[0] is False and handler.execute("/skin olho direito 300,0,0")[0] is False
+    # The adjustments of colour move it from there, both eyes and each; a colour newly chosen takes them back to 0.
+    assert handler.execute("/skin olhos #c02020")[0] and handler.execute("/skin ajuste olho_esquerdo_matiz 100")[0]
+    right, left = custom.resolved_iris_color, custom.resolved_iris_color_other
+    assert right == (192, 32, 32) and left[2] > left[0] and left[1] > left[0]              # half the wheel from red
+    assert handler.execute("/skin olho esquerdo #c02020")[0] and custom.resolved_iris_color_other == (192, 32, 32)
+    assert custom.get_cache_key() != AvatarCustomization(iris_color=IrisColor.BLUE).get_cache_key()
+
+
+def test_the_skin_and_the_hair_take_any_colour():
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: None, update_customization=lambda **k: None)
+    handler = SkinCommandHandler(character_model=model)
+    custom = model.customization
+    assert handler.execute("/skin pele #8d5a3c")[0] and custom.skin_rgb_255 == (141, 90, 60)
+    assert handler.execute("/skin cabelo #7a1cff")[0] and custom.hair_rgb_255 == (122, 28, 255)
+    assert handler.execute("/skin cabelo 10,200,30")[0] and custom.hair_rgb_255 == (10, 200, 30)
+    assert handler.execute("/skin cabelo #zzzzzz")[0] is False
+
+
+@pytest.mark.parametrize("body", ["male", "female"])
+def test_the_shaved_style_is_a_hair_and_not_a_bald_head(body):
+    import os
+    from src.clothing.character_model import BODY_MESHES, FADING_HAIR, MODELS_DIR, SHAVED_HAIR_ID, parse_clean_obj_groups
+    from src.clothing.customization import HairStyle
+    from src.clothing.wear_engine import hair_fitted_path
+    path = hair_fitted_path(SHAVED_HAIR_ID, body)
+    assert os.path.exists(path) and SHAVED_HAIR_ID in FADING_HAIR
+    lines = open(path, encoding="utf-8").read().splitlines()
+    hair = np.array([[float(t) for t in line.split()[1:4]] for line in lines if line.startswith("v ")])
+    solid = np.array([float(line.split()[1]) for line in lines if line.startswith("vt ")])
+    head = parse_clean_obj_groups(os.path.join(MODELS_DIR, BODY_MESHES[body]), ["Export_cabeca"])[0].reshape(-1, 11)[:, :3]
+    # Tight on the head all over (no volume), clear at its line and nearly solid over the top.
+    assert hair[:, 1].max() < head[:, 1].max() + 0.01 and abs(hair[:, 0]).max() < abs(head[:, 0]).max() + 0.01
+    assert solid.min() < 0.05 and 0.85 < solid.max() < 0.97
+    assert AvatarCustomization(hair_style=HairStyle.BUZZ_CUT).resolved_hair_2d_style == "bald"   # nothing painted under it

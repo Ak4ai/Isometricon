@@ -826,6 +826,8 @@ DEFAULT_HAIR_ID = "116773763268018"
 # name they are chosen by and the id of their files, Hair_fitted_<id>_<body>.obj. With no texture
 # of their own, they take the character's hair colour.
 HANDMADE_HAIR = {"nudred": "900000000001"}
+SHAVED_HAIR_ID = "900000000002"  # the hair of the shaved style (HairStyle.BUZZ_CUT): made by hand too, a cap tight on the head
+FADING_HAIR = tuple(HANDMADE_HAIR.values()) + (SHAVED_HAIR_ID,)  # these say in their texture coordinates how solid they are
 # Parts of the model that are skin (the head's texture has more than skin; the shader tells them apart).
 SKIN_PART_NAMES = ("head", "nose", "neck", "trunk_skin", "legs_skin", "feet_skin", "arm_", "forearm_", "hand_")
 # Head (with neck and hair) moved forward (m) on each body, plus head_z_offset.
@@ -943,7 +945,8 @@ class CharacterModel:
         if hair_str.lower() in ("none", "0", "false", "sem", "careca", "bald"):
             self.customization.custom_hair_obj = None
             self.customization.custom_hair_tex = None
-            self.customization.hair_style = HairStyle.BALD
+            if self.customization.hair_style_str != "buzz_cut":  # the shaved style wears no hair of the catalogue either
+                self.customization.hair_style = HairStyle.BALD
             return
         hair_obj_path = self._fitted_hair(hair_str)
         if hair_obj_path:
@@ -1581,6 +1584,12 @@ class CharacterModel:
         current = self.customization.custom_hair_obj
         if current and os.path.basename(current).startswith(f"Hair_fitted_{DEFAULT_HAIR_ID}"):
             self.customization.custom_hair_obj = None  # the default hair of the body shown before
+        if current and os.path.basename(current).startswith(f"Hair_fitted_{SHAVED_HAIR_ID}"):
+            self.customization.custom_hair_obj = None  # the shaved hair of the body or the style shown before
+        if self.customization.hair_style_str == "buzz_cut":
+            # The shaved style is a hair too: a cap tight on this body's head, in the hair's colour.
+            self.customization.custom_hair_obj = self._fitted_hair(SHAVED_HAIR_ID)
+            self.customization.custom_hair_tex = None
         if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
             # Default hair, fitted to this body's head; it keeps the customization's hair colour.
             self.customization.custom_hair_obj = self._fitted_hair(DEFAULT_HAIR_ID)
@@ -1597,7 +1606,8 @@ class CharacterModel:
                     hair_rgb = getattr(self.customization, "hair_rgb_255", (92, 62, 54))
                     # A hair made by hand says in its texture coordinate how solid it is at each
                     # vertex: its texture is the hair's colour from clear to solid, and it is blended.
-                    self.hair_fades = str(self.hair_id) in HANDMADE_HAIR.values()
+                    self.hair_fades = os.path.basename(self.customization.custom_hair_obj).startswith(
+                        tuple(f"Hair_fitted_{made}" for made in FADING_HAIR))
                     hair_tex_id = upload_texture_rgba(fade_texture(hair_rgb)) if self.hair_fades else create_solid_texture(hair_rgb)
                 self.textures.append(hair_tex_id)
                 mesh = TexturedMesh(hair_data[0], hair_data[1])

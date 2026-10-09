@@ -282,3 +282,37 @@ def test_the_eyebrows_are_adjusted_apart_from_the_eyes():
         moved = atlas(**{name: 1.0})
         assert (moved[:125, :256] != plain[:125, :256]).any(), name                    # the eyebrows change
         assert (moved[135:185, :256] == plain[135:185, :256]).all(), name             # and the eyes stay where they were
+
+
+def test_every_group_of_colours_has_a_picker_of_any_colour():
+    editor, sent = make_editor()
+    names = [section.title for section in editor.sections]
+    found = {}
+    for name in ("Corpo", "Olhos", "Cabelo", "Maquiagem"):
+        editor.select_section(names.index(name))
+        found[name] = [option.picker for group in editor.groups() for option in group.options if option.picker]
+    assert found["Olhos"] == ["/skin olhos", "/skin olho direito", "/skin olho esquerdo"]
+    assert found["Cabelo"] == ["/skin cabelo"]
+    assert {"/skin pele", "/skin intima", "/skin cauda cor", "/skin asa cor"} <= set(found["Corpo"])
+    assert found["Maquiagem"] == ["/skin maquiagem batom", "/skin maquiagem sombra", "/skin maquiagem blush"]
+
+
+def test_dragging_a_picker_sends_the_colour_under_the_mouse():
+    import re
+    editor, sent = make_editor()
+    editor.select_section([section.title for section in editor.sections].index("Cabelo"))
+    editor.layout(*SIZE)
+    option = next(o for group in editor.groups() for o in group.options if o.picker)
+    x0, y0, x1, y1 = editor._picker_rect(option)
+    red, middle = x0 + 9, y0 + 40                                   # the left of the map is red; its middle row, half light
+    assert editor.handle_mouse_button(red, middle, 0, 1)
+    assert re.fullmatch(r"/skin cabelo #[0-9a-f]{6}", sent[-1])
+    r, g, b = (int(sent[-1][-6:][k:k + 2], 16) for k in (0, 2, 4))
+    assert r > 200 and g < 60 and b < 60
+    editor.handle_cursor((x0 + x1) / 2, y0 + 8)                 # the top of the map: white, whatever the hue
+    editor.handle_mouse_button((x0 + x1) / 2, y0 + 8, 0, 0)
+    assert sent[-1] == "/skin cabelo #ffffff" and editor._picker is None
+    editor.handle_mouse_button(x0 + 8, y0 + 87, 0, 1)               # the bar under it, at its left: no colour at all
+    editor.handle_mouse_button(x0 + 8, y0 + 87, 0, 0)
+    assert editor.picked(option)[2] == 0.0 and sent[-1] == "/skin cabelo #ffffff"
+    assert editor.image(*SIZE).size[0] > 0
