@@ -1302,6 +1302,15 @@ class CharacterModel:
 
             each[k] = _memo("hsr_edges", (each[k], cage_points, path, os.path.getmtime(path), moves), recut)
         hidden = np.logical_or.reduce(each)
+        # The cloth of all that is worn, as it is on this body.
+        from src.clothing.hsr import garment_mesh as worn_mesh
+        cloth_key = tuple((path, os.path.getmtime(path)) for path in worn)
+
+        def cloth():
+            def read():
+                meshes = [worn_mesh(path) for path in worn]
+                return np.concatenate([vertices[triangles] for vertices, triangles in meshes])
+            return _memo("cloth", (cloth_key,), read)
 
         # What the garments hide, then the character's corrections: mirrored, and painted by hand.
         from src.clothing.hsr import adjusted_hidden
@@ -1310,6 +1319,9 @@ class CharacterModel:
         hidden = adjusted_hidden(hidden, cage_points, bool(getattr(custom, "hsr_mirror", False)),
                                  getattr(custom, "hsr_hide", ()), getattr(custom, "hsr_show", ()))
         self.hsr_hidden = hidden
+        # The points hidden by hand stay hidden, whatever the cloth says.
+        by_hand = np.zeros(len(hidden), dtype=bool)
+        by_hand[[int(i) for i in (getattr(custom, "hsr_hide", ()) or ()) if 0 <= int(i) < len(hidden)]] = True
 
         hip_tf = arm_tf = None
 
@@ -1353,8 +1365,33 @@ class CharacterModel:
                     # What cull_hidden_triangles does, from where the vertices are on the cage (kept
                     # above): a slider dragged or a stroke of the brush cuts the skin again at once.
                     if hidden.any():
-                        under = (nearest[1] * hidden[np.asarray(cage_faces)][nearest[0]]).sum(-1) > HSR_HIDDEN
-                        faces = faces[under[faces].sum(1) < 3]
+                        from src.clothing.hsr import CLOTH_CLEAR, CLOTH_PUSH, clip_hidden, cloth_behind, cloth_distance
+                        faces_of_cage = np.asarray(cage_faces)
+
+                        corners = faces_of_cage[nearest[0]]
+                        share = (nearest[1] * hidden[corners]).sum(-1)
+                        # The mask is the garment's, made for another body; the cloth is here. About the mask's
+                        # edge (where a vertex is hidden at all) the cloth is looked for, in front of the skin
+                        # and behind it, sunk into the body.
+                        about = np.flatnonzero(share > 0)
+                        some = rows[about]
+                        ahead = np.full(len(rows), np.inf)
+                        ahead[about] = _memo("hsr_cloth", (some[:, :6], cloth_key), lambda: cloth_distance(some[:, :3], some[:, 3:6], cloth()))
+                        covered = np.isfinite(ahead)
+                        covered[about] |= _memo("hsr_sunk", (some[:, :6], cloth_key), lambda: cloth_behind(some[:, :3], some[:, 3:6], cloth()))
+                        covered |= (nearest[1] * by_hand[corners]).sum(-1) > 0   # hidden by hand: cut as asked
+                        # Skin that is kept right under the cloth, or out of it, goes in to just under it: it
+                        # showed through the cloth as a streak (along an edge of the body, where the cloth dips).
+                        out = (share <= HSR_HIDDEN) & (ahead < CLOTH_CLEAR)
+                        if out.any():
+                            rows = rows.copy()
+                            rows[out, :3] -= rows[out, 3:6] * np.minimum(CLOTH_CLEAR - ahead[out], CLOTH_PUSH)[:, None]
+                        # And the skin is cut along the mask's line where the cloth covers what is cut away,
+                        # not by whole triangles (a saw's teeth, which come through the cloth in movement).
+                        # Tried and left out, for making the skin come through when the body moves: never
+                        # cutting skin with no cloth in front of it, and keeping skin seen through an opening.
+                        rows, faces = clip_hidden(rows, faces, share, HSR_HIDDEN, covered)
+                        vertices = rows.ravel()
                 else:
                     faces = _memo("hsr", (rows[:, :3], faces, cage_points, hidden, cage_faces),
                                   lambda: cull_hidden_triangles(rows[:, :3], faces, cage_points, hidden, cage_faces))

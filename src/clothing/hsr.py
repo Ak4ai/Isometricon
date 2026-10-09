@@ -580,6 +580,129 @@ def cull_hidden_triangles(positions: np.ndarray, faces: np.ndarray, cage_points:
     return faces[vertex_hidden[faces].sum(1) < min_hidden]
 
 
+# The skin against the cloth that is worn, vertex by vertex: metres behind the skin a ray starts looking for cloth
+# and how far in front of it it looks, the gap left between skin that is kept and the cloth right over it, and the
+# most a vertex is moved in to leave that gap.
+CLOTH_INSIDE, CLOTH_REACH, CLOTH_CLEAR, CLOTH_PUSH = 0.02, 0.15, 0.004, 0.025
+CLOTH_SUNK = 0.06   # metres into the body a garment may be sunk (a tight one on a wider body): there the mask stands
+
+
+def _first_hit(origins: np.ndarray, directions: np.ndarray, triangles: np.ndarray, reach: float) -> np.ndarray:
+    """Distance along each ray to the first triangle it meets within ``reach`` (inf when none). Moller-Trumbore.
+
+    The rays are taken a few at a time, neighbours together, and each lot only against the triangles its rays can
+    reach: a whole outfit is tens of thousands of triangles, and most are a limb away from any given ray."""
+    out = np.full(len(origins), np.inf)
+    if not len(triangles) or not len(origins):
+        return out
+    low, high = triangles.min(1), triangles.max(1)
+    ends = origins + directions * reach
+    cells = np.floor(origins / max(reach, 0.05)).astype(np.int64)
+    order = np.lexsort((cells[:, 0], cells[:, 2], cells[:, 1]))          # neighbours in space, one after the other
+    for start in range(0, len(order), 64):
+        rows = order[start:start + 64]
+        origin, direction = origins[rows], directions[rows]
+        box_low = np.minimum(origin, ends[rows]).min(0)
+        box_high = np.maximum(origin, ends[rows]).max(0)
+        some = triangles[np.all((high >= box_low) & (low <= box_high), axis=1)]
+        if not len(some):
+            continue
+        v0, e1, e2 = some[:, 0], some[:, 1] - some[:, 0], some[:, 2] - some[:, 0]
+        p = np.cross(direction[:, None], e2[None])
+        det = np.einsum("tk,rtk->rt", e1, p)
+        ok = np.abs(det) > 1e-12
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        s = origin[:, None] - v0[None]
+        u = np.einsum("rtk,rtk->rt", s, p) * inv
+        q = np.cross(s, e1[None])
+        v = np.einsum("rk,rtk->rt", direction, q) * inv
+        t = np.einsum("tk,rtk->rt", e2, q) * inv
+        hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t >= 0) & (t <= reach)
+        out[rows] = np.where(hit, t, np.inf).min(axis=1)
+    return out
+
+
+def cloth_behind(points: np.ndarray, normals: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+    """Which points have cloth behind them, inside the body (within CLOTH_SUNK along the normal, inwards): a
+    garment sunk into a body wider than its own. Skin left there stands out of the cloth, so a mask that hides it
+    is right, though nothing is in front of the skin."""
+    points = np.asarray(points, dtype=np.float64)
+    behind = np.zeros(len(points), dtype=bool)
+    if not len(triangles) or not len(points):
+        return behind
+    corners = triangles.reshape(-1, 3)
+    near = np.flatnonzero(np.all((points >= corners.min(0) - CLOTH_SUNK) & (points <= corners.max(0) + CLOTH_SUNK), axis=1))
+    behind[near] = np.isfinite(_first_hit(points[near], -np.asarray(normals, dtype=np.float64)[near], triangles, CLOTH_SUNK))
+    return behind
+
+
+def cloth_distance(points: np.ndarray, normals: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+    """How far in front of each skin vertex the cloth is, along the vertex's normal: negative when the cloth is
+    behind the skin's surface there (down to -CLOTH_INSIDE), inf when there is none within CLOTH_REACH."""
+    points = np.asarray(points, dtype=np.float64)
+    normals = np.asarray(normals, dtype=np.float64)
+    out = np.full(len(points), np.inf)
+    if not len(triangles) or not len(points):
+        return out
+    low, high = triangles.reshape(-1, 3).min(0) - CLOTH_REACH, triangles.reshape(-1, 3).max(0) + CLOTH_REACH
+    near = np.flatnonzero(np.all((points >= low) & (points <= high), axis=1))   # only the skin about the clothes
+    out[near] = _first_hit(points[near] - normals[near] * CLOTH_INSIDE, normals[near], triangles, CLOTH_REACH + CLOTH_INSIDE) - CLOTH_INSIDE
+    return out
+
+
+def clip_hidden(rows: np.ndarray, faces: np.ndarray, share: np.ndarray, threshold: float, covered: np.ndarray = None):
+    """The skin cut along the mask's own line: (rows, faces) of what is kept.
+
+    ``share``: how hidden each vertex is (0 to 1). A triangle wholly past ``threshold`` goes, one wholly short of it
+    stays, and one the line crosses is cut along it (new vertices on its edges, every attribute interpolated).
+    Dropping only the whole triangles left the ones the line crosses standing: a saw's teeth along every cut,
+    which come through the cloth when the body moves.
+
+    ``covered``: the vertices with cloth over them. A triangle the line crosses is only cut when the corners it
+    loses are covered; otherwise it stays whole, as it always did: what is cut away is never what was showing.
+    """
+    rows = np.asarray(rows)
+    faces = np.asarray(faces, dtype=np.int64)
+    over = share > threshold
+    count = over[faces].sum(1)
+    mixed = (count == 1) | (count == 2)
+    whole = np.zeros(len(faces), dtype=bool)
+    if covered is not None:
+        whole = mixed & (over & ~np.asarray(covered, dtype=bool))[faces].any(1)
+    kept = [faces[(count == 0) | whole]]
+    crossed = faces[mixed & ~whole]
+    if not len(crossed):
+        return rows, kept[0]
+    added, index = [], {}
+
+    def on_edge(a: int, b: int) -> int:
+        """The vertex where the line crosses the edge from a (kept) to b (cut)."""
+        key = (a, b)
+        if key not in index:
+            t = float((threshold - share[a]) / max(share[b] - share[a], 1e-9))
+            row = rows[a] + (rows[b] - rows[a]) * min(max(t, 0.0), 1.0)
+            if rows.shape[1] >= 6:  # the normal stays of unit length
+                row[3:6] /= max(float(np.linalg.norm(row[3:6])), 1e-8)
+            index[key] = len(rows) + len(added)
+            added.append(row)
+        return index[key]
+
+    cut = []
+    for face in crossed:
+        inside = [int(i) for i in face if not over[i]]
+        # Turned so that the kept corners come first, in the triangle's own order.
+        k = next(k for k in range(3) if not over[face[k]] and (over[face[k - 1]] or len(inside) == 1))
+        a, b, c = (int(face[(k + j) % 3]) for j in range(3))
+        if len(inside) == 1:                 # a kept, b and c cut: the corner at a
+            cut.append((a, on_edge(a, b), on_edge(a, c)))
+        else:                                # a and b kept, c cut: the strip along ab
+            bc, ac = on_edge(b, c), on_edge(a, c)
+            cut += [(a, b, bc), (a, bc, ac)]
+    kept.append(np.asarray(cut, dtype=np.int64).reshape(-1, 3))
+    rows = np.vstack([rows, np.asarray(added, dtype=rows.dtype)]) if added else rows
+    return rows, np.concatenate(kept)
+
+
 def subdivide(vertices: np.ndarray, faces: np.ndarray, levels: int = 2):
     """Midpoint subdivision (1 triangle -> 4 per level), interpolating every vertex attribute.
 

@@ -109,3 +109,56 @@ def test_wrapped_limbs_cover_the_armpit_only_under_sleeves():
         closed = close_wrapped_limbs(hidden, "male", paths[top])
         assert (closed | ~hidden).all()  # only ever adds cover
         assert ((closed & ~hidden & arms).any()) == sleeved
+
+
+def _square(z: float, half: float = 0.5) -> np.ndarray:
+    """Two triangles of cloth: a square across the z axis at this height."""
+    a, b, c, d = [-half, -half, z], [half, -half, z], [half, half, z], [-half, half, z]
+    return np.array([[a, b, c], [a, c, d]], dtype=np.float64)
+
+
+def test_the_cloth_is_measured_in_front_of_the_skin_and_found_behind_it():
+    from src.clothing.hsr import CLOTH_REACH, CLOTH_SUNK, cloth_behind, cloth_distance
+    points = np.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.0], [2.0, 0.0, 0.0]])
+    up = np.tile([0.0, 0.0, 1.0], (3, 1))
+    ahead = cloth_distance(points, up, _square(0.03))
+    assert np.allclose(ahead[:2], 0.03, atol=1e-6) and np.isinf(ahead[2])                 # 3 cm over the skin; none beside it
+    assert np.allclose(cloth_distance(points, up, _square(-0.01))[:2], -0.01, atol=1e-6)  # the cloth 1 cm into the skin
+    assert np.isinf(cloth_distance(points, up, _square(CLOTH_REACH + 0.05))).all()        # too far to be over it
+    assert cloth_behind(points, up, _square(-0.04)).tolist() == [True, True, False]       # sunk into the body
+    assert not cloth_behind(points, up, _square(-CLOTH_SUNK - 0.02)).any()
+    assert not cloth_behind(points, up, _square(0.03)).any()                              # in front is not behind
+
+
+def test_the_skin_is_cut_along_the_line_of_the_mask():
+    from src.clothing.hsr import clip_hidden
+    # A strip of two triangles along x, attributes of 11 numbers; the mask grows with x.
+    rows = np.zeros((4, 11), dtype=np.float32)
+    rows[:, :3] = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]]
+    rows[:, 5] = 1.0
+    rows[:, 6] = rows[:, 0]                                # u follows x
+    faces = np.array([[0, 1, 2], [0, 2, 3]])
+    share = np.array([0.0, 1.0, 1.0, 0.0])
+    cut_rows, cut_faces = clip_hidden(rows, faces, share, 0.5)
+    used = cut_rows[np.unique(cut_faces)]
+    assert used[:, 0].max() == pytest.approx(0.5) and len(cut_rows) > len(rows)            # cut at the line, not at a triangle's edge
+    assert np.allclose(used[:, 6], used[:, 0]) and np.allclose(np.linalg.norm(used[:, 3:6], axis=1), 1.0)   # attributes follow
+    area = lambda r, f: sum(np.linalg.norm(np.cross(r[b, :3] - r[a, :3], r[c, :3] - r[a, :3])) / 2 for a, b, c in f)
+    assert area(cut_rows, cut_faces) == pytest.approx(0.5)                                 # half the strip is kept
+    normal = lambda r, f: np.cross(r[f[1], :3] - r[f[0], :3], r[f[2], :3] - r[f[0], :3])[2]
+    assert all(normal(cut_rows, f) > 0 for f in cut_faces)                                 # facing as they did
+    # Nothing to cut, and all of it cut.
+    assert len(clip_hidden(rows, faces, np.zeros(4), 0.5)[1]) == 2 and len(clip_hidden(rows, faces, np.ones(4), 0.5)[1]) == 0
+
+
+def test_a_triangle_is_only_cut_where_the_cloth_covers_what_it_loses():
+    from src.clothing.hsr import clip_hidden
+    rows = np.zeros((4, 11), dtype=np.float32)
+    rows[:, :3] = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]]
+    faces = np.array([[0, 1, 2], [0, 2, 3]])
+    share = np.array([0.0, 1.0, 1.0, 0.0])
+    # Vertex 1 is hidden by the mask but no cloth is over it: its triangle stays whole (it would be a hole);
+    # the other, whose lost corner is covered, is cut.
+    cut_rows, cut_faces = clip_hidden(rows, faces, share, 0.5, covered=np.array([True, False, True, True]))
+    assert [0, 1, 2] in cut_faces.tolist()
+    assert not any(set(f) == {0, 2, 3} for f in cut_faces.tolist()) and len(cut_rows) > len(rows)
