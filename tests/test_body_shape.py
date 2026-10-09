@@ -1019,7 +1019,7 @@ def test_the_handmade_nudred_hair_is_a_hair_the_game_can_wear(body):
     lines = open(path, encoding="utf-8").read().splitlines()
     assert lines[0].startswith("# Isometricon Native Fitted Hair: ")
     counts = {tag: sum(line.startswith(tag + " ") for line in lines) for tag in ("v", "vt", "f")}
-    assert counts["v"] == counts["vt"] > 5000 and counts["f"] > 10000
+    assert counts["v"] == counts["vt"] > 3000 and counts["f"] > 6000
     assert all(len(line.split()) == 4 for line in lines if line.startswith("f "))            # triangles
     hair = parse_clean_obj_groups(path, [""])[0].reshape(-1, 11)[:, :3]
     head = parse_clean_obj_groups(os.path.join(MODELS_DIR, BODY_MESHES[body]), ["Export_cabeca"])[0].reshape(-1, 11)[:, :3]

@@ -9,8 +9,8 @@ veste (``/skin cabelo nudred``).
 Para só exportar de novo um cabelo editado à mão no Blender, chame ``export`` com o objeto.
 
 Como é feito: uma calota em volta da cabeça, justa na linha do cabelo (o degradê dos lados e da
-nuca) e cheia em cima, medida a partir da própria cabeça; e sobre ela centenas de "twists"
-curtos e grossos, cada um um tubinho de três anéis que giram um pouco a cada passo.
+nuca: cabelo rente, sem twists) e cheia em cima, medida a partir da própria cabeça; e no alto dela
+os "twists", compridos e largos, cada um um tubinho de quatro anéis que giram um pouco a cada passo.
 """
 import math
 import os
@@ -25,9 +25,11 @@ HAIR_ID = "900000000001"
 HEADS = {"male": "cabeca", "female": "cabeca.001"}                    # body of the game -> head object in the file
 CLOTHING = os.path.join(os.path.dirname(bpy.data.filepath), "clothing")  # assets/models/clothing, beside the .blend
 UP = Vector((0, 0, 1))
-RING_POINTS, RINGS_ROUND, SIDES = 22, 72, 5                           # the cap's grid, and corners around a twist
-TIGHT, MIN_FULL, BLEND = 0.004, 0.010, 0.07                           # metres off the head at the hairline, at least in the volume, and the height of the fade
-TWISTS, TWIST_GAP = 760, 0.0150                                       # how many at most, and metres between them
+RING_POINTS, RINGS_ROUND, SIDES = 22, 72, 6                           # the cap's grid, and corners around a twist
+TIGHT, MIN_FULL = 0.003, 0.010                                        # metres off the head in the fade, and at least in the volume
+FADE, FADE_FRONT, BLEND = 0.040, 0.006, 0.045                         # metres of fade above the hairline at the sides and the nape (hair cut to the skin), at the forehead (none: the volume starts at the line), then of passing to the volume
+TWISTS, TWIST_GAP, TWIST_FROM = 300, 0.0250, 0.72                     # how many at most, metres between them, and how full the hair must be to have them (the top)
+TWIST_LENGTH, TWIST_RADIUS = (0.020, 0.018), 0.0160                   # metres long (the least, and more where the hair is fullest) and wide
 
 
 def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
@@ -38,9 +40,9 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     tall = top - bottom
     face_y, back_y, half = pts[:, 1].min(), pts[:, 1].max(), np.abs(pts[:, 0]).max()
     centre = Vector((0.0, (face_y + back_y) / 2 + 0.0025, bottom + 0.656 * tall))
-    rx, rz_up, rz_down = half + 0.023, (top - centre.z) + 0.063, 0.150
+    rx, rz_up, rz_down = half + 0.020, (top - centre.z) + 0.060, 0.150
     ry_front, ry_back = (centre.y - face_y) + 0.032, (back_y - centre.y) + 0.032
-    line = bottom + 0.536 * tall            # the hairline at the sides
+    line = bottom + 0.500 * tall            # the hairline at the sides
 
     def direction(theta, phi):              # theta: 0 at the front (-y); phi: from straight up
         s = math.sin(phi)
@@ -66,7 +68,8 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
     def surface(theta, phi):
         d = direction(theta, phi)
         rh, rf = r_head(d), r_full(d)
-        full = smooth((centre.z + (rh + rf) / 2 * d.z - z_low(theta)) / BLEND)   # 0 at the hairline, 1 in the volume
+        fade = FADE_FRONT + (FADE - FADE_FRONT) * (1.0 - max(math.cos(theta), 0.0) ** 1.2)   # none over the forehead
+        full = smooth((centre.z + (rh + rf) / 2 * d.z - z_low(theta) - fade) / BLEND)        # 0 in the fade, 1 in the volume
         return centre + d * (rh + TIGHT + full * max(rf - rh - TIGHT, MIN_FULL)), d, full
 
     def phi_end(theta):                     # where the surface meets the hairline
@@ -99,9 +102,9 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         theta = rng.uniform(0, 2 * math.pi)
         end = ends[int(theta / (2 * math.pi) * RINGS_ROUND) % RINGS_ROUND]
         p, d, full = surface(theta, math.acos(1 - rng.uniform(0, 1) * (1 - math.cos(end))))
-        if full < 0.18:
+        if full < TWIST_FROM:               # the sides and the nape are a fade: no twists there
             continue
-        gap = TWIST_GAP * (0.60 + 0.40 * full)
+        gap = TWIST_GAP * (0.80 + 0.20 * full)
         if any((p - q).length < gap for q, _, _ in spots):
             continue
         spots.append((p, d, full))
@@ -109,25 +112,26 @@ def nudred(name: str, head_points, head_faces, collection, seed: int = 7):
         axis = (d * 0.62 + UP * 0.38 + Vector(rng.normal(0, 0.13, 3))).normalized()   # standing up more than out
         side = axis.cross(UP if abs(axis.z) < 0.9 else Vector((1, 0, 0))).normalized()
         other = axis.cross(side)
-        length = (0.007 + 0.014 * full) * rng.uniform(0.85, 1.2)
-        radius = 0.0098 * rng.uniform(0.88, 1.12) * (0.62 + 0.38 * full)
+        length = (TWIST_LENGTH[0] + TWIST_LENGTH[1] * full) * rng.uniform(0.85, 1.2)
+        radius = TWIST_RADIUS * rng.uniform(0.88, 1.12) * (0.75 + 0.25 * full)
         turn, coil = rng.uniform(0, 2 * math.pi), rng.choice((-1.0, 1.0))
         base = len(verts)
-        rings = ((0.0, 1.0), (0.5, 0.92), (0.9, 0.62))
+        rings = ((0.0, 1.0), (0.32, 0.96), (0.64, 0.84), (0.90, 0.56))
         for k, (t, wide) in enumerate(rings):
-            swing = turn + coil * 1.3 * k   # the middle of each ring goes round: a coil
-            middle = p - d * 0.004 + axis * length * t + (side * math.cos(swing) + other * math.sin(swing)) * radius * 0.22 * (k > 0)
+            swing = turn + coil * 1.5 * k   # the middle of each ring goes round: a coil
+            middle = p - d * 0.006 + axis * length * t + (side * math.cos(swing) + other * math.sin(swing)) * radius * 0.26 * (k > 0)
             for s in range(SIDES):
                 a = turn + 2 * math.pi * s / SIDES + coil * 0.6 * k
                 verts.append(middle + (side * math.cos(a) + other * math.sin(a)) * radius * wide)
-        verts.append(p - d * 0.004 + axis * length * 1.12)
+        verts.append(p - d * 0.006 + axis * length * 1.10)
         tip = len(verts) - 1
         for k in range(len(rings) - 1):
             for s in range(SIDES):
                 a, b = base + k * SIDES + s, base + k * SIDES + (s + 1) % SIDES
                 faces.append((a, b, b + SIDES, a + SIDES))
+        last = base + (len(rings) - 1) * SIDES
         for s in range(SIDES):
-            faces.append((base + 2 * SIDES + s, base + 2 * SIDES + (s + 1) % SIDES, tip))
+            faces.append((last + s, last + (s + 1) % SIDES, tip))
 
     old = bpy.data.objects.get(name)
     if old:
