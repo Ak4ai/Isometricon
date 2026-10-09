@@ -12,7 +12,7 @@ Permite desacoplamento total entre:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Tuple, Dict, Any, Union
+from typing import Optional, Tuple, Dict, Any, List, Union
 import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -160,6 +160,41 @@ IRIS_PALETTES: Dict[str, Tuple[int, int, int]] = {
 # (above it the colour goes towards white: the light of the eye), the darkest shade and how far towards white.
 IRIS_HUES, IRIS_SATURATION, IRIS_PATCH = (0.48, 0.70), 0.22, 12
 IRIS_VALUES, IRIS_SHADES, IRIS_DARKEST, IRIS_LIGHT = (0.24, 0.85), 0.70, 0.30, 0.45
+# The shines drawn inside the iris (what its patch encloses): how far from the iris's colour towards white the
+# sharp ones are (the drawn cream ones) and the soft one (the drawn pale green one, at the bottom). Each is painted
+# flat: the drawing has grey specks and bluish rims in them, which showed as dirt on any colour.
+IRIS_SHINE, IRIS_SOFT_SHINE = 0.95, 0.74
+
+
+def iris_shines(pixels: np.ndarray, mask: np.ndarray) -> List[Tuple[np.ndarray, bool]]:
+    """The shines inside the iris: for each, its pixels and whether it is the soft one."""
+    try:
+        from scipy import ndimage
+    except ImportError:
+        return []
+    inside = ndimage.binary_fill_holes(mask) & ~mask
+    # A shine at the rim of the iris is not enclosed by it: there, what is within the iris's box and is of the
+    # shines' cream (the white of the eye is pure white, and its shadow is bluish), and what touches that and is
+    # not the white of the eye (the bluish rim of a shine, or a hole in the drawing).
+    rgb = pixels[:, :, :3].astype(int)
+    box = np.zeros_like(mask)
+    for rows, columns in ndimage.find_objects(ndimage.label(mask)[0]):
+        box[rows, columns] = True
+    light = rgb.max(axis=2) > 150
+    rim = box & ~mask & light & (rgb[:, :, 2] <= rgb[:, :, 0] - 8)
+    rim |= box & ~mask & ndimage.binary_dilation(rim) & (((pixels[:, :, 3] < 255) & (pixels[:, :, 3] > 0)) | (light & (rgb.min(axis=2) < 250)))
+    inside = ndimage.binary_fill_holes(mask | inside | rim) & ~mask   # and the holes in those
+    patches, count = ndimage.label(inside)
+    shines = []
+    for k in range(1, count + 1):
+        patch = patches == k
+        colours = pixels[patch][:, :3].astype(int)
+        lit = colours[colours.max(axis=1) > 150]
+        if len(lit) == 0:
+            continue
+        red, green, _ = np.median(lit, axis=0)
+        shines.append((patch, bool(green > red)))
+    return shines
 
 
 def iris_mask(pixels: np.ndarray) -> np.ndarray:
@@ -200,6 +235,11 @@ def tint_iris(pixels: np.ndarray, first_rgb: Tuple[int, int, int], other_rgb: Tu
         for channel in range(3):
             painted = colour[channel] * shade[tinted]
             out[tinted, channel] = np.clip(painted + (255.0 - painted) * white[tinted], 0, 255).astype(np.uint8)
+    for patch, soft in iris_shines(pixels, mask):
+        colour = first_rgb if first[0, int(np.nonzero(patch.any(axis=0))[0].mean())] else other_rgb
+        towards = IRIS_SOFT_SHINE if soft else IRIS_SHINE
+        out[patch, :3] = [int(round(c + (255 - c) * towards)) for c in colour]
+        out[patch, 3] = 255  # the drawing has holes in them: specks through which what is under the eyes showed
     return out
 
 

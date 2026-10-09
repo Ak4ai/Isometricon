@@ -1132,5 +1132,13 @@ def test_the_iris_is_cut_clean_and_keeps_its_light_in_any_colour():
     half = (columns.min() + columns.max()) // 2          # between the two eyes
     left = red[:, :half][mask[:, :half]][:, :3].astype(int)
     assert (left[:, 0] >= left[:, 1]).all() and left[:, 0].min() < 110 and left[:, 1].max() > 80   # shades of red, and red towards white
+    # The shines inside the iris are flat and whole: no specks, no holes, no rim of the drawing's blue.
+    from src.clothing.customization import iris_shines
+    shines = iris_shines(eyes, mask)
+    assert len(shines) >= 8 and 2 <= sum(soft for _, soft in shines) < len(shines)   # sharp ones and soft ones, in each eye
+    for patch, soft in shines:
+        assert len(np.unique(red[patch], axis=0)) == 1 and red[patch][0, 3] == 255
+    whole = ndimage.binary_fill_holes(mask)
+    assert (red[whole][:, 3] == 255).all()
     black = tint_iris(eyes, (0, 0, 0), (0, 0, 0))[mask][:, :3]
     assert black.min() == 0 and black.max() > 90                                  # even a black iris has its light
