@@ -772,12 +772,17 @@ def create_solid_texture(color_rgb_255: Tuple[int, int, int], alpha: int = 255) 
 FADE_U = (0.02, 0.98)  # where a faded hair's texture is clear and where it is solid, across it
 
 
-def fade_texture(color_rgb_255: Tuple[int, int, int], width: int = 256) -> Image.Image:
-    """One colour from clear (at the left) to solid (at the right): the texture of a hair that fades."""
+STREAK_COLOR = (238, 238, 232)  # the streak of a hair made by hand
+
+
+def fade_texture(color_rgb_255: Tuple[int, int, int], width: int = 256, streak_rgb_255: Tuple[int, int, int] = STREAK_COLOR) -> Image.Image:
+    """The texture of a hair that fades: across it, from clear (at the left) to solid (at the right); down it, the
+    hair's colour in one half (v 0.25) and the streak's in the other (v 0.75)."""
     across = (np.arange(width) + 0.5) / width
     alpha = np.clip((across - FADE_U[0]) / (FADE_U[1] - FADE_U[0]), 0.0, 1.0)
     pixels = np.zeros((4, width, 4), dtype=np.uint8)
-    pixels[:, :, :3] = color_rgb_255
+    pixels[2:, :, :3] = color_rgb_255   # the image's first row is the top of the texture: v 1
+    pixels[:2, :, :3] = streak_rgb_255
     pixels[:, :, 3] = np.round(alpha * 255)
     return Image.fromarray(pixels, "RGBA")
 
