@@ -1125,7 +1125,11 @@ def test_the_iris_is_cut_clean_and_keeps_its_light_in_any_colour():
     from scipy import ndimage
     assert ndimage.label(mask)[1] <= 4 and mask.sum() > 1500                    # the two irises, not specks about them
     red = tint_iris(eyes, (255, 0, 0), (0, 255, 0))
-    assert (red[~mask] == eyes[~mask]).all()                                      # the white, its shadow and the lashes: as drawn
+    from src.clothing.customization import iris_shines
+    painted = mask.copy()
+    for patch, _ in iris_shines(eyes, mask):
+        painted |= patch
+    assert (red[~painted] == eyes[~painted]).all()                                # the white, its shadow and the lashes: as drawn
     changed = red[mask][:, :3].astype(int)
     assert ((changed[:, 2] <= changed[:, 0]) | (changed[:, 2] <= changed[:, 1])).all()   # no blue left in either
     columns = np.nonzero(mask.any(axis=0))[0]
@@ -1133,7 +1137,6 @@ def test_the_iris_is_cut_clean_and_keeps_its_light_in_any_colour():
     left = red[:, :half][mask[:, :half]][:, :3].astype(int)
     assert (left[:, 0] >= left[:, 1]).all() and left[:, 0].min() < 110 and left[:, 1].max() > 80   # shades of red, and red towards white
     # The shines inside the iris are flat and whole: no specks, no holes, no rim of the drawing's blue.
-    from src.clothing.customization import iris_shines
     shines = iris_shines(eyes, mask)
     assert len(shines) >= 8 and 2 <= sum(soft for _, soft in shines) < len(shines)   # sharp ones and soft ones, in each eye
     for patch, soft in shines:
