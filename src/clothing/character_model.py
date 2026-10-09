@@ -1547,6 +1547,10 @@ class CharacterModel:
             ears = ear_rows(v_h, self.customization)  # the model, the adjustments and the colours chosen
             if ears is not None:
                 self.parts.append(CharacterPart("ears", TexturedMesh(ears[0].flatten(), ears[1].flatten()), self.white_tex_id))
+            from .horns import rows_for as horn_rows
+            horns = horn_rows(v_h, self.customization)  # the horns, in the style chosen (none by default)
+            if horns is not None:
+                self.parts.append(CharacterPart("horns", TexturedMesh(horns[0].flatten(), horns[1].flatten()), self.white_tex_id))
 
         current = self.customization.custom_hair_obj
         if current and os.path.basename(current).startswith(f"Hair_fitted_{DEFAULT_HAIR_ID}"):

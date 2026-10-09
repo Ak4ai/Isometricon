@@ -76,6 +76,7 @@ class MouthStyle(str, Enum):
     CLASSIC = "classic"                 # Arco retrô clássico
     CAT = "cat"                         # Boquinha fofa estilo gato (:3 / nya)
     POUT = "pout"                       # Beicinho suave (pout)
+    VAMPIRE = "vampire"                 # A boca anime com duas presas
     BLANK = "blank"                     # Sem boca
     NONE = "none"                       # Sinônimo de sem boca
 
@@ -174,6 +175,8 @@ class AvatarCustomization:
     face_detail: Optional[Union[FaceDetail, str]] = None
     nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
     ear_style: str = "sem"      # orelhas 3D (ver ears.STYLE_NAMES); "sem": nenhuma
+    horn_style: str = "sem"     # chifres 3D (ver horns.STYLE_NAMES); "sem": nenhum
+    horn_color: str = ""        # a cor deles: "" a do modelo, um nome de horns.HORN_COLORS ou "#rrggbb"
     ear_color: str = ""         # a cor delas: "" a do modelo, "pele", "cabelo", um nome de ears.EAR_COLORS ou "#rrggbb"
     race: str = ""              # a raça escolhida por último (races.RACES); "": nenhuma, o corpo como veio
     nose_shadow: str = "legado"  # sombra do nariz: "legado" (um trecho fixo) ou "calculada" (do contorno do nariz)
@@ -493,6 +496,10 @@ NOSE_SHADOW_GROWTH = (0.5, 0.6, 12.0)
 # nose's height, from its top, over which the shadow fades in (none at the top of the bridge).
 NOSE_CAST, NOSE_CONTACT, NOSE_CAST_FALL, NOSE_RIM, NOSE_FADE = 2.6, 0.55, (-0.85, 0.70), 2, 0.75
 NOSE_SHADOWS = ("legado", "calculada")
+# The vampire's fangs: where each is across the mouth, pixels under the top of the mouth where they
+# start (the 512 px atlas), half the width of each two-pixel row from there down, and their colours.
+FANGS_AT, FANG_UNDER, FANG_ROWS = (0.24, 0.76), 8.0, (4, 4, 3, 2, 1)
+FANG, FANG_EDGE = (250, 248, 240, 255), (232, 226, 214, 255)
 # The band of darker skin under the face on the head atlas (the chin and the jaw take it): its
 # rows and columns, and how much darker it gets at the strongest shading.
 CHIN_BAND, CHIN_DARKER = (232, 256, 0, 256), 0.18
@@ -821,6 +828,19 @@ class LayeredHeadCompositor:
                     mouth_img = Image.fromarray(arr_m.astype(np.uint8))
             if mouth_img is not None:
                 canvas.alpha_composite(mouth_img)
+            if mouth_style == "vampire" and mouth_img is not None and mouth_img.getbbox() is not None:
+                # A vampire's: the anime mouth with a fang under each side of it, in steps of the
+                # drawing's pixels. Drawn after the lipstick, which they do not take.
+                unit = canvas.width / 512.0
+                x0, y0, x1, _ = mouth_img.getbbox()
+                under = y0 + FANG_UNDER * unit
+                pen = ImageDraw.Draw(canvas)
+                for at in FANGS_AT:
+                    middle = x0 + (x1 - x0) * at
+                    for row, half in enumerate(FANG_ROWS):
+                        top = under + row * 2 * unit
+                        pen.rectangle([middle - half * unit, top, middle + half * unit - 1, top + 2 * unit - 1],
+                                      fill=FANG_EDGE if half == FANG_ROWS[0] and row == 0 else FANG)
 
         # ---------------------------------------------------------
         # 7. ROSTO CUSTOMIZADO EM PNG (Se fornecido)

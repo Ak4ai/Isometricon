@@ -53,7 +53,7 @@ EYE_STYLES = {"anime": EyeStyle.ANIME, "piscando": EyeStyle.ANIME_WINK, "classic
               "sem": EyeStyle.BLANK, "wink": EyeStyle.ANIME_WINK, "classic": EyeStyle.CLASSIC, "blank": EyeStyle.BLANK}
 MOUTHS = {"anime": MouthStyle.ANIME_ORIGINAL, "sorriso": MouthStyle.SMILE, "aberta": MouthStyle.OPEN,
           "piscando": MouthStyle.WINK_SMILE, "neutra": MouthStyle.NEUTRAL, "classica": MouthStyle.CLASSIC,
-          "gato": MouthStyle.CAT, ":3": MouthStyle.CAT, "beicinho": MouthStyle.POUT, "sem": MouthStyle.BLANK,
+          "gato": MouthStyle.CAT, ":3": MouthStyle.CAT, "beicinho": MouthStyle.POUT, "vampiro": MouthStyle.VAMPIRE, "sem": MouthStyle.BLANK,
           "anime_original": MouthStyle.ANIME_ORIGINAL, "smile": MouthStyle.SMILE, "open": MouthStyle.OPEN,
           "wink_smile": MouthStyle.WINK_SMILE, "neutral": MouthStyle.NEUTRAL, "classic": MouthStyle.CLASSIC,
           "cat": MouthStyle.CAT, "pout": MouthStyle.POUT, "blank": MouthStyle.BLANK}
@@ -378,7 +378,7 @@ class SkinCommandHandler:
     def mouth(self, args: List[str]) -> Result:
         value = args[0].lower() if args else ""
         if value not in MOUTHS:
-            return False, "Uso: /skin boca <anime|sorriso|aberta|piscando|neutra|classica|gato|beicinho|sem>", GOLD
+            return False, "Uso: /skin boca <anime|sorriso|aberta|piscando|neutra|classica|gato|beicinho|vampiro|sem>", GOLD
         self._change(lambda c: setattr(c, "mouth_style", MOUTHS[value]), face=True)
         return True, f"[Skin] Boca: {value}.", GREEN
 
@@ -887,6 +887,32 @@ class SkinCommandHandler:
             self.character_model.reload()  # the ears are a mesh the model has or has not; between models they are moved in place
         return True, f"[Orelhas] {value.replace('_', ' ').capitalize()}.", GREEN
 
+    def horns(self, args: List[str]) -> Result:
+        """/skin chifre <sem|modelo> | cor <auto|nome|#rrggbb>: os chifres 3D e a cor deles."""
+        missing = self._need_model()
+        if missing:
+            return missing
+        from src.clothing import horns
+        custom = self.character_model.customization
+        value = args[0].lower() if args else ""
+        if value in ("cor", "color"):
+            wanted = args[1].lower() if len(args) > 1 else ""
+            if wanted in ("auto", "automatica", "automática") + NONE_WORDS:
+                custom.horn_color = ""
+                return True, "[Chifres] Cor: a do modelo.", GREEN
+            if wanted not in horns.HORN_COLORS and not (wanted.startswith("#") and len(wanted) == 7):
+                return False, f"[Erro] Uso: /skin chifre cor <auto|{'|'.join(horns.HORN_COLORS)}|#rrggbb>", RED
+            custom.horn_color = wanted
+            return True, f"[Chifres] Cor: {wanted}.", GREEN
+        value = "sem" if value in NONE_WORDS else value
+        if value not in horns.STYLE_NAMES:
+            return False, f"[Erro] Uso: /skin chifre <{'|'.join(horns.STYLE_NAMES)}> | cor <auto|nome|#rrggbb>", RED
+        before = getattr(custom, "horn_style", "sem")
+        custom.horn_style = value
+        if (before == "sem") != (value == "sem"):
+            self.character_model.reload()  # the horns are a mesh the model has or has not; between models they are moved in place
+        return True, f"[Chifres] {value.replace('_', ' ').capitalize()}.", GREEN
+
     def recut_skin(self) -> None:
         """Recorta de novo a pele sob as roupas (rápido), ou reconstrói o personagem se não der."""
         model = self.character_model
@@ -989,11 +1015,15 @@ SKIN_COMMANDS: List[Command] = [
             "batom, sombra, contorno, blush e sardas", SkinCommandHandler.makeup, ["batom", "sombra", "contorno", "blush", "sardas", "sem"],
             "Aparência"),
     Command(("boca", "mouth"), "/skin boca <estilo>", "estilo da boca", SkinCommandHandler.mouth,
-            ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "sem"], "Aparência"),
+            ["anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "vampiro", "sem"], "Aparência"),
     Command(("nariz", "nose"), "/skin nariz <sim|nao|formato|sombra legado|sombra calculada>", "nariz 3D, seu formato e o tipo de sombra (ajustes em /skin ajuste nariz_...)",
             SkinCommandHandler.nose, ["sim", "nao", "sombra"] + list(NOSE_STYLE_NAMES), "Aparência"),
     Command(("raca", "raça", "race"), "/skin raca <nome>", "corpo pronto de uma raça: pele, orelhas, olhos, nariz e proporções",
             SkinCommandHandler.race, lambda: list(__import__("src.clothing.races", fromlist=["RACES"]).RACES), "Aparência"),
+    Command(("chifre", "chifres", "horns"), "/skin chifre <sem|modelo> | cor <auto|nome|#rrggbb>",
+            "chifres 3D e a cor deles (ajustes em /skin ajuste chifre_...)",
+            SkinCommandHandler.horns, lambda: list(__import__("src.clothing.horns", fromlist=["STYLE_NAMES"]).STYLE_NAMES) + ["cor"],
+            "Aparência"),
     Command(("orelha", "orelhas", "ears"), "/skin orelha <sem|modelo> | cor <auto|pele|cabelo|nome|#rrggbb>",
             "orelhas 3D e a cor delas (ajustes em /skin ajuste orelha_...)",
             SkinCommandHandler.ears, list(EAR_STYLE_NAMES) + ["cor"], "Aparência"),

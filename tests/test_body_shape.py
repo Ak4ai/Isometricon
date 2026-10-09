@@ -787,3 +787,70 @@ def test_the_ears_take_a_colour_of_their_own_or_the_skin_s_at_a_click():
     custom.ear_style, custom.body_adjust = "elfo", {}
     assert np.allclose(coat(), skin, atol=1e-6) and colour().max() <= max(skin) + 1e-6     # a person's: the skin's
     assert set(ears.TONES) <= set(body_shape.EARS) and set(ears.ADJUSTMENTS) == set(body_shape.EARS)
+
+
+def test_every_horn_model_has_the_same_triangles_and_its_own_shape():
+    from src.clothing import horns
+    wanted = {"demonio", "bode", "touro", "boi", "cervo", "unicornio", "um", "dois", "tres", "um_quebrado"}
+    assert wanted <= set(horns.STYLE_NAMES) and horns.STYLE_NAMES[0] == "sem"
+    assert horns.styled_rows(head_box(), "sem") is None and horns.styled_rows(head_box(), "de_narval") is None
+    made = {name: horns.styled_rows(head_box(), name)[0] for name in horns.HORN_STYLES}
+    assert len({rows.shape for rows in made.values()}) == 1                             # moved in place from one model to another
+    tubes = lambda name: made[name].reshape(horns.TUBES, -1, 11)
+    used = lambda name: [t for t in tubes(name) if np.ptp(t[:, :3], axis=0).max() > 1e-6]
+    points = lambda name: np.concatenate([t[:, :3] for t in used(name)])
+    assert [len(used(n)) for n in ("um", "unicornio", "dois", "tres", "um_quebrado", "cervo")] == [1, 1, 2, 3, 2, 8]
+    for name, rows in made.items():
+        assert np.isfinite(rows).all() and np.allclose(np.linalg.norm(rows[:, 3:6], axis=1), 1.0, atol=1e-4), name
+        assert points(name)[:, 1].max() > 1.8 or name == "carneiro", name               # out of the top of the head
+    top = lambda name: points(name)[:, 1].max()
+    wide = lambda name: np.abs(points(name)[:, 0]).max()
+    assert abs(points("unicornio")[:, 0]).max() < 0.03 and points("unicornio")[:, 2].max() > 0.15   # one, on the forehead, forwards
+    assert top("unicornio") > top("um") and top("cervo") > top("dois")
+    assert wide("boi") > wide("touro") > wide("dois")                                   # the ox's wider than the bull's
+    assert points("bode")[:, 2].min() < -0.05 and points("carneiro")[:, 1].min() < 1.75  # swept back; curling down beside the head
+    whole, broken = used("um_quebrado")
+    assert np.ptp(whole[:, 1]) > 1.8 * np.ptp(broken[:, 1])                             # one whole, one broken off
+    assert whole[:, 0].mean() > 0 > broken[:, 0].mean()
+    pair = used("dois")
+    np.testing.assert_allclose(pair[0][:, 0], -pair[1][:, 0], atol=1e-6)                # a pair mirrors
+    dark = made["demonio"][:, 8:11].max()
+    assert dark < 0.4 < made["unicornio"][:, 8:11].max()                                # each in its colour
+    red = horns.styled_rows(head_box(), "dois", colour=(150, 40, 40))[0]
+    assert red[:, 8].max() > 0.55 and red[:, 9].max() < 0.2                             # or in the one given
+    bigger = horns.styled_rows(head_box(), "touro", {"chifre_tamanho": 1.0})[0]
+    curlier = horns.styled_rows(head_box(), "touro", {"chifre_curva": 1.0})[0]
+    assert np.abs(bigger[:, 0]).max() > wide("touro") and not np.allclose(curlier, made["touro"])
+    assert set(horns.ADJUSTMENTS) == set(body_shape.HORNS) <= set(body_shape.ADJUSTMENTS)
+
+
+def test_horns_and_the_vampire_s_mouth_are_chosen_by_command():
+    from src.clothing import races
+    from src.clothing.customization import HeadAtlasBuilder
+    reloads = []
+    model = SimpleNamespace(customization=AvatarCustomization(), reload=lambda: reloads.append(1), refresh_face=lambda: True)
+    handler, custom = SkinCommandHandler(character_model=model), model.customization
+    assert custom.horn_style == "sem" and handler.execute("/skin chifre cervo")[0] and custom.horn_style == "cervo" and len(reloads) == 1
+    assert handler.execute("/skin chifre unicornio")[0] and len(reloads) == 1          # another model: moved in place
+    assert handler.execute("/skin chifre cor preto")[0] and custom.horn_color == "preto" and len(reloads) == 1
+    assert handler.execute("/skin chifre cor #aabbcc")[0] and not handler.execute("/skin chifre cor fluorescente")[0]
+    assert handler.execute("/skin chifre cor auto")[0] and custom.horn_color == ""
+    assert not handler.execute("/skin chifre de_narval")[0] and handler.execute("/skin chifre sem")[0] and len(reloads) == 2
+    assert handler.execute("/skin boca vampiro")[0] and custom.resolved_mouth_style == "vampire"
+    builder = HeadAtlasBuilder()
+    atlas = lambda **fields: np.array(builder.build_atlas(AvatarCustomization(**fields)).convert("RGB"), dtype=int)
+    plain, fanged = atlas(mouth_style="anime_original"), atlas(mouth_style="vampire")
+    changed = np.abs(plain - fanged).sum(axis=2) > 0
+    rows, columns = np.nonzero(changed)
+    assert changed.any() and rows.min() >= 208 and rows.max() <= 230 and 95 <= columns.min() and columns.max() <= 161   # under the mouth only
+    assert (fanged[changed].min(axis=1) > 200).all()                                    # two white fangs
+    assert changed[:, :128].any() and changed[:, 128:].any()
+    painted = atlas(mouth_style="vampire", makeup={"batom": "vinho"})
+    assert (painted[changed] == fanged[changed]).all()                                  # which the lipstick does not take
+    races.apply(custom, "vampiro")
+    assert custom.resolved_mouth_style == "vampire" and custom.horn_style == "sem"
+    races.apply(custom, "demonio")
+    assert custom.horn_style == "demonio" and custom.resolved_mouth_style == "anime_original"   # the fangs go with the race
+    custom.mouth_style = "smile"
+    races.apply(custom, "humano")
+    assert custom.resolved_mouth_style == "smile" and custom.horn_style == "sem"        # a mouth chosen by hand stays

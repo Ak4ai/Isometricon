@@ -9,7 +9,7 @@ execução, o autocompletar e a ajuda.
 | `/skin corpo <feminino\|masculino>` | troca o corpo |
 | `/skin pele <palida\|clara\|bronzeada\|morena\|negra>` | tom de pele |
 | `/skin olhos <cor\|estilo>` | azul, verde, castanho, roxo, vermelho, dourado, ciano; anime, piscando, classico, sem |
-| `/skin boca <estilo>` | anime, sorriso, aberta, piscando, neutra, classica, gato, beicinho, sem |
+| `/skin boca <estilo>` | anime, sorriso, aberta, piscando, neutra, classica, gato, beicinho, vampiro (a anime com presas), sem |
 | `/skin cabeca <arredondada\|quadrada>` | formato da cabeça |
 | `/skin cabelo <id\|cor\|careca\|raspado\|padrao>` | troca ou pinta o cabelo |
 | `/skin cabelo posicao <x\|y\|z> <cm>` · `escala [x\|y\|z] <fator>` · `reset` | ajusta o cabelo (como acessório no Roblox) |
@@ -27,6 +27,7 @@ execução, o autocompletar e a ajuda.
 | `/skin hsr espelhar <sim\|nao>` · `<esconder\|mostrar\|apagar> <pontos>` · `limpar` · `desfazer` · `refazer` | a pele escondida sob a roupa: espelhar os dois lados do corpo, ou corrigir à mão os pontos da cage (o pincel da seção Ajuste fino) |
 | `/skin extra <nome\|id\|none>` | veste ou tira uma peça a mais, junto com as outras |
 | `/skin raca <humano\|elfo\|anao\|orc\|goblin\|demonio\|vampiro\|tritao\|marciano\|fada\|felino\|lupino\|kitsune\|coelho\|draconato\|reptiliano>` | corpo pronto de uma raça sobre o corpo em uso: pele, orelhas, olhos, nariz e proporções |
+| `/skin chifre <sem\|demonio\|bode\|carneiro\|touro\|boi\|cervo\|unicornio\|um\|dois\|tres\|um_quebrado>` · `cor <auto\|marfim\|osso\|branco\|cinza\|marrom\|preto\|vermelho\|dourado\|#rrggbb>` | chifres 3D e a cor deles (ajustes em `/skin ajuste`: `chifre_tamanho`, `chifre_curva`) |
 | `/skin orelha <sem\|humana\|redonda\|elfo\|elfo_asa\|morcego\|barbatana\|gato\|cachorro\|cachorro_caido\|cachorro_uma_caida\|lobo\|raposa\|coelho\|coelho_uma_caida\|coelho_caidas\|dragao\|reptil>` · `cor <auto\|pele\|cabelo\|branco\|creme\|caramelo\|marrom\|ruivo\|cinza\|preto\|rosa\|#rrggbb>` | orelhas 3D e a cor delas (ajustes em `/skin ajuste`: `orelha_tamanho`, `orelha_altura`, `orelha_abertura`, `orelha_matiz`, `orelha_saturacao`, `orelha_brilho`) |
 | `/skin sobrancelha <padrao\|grossa\|decidida\|sem>` | estilo das sobrancelhas |
 | `/skin nariz <sim\|nao\|formato\|sombra legado\|sombra calculada>` | nariz 3D e seu formato: padrao, projetado, ponta_larga, narinas_largas, aquilino, arrebitado, fino, largo, botao, longo, botao_largo, botao_arrebitado, narinas_grandes, achatado, batata, aberto, bloco, bloco_narinas; a sombra é a legada (um trecho fixo) ou a calculada pelo contorno do nariz (ajustes em `/skin ajuste`: `nariz_tamanho`, `nariz_altura`, `nariz_projecao`, `nariz_largura`, `nariz_ponte_largura`, `nariz_ponte_altura`, `nariz_ponta_largura`, `nariz_ponta_projecao`, `nariz_base_largura`, `nariz_base_altura`, `nariz_narinas_altura`, `nariz_ponta_cor`, `nariz_sombra`; pele: `vitiligo`, `vitiligo_forma`) |

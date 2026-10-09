@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 from .body_shape import BODY, EARS
-from .customization import IrisColor
+from .customization import IrisColor, MouthStyle
+
+RACE_MOUTHS = ("vampire",)  # mouths that belong to a race
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,8 @@ class Race:
     eyes: IrisColor
     nose: Optional[str] = "padrao"
     adjust: Dict[str, int] = field(default_factory=dict)
+    horns: str = "sem"
+    mouth: Optional[str] = None  # a mouth of the race's own (MouthStyle); None: the one the character has
 
 
 RACES: Dict[str, Race] = {
@@ -45,10 +49,10 @@ RACES: Dict[str, Race] = {
                     "orelha_tamanho": 60, "olhos_tamanho": 40}),
     # Red skin, golden eyes, ears like a bat's.
     "demonio": Race("Demônio", (190, 62, 58), "morcego", IrisColor.GOLD, "aquilino",
-                    {"altura": 25, "ombros": 35, "cintura": -15, "orelha_tamanho": -20}),
+                    {"altura": 25, "ombros": 35, "cintura": -15, "orelha_tamanho": -20}, horns="demonio"),
     # Ashen, red-eyed, a little taller and thinner than a human.
     "vampiro": Race("Vampiro", (214, 214, 224), "elfo_asa", IrisColor.RED, "fino",
-                    {"altura": 15, "pescoco": 15, "cintura": -20, "orelha_tamanho": -40}),
+                    {"altura": 15, "pescoco": 15, "cintura": -20, "orelha_tamanho": -40}, mouth="vampire"),
     # Sea folk (merman, triton): teal skin, fins for ears, large hands and feet to swim with.
     "tritao": Race("Tritão", (96, 186, 190), "barbatana", IrisColor.CYAN, "botao",
                    {"ombros": 15, "cintura": -20, "maos": 20, "pes": 35}),
@@ -71,14 +75,14 @@ RACES: Dict[str, Race] = {
                    {"altura": -30, "cabeca": 15, "pes": 40, "olhos_tamanho": 25}),
     # Dragon kin and lizard folk: scaly ears, strong colours.
     "draconato": Race("Draconato", (150, 70, 60), "dragao", IrisColor.GOLD, "achatado",
-                      {"altura": 35, "ombros": 50, "peito": 30, "pescoco": 20, "maos": 30, "pes": 30}),
+                      {"altura": 35, "ombros": 50, "peito": 30, "pescoco": 20, "maos": 30, "pes": 30}, horns="dois"),
     "reptiliano": Race("Reptiliano", (110, 150, 96), "reptil", IrisColor.GOLD, None,
                        {"pescoco": 35, "ombros": -10, "cintura": -10, "olhos_distancia": 30}),
 }
 RACE_NAMES = tuple(RACES)
 # The adjustments a race decides: choosing another race takes these back and keeps the rest
 # (makeup, the edges of the clothes, the details of the nose).
-RACE_ADJUSTMENTS = (set(BODY) - {"folga"}) | set(EARS) | {"olhos_tamanho", "olhos_distancia", "olhos_altura"}
+RACE_ADJUSTMENTS = (set(BODY) - {"folga"}) | set(EARS) | {"chifre_tamanho", "chifre_curva"} | {"olhos_tamanho", "olhos_distancia", "olhos_altura"}
 
 
 def apply(custom: Any, name: str) -> None:
@@ -88,6 +92,12 @@ def apply(custom: Any, name: str) -> None:
     custom.race = name
     custom.skin_color_rgb = tuple(c / 255.0 for c in race.skin)
     custom.ear_style = race.ears
+    custom.horn_style = race.horns
+    was = custom.resolved_mouth_style
+    if race.mouth is not None:
+        custom.mouth_style = MouthStyle(race.mouth)
+    elif was in RACE_MOUTHS:  # another race's mouth does not stay
+        custom.mouth_style = MouthStyle.ANIME_ORIGINAL
     custom.iris_color, custom.iris_color_other = race.eyes, None
     custom.has_3d_nose = race.nose is not None
     if race.nose is not None:
