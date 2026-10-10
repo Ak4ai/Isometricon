@@ -56,3 +56,6 @@ if __name__ == "__main__":
         elif arg == "run" and len(sys.argv) > 2:
             res = execute_blender_script_file(sys.argv[2])
             print("RUN RESULT:", res)
+        elif arg == "eval" and len(sys.argv) > 2:
+            res = execute_blender_code(sys.argv[2])
+            print("EVAL RESULT:", res)

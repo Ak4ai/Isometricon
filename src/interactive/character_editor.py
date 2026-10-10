@@ -1,0 +1,1259 @@
+"""Tela de criação de personagem: seções à esquerda, opções em grade e o personagem girando ao lado.
+
+Abre com ``/skin interface`` (no terreno ou no visualizador ``--char``). Cada opção da grade
+executa o mesmo comando do chat (``/skin olhos azul``, ``/skin top <id>``...), então a tela e o
+chat nunca divergem. As roupas vêm dos itens baixados em ``assets/models/clothing``, separadas
+pelo tipo do asset do Roblox.
+
+A disposição e os cliques não dependem de OpenGL (``create_gl=False`` nos testes); o painel é
+uma imagem desenhada com PIL e enviada como textura só quando muda.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import glob
+import os
+import re
+import subprocess
+import sys
+import time
+
+import numpy as np
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from src.clothing.body_shape import EYE_SLIDERS, BODY_GROUPS, BROWS, EARS, EYES, GARMENTS, HORNS, TAILS, WINGS, MAKEUP_SLIDERS, NOSE, REDRAWS_FACE, SHADING, SKIN
+from src.clothing.ears import EAR_COLORS
+from src.clothing.horns import HORN_COLORS, STYLE_NAMES as HORN_STYLE_NAMES
+from src.clothing.tails import STYLE_NAMES as TAIL_STYLE_NAMES
+from src.clothing.wings import STYLE_NAMES as WING_STYLE_NAMES
+from src.clothing import underwear as underwear_models
+from src.clothing.known_defects import defect_of
+from src.clothing.races import RACES
+from src.clothing.customization import IRIS_PALETTES, MAKEUP_COLORS
+from src.clothing.character_model import DEFAULT_HAIR_ID, HANDMADE_HAIR, MODELS_DIR, SKIN_PRESETS
+from src.clothing.customization import HairStyle
+from src.clothing.layer_clearance import fitted_asset_type
+from src.interactive.skin_commands import (
+    BODIES,
+    CLOTHING_DIR,
+    EYE_SHAPE_NAMES,
+    EYEBROWS,
+    EYE_COLORS,
+    EYE_STYLES,
+    HAIR_COLORS,
+    HEADS,
+    MOUTHS,
+    NOSE_STYLE_NAMES,
+    EAR_STYLE_NAMES,
+    PRESETS,
+    SKIN_TONES,
+    SkinCommandHandler,
+)
+
+Rect = Tuple[int, int, int, int]  # x0, y0, x1, y1
+
+PANEL_WIDTH = 408
+TAB_WIDTH = 104
+TAB_HEIGHT = 42
+FOOTER_HEIGHT = 136
+PAD = 12
+CARD = (88, 112)   # a garment: picture and two lines of name
+TEXT_TILE = 34     # height of a named option (two to a row)
+SWATCH = 32        # a colour (seven to a row)
+GAP = 8
+SWATCHES_PER_ROW = 7
+SLIDER_TILE = 46   # height of an adjustment: its name, its value and the track
+PICKER_TILE = 104  # height of a picker of any colour: the hues by how light, and under them how vivid
+PICKER_MAP = (8, 8, 72)   # the margin of the picker's map in its tile, its top and its bottom
+PICKER_BAR = (80, 94)     # the top and the bottom of the bar of how vivid
+PICKER_REDRAW = 0.10      # seconds between two colours sent while the picker is dragged
+WARNING = (245, 190, 40, 255)  # the mark on a card of a garment with a known defect
+SLIDER_SNAP = 5    # this close to the middle, a slider goes back to 0
+FACE_REDRAW = 0.06 # seconds between two redraws of the face while one of its sliders is dragged
+SCROLL_STEP = 60
+DRAG_DEGREES = 0.45  # the character turns this much for each pixel dragged sideways
+TILT_DEGREES = 0.30  # and the camera tilts this much for each pixel dragged up or down,
+TILT_LIMITS = (-20.0, 80.0)  # from a little below the character to almost straight above
+SPIN_DEGREES = 30.0  # and this much each second on its own
+FACE_SECTIONS = ("Olhos", "Rosto", "Nariz", "Maquiagem")
+FINE_SECTION = "Ajuste fino"  # where the skin brush works
+BRUSHES = (("esconder", "Esconder pele"), ("mostrar", "Mostrar pele"), ("apagar", "Apagar pintura"))
+BRUSH_SIZES = (("Pequeno", 10), ("Médio", 22), ("Grande", 40))  # radius, in pixels of the window
+HISTORY_BUTTON, HISTORY_GAP, HISTORY_MARGIN = 40, 6, 12  # the undo and redo arrows at the top right of the scene
+HISTORY_NOTICE = 48  # how far down they go while the loading notice is in that corner  # sections worked on with the camera close to the face
+
+BACKGROUND = (22, 24, 30, 240)
+TAB_STRIP = (15, 16, 20, 245)
+TILE = (44, 47, 57, 255)
+TILE_HOVER = (62, 66, 80, 255)
+ACCENT = (255, 200, 60, 255)
+TEXT = (232, 234, 240, 255)
+MUTED = (150, 155, 168, 255)
+
+# Roblox asset types of the garments of each section.
+PICTURED = ("top", "jacket", "bottom", "dress", "shoes", "hair")  # kinds the thumbnail script draws
+KIND_OF_TYPE = {64: "top", 65: "top", 68: "top", 67: "jacket", 66: "bottom", 69: "bottom", 72: "dress",
+                70: "shoe", 71: "shoe", 41: "hair", 19: "tool"}
+HAIR_WORDS = ("hair", "cabelo", "wig", "ponytail", "pigtails", "braids")
+LEFT_WORDS = ("left", "esquerdo")
+RIGHT_WORDS = ("right", "direito")
+SHOE_WORDS = ("shoe", "boots", "sneakers", "cal_ado", "calcado")
+
+EYE_RGB = {"azul": (70, 130, 235), "verde": (70, 190, 110), "castanho": (120, 80, 50), "roxo": (150, 90, 220),
+           "vermelho": (220, 60, 60), "dourado": (230, 185, 60), "ciano": (70, 215, 225)}
+EYE_RGB.update({n: IRIS_PALETTES[n] for n in ("rosa", "laranja", "ambar", "turquesa", "lilas", "cinza", "branco", "preto")})
+HAIR_RGB = {"castanho": (105, 70, 45), "loiro": (235, 205, 120), "preto": (30, 30, 34), "rosa": (245, 160, 195),
+            "prata": (215, 218, 225), "ruivo": (170, 75, 40), "ciano": (80, 210, 225)}
+PORTUGUESE_EYE_STYLES = ("anime", "piscando", "classico", "sem")
+PORTUGUESE_MOUTHS = ("anime", "sorriso", "aberta", "piscando", "neutra", "classica", "gato", "beicinho", "vampiro", "sem")
+
+
+@dataclass
+class Option:
+    """Uma opção da grade: o que mostra e o comando do chat que aplica."""
+    label: str
+    command: str
+    color: Optional[Tuple[int, int, int]] = None  # a colour swatch
+    image: Optional[str] = None                   # a picture file (a garment)
+    selected: Callable[[Any], bool] = lambda model: False
+    slider: Optional[str] = None                  # an adjustment of body_shape, set from -100 to 100
+    check: bool = False                           # drawn with a box that is ticked when selected
+    picker: Optional[str] = None                  # a command that takes "#rrggbb": drawn as a picker of any colour
+
+    @property
+    def kind(self) -> str:
+        if self.slider is not None:
+            return "slider"
+        if self.picker is not None:
+            return "picker"
+        return "card" if self.image is not None or self.command.startswith(CARD_COMMANDS) else \
+            "swatch" if self.color is not None else "text"
+
+
+CARD_COMMANDS = ("/skin top ", "/skin calca ", "/skin jaqueta ", "/skin sapato ", "/skin vestir ", "/skin extra ", "/skin raca ")
+RACE_THUMBS = os.path.join(CLOTHING_DIR, "thumbs", "racas")  # <race>_<body>.png, by scripts/render_catalog_thumbnails.py
+
+
+@dataclass
+class Group:
+    title: str
+    options: List[Option]
+
+
+def with_pickers(groups: List[Group]) -> List[Group]:
+    """The groups, and under each one of colours a picker of any colour for the same command."""
+    out: List[Group] = []
+    for group in groups:
+        out.append(group)
+        swatches = [o for o in group.options if o.color is not None and o.kind == "swatch"]
+        if swatches:
+            command = swatches[0].command.rsplit(" ", 1)[0]
+            out.append(Group(f"{group.title}: qualquer cor", [Option(group.title, "", picker=command)]))
+    return out
+
+
+@dataclass
+class Section:
+    title: str
+    groups: Callable[[], List[Group]]
+
+
+@dataclass
+class CatalogItem:
+    asset_id: str  # one id, or "left,right" for a pair of shoes
+    name: str
+    kind: str
+    image: Optional[str] = None
+
+
+def _same(a: Any, b: Any) -> bool:
+    return a is not None and b is not None and str(a) == str(b)
+
+
+def _value(thing: Any) -> str:
+    return str(getattr(thing, "value", thing)).lower()
+
+
+def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> Dict[str, List[CatalogItem]]:
+    """Os itens baixados, por lugar onde se vestem (top, jacket, bottom, dress, shoes, hair, other).
+
+    O tipo vem do item já encaixado em qualquer corpo (cabeçalho do OBJ); sem ele, do nome.
+    Os dois pés de um calçado viram um item só.
+    """
+    found: Dict[str, List[CatalogItem]] = {k: [] for k in ("top", "jacket", "bottom", "dress", "shoes", "hair", "tool", "other")}
+    halves: Dict[str, Dict[str, CatalogItem]] = {}
+    for path in sorted(glob.glob(os.path.join(clothing_dir, "*.rbxm"))):
+        base = os.path.basename(path)
+        match = re.search(r"_(\d{6,})\.rbxm$", base)
+        if not match:
+            continue
+        asset_id, stem = match.group(1), base[:match.start()]
+        lower = stem.lower()
+        asset_type = next((t for t in (fitted_asset_type(os.path.join(models_dir, f"character_native_{asset_id}_{body}.obj"))
+                                       for body in ("female", "male")) if t is not None), None)
+        kind = KIND_OF_TYPE.get(asset_type)
+        if kind is None:
+            is_side = any(w in lower for w in LEFT_WORDS + RIGHT_WORDS)
+            kind = ("hair" if any(w in lower for w in HAIR_WORDS)
+                    else "shoe" if is_side and any(w in lower for w in SHOE_WORDS) else "other")
+        thumb = os.path.join(clothing_dir, "thumbs", f"{asset_id}.png")
+        texture = path[:-len(".rbxm")] + ".png"
+        image = thumb if os.path.exists(thumb) else texture if os.path.exists(texture) else None
+        item = CatalogItem(asset_id, re.sub(r"[_\s]+", " ", stem).strip(" -"), kind, image)
+        if kind != "shoe":
+            found[kind].append(item)
+            continue
+        side = "left" if any(w in lower for w in LEFT_WORDS) else "right"
+        pair = re.sub(r"[^a-z0-9]+", " ", re.sub("|".join(LEFT_WORDS + RIGHT_WORDS), "", lower)).strip()
+        pair = re.sub(r"\b(shoe|accessory|acess rio de cal ado|cla|cl)\b", "", pair).strip()
+        halves.setdefault(pair, {})[side] = item
+    for pair in halves.values():
+        if "left" in pair and "right" in pair:
+            left, right = pair["left"], pair["right"]
+            name = re.sub(r"(?i)\s*-?\s*(left|right)\s*(shoe)?\s*(accessory)?", "", left.name).strip(" -") or left.name
+            found["shoes"].append(CatalogItem(f"{left.asset_id},{right.asset_id}", name, "shoes", left.image))
+    return found
+
+
+class CharacterEditor:
+    """Estado, disposição e desenho da tela de criação de personagem."""
+
+    def __init__(self, handler: SkinCommandHandler, turntable_state: Optional[Dict[str, Any]] = None,
+                 create_gl: bool = True) -> None:
+        self.handler = handler
+        self.turntable = turntable_state if turntable_state is not None else {"active": True, "yaw": 0.0}
+        self.create_gl = create_gl
+        self.autosave = True  # closing the editor saves the character
+        self.typing = False   # the field that adds a Roblox item has the keyboard
+        self.entry = ""
+        self.clipboard: Callable[[], str] = lambda: ""
+        self.make_thumbnails = create_gl  # pictures of new items are rendered by a process of their own
+        self._thumbnails: Any = None
+        self._pictured: set = set()
+        self.is_open = False
+        self.active = 0
+        self.scroll = 0
+        self.hover: Optional[Tuple[str, Any]] = None
+        self.message = ""
+        self.dirty = True
+        self._dragging = False
+        self._drag_x = 0.0
+        self._drag_y = 0.0
+        self._slider: Optional[Tuple[Option, int, int]] = None  # the adjustment being dragged and its track
+        self._slider_value = 0
+        self._slider_sent = 0.0
+        self._picker: Optional[Tuple[Option, str]] = None             # the picker being dragged and where: "map" or "bar"
+        self._picked: Dict[str, Tuple[float, float, float]] = {}      # of each picker, by its command: hue, how light, how vivid
+        self._picker_maps: Dict[Tuple[int, int, int], Image.Image] = {}
+        self._was_spinning = True
+        self._hits: List[Tuple[Rect, str, Any]] = []
+        self._content_height = 0
+        self._size = (0, 0)
+        self._busy = ""
+        self._selected_key: Any = None
+        self._images: Dict[Tuple[str, Tuple[int, int]], Any] = {}
+        self._catalog: Dict[str, List[CatalogItem]] = {}
+        self._groups: Optional[List[Group]] = None
+        self._quad = None
+        # The skin brush: what it does (None: off), its radius, whether it paints both sides, the
+        # points taken by the stroke being made, and what the main loop gives it each frame: a
+        # function from the cursor to the points under it, and the points to show on the character.
+        # The skin under the clothes is edited with two things, each on its own: the brush (the left
+        # button paints, and the points it takes are shown) and the transparency (the skin whole and
+        # painted by its state, under see-through clothes). With either, the legend and undo are there.
+        self.brush_on = False
+        self.clear_clothes = False
+        self._brush_used = False  # the first time the brush is turned on, the transparency comes with it
+        self.arms_out = False      # the character stands with the arms at 90 degrees while in the fine adjustment
+        self._history_quad = None
+        self._legend_quad = None
+        self._history_key: Any = None
+        self.ctrl = False      # Ctrl is held (the main loop says): the brush does the opposite
+        self._stroke_brush = ""
+        self.brush: Optional[str] = BRUSHES[0][0]
+        self.brush_size = BRUSH_SIZES[1][1]
+        self.brush_mirror = False
+        self.picker: Optional[Callable[..., Any]] = None
+        self.overlay: Any = None
+        self.cursor = (0.0, 0.0)
+        self._stroke: Optional[set] = None
+        self._overlay_quad = None
+        self._overlay_key: Any = None
+        self._ring_quad = None
+        self._ring_size = 0
+        self.sections = self._make_sections()
+
+    # ------------------------------------------------------------------ o que há para escolher
+    @property
+    def model(self) -> Any:
+        return self.handler.character_model
+
+    def _custom(self) -> Any:
+        return getattr(self.model, "customization", None)
+
+    def defect(self, option: Option) -> str:
+        """The known defect of the garment of a card on the body shown ("" when there is none)."""
+        worn = re.search(r"(\d{6,})$", option.command) if option.kind == "card" else None
+        return defect_of(worn.group(1), getattr(self.model, "body", "")) if worn and self.model is not None else ""
+
+    def _garments(self, kind: str, command: str, slot: str) -> List[Option]:
+        options = [Option("Nenhum", f"/skin {command} none", selected=lambda m, s=slot: not getattr(m, s, None))]
+        for item in self._catalog.get(kind, []):
+            options.append(Option(item.name, f"/skin {command} {item.asset_id}", image=item.image or "",
+                                  selected=lambda m, s=slot, i=item.asset_id: _same(getattr(m, s, None), i)))
+        return options
+
+    def _make_sections(self) -> List[Section]:
+        custom = self._custom
+        tone_rgb = lambda name: tuple(int(round(c * 255)) for c in SKIN_PRESETS[SKIN_TONES[name]])
+
+        def body() -> List[Group]:
+            return [
+                Group("Corpo", [Option(n.capitalize(), f"/skin corpo {n}", selected=lambda m, v=BODIES[n]: _value(getattr(m, "body", "")) == _value(v))
+                                for n in ("feminino", "masculino")]),
+                Group("Raça (sobre o corpo escolhido)", [
+                    Option(race.label, f"/skin raca {name}", image=self._race_picture(name),
+                           selected=lambda m, name=name: custom() is not None and getattr(custom(), "race", "") == name)
+                    for name, race in RACES.items()]),
+                Group("Cauda", [Option("Sem cauda" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin cauda {n}",
+                                       selected=lambda m, n=n: custom() is not None and getattr(custom(), "tail_style", "sem") == n)
+                                for n in TAIL_STYLE_NAMES]),
+                Group("Cor da cauda", [
+                    Option("Cor da pele", "/skin cauda cor pele alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "tail_color", "") == "pele"),
+                    Option("Cor do cabelo", "/skin cauda cor cabelo alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "tail_color", "") == "cabelo")]
+                    + [Option(n.capitalize(), f"/skin cauda cor {n}", color=EAR_COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "tail_color", "") == n)
+                       for n in EAR_COLORS]),
+                Group("Ajustes da cauda", [Option(label, "", slider=name) for name, label in TAILS.items()]),
+                Group("Roupa de baixo (pintada na pele)", [
+                    Option("Usar", "/skin intima alternar", check=True,
+                           selected=lambda m: custom() is not None and underwear_models.colour_of(custom()) is not None)]
+                    + [Option(n.capitalize(), f"/skin intima {n}", color=underwear_models.COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "underwear", "") == n)
+                       for n in underwear_models.COLORS]),
+                Group("Asas", [Option("Sem asas" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin asa {n}",
+                                      selected=lambda m, n=n: custom() is not None and getattr(custom(), "wing_style", "sem") == n)
+                               for n in WING_STYLE_NAMES]),
+                Group("Cor das asas", [
+                    Option("Cor da pele", "/skin asa cor pele alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "wing_color", "") == "pele"),
+                    Option("Cor do cabelo", "/skin asa cor cabelo alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "wing_color", "") == "cabelo")]
+                    + [Option(n.capitalize(), f"/skin asa cor {n}", color=EAR_COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "wing_color", "") == n)
+                       for n in EAR_COLORS]),
+                Group("Ajustes das asas", [Option(label, "", slider=name) for name, label in WINGS.items()]),
+                Group("Tom de pele", [Option(n.capitalize(), f"/skin pele {n}", color=tone_rgb(n),
+                                             selected=lambda m, n=n: custom() is not None and all(
+                                                 abs(a - b) < 0.02 for a, b in zip(custom().skin_color_rgb, SKIN_PRESETS[SKIN_TONES[n]])))
+                                      for n in SKIN_TONES]),
+                Group("Cabeça", [Option(n.capitalize(), f"/skin cabeca {n}", selected=lambda m, v=HEADS[n]: custom() is not None and _value(custom().head_type) == _value(v))
+                                 for n in ("arredondada", "quadrada")]),
+                Group("Pele", [Option(label, "", slider=name) for name, label in SKIN.items()]),
+            ]
+
+        def eye_colours(title: str, command: str, eye: str, worn) -> List[Group]:
+            """As cores prontas de um olho (ou dos dois) e os controles que levam a qualquer outra cor."""
+            is_worn = lambda v: custom() is not None and all(w is None or _value(w) == _value(v) for w in worn()) \
+                and any(w is not None for w in worn())
+            return [Group(title, [Option(n.capitalize(), f"{command} {n}", color=EYE_RGB[n], selected=lambda m, v=EYE_COLORS[n]: is_worn(v))
+                                  for n in EYE_COLORS])]
+
+        def eyes() -> List[Group]:
+            return [
+                Group("Olhos", [Option(n.capitalize(), f"/skin olhos {n}", selected=lambda m, v=EYE_STYLES[n]: custom() is not None and custom().resolved_eye_style == _value(v))
+                                for n in PORTUGUESE_EYE_STYLES]),
+                Group("Formato dos olhos", [
+                    Option(n.replace("_", " ").capitalize(), f"/skin olhos {n}",
+                           selected=lambda m, n=n: custom() is not None and getattr(custom(), "eye_shape", "padrao") == n
+                           and custom().resolved_eye_style not in ("classic", "blank"))
+                    for n in EYE_SHAPE_NAMES]),
+                *eye_colours("Cor dos olhos (os dois)", "/skin olhos", "olhos", lambda: (custom().iris_color, custom().iris_color_other)),
+                *eye_colours("Olho direito", "/skin olho direito", "olho_direito", lambda: (custom().iris_color,)),
+                *eye_colours("Olho esquerdo", "/skin olho esquerdo", "olho_esquerdo", lambda: (
+                    custom().iris_color_other if custom().iris_color_other is not None else custom().iris_color,)),
+                Group("Ajustes dos olhos", [Option(label, "", slider=name) for name, label in EYES.items()]),
+            ]
+
+        def face() -> List[Group]:
+            return [
+                Group("Boca", [Option(n.capitalize(), f"/skin boca {n}", selected=lambda m, v=MOUTHS[n]: custom() is not None and _value(custom().mouth_style) == _value(v))
+                               for n in PORTUGUESE_MOUTHS]),
+                Group("Sobrancelhas", [Option(n.capitalize(), f"/skin sobrancelha {n}",
+                                              selected=lambda m, v=EYEBROWS[n]: custom() is not None and custom().resolved_eyebrow_style == _value(v))
+                                       for n in EYEBROWS]),
+                Group("Ajustes das sobrancelhas", [Option(label, "", slider=name) for name, label in BROWS.items()]),
+                Group("Orelhas", [Option("Sem orelhas" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin orelha {n}",
+                                         selected=lambda m, n=n: custom() is not None and getattr(custom(), "ear_style", "sem") == n)
+                                  for n in EAR_STYLE_NAMES]),
+                Group("Cor das orelhas", [
+                    Option("Cor da pele", "/skin orelha cor pele alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "ear_color", "") == "pele"),
+                    Option("Cor do cabelo", "/skin orelha cor cabelo alternar", check=True,
+                           selected=lambda m: custom() is not None and getattr(custom(), "ear_color", "") == "cabelo")]
+                    + [Option(n.capitalize(), f"/skin orelha cor {n}", color=EAR_COLORS[n],
+                              selected=lambda m, n=n: custom() is not None and getattr(custom(), "ear_color", "") == n)
+                       for n in EAR_COLORS]),
+                Group("Ajustes das orelhas", [Option(label, "", slider=name) for name, label in EARS.items()]),
+                Group("Chifres", [Option("Sem chifres" if n == "sem" else n.replace("_", " ").capitalize(), f"/skin chifre {n}",
+                                         selected=lambda m, n=n: custom() is not None and getattr(custom(), "horn_style", "sem") == n)
+                                  for n in HORN_STYLE_NAMES]),
+                Group("Cor dos chifres", [Option("Do modelo", "/skin chifre cor auto",
+                                                 selected=lambda m: custom() is not None and not getattr(custom(), "horn_color", ""))]
+                      + [Option(n.capitalize(), f"/skin chifre cor {n}", color=HORN_COLORS[n],
+                                selected=lambda m, n=n: custom() is not None and getattr(custom(), "horn_color", "") == n)
+                         for n in HORN_COLORS]),
+                Group("Ajustes dos chifres", [Option(label, "", slider=name) for name, label in HORNS.items()]),
+            ]
+
+        def nose() -> List[Group]:
+            return [
+                Group("Nariz", [Option("Com nariz", "/skin nariz sim", selected=lambda m: custom() is not None and custom().should_render_3d_nose),
+                                Option("Sem nariz", "/skin nariz nao", selected=lambda m: custom() is not None and not custom().should_render_3d_nose)]),
+                Group("Formato do nariz", [
+                    Option(n.replace("_", " ").capitalize(), f"/skin nariz {n}",
+                           selected=lambda m, n=n: custom() is not None and custom().should_render_3d_nose and getattr(custom(), "nose_style", "padrao") == n)
+                    for n in NOSE_STYLE_NAMES]),
+                Group("Sombra do nariz", [
+                    Option(label, f"/skin nariz sombra {kind}",
+                           selected=lambda m, kind=kind: custom() is not None and getattr(custom(), "nose_shadow", "legado") == kind)
+                    for kind, label in (("legado", "Legado"), ("calculada", "Calculada"))]),
+                Group("Ajustes do nariz", [Option(label, "", slider=name) for name, label in NOSE.items()]),
+            ]
+
+        def shape() -> List[Group]:
+            return [Group(title, [Option(label, "", slider=name) for name, label in group])
+                    for title, group in BODY_GROUPS] + [Group("Recomeçar", [Option("Voltar ao padrão", "/skin ajuste reset")])]
+
+        def hair() -> List[Group]:
+            style = lambda: _value(custom().hair_style) if custom() is not None else ""
+            hair_id = lambda m: getattr(m, "hair_id", None)
+            styles = [
+                Option("Padrão", "/skin cabelo padrao", selected=lambda m: style() == HairStyle.ANIME_LONG.value and (not hair_id(m) or _same(hair_id(m), DEFAULT_HAIR_ID))),
+                Option("Raspado", "/skin cabelo raspado", selected=lambda m: style() == HairStyle.BUZZ_CUT.value),
+                Option("Careca", "/skin cabelo careca", selected=lambda m: style() in (HairStyle.BALD.value, HairStyle.NONE.value)),
+            ] + [Option(name.capitalize(), f"/skin cabelo {name}",
+                        selected=lambda m, made=made: _same(hair_id(m), made) and style() == HairStyle.ANIME_LONG.value)
+                 for name, made in HANDMADE_HAIR.items()]
+            worn = [Option(item.name, f"/skin cabelo {item.asset_id}", image=item.image or "",
+                           selected=lambda m, i=item.asset_id: _same(hair_id(m), i) and style() == HairStyle.ANIME_LONG.value)
+                    for item in self._catalog.get("hair", []) if not _same(item.asset_id, DEFAULT_HAIR_ID)]
+            groups = [Group("Estilo", styles),
+                      Group("Cor", [Option(n.capitalize(), f"/skin cabelo {n}", color=HAIR_RGB[n],
+                                           selected=lambda m, v=HAIR_COLORS[n]: custom() is not None and _value(custom().hair_color) == _value(v))
+                                    for n in HAIR_COLORS])]
+            return groups + ([Group("Cabelos do Roblox", worn)] if worn else [])
+
+        def makeup() -> List[Group]:
+            worn = lambda what: (getattr(custom(), "makeup", None) or {}).get(what) if custom() is not None else None
+            detail = lambda word: custom() is not None and word in custom().resolved_face_detail
+            def item(title: str, name: str) -> List[Group]:
+                """As cores de um item e os controles dele (como é posto e a cor mexida)."""
+                return [Group(title, [Option(n.capitalize(), f"/skin maquiagem {name} {n}", color=MAKEUP_COLORS[n],
+                                             selected=lambda m, n=n: worn(name) == n) for n in MAKEUP_COLORS]),
+                        Group(f"Ajustes: {title.lower()}", [Option(label, "", slider=slider) for slider, label in MAKEUP_SLIDERS[name]])]
+
+            return item("Batom", "batom") + item("Sombra dos olhos", "sombra") + item("Blush", "blush") + [
+                Group("Contorno", [Option("Sem contorno", "/skin maquiagem contorno sem", selected=lambda m: not worn("contorno")),
+                                   Option("Suave", "/skin maquiagem contorno suave", selected=lambda m: worn("contorno") == "suave"),
+                                   Option("Marcado", "/skin maquiagem contorno marcado", selected=lambda m: worn("contorno") == "marcado")]),
+                Group("Sombras do rosto", [Option(label, "", slider=name) for name, label in SHADING.items()]),
+                Group("Rosto", [Option("Sardas", "/skin maquiagem sardas alternar", selected=lambda m: detail("freckles"), check=True)]),
+                Group("Tirar", [Option(f"Sem {name}", f"/skin maquiagem {name} sem") for name in ("batom", "sombra", "blush")]
+                      + [Option("Sem maquiagem", "/skin maquiagem sem")]),
+            ]
+
+        def fine() -> List[Group]:
+            mirrored = lambda m: custom() is not None and bool(getattr(custom(), "hsr_mirror", False))
+            painted = lambda: len(getattr(custom(), "hsr_hide", ()) or ()) + len(getattr(custom(), "hsr_show", ()) or ()) if custom() is not None else 0
+            return [
+                Group("Bordas das roupas", [Option(label, "", slider=name) for name, label in GARMENTS.items()]),
+                Group("Pele sob a roupa: automático", [
+                    Option("Espelhar os lados", "/skin hsr espelhar sim", selected=mirrored),
+                    Option("Sem espelhar", "/skin hsr espelhar nao", selected=lambda m: not mirrored(m))]),
+                Group("Edição da pele sob a roupa (HSR)", [
+                    Option("Ativar pincel", "@pintar", selected=lambda m: self.brush_on, check=True),
+                    Option("Transparência", "@transparente", selected=lambda m: self.clear_clothes, check=True),
+                    Option("Braços a 90°", "@bracos", selected=lambda m: self.arms_out, check=True)]),
+                Group("Pincel (esquerdo pinta, Ctrl inverte, direito gira)", [
+                    Option(label, f"@pincel {name}", selected=lambda m, name=name: self.brush == name) for name, label in BRUSHES]),
+                Group("Tamanho do pincel", [Option(label, f"@tamanho {size}", selected=lambda m, size=size: self.brush_size == size)
+                                            for label, size in BRUSH_SIZES]),
+                Group("Simetria do pincel", [Option("Um lado", "@simetria nao", selected=lambda m: not self.brush_mirror),
+                                             Option("Os dois lados", "@simetria sim", selected=lambda m: self.brush_mirror)]),
+                Group("Pintura", [Option("Apagar tudo", "/skin hsr limpar", selected=lambda m: False)]),
+            ]
+
+        def extras() -> List[Group]:
+            worn = lambda m: [str(i) for i in getattr(m, "extra_ids", None) or []]
+            groups = [Group("Tirar", [Option("Nenhuma peça extra", "/skin extra none", selected=lambda m: not worn(m))])]
+            for title, kind in (("De baixo", "bottom"), ("Vestidos e saias", "dress"), ("De cima", "top"), ("Jaquetas", "jacket")):
+                items = self._catalog.get(kind, [])
+                if items:
+                    groups.append(Group(f"{title} (clique veste ou tira)", [
+                        Option(i.name, f"/skin extra {i.asset_id}", image=i.image or "",
+                               selected=lambda m, a=i.asset_id: str(a) in worn(m)) for i in items]))
+            return groups
+
+        def looks() -> List[Group]:
+            return [Group("Aparências prontas", [Option(n.replace("_", " ").capitalize(), f"/skin preset {n}") for n in PRESETS]),
+                    Group("Recomeçar", [Option("Padrão", "/skin reset"), Option("Tirar roupas", "/skin tirar tudo")])]
+
+        return [
+            Section("Corpo", body),
+            Section("Ajustes", shape),
+            Section("Olhos", eyes),
+            Section("Rosto", face),
+            Section("Nariz", nose),
+            Section("Maquiagem", makeup),
+            Section("Cabelo", hair),
+            Section("Superior", lambda: [Group("Roupa de cima", self._garments("top", "top", "top_id"))]),
+            Section("Jaqueta", lambda: [Group("Por cima da roupa", self._garments("jacket", "jaqueta", "outer_top_id"))]),
+            Section("Inferior", lambda: [Group("Roupa de baixo", self._garments("bottom", "calca", "bottom_id"))]),
+            Section("Vestidos", lambda: [Group("Vestidos e saias", [
+                Option(i.name, f"/skin vestir {i.asset_id}", image=i.image or "",
+                       selected=lambda m, a=i.asset_id: _same(getattr(m, "top_id", None), a) or _same(getattr(m, "bottom_id", None), a))
+                for i in self._catalog.get("dress", [])])]),
+            Section("Extras", extras),
+            Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
+            Section(FINE_SECTION, fine),
+            Section("Prontos", looks),
+        ]
+
+    @property
+    def focus(self) -> str:
+        """O que a câmera deve enquadrar na seção aberta: "face" (o rosto, de frente) ou "body"."""
+        return "face" if self.sections[self.active].title in FACE_SECTIONS else "body"
+
+    @property
+    def brushing(self) -> bool:
+        """O pincel está ligado e a tela na seção dele: o arraste no personagem pinta."""
+        return self.in_fine and self.brush_on and self.brush is not None
+
+    @property
+    def in_fine(self) -> bool:
+        return self.is_open and self.sections[self.active].title == FINE_SECTION
+
+    def history_rects(self, width: int, height: int) -> Dict[str, Rect]:
+        """As setas de desfazer e refazer, no canto de cima à direita (só no modo de edição da pele)."""
+        if not self.hsr_editing:
+            return {}
+        right = width - HISTORY_MARGIN
+        top = HISTORY_MARGIN + (HISTORY_NOTICE if getattr(self.handler, "busy_status", "") else 0)  # under the loading notice
+        redo = (right - HISTORY_BUTTON, top, right, top + HISTORY_BUTTON)
+        undo = (redo[0] - HISTORY_GAP - HISTORY_BUTTON, redo[1], redo[0] - HISTORY_GAP, redo[3])
+        return {"desfazer": undo, "refazer": redo}
+
+    def _history(self) -> Tuple[int, int]:
+        undone, redone = getattr(self.handler, "hsr_history", ((), ()))
+        return len(undone), len(redone)
+
+    @property
+    def hsr_editing(self) -> bool:
+        """A pele sob a roupa está sendo editada: o pincel ou a transparência ligados, na seção deles."""
+        return self.in_fine and (self.brush_on or self.clear_clothes)
+
+    @property
+    def arms_raised(self) -> bool:
+        """O personagem deve ficar com os braços a 90 graus: a opção está marcada e a tela na seção dela."""
+        return self.is_open and self.arms_out and self.sections[self.active].title == FINE_SECTION
+
+    def _sync_edit(self) -> None:
+        """Põe o modelo no modo de edição da pele, ou tira (ao sair da seção ou fechar a tela)."""
+        model = self.model
+        wanted = self.in_fine and self.clear_clothes  # without it the character is shown as in the game
+        if model is None or bool(getattr(model, "hsr_edit", False)) == wanted:
+            return
+        model.hsr_edit = wanted
+        if not getattr(model, "refresh_skin", lambda: False)() and hasattr(model, "reload"):
+            model.reload()
+
+    def _paint(self, x: float, y: float) -> None:
+        if self._stroke is not None and self.picker is not None:
+            self._stroke.update(self.picker(x, y, self.brush_size, self.brush_mirror))
+
+    def groups(self) -> List[Group]:
+        if self._groups is None:
+            self._groups = with_pickers(self.sections[self.active].groups())
+        return self._groups
+
+    # ------------------------------------------------------------------ abrir, fechar, girar
+    def open(self) -> None:
+        self.refresh_catalog()
+        self.is_open = True
+        self.message = "Arraste para girar e inclinar a vista. Esc fecha."
+        self._was_spinning = True
+        self.turntable["active"] = True
+        self.dirty = True
+
+    def close(self) -> None:
+        """Fecha a tela e grava o personagem (o que foi montado nela não se perde ao sair do jogo)."""
+        if self.is_open and self.autosave and self.model is not None and hasattr(self.handler, "save"):
+            self.handler.save()
+        self.is_open = False
+        self._dragging = False
+        self.hover = None
+        self._stroke = None
+        self._sync_edit()  # the game shows the character as it is, not as it is edited
+
+    def _race_picture(self, name: str) -> str:
+        """A miniatura de uma raça no corpo em uso, ou "" enquanto não foi desenhada."""
+        body = str(_value(getattr(self.model, "body", "female")) or "female").lower()
+        path = os.path.join(RACE_THUMBS, f"{name}_{body}.png")
+        return path if os.path.exists(path) else ""
+
+    def refresh_catalog(self) -> None:
+        """Relê os itens baixados e pede as miniaturas dos que ainda não têm."""
+        self._catalog = catalog()
+        self._groups = None
+        self.dirty = True
+        thumbs = os.path.join(CLOTHING_DIR, "thumbs")
+        missing = {item.asset_id for kind, items in self._catalog.items() if kind in PICTURED for item in items
+                   if item.image is None or os.path.dirname(item.image) != thumbs}
+        missing |= {f"raca:{name}:{body}" for name in RACES for body in ("female", "male")
+                    if not os.path.exists(os.path.join(RACE_THUMBS, f"{name}_{body}.png"))}
+        missing -= self._pictured
+        if missing and self.make_thumbnails and self._thumbnails is None:
+            self._pictured |= missing  # asked for once: an item that cannot be drawn is not asked for again
+            script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                  "scripts", "render_catalog_thumbnails.py")
+            try:
+                self._thumbnails = subprocess.Popen([sys.executable, script], stdout=subprocess.DEVNULL,
+                                                    stderr=subprocess.DEVNULL)
+            except OSError:
+                self._thumbnails = None
+
+    def select_section(self, index: int) -> None:
+        if 0 <= index < len(self.sections) and index != self.active:
+            self.active, self.scroll, self._groups, self.dirty = index, 0, None, True
+            self._stroke = None
+            self._sync_edit()
+
+    def update(self, dt: float) -> None:
+        """Gira o personagem e nota o que mudou por fora (comando do chat, roupa que terminou de encaixar)."""
+        if not self.is_open:
+            return
+        self._sync_edit()
+        if self.turntable.get("active") and not self._dragging:
+            self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + dt * SPIN_DEGREES) % 360.0
+        busy = self.handler.busy_status or ""
+        if self._busy and not busy:
+            self.refresh_catalog()  # an item has just arrived
+        if self._thumbnails is not None and self._thumbnails.poll() is not None:
+            self._thumbnails = None
+            self._images.clear()
+            self.refresh_catalog()
+        selected = tuple(self.slider_value(option) if option.slider else option.selected(self.model)
+                         for group in self.groups() for option in group.options) if self.model is not None else ()
+        if busy != self._busy or selected != self._selected_key:
+            self._busy, self._selected_key, self.dirty = busy, selected, True
+
+    # ------------------------------------------------------------------ disposição
+    def scene_rect(self, width: int, height: int) -> Rect:
+        """Onde o personagem é desenhado: a janela menos o painel."""
+        return (min(PANEL_WIDTH, width), 0, width, height)
+
+    def layout(self, width: int, height: int) -> List[Tuple[Rect, str, Any]]:
+        """As áreas clicáveis, em pixels da janela: ('tab', índice), ('option', Option), ('button', nome)."""
+        self._size = (width, height)
+        hits: List[Tuple[Rect, str, Any]] = []
+        for index in range(len(self.sections)):
+            y = PAD + index * (TAB_HEIGHT + 4)
+            hits.append(((6, y, TAB_WIDTH - 6, y + TAB_HEIGHT), "tab", index))
+        left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
+        top, bottom = PAD, height - FOOTER_HEIGHT
+        for kind, (x0, y0, x1, y1), payload in self._tiles():
+            y0, y1 = y0 + top - self.scroll, y1 + top - self.scroll
+            if kind == "option" and y1 > top and y0 < bottom:
+                hits.append(((x0, max(y0, top), x1, min(y1, bottom)), "option", payload))
+        half = (right - left - GAP) // 2
+        hits.append(((left, height - 86, right, height - 54), "field", "add"))
+        hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
+        hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
+        self._hits = hits
+        return hits
+
+    def _tiles(self) -> List[Tuple[str, Rect, Any]]:
+        """A grade inteira, sem rolagem, com y a partir do seu topo: ('title', área, texto) e
+        ('option', área, Option). Também mede a altura do conteúdo."""
+        left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
+        tiles: List[Tuple[str, Rect, Any]] = []
+        y = 0
+        for group in self.groups():
+            tiles.append(("title", (left, y, right, y + 26), group.title))
+            y += 26
+            kind = group.options[0].kind if group.options else "text"
+            if kind == "card":
+                columns, (w, h) = 3, CARD
+            elif kind == "swatch":
+                columns, (w, h) = SWATCHES_PER_ROW, (SWATCH, SWATCH)
+            elif kind == "slider":
+                columns, (w, h) = 1, (right - left, SLIDER_TILE)
+            elif kind == "picker":
+                columns, (w, h) = 1, (right - left, PICKER_TILE)
+            else:
+                columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
+            for k, option in enumerate(group.options):
+                x, oy = left + (k % columns) * (w + GAP), y + (k // columns) * (h + GAP)
+                tiles.append(("option", (x, oy, x + w, oy + h), option))
+            y += -(-len(group.options) // columns) * (h + GAP) + 6
+        self._content_height = y
+        return tiles
+
+    def _max_scroll(self) -> int:
+        return max(0, self._content_height - (self._size[1] - FOOTER_HEIGHT - PAD))
+
+    def hit(self, x: float, y: float) -> Optional[Tuple[Rect, str, Any]]:
+        for rect, kind, payload in self._hits:
+            if rect[0] <= x < rect[2] and rect[1] <= y < rect[3]:
+                return rect, kind, payload
+        return None
+
+    # ------------------------------------------------------------------ entrada
+    def over_panel(self, x: float) -> bool:
+        return x < PANEL_WIDTH
+
+    def handle_mouse_button(self, x: float, y: float, button: int, action: int, shift: bool = False) -> bool:
+        """Clique esquerdo: escolhe no painel, ou começa a girar o personagem. True se o evento foi usado."""
+        if not self.is_open:
+            return False
+        if button == 0:
+            for name, (x0, y0, x1, y1) in self.history_rects(*self._size).items():
+                if x0 <= x < x1 and y0 <= y < y1:
+                    if action != 0:
+                        self.choose(Option("", f"/skin hsr {name}"))
+                    return True
+        if button == 1 and self.hsr_editing and not self.over_panel(x) and action != 0:
+            # In the edit mode the left button paints: the right one turns the character.
+            self._dragging, self._drag_x, self._drag_y = True, x, y
+            self._was_spinning = bool(self.turntable.get("active"))
+            return True
+        if button == 1 and action == 0 and self._dragging:
+            self._dragging = False
+            self.turntable["active"] = self._was_spinning
+            return True
+        if button != 0:
+            return False
+        if action == 0:  # release
+            if self._stroke is not None:
+                points, self._stroke = sorted(self._stroke), None
+                if points:
+                    self.choose(Option("", f"/skin hsr {self._stroke_brush} {','.join(str(p) for p in points)}"))
+                return True
+            if self._slider is not None:
+                option, self._slider = self._slider[0], None
+                self.set_slider(option, self._slider_value)  # the face is drawn again only now
+                if option.slider in GARMENTS and hasattr(self.handler, "recut_skin"):
+                    self.handler.recut_skin()                # and the skin under a moved edge is cut
+                return True
+            if self._picker is not None:
+                option, self._picker = self._picker[0], None
+                self.choose(Option(option.label, f"{option.picker} {self.picked_colour(option)}"))  # the last colour, whatever was sent
+                return True
+            if self._dragging:
+                self._dragging = False
+                self.turntable["active"] = self._was_spinning
+                return True
+            return self.over_panel(x)
+        if not self.over_panel(x):
+            if self.typing:
+                self.typing, self.dirty = False, True
+            if shift:
+                return False  # Shift + arrastar continua sendo o pan da câmera
+            if self.brushing:
+                # Ctrl paints the opposite, as in Blender: showing with the brush that hides, and back.
+                opposite = {"esconder": "mostrar", "mostrar": "esconder"}
+                self._stroke_brush = opposite.get(self.brush, self.brush) if self.ctrl else self.brush
+                self._stroke = set()
+                self._paint(x, y)
+                return True
+            self._dragging, self._drag_x, self._drag_y = True, x, y
+            self._was_spinning = bool(self.turntable.get("active"))
+            return True
+        found = self.hit(x, y)
+        typing = found is not None and found[1] == "field"
+        if typing != self.typing:
+            self.typing, self.dirty = typing, True
+        if found is None:
+            return True
+        _, kind, payload = found
+        if kind == "field":
+            pass
+        elif kind == "tab":
+            self.select_section(payload)
+        elif kind == "option" and payload.picker is not None:
+            zone = self._picker_zone(payload, y)
+            if zone is not None:
+                self._picker = (payload, zone)
+                self._slider_sent = 0.0
+                self._drag_picker(x, y)
+        elif kind == "option" and payload.slider is not None:
+            x0, x1 = TAB_WIDTH + PAD + 10, PANEL_WIDTH - PAD - 10
+            self._slider = (payload, x0, x1)
+            self._drag_slider(x)
+        elif kind == "option":
+            self.choose(payload)
+        elif payload == "spin":
+            self.turntable["active"] = self._was_spinning = not self.turntable.get("active")
+            self.dirty = True
+        elif payload == "done":
+            self.close()
+        return True
+
+    # ------------------------------------------------------------------ qualquer cor
+    def _picker_rect(self, option: Option) -> Optional[Rect]:
+        """Where a picker's tile is in the window, whole (the grid may be cutting it)."""
+        for kind, (x0, y0, x1, y1), payload in self._tiles():
+            if kind == "option" and payload.picker == option.picker:
+                return (x0, y0 + PAD - self.scroll, x1, y1 + PAD - self.scroll)
+        return None
+
+    def _picker_zone(self, option: Option, y: float) -> Optional[str]:
+        rect = self._picker_rect(option)
+        if rect is None:
+            return None
+        return "bar" if y - rect[1] >= (PICKER_MAP[2] + PICKER_BAR[0]) / 2 else "map"
+
+    def picked(self, option: Option) -> Tuple[float, float, float]:
+        """What a picker is at: the hue, how light and how vivid, each from 0 to 1."""
+        return self._picked.get(option.picker, (0.0, 0.5, 1.0))
+
+    def picked_colour(self, option: Option) -> str:
+        import colorsys
+        hue, light, vivid = self.picked(option)
+        return "#%02x%02x%02x" % tuple(int(round(c * 255)) for c in colorsys.hls_to_rgb(hue, light, vivid))
+
+    def _drag_picker(self, x: float, y: float) -> None:
+        option, zone = self._picker
+        rect = self._picker_rect(option)
+        if rect is None:
+            return
+        x0, x1 = rect[0] + PICKER_MAP[0], rect[2] - PICKER_MAP[0]
+        across = (min(max(x, x0), x1 - 1) - x0) / max(x1 - 1 - x0, 1)
+        hue, light, vivid = self.picked(option)
+        if zone == "bar":
+            vivid = across
+        else:
+            top, bottom = rect[1] + PICKER_MAP[1], rect[1] + PICKER_MAP[2]
+            hue, light = min(across, 0.999), 1.0 - (min(max(y, top), bottom - 1) - top) / max(bottom - 1 - top, 1)
+        self._picked[option.picker], self.dirty = (hue, light, vivid), True
+        now = time.monotonic()
+        if now - self._slider_sent >= PICKER_REDRAW:  # the character follows a few times a second
+            self._slider_sent = now
+            self.choose(Option(option.label, f"{option.picker} {self.picked_colour(option)}"))
+
+    def _picker_map(self, width: int, height: int, vivid: float) -> Image.Image:
+        """Every hue (across) by how light (from white at the top to black at the bottom), at one vividness."""
+        import colorsys
+        from PIL import Image
+        key = (width, height, int(round(vivid * 20)))
+        if key not in self._picker_maps:
+            if len(self._picker_maps) > 40:
+                self._picker_maps.clear()
+            pixels = np.zeros((height, width, 4), dtype=np.uint8)
+            pixels[:, :, 3] = 255
+            for column in range(width):
+                for row in range(height):
+                    rgb = colorsys.hls_to_rgb(column / width, 1.0 - row / max(height - 1, 1), key[2] / 20.0)
+                    pixels[row, column, :3] = [int(round(c * 255)) for c in rgb]
+            self._picker_maps[key] = Image.fromarray(pixels, "RGBA")
+        return self._picker_maps[key]
+
+    def slider_value(self, option: Option) -> int:
+        """O valor de um ajuste, de -100 a 100 (o que está sendo arrastado, enquanto é arrastado)."""
+        if self._slider is not None and self._slider[0] is option:
+            return self._slider_value
+        custom = self._custom()
+        adjust = getattr(custom, "resolved_body_adjust", None) or getattr(custom, "body_adjust", None) or {}
+        return int(round(float(adjust.get(option.slider, 0.0)) * 100))
+
+    def set_slider(self, option: Option, value: int) -> None:
+        self.choose(Option(option.label, f"/skin ajuste {option.slider} {int(value)}"))
+
+    def _drag_slider(self, x: float) -> None:
+        option, x0, x1 = self._slider
+        value = int(round((min(max(x, x0), x1) - x0) / (x1 - x0) * 200 - 100))
+        value = 0 if abs(value) <= SLIDER_SNAP else value
+        self._slider_value, self.dirty = value, True
+        # The body follows the mouse. The face is a texture drawn again at each change: it
+        # follows a few times a second, and takes the last value when the slider is let go.
+        now = time.monotonic()
+        if option.slider not in REDRAWS_FACE or now - self._slider_sent >= FACE_REDRAW:
+            self._slider_sent = now
+            # An edge of a garment follows the mouse as cloth; the skin under it waits for the release.
+            self.handler.defer_skin = option.slider in GARMENTS
+            try:
+                self.set_slider(option, value)
+            finally:
+                self.handler.defer_skin = False
+
+    def choose(self, option: Option) -> None:
+        if option.command.startswith("@"):  # the brush's own settings: nothing of the character changes
+            name, _, value = option.command[1:].partition(" ")
+            if name == "transparente":
+                self.clear_clothes = not self.clear_clothes
+                self._sync_edit()
+            elif name == "bracos":
+                self.arms_out = not self.arms_out
+            if name == "pintar":
+                self.brush_on = not self.brush_on
+                if self.brush_on:
+                    self.turntable["active"] = self._was_spinning = False  # a still character to paint on
+                    self.message = ("Esquerdo pinta, Ctrl inverte, direito gira o personagem."
+                                    if getattr(self.model, "hsr_cage", None) is not None
+                                    else "Vista uma roupa: o pincel corrige a pele sob ela.")
+                    if not self._brush_used:  # what is painted is seen under the clothes; unticked after, it stays so
+                        self._brush_used, self.clear_clothes = True, True
+                self._sync_edit()
+            elif name == "pincel":
+                self.brush = value or BRUSHES[0][0]
+            elif name == "tamanho":
+                self.brush_size = int(value)
+            elif name == "simetria":
+                self.brush_mirror = value == "sim"
+            self.dirty = True
+            return
+        _, feedback, _ = self.handler.execute(option.command)
+        self.message = feedback.split("\n")[0] if feedback else ""
+        self.dirty = True
+
+    def handle_cursor(self, x: float, y: float) -> None:
+        if not self.is_open:
+            return
+        self.cursor = (x, y)
+        if self._stroke is not None:
+            self._paint(x, y)
+            return
+        if self._slider is not None:
+            self._drag_slider(x)
+            return
+        if self._picker is not None:
+            self._drag_picker(x, y)
+            return
+        if self._dragging:
+            self.turntable["yaw"] = (self.turntable.get("yaw", 0.0) + (x - self._drag_x) * DRAG_DEGREES) % 360.0
+            if "pitch" in self.turntable:  # the camera's tilt, in degrees (the main loop applies it)
+                tilt = self.turntable["pitch"] + (y - self._drag_y) * TILT_DEGREES
+                self.turntable["pitch"] = min(max(tilt, TILT_LIMITS[0]), TILT_LIMITS[1])
+            self._drag_x, self._drag_y = x, y
+            return
+        found = self.hit(x, y)
+        hover = (found[1], id(found[2]) if found[1] == "option" else found[2]) if found else None
+        if hover != self.hover:
+            self.hover, self.dirty = hover, True
+
+    def handle_scroll(self, x: float, y_offset: float) -> bool:
+        """A roda do mouse sobre o painel rola a grade; fora dele continua sendo o zoom."""
+        if not self.is_open or not self.over_panel(x):
+            return False
+        scroll = int(min(max(self.scroll - y_offset * SCROLL_STEP, 0), self._max_scroll()))
+        if scroll != self.scroll:
+            self.scroll, self.dirty = scroll, True
+        return True
+
+    def handle_char(self, codepoint: int) -> bool:
+        """Um caractere digitado: vai para o campo de adicionar item, se ele tem o teclado."""
+        if not (self.is_open and self.typing):
+            return False
+        if codepoint >= 32:
+            self.entry, self.dirty = (self.entry + chr(codepoint))[:200], True
+        return True
+
+    def submit(self) -> None:
+        """Baixa e veste o item do campo (id ou link do catálogo do Roblox)."""
+        text = self.entry.strip()
+        self.entry, self.typing, self.dirty = "", False, True
+        if text:
+            self.choose(Option(text, f"/skin vestir {text}"))
+
+    def handle_key(self, key: int, action: int, mods: int = 0) -> bool:
+        """Esc fecha; Espaço liga ou desliga o giro. Com o campo de adicionar item em uso, o
+        teclado é dele: Enter envia, Esc desiste, Ctrl+V cola."""
+        if not self.is_open:
+            return False
+        if self.typing:
+            if action in (1, 2):  # press or repeat
+                if key in (257, 335):   # Enter
+                    self.submit()
+                elif key == 256:        # Esc
+                    self.entry, self.typing = "", False
+                elif key == 259:        # Backspace
+                    self.entry = self.entry[:-1]
+                elif key == 86 and mods & 2:  # Ctrl+V
+                    self.entry = (self.entry + (self.clipboard() or "").strip().replace("\n", " "))[:200]
+                self.dirty = True
+            return True
+        if key == 90 and mods & 2 and action in (1, 2) and self.in_fine:  # Ctrl+Z undoes, Ctrl+Shift+Z redoes
+            self.choose(Option("", f"/skin hsr {'refazer' if mods & 1 else 'desfazer'}"))
+            return True
+        if action != 1:
+            return False
+        if key == 256:  # GLFW_KEY_ESCAPE
+            self.close()
+            return True
+        if key == 32:   # GLFW_KEY_SPACE
+            self.turntable["active"] = self._was_spinning = not self.turntable.get("active")
+            self.dirty = True
+            return True
+        return False
+
+    # ------------------------------------------------------------------ desenho
+    def _font(self, size: int) -> Any:
+        from PIL import ImageFont
+        for name in ("segoeui.ttf", "C:/Windows/Fonts/segoeui.ttf", "arial.ttf", "DejaVuSans.ttf"):
+            try:
+                return ImageFont.truetype(name, size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def _picture(self, path: str, size: Tuple[int, int]) -> Any:
+        """A imagem de um item, cortada ao centro e reduzida ao tamanho do quadro (com cache)."""
+        from PIL import Image, ImageOps
+        key = (path, size)
+        if key not in self._images:
+            try:
+                self._images[key] = ImageOps.fit(Image.open(path).convert("RGBA"), size, Image.LANCZOS)
+            except Exception:
+                self._images[key] = None
+        return self._images[key]
+
+    def _fit_text(self, draw: Any, text: str, font: Any, width: int, lines: int) -> List[str]:
+        words, out, line = text.split(), [], ""
+        for word in words:
+            trial = (line + " " + word).strip()
+            if draw.textlength(trial, font=font) <= width or not line:
+                line = trial
+            else:
+                out.append(line)
+                line = word
+        out.append(line)
+        out = out[:lines]
+        while out and draw.textlength(out[-1], font=font) > width and len(out[-1]) > 1:
+            out[-1] = out[-1][:-2] + "…"
+        return out
+
+    def image(self, width: int, height: int) -> Any:
+        """O painel inteiro (PANEL_WIDTH x altura da janela) como imagem RGBA."""
+        from PIL import Image, ImageDraw
+        hits = self.layout(width, height)
+        panel = Image.new("RGBA", (PANEL_WIDTH, height), BACKGROUND)
+        draw = ImageDraw.Draw(panel)
+        draw.rectangle((0, 0, TAB_WIDTH, height), fill=TAB_STRIP)
+        title, text, small = self._font(15), self._font(14), self._font(11)
+        left, top, bottom = TAB_WIDTH + PAD, PAD, height - FOOTER_HEIGHT
+
+        # A grade é desenhada inteira e só a parte visível é copiada: um quadro cortado pela
+        # borda aparece pela metade, não vazio.
+        tiles = self._tiles()
+        view = max(bottom - top, 1)
+        grid = Image.new("RGBA", (PANEL_WIDTH, max(self._content_height, view)), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(grid)
+        for kind, rect, payload in tiles:
+            x0, y0, x1, y1 = rect
+            if y1 < self.scroll or y0 > self.scroll + view:
+                continue
+            if kind == "title":
+                pen.text((x0, y0 + 4), payload.upper(), font=small, fill=MUTED)
+                continue
+            draw_rect = (x0, y0, x1 - 1, y1 - 1)
+            pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE)
+            if payload.kind == "slider":
+                value = self.slider_value(payload) if self.model is not None else 0
+                pen.text((x0 + 10, y0 + 13), payload.label, font=small, fill=TEXT, anchor="lm")
+                pen.text((x1 - 10, y0 + 13), f"{value:+d}" if value else "0", font=small,
+                         fill=ACCENT if value else MUTED, anchor="rm")
+                t0, t1, ty = x0 + 10, x1 - 10, y0 + 31
+                knob = t0 + (value + 100) / 200 * (t1 - t0)
+                pen.line((t0, ty, t1, ty), fill=(14, 15, 19, 255), width=4)
+                pen.line(((t0 + t1) / 2, ty, knob, ty), fill=ACCENT, width=4)
+                pen.line(((t0 + t1) / 2, ty - 5, (t0 + t1) / 2, ty + 5), fill=MUTED, width=1)
+                pen.ellipse((knob - 7, ty - 7, knob + 7, ty + 7), fill=TEXT)
+                continue
+            if payload.kind == "picker":
+                import colorsys
+                hue, light, vivid = self.picked(payload)
+                m0, m1 = x0 + PICKER_MAP[0], x1 - PICKER_MAP[0]
+                map_top, map_low = y0 + PICKER_MAP[1], y0 + PICKER_MAP[2]
+                grid.paste(self._picker_map(m1 - m0, map_low - map_top, vivid), (m0, map_top))
+                b0, b1 = y0 + PICKER_BAR[0], y0 + PICKER_BAR[1]
+                for column in range(m0, m1):  # from grey to the hue at its most vivid
+                    rgb = colorsys.hls_to_rgb(hue, 0.5, (column - m0) / max(m1 - m0 - 1, 1))
+                    pen.line((column, b0, column, b1), fill=tuple(int(round(c * 255)) for c in rgb) + (255,))
+                if payload.picker in self._picked:  # where it is: a ring on the map and a mark on the bar
+                    px, py = m0 + hue * (m1 - m0 - 1), map_top + (1.0 - light) * (map_low - map_top - 1)
+                    pen.ellipse((px - 5, py - 5, px + 5, py + 5), outline=(255, 255, 255, 255), width=2)
+                    pen.ellipse((px - 6, py - 6, px + 6, py + 6), outline=(0, 0, 0, 255), width=1)
+                    bx = m0 + vivid * (m1 - m0 - 1)
+                    pen.rectangle((bx - 2, b0 - 2, bx + 2, b1 + 2), outline=(255, 255, 255, 255), width=1)
+                continue
+            if payload.kind == "swatch":
+                pen.rounded_rectangle((x0 + 4, y0 + 4, x1 - 5, y1 - 5), 5, fill=payload.color + (255,))
+            elif payload.kind == "card":
+                picture = self._picture(payload.image, (CARD[0] - 8, 72)) if payload.image else None
+                if picture is not None:
+                    grid.paste(picture, (x0 + 4, y0 + 4), picture)
+                else:
+                    pen.line((x0 + 30, y0 + 26, x1 - 30, y0 + 54), fill=MUTED, width=2)
+                    pen.line((x1 - 30, y0 + 26, x0 + 30, y0 + 54), fill=MUTED, width=2)
+                for k, line in enumerate(self._fit_text(pen, payload.label, small, CARD[0] - 8, 2)):
+                    pen.text(((x0 + x1) // 2, y0 + 80 + k * 13), line, font=small, fill=TEXT, anchor="ma")
+                if self.defect(payload):  # a garment with a known defect on this body: a warning at its corner
+                    cx, cy = x1 - 15, y0 + 15
+                    pen.polygon(((cx, cy - 9), (cx + 10, cy + 8), (cx - 10, cy + 8)), fill=WARNING, outline=(20, 20, 24, 255))
+                    pen.text((cx, cy + 1), "!", font=small, fill=(20, 20, 24, 255), anchor="mm")
+            elif payload.check:
+                ticked = self.model is not None and payload.selected(self.model)
+                box = (x0 + 12, (y0 + y1) // 2 - 8, x0 + 28, (y0 + y1) // 2 + 8)
+                pen.rounded_rectangle(box, 3, fill=ACCENT if ticked else (14, 15, 19, 255), outline=ACCENT if ticked else MUTED)
+                if ticked:
+                    pen.line((box[0] + 3, box[1] + 8, box[0] + 7, box[1] + 12, box[0] + 13, box[1] + 4), fill=(20, 20, 24, 255), width=2)
+                pen.text((x0 + 36, (y0 + y1) // 2), self._fit_text(pen, payload.label, text, x1 - x0 - 44, 1)[0],
+                         font=text, fill=TEXT, anchor="lm")
+                continue
+            else:
+                pen.text(((x0 + x1) // 2, (y0 + y1) // 2), self._fit_text(pen, payload.label, text, x1 - x0 - 10, 1)[0],
+                         font=text, fill=TEXT, anchor="mm")
+            if self.model is not None and payload.selected(self.model):
+                pen.rounded_rectangle(draw_rect, 6, outline=ACCENT, width=2)
+        panel.alpha_composite(grid.crop((0, self.scroll, PANEL_WIDTH, self.scroll + view)), (0, top))
+
+        for rect, kind, payload in hits:
+            x0, y0, x1, y1 = rect
+            hovered = self.hover == (kind, id(payload) if kind == "option" else payload)
+            if kind == "option":
+                continue
+            if kind == "field":
+                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if self.typing else TILE_HOVER)
+                shown = self.entry + ("|" if self.typing else "")
+                while shown and draw.textlength(shown, font=small) > x1 - x0 - 16:
+                    shown = shown[1:]
+                draw.text((x0 + 8, (y0 + y1) // 2), shown or "Adicionar do Roblox: cole o id ou o link",
+                          font=small, fill=TEXT if shown else MUTED, anchor="lm")
+                continue
+            if kind == "tab":
+                active = payload == self.active
+                if active or hovered:
+                    draw.rounded_rectangle(rect, 6, fill=TILE_HOVER if active else TILE)
+                if active:
+                    draw.rectangle((x0, y0 + 8, x0 + 3, y1 - 8), fill=ACCENT)
+                draw.text((x0 + 14, (y0 + y1) // 2), self.sections[payload].title, font=title,
+                          fill=TEXT if active else MUTED, anchor="lm")
+            else:
+                label = ("Girar: ligado" if self.turntable.get("active") else "Girar: parado") if payload == "spin" else "Concluir"
+                fill = ACCENT if payload == "done" else (TILE_HOVER if hovered else TILE)
+                draw.rounded_rectangle(rect, 6, fill=fill)
+                draw.text(((x0 + x1) // 2, (y0 + y1) // 2), label, font=text,
+                          fill=(20, 20, 24, 255) if payload == "done" else TEXT, anchor="mm")
+
+        # rodapé: o que está acontecendo
+        draw.rectangle((TAB_WIDTH, bottom, PANEL_WIDTH, bottom + 1), fill=TILE)
+        status = self._busy or self.message
+        for k, line in enumerate(self._fit_text(draw, status, small, PANEL_WIDTH - TAB_WIDTH - 2 * PAD, 2)):
+            draw.text((left, bottom + 10 + k * 15), line, font=small, fill=ACCENT if self._busy else MUTED)
+        if self._max_scroll() > 0:  # barra de rolagem
+            track = bottom - top
+            size = max(24, int(track * track / max(self._content_height, 1)))
+            at = top + int((track - size) * self.scroll / self._max_scroll())
+            draw.rounded_rectangle((PANEL_WIDTH - 6, at, PANEL_WIDTH - 3, at + size), 2, fill=TILE_HOVER)
+        return panel
+
+    def render(self, width: int, height: int) -> None:
+        """Desenha o painel sobre a cena (a textura só é refeita quando algo mudou)."""
+        if not self.is_open or not self.create_gl:
+            return
+        from src.rendering.hud_quad import HudQuad
+        if self._quad is None:
+            self._quad = HudQuad()
+        if self.dirty or self._size != (width, height):
+            self._quad.set_image(self.image(width, height))
+            self.dirty = False
+        self._quad.draw(0, 0, width, height)
+        self._draw_brush(width, height)
+        self._draw_history(width, height)
+
+    def history_image(self, width: int, height: int) -> Any:
+        """As duas setas (desfazer, refazer), apagadas quando não há o que desfazer ou refazer."""
+        from PIL import Image, ImageDraw
+        rects = self.history_rects(width, height)
+        x0, y0 = rects["desfazer"][0], rects["desfazer"][1]
+        image = Image.new("RGBA", (rects["refazer"][2] - x0, HISTORY_BUTTON), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(image)
+        for (name, rect), some in zip(rects.items(), self._history()):
+            left, size = rect[0] - x0, HISTORY_BUTTON
+            pen.rounded_rectangle((left, 0, left + size - 1, size - 1), 6, fill=TILE)
+            colour = TEXT if some else MUTED
+            tip, tail = (left + 11, left + size - 11) if name == "desfazer" else (left + size - 11, left + 11)
+            barb = 8 if name == "desfazer" else -8
+            pen.line((tail, size // 2, tip, size // 2), fill=colour, width=3)
+            pen.polygon([(tip, size // 2), (tip + barb, size // 2 - 8), (tip + barb, size // 2 + 8)], fill=colour)
+        return image
+
+    def legend_image(self) -> Any:
+        """A legenda do modo de edição da pele: o que é cada cor."""
+        from PIL import Image, ImageDraw
+        from src.interactive.skin_brush import LEGEND
+        font = self._font(12)
+        row, pad = 20, 10
+        probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        wide = int(max(probe.textlength(label, font=font) for _, label in LEGEND)) + 2 * pad + 22
+        image = Image.new("RGBA", (wide, row * len(LEGEND) + 2 * pad), (0, 0, 0, 0))
+        pen = ImageDraw.Draw(image)
+        pen.rounded_rectangle((0, 0, image.width - 1, image.height - 1), 8, fill=BACKGROUND[:3] + (225,))
+        for k, (colour, label) in enumerate(LEGEND):
+            y = pad + k * row + row // 2
+            pen.ellipse((pad, y - 6, pad + 12, y + 6), fill=tuple(colour) + (255,))
+            pen.text((pad + 22, y), label, font=font, fill=TEXT, anchor="lm")
+        return image
+
+    def _draw_history(self, width: int, height: int) -> None:
+        rects = self.history_rects(width, height)
+        if not rects:
+            return
+        from src.rendering.hud_quad import HudQuad
+        if self._legend_quad is None:  # the legend, at the bottom right
+            self._legend_quad = HudQuad()
+            self._legend_quad.set_image(self.legend_image())
+        self._legend_quad.draw(width - HISTORY_MARGIN - self._legend_quad.size[0],
+                               height - HISTORY_MARGIN - self._legend_quad.size[1], width, height)
+        if self._history_quad is None:
+            self._history_quad = HudQuad()
+        key = (width, height, self._history()[0] > 0, self._history()[1] > 0)
+        if key != self._history_key:
+            self._history_quad.set_image(self.history_image(width, height))
+            self._history_key = key
+        self._history_quad.draw(rects["desfazer"][0], rects["desfazer"][1], width, height)
+
+    def _draw_brush(self, width: int, height: int) -> None:
+        """Os pontos da cage sobre o personagem (o que cada um é) e o cursor do pincel."""
+        if not self.brushing or self.overlay is None:
+            return
+        from src.interactive import skin_brush
+        from src.rendering.hud_quad import HudQuad
+        xy, facing, kinds = self.overlay
+        x0, y0, x1, y1 = self.scene_rect(width, height)
+        key = (x0, y0, x1, y1, np.round(xy).astype(np.int32).tobytes(), facing.tobytes(), kinds.tobytes(),
+               tuple(sorted(self._stroke)) if self._stroke else ())
+        if self._overlay_quad is None:
+            self._overlay_quad, self._ring_quad = HudQuad(), HudQuad()
+        if key != self._overlay_key:
+            self._overlay_quad.set_image(skin_brush.overlay((x1 - x0, y1 - y0), (x0, y0), xy, facing, kinds, self._stroke or ()))
+            self._overlay_key = key
+        self._overlay_quad.draw(x0, y0, width, height)
+        if self._ring_size != self.brush_size:
+            self._ring_quad.set_image(skin_brush.ring(self.brush_size))
+            self._ring_size = self.brush_size
+        if not self.over_panel(self.cursor[0]):
+            half = self._ring_quad.size[0] / 2
+            self._ring_quad.draw(self.cursor[0] - half, self.cursor[1] - half, width, height)
+
+    def delete(self) -> None:
+        for name in ("_overlay_quad", "_ring_quad", "_history_quad", "_legend_quad"):
+            if getattr(self, name) is not None:
+                getattr(self, name).delete()
+                setattr(self, name, None)
+        if self._quad is not None:
+            self._quad.delete()
+            self._quad = None

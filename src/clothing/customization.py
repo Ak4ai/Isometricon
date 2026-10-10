@@ -1,0 +1,1108 @@
+"""Sistema de Customização Modular de Avatar: Rostos, Cabelos, Tons de Pele e Acessórios.
+
+Permite desacoplamento total entre:
+- Tom de Pele (Skin Tone)
+- Olhos (Estilo e Cor da Íris)
+- Boca (Expressões)
+- Sobrancelhas (Estilo e Cor harmonizada)
+- Detalhes Faciais (Blush, Sardas)
+- Cabelo 2D (Franja e Couro Cabeludo no Atlas)
+- Cabelo 3D (Malha OBJ com cor sincronizada)
+"""
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional, Tuple, Dict, Any, List, Union
+import os
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
+
+
+class BodyType(str, Enum):
+    """Tipos de Corpo disponíveis."""
+    MALE = "male"       # Modelo masculino padrão
+    FEMALE = "female"   # Novo modelo feminino
+
+
+class HeadType(str, Enum):
+    """Tipos de Cabeça disponíveis."""
+    BLOCKY = "blocky"                       # Cabeça quadrada original voxel/Minecraft
+    ROBLOX_COMPATIBLE = "roblox_compatible" # Cabeça arredondada compatível com cabelos Roblox
+    ROUNDED = "rounded"                     # Sinônimo de roblox_compatible
+
+
+class FaceOption(str, Enum):
+    """Opções de Rosto integradas (Presets legados e atalhos rápidos)."""
+    ANIME_BLUE = "anime_blue"           # Padrão: Olhos azuis anime vibrantes
+    ANIME_GREEN = "anime_green"         # Olhos verde esmeralda
+    ANIME_BROWN = "anime_brown"         # Olhos castanho âmbar
+    ANIME_PURPLE = "anime_purple"       # Olhos violeta / ametista
+    ANIME_RED = "anime_red"             # Olhos rubi / carmesim
+    ANIME_WINK = "anime_wink"           # Olho piscando com bochechas coradas 😉
+    ANIME_DETERMINED = "anime_determined" # Olhos determinados e confiantes
+    CLASSIC_SMILE = "classic_smile"     # Sorriso clássico e amigável
+    BLANK = "blank"                     # Sem rosto / liso (manequim/voxel)
+    NONE = "none"                       # Sinônimo de sem rosto
+
+
+class EyeStyle(str, Enum):
+    """Estilos de Olhos modulares independentes."""
+    ANIME = "anime"                     # Olhos expressivos estilo anime
+    ANIME_WINK = "anime_wink"           # Olho aberto + piscadela 😉
+    CLASSIC = "classic"                 # Olhos retrô clássicos ovais
+    BLANK = "blank"                     # Sem olhos
+    NONE = "none"                       # Sinônimo de sem olhos
+
+
+class IrisColor(str, Enum):
+    """Cores pré-definidas de Íris."""
+    BLUE = "blue"                       # Azul celeste / safira
+    GREEN = "green"                     # Verde esmeralda
+    BROWN = "brown"                     # Castanho âmbar
+    PURPLE = "purple"                   # Roxo ametista
+    RED = "red"                         # Vermelho rubi
+    GOLD = "gold"                       # Dourado âmbar brilhante
+    CYAN = "cyan"                       # Ciano / turquesa
+    CUSTOM = "custom"                   # Cor RGB personalizada
+
+
+class MouthStyle(str, Enum):
+    """Estilos de Boca e Expressões faciais modulares."""
+    ANIME_ORIGINAL = "anime_original"   # Boca/Lábios anime originais (padrão original de character_head_full.png)
+    SMILE = "smile"                     # Sorriso padrão suave curvado
+    OPEN = "open"                       # Boca aberta alegre com dentes e língua
+    WINK_SMILE = "wink_smile"           # Sorriso expressivo animado
+    NEUTRAL = "neutral"                 # Linha neutra sutil fechada
+    CLASSIC = "classic"                 # Arco retrô clássico
+    CAT = "cat"                         # Boquinha fofa estilo gato (:3 / nya)
+    POUT = "pout"                       # Beicinho suave (pout)
+    VAMPIRE = "vampire"                 # A boca anime com duas presas
+    BLANK = "blank"                     # Sem boca
+    NONE = "none"                       # Sinônimo de sem boca
+
+
+class EyebrowStyle(str, Enum):
+    """Estilos de Sobrancelha modulares."""
+    STANDARD = "standard"               # Sobrancelhas anime padrão
+    THICK = "thick"                     # Sobrancelhas mais marcadas / espessas
+    DETERMINED = "determined"           # Inclinadas em foco confiante
+    NONE = "none"                       # Sem sobrancelhas
+
+
+class Hair2DStyle(str, Enum):
+    """Estilos do Couro Cabeludo / Cabelo 2D na textura da cabeça."""
+    STANDARD = "standard"               # Franja, topo, laterais e nuca para cabelos longos
+    BUZZ = "buzz"                       # Raspado / militar uniforme
+    BALD = "bald"                       # Totalmente liso / pele limpa
+    NONE = "none"                       # Sinônimo de careca
+
+
+class FaceDetail(str, Enum):
+    """Detalhes faciais opcionais (Blush, Sardas, etc.)."""
+    NONE = "none"                       # Sem detalhes adicionais
+    BLUSH = "blush"                     # Bochechas coradas suaves
+    FRECKLES = "freckles"               # Sardas delicadas no nariz e bochechas
+    BLUSH_AND_FRECKLES = "blush_and_freckles" # Blush com sardas combinados
+
+
+class HairStyle(str, Enum):
+    """Estilos de Cabelo (Geometria 3D + Textura)."""
+    ANIME_LONG = "anime_long"           # Malha 3D completa com franja, mechas e laços
+    BUZZ_CUT = "buzz_cut"               # Cabelo raspado / curto na textura (sem malha 3D)
+    BALD = "bald"                       # Totalmente careca / sem cabelo
+    NONE = "none"                       # Sinônimo de careca
+
+
+class HairColor(str, Enum):
+    """Cores e Paletas de Cabelo pré-definidas."""
+    BRUNETTE = "brunette"               # Castanho chocolate original
+    BLONDE = "blonde"                   # Loiro dourado reluzente
+    BLACK = "black"                     # Preto corvo elegante
+    PINK = "pink"                       # Rosa pastel anime
+    SILVER = "silver"                   # Branco / prateado platinado
+    AUBURN = "auburn"                   # Ruivo acobreado
+    CYAN = "cyan"                       # Azul celeste anime
+
+
+HAIR_PALETTES: Dict[str, Tuple[int, int, int]] = {
+    "brunette": (92, 62, 54),
+    "blonde": (230, 185, 95),
+    "black": (38, 38, 42),
+    "pink": (235, 140, 175),
+    "silver": (215, 220, 230),
+    "auburn": (180, 65, 45),
+    "cyan": (60, 150, 210),
+}
+
+IRIS_PALETTES: Dict[str, Tuple[int, int, int]] = {
+    "blue": (60, 140, 220),
+    "green": (50, 180, 90),
+    "brown": (130, 80, 45),
+    "purple": (150, 75, 200),
+    "red": (210, 50, 55),
+    "gold": (230, 180, 40),
+    "cyan": (40, 200, 220),
+    # More of them, by the name the editor shows.
+    "rosa": (235, 110, 170),
+    "laranja": (235, 130, 40),
+    "ambar": (200, 140, 50),
+    "turquesa": (40, 190, 160),
+    "lilas": (185, 150, 235),
+    "cinza": (140, 150, 160),
+    "branco": (235, 238, 242),
+    "preto": (35, 35, 40),
+}
+
+
+# The iris in the drawn eyes (which are blue): the hues it is of and the least saturation it has (the shadow on the
+# white of the eye is of the same hue, but nearly grey), the fewest pixels of a patch of it (smaller are specks at
+# an edge), the darkest and the lightest it is drawn, the share of that range painted in shades of the colour
+# (above it the colour goes towards white: the light of the eye), the darkest shade and how far towards white.
+IRIS_HUES, IRIS_SATURATION, IRIS_PATCH = (0.48, 0.70), 0.22, 12
+IRIS_VALUES, IRIS_SHADES, IRIS_DARKEST, IRIS_LIGHT = (0.24, 0.85), 0.70, 0.30, 0.45
+# The shines drawn inside the iris (what its patch encloses): how far from the iris's colour towards white the
+# sharp ones are (the drawn cream ones) and the soft one (the drawn pale green one, at the bottom). Each is painted
+# flat: the drawing has grey specks and bluish rims in them, which showed as dirt on any colour.
+IRIS_SHINE, IRIS_SOFT_SHINE = 0.95, 0.74
+
+
+def iris_shines(pixels: np.ndarray, mask: np.ndarray) -> List[Tuple[np.ndarray, bool]]:
+    """The shines inside the iris: for each, its pixels and whether it is the soft one."""
+    try:
+        from scipy import ndimage
+    except ImportError:
+        return []
+    inside = ndimage.binary_fill_holes(mask) & ~mask
+    # A shine at the rim of the iris is not enclosed by it: there, what is within the iris's box and is of the
+    # shines' cream (the white of the eye is pure white, and its shadow is bluish), and what touches that and is
+    # not the white of the eye (the bluish rim of a shine, or a hole in the drawing).
+    rgb = pixels[:, :, :3].astype(int)
+    box = np.zeros_like(mask)
+    for rows, columns in ndimage.find_objects(ndimage.label(mask)[0]):
+        box[rows, columns] = True
+    light = rgb.max(axis=2) > 150
+    rim = box & ~mask & light & (rgb[:, :, 2] <= rgb[:, :, 0] - 8)
+    rim |= box & ~mask & ndimage.binary_dilation(rim) & (((pixels[:, :, 3] < 255) & (pixels[:, :, 3] > 0)) | (light & (rgb.min(axis=2) < 250)))
+    inside = ndimage.binary_fill_holes(mask | inside | rim) & ~mask   # and the holes in those
+    patches, count = ndimage.label(inside)
+    shines = []
+    for k in range(1, count + 1):
+        patch = patches == k
+        colours = pixels[patch][:, :3].astype(int)
+        lit = colours[colours.max(axis=1) > 150]
+        if len(lit) == 0:
+            continue
+        red, green, _ = np.median(lit, axis=0)
+        shines.append((patch, bool(green > red)))
+    return shines
+
+
+def iris_mask(pixels: np.ndarray) -> np.ndarray:
+    """Which pixels of the eyes' drawing (RGBA) are the iris: the blue ones, in patches and not specks."""
+    rgb = pixels[:, :, :3].astype(float) / 255.0
+    high, low = rgb.max(axis=2), rgb.min(axis=2)
+    spread = high - low
+    saturation = np.where(high > 0, spread / np.maximum(high, 1e-6), 0.0)
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    safe = np.maximum(spread, 1e-6)
+    hue = np.where(high == r, ((g - b) / safe) % 6.0, np.where(high == g, (b - r) / safe + 2.0, (r - g) / safe + 4.0)) / 6.0
+    mask = (pixels[:, :, 3] > 0) & (saturation > IRIS_SATURATION) & (hue >= IRIS_HUES[0]) & (hue <= IRIS_HUES[1])
+    try:
+        from scipy import ndimage
+        patches, count = ndimage.label(mask)
+        sizes = ndimage.sum(mask, patches, index=np.arange(1, count + 1))
+        mask = np.isin(patches, 1 + np.nonzero(sizes >= IRIS_PATCH)[0])
+    except ImportError:
+        pass
+    return mask
+
+
+def tint_iris(pixels: np.ndarray, first_rgb: Tuple[int, int, int], other_rgb: Tuple[int, int, int]) -> np.ndarray:
+    """The eyes' drawing with each iris in its colour (the eye at the left of the drawing in the first). The
+    drawing's light and dark are kept, whatever the colour: its dark parts are shades of the colour, and its
+    lightest go from the colour towards white."""
+    out = pixels.copy()
+    mask = iris_mask(pixels)
+    columns = np.nonzero(mask.any(axis=0))[0]
+    middle = (int(columns.min()) + int(columns.max())) // 2 if len(columns) else pixels.shape[1] // 2
+    first = np.arange(pixels.shape[1])[None, :] <= middle
+    value = pixels[:, :, :3].max(axis=2).astype(float) / 255.0
+    light = np.clip((value - IRIS_VALUES[0]) / (IRIS_VALUES[1] - IRIS_VALUES[0]), 0.0, 1.0)
+    shade = IRIS_DARKEST + (1.0 - IRIS_DARKEST) * np.clip(light / IRIS_SHADES, 0.0, 1.0)
+    white = IRIS_LIGHT * np.clip((light - IRIS_SHADES) / (1.0 - IRIS_SHADES), 0.0, 1.0)
+    for half, colour in ((first, first_rgb), (~first, other_rgb)):
+        tinted = mask & half
+        for channel in range(3):
+            painted = colour[channel] * shade[tinted]
+            out[tinted, channel] = np.clip(painted + (255.0 - painted) * white[tinted], 0, 255).astype(np.uint8)
+    for patch, soft in iris_shines(pixels, mask):
+        colour = first_rgb if first[0, int(np.nonzero(patch.any(axis=0))[0].mean())] else other_rgb
+        towards = IRIS_SOFT_SHINE if soft else IRIS_SHINE
+        out[patch, :3] = [int(round(c + (255 - c) * towards)) for c in colour]
+        out[patch, 3] = 255  # the drawing has holes in them: specks through which what is under the eyes showed
+    return out
+
+
+def parse_iris_colour(value: Any) -> Optional[Tuple[int, int, int]]:
+    """The colour of an iris from what the character keeps: one of IrisColor, a name of IRIS_PALETTES,
+    "#rrggbb", "r,g,b" or three numbers; None when it is none of them."""
+    if isinstance(value, (tuple, list)):
+        return tuple(int(c) for c in value[:3]) if len(value) >= 3 else None
+    text = str(getattr(value, "value", value) or "").strip().lower()
+    if text in IRIS_PALETTES:
+        return IRIS_PALETTES[text]
+    try:
+        if text.startswith("#") and len(text) == 7:
+            return tuple(int(text[k:k + 2], 16) for k in (1, 3, 5))
+        parts = [int(p) for p in text.split(",")]
+        return tuple(parts) if len(parts) == 3 and all(0 <= p <= 255 for p in parts) else None
+    except ValueError:
+        return None
+
+
+@dataclass
+class AvatarCustomization:
+    """Configuração de customização do avatar (compatível com presets rápidos e controle modular desacoplado)."""
+    body_type: Union[BodyType, str] = BodyType.MALE
+    head_type: Union[HeadType, str] = HeadType.BLOCKY
+    face: Optional[Union[FaceOption, str]] = FaceOption.ANIME_BLUE
+    hair_style: Optional[Union[HairStyle, str]] = HairStyle.ANIME_LONG
+    hair_color: Union[HairColor, str, Tuple[int, int, int]] = HairColor.BRUNETTE
+    skin_color_rgb: Tuple[float, float, float] = (0.94, 0.83, 0.76) # Normalizado OpenGL [0, 1] ou int 0-255
+    has_3d_nose: Optional[bool] = None # Se None, deduz automaticamente baseado no rosto
+    custom_face_path: Optional[str] = None # Caminho para PNG customizado de rosto 256x256
+    custom_hair_obj: Optional[str] = None # Caminho para OBJ customizado de cabelo 3D
+    custom_hair_tex: Optional[str] = None # Caminho para textura PNG customizada do cabelo 3D
+    hair_offset_x: float = 0.0            # Deslocamento lateral (+ direita, - esquerda em metros)
+    hair_offset_y: float = 0.0            # Deslocamento vertical (+ cima, - baixo em metros)
+    hair_offset_z: float = 0.0            # Deslocamento sagital (+ frente, - trás em metros)
+    hair_scale_x: float = 1.0             # Escala horizontal X (largura)
+    hair_scale_y: float = 1.0             # Escala vertical Y (altura)
+    hair_scale_z: float = 1.0             # Escala sagital Z (profundidade)
+
+    # Configurações Modulares Desacopladas (Se None, deduzidas harmonicamente dos campos acima)
+    eye_style: Optional[Union[EyeStyle, str]] = None
+    iris_color: Optional[Union[IrisColor, str, Tuple[int, int, int]]] = None
+    mouth_style: Optional[Union[MouthStyle, str]] = None
+    eyebrow_style: Optional[Union[EyebrowStyle, str]] = None
+    eyebrow_color: Optional[Union[HairColor, str, Tuple[int, int, int]]] = None
+    hair_2d_style: Optional[Union[Hair2DStyle, str]] = None
+    face_detail: Optional[Union[FaceDetail, str]] = None
+    nose_style: str = "padrao"  # formato do nariz 3D (ver nose.STYLE_NAMES)
+    ear_style: str = "sem"      # orelhas 3D (ver ears.STYLE_NAMES); "sem": nenhuma
+    underwear: str = "branco"   # a roupa de baixo pintada na pele: "sem", um nome de underwear.COLORS ou "#rrggbb"
+    wing_style: str = "sem"     # asas 3D (ver wings.STYLE_NAMES); "sem": nenhuma
+    wing_color: str = ""        # a cor delas: "" a do modelo, "pele", "cabelo", um nome de ears.EAR_COLORS ou "#rrggbb"
+    tail_style: str = "sem"     # cauda 3D (ver tails.STYLE_NAMES); "sem": nenhuma
+    tail_color: str = ""        # a cor dela: "" a do modelo, "pele", "cabelo", um nome de ears.EAR_COLORS ou "#rrggbb"
+    horn_style: str = "sem"     # chifres 3D (ver horns.STYLE_NAMES); "sem": nenhum
+    horn_color: str = ""        # a cor deles: "" a do modelo, um nome de horns.HORN_COLORS ou "#rrggbb"
+    ear_color: str = ""         # a cor delas: "" a do modelo, "pele", "cabelo", um nome de ears.EAR_COLORS ou "#rrggbb"
+    race: str = ""              # a raça escolhida por último (races.RACES); "": nenhuma, o corpo como veio
+    nose_shadow: str = "legado"  # sombra do nariz: "legado" (um trecho fixo) ou "calculada" (do contorno do nariz)
+    eye_shape: str = "padrao"   # formato dos olhos anime (ver eye_shapes.SHAPE_NAMES)
+    # Cor da íris do outro olho (o esquerdo do personagem), para olhos de cores diferentes; None = igual.
+    iris_color_other: Optional[Union[IrisColor, str, Tuple[int, int, int]]] = None
+    # Maquiagem: "batom" e "sombra", cada um com o nome de uma cor de MAKEUP_COLORS.
+    makeup: Dict[str, str] = field(default_factory=dict)
+    # Pele escondida sob a roupa, corrigida: espelhada entre os dois lados do corpo, e os pontos da
+    # cage do corpo pintados à mão para esconder ou mostrar (ver hsr.adjusted_hidden).
+    hsr_mirror: bool = False
+    hsr_hide: Tuple[int, ...] = ()
+    hsr_show: Tuple[int, ...] = ()
+    # Ajustes de proporção, de -1 a 1 (ver body_shape.ADJUSTMENTS): corpo e rosto.
+    body_adjust: Dict[str, float] = field(default_factory=dict)
+
+    @property
+    def body_type_str(self) -> str:
+        if hasattr(self.body_type, "value"):
+            return self.body_type.value.lower()
+        return str(self.body_type).lower()
+
+    @property
+    def is_female(self) -> bool:
+        return self.body_type_str in ("female", "feminino", "f", "mulher", "woman")
+
+    @property
+    def head_type_str(self) -> str:
+        if hasattr(self.head_type, "value"):
+            return self.head_type.value.lower()
+        return str(self.head_type).lower()
+
+    @property
+    def is_rounded_head(self) -> bool:
+        return self.head_type_str in ("roblox_compatible", "rounded", "roblox")
+
+    @property
+    def face_str(self) -> str:
+        if self.face is None:
+            return "blank"
+        return self.face.value.lower() if hasattr(self.face, "value") else str(self.face).lower()
+
+    @property
+    def hair_style_str(self) -> str:
+        if self.hair_style is None:
+            return "bald"
+        return self.hair_style.value.lower() if hasattr(self.hair_style, "value") else str(self.hair_style).lower()
+
+    @property
+    def hair_color_str(self) -> str:
+        if isinstance(self.hair_color, tuple):
+            return f"rgb_{self.hair_color[0]}_{self.hair_color[1]}_{self.hair_color[2]}"
+        if hasattr(self.hair_color, "value"):
+            return self.hair_color.value.lower()
+        return str(self.hair_color).lower()
+
+    @property
+    def is_bald(self) -> bool:
+        return self.hair_style_str in ("none", "bald")
+
+    @property
+    def is_faceless(self) -> bool:
+        return self.face_str in ("none", "blank")
+
+    @property
+    def should_render_3d_nose(self) -> bool:
+        if self.has_3d_nose is not None:
+            return self.has_3d_nose
+        if self.is_faceless or self.face_str == "classic_smile" or self.resolved_eye_style == "classic":
+            return False
+        return True
+
+    @property
+    def should_render_3d_hair(self) -> bool:
+        if self.is_bald or self.hair_style_str == "buzz_cut":
+            return False
+        return True
+
+    @property
+    def skin_rgb_255(self) -> Tuple[int, int, int]:
+        """Retorna a cor da pele em inteiros 0..255."""
+        if isinstance(self.skin_color_rgb, tuple) and len(self.skin_color_rgb) >= 3:
+            c = self.skin_color_rgb
+            if any(x > 1.0 for x in c[:3]):
+                return (int(c[0]), int(c[1]), int(c[2]))
+            return (int(c[0] * 255), int(c[1] * 255), int(c[2] * 255))
+        return (240, 212, 194)
+
+    @property
+    def hair_rgb_255(self) -> Tuple[int, int, int]:
+        """Retorna a cor do cabelo em inteiros 0..255 (sincronizada para 2D e 3D)."""
+        if isinstance(self.hair_color, tuple) and len(self.hair_color) >= 3:
+            return (int(self.hair_color[0]), int(self.hair_color[1]), int(self.hair_color[2]))
+        key = self.hair_color_str
+        return HAIR_PALETTES.get(key, (92, 62, 54))
+
+    @property
+    def resolved_eye_style(self) -> str:
+        """Estilo de olhos resolvido a partir da configuração explícita ou do preset de face."""
+        if self.eye_style is not None:
+            val = self.eye_style.value if hasattr(self.eye_style, "value") else str(self.eye_style)
+            return val.lower()
+        if self.is_faceless:
+            return "blank"
+        if self.face_str == "classic_smile":
+            return "classic"
+        if self.face_str == "anime_wink":
+            return "anime_wink"
+        return "anime"
+
+    def _eye_tone(self, rgb: Tuple[int, int, int], eye: str) -> Tuple[int, int, int]:
+        """A colour of an iris moved by the adjustments of both eyes and of that one (body_shape.EYE_SLIDERS)."""
+        adjust = self.body_adjust or {}
+        move = [max(-1.0, min(1.0, float(adjust.get(f"olhos_{tone}", 0.0)) + float(adjust.get(f"{eye}_{tone}", 0.0))))
+                for tone in ("matiz", "saturacao", "brilho")]
+        return shift_colour(rgb, *move) if any(move) else rgb
+
+    @property
+    def resolved_iris_color(self) -> Tuple[int, int, int]:
+        """Cor da íris (do olho direito) em inteiros 0..255, com os ajustes de cor dela."""
+        return self._eye_tone(self._iris_base, "olho_direito")
+
+    @property
+    def _iris_base(self) -> Tuple[int, int, int]:
+        if self.iris_color is not None:
+            return parse_iris_colour(self.iris_color) or IRIS_PALETTES["blue"]
+        # Deduz do face_str legado
+        f = self.face_str
+        if "green" in f:
+            return IRIS_PALETTES["green"]
+        if "brown" in f:
+            return IRIS_PALETTES["brown"]
+        if "purple" in f:
+            return IRIS_PALETTES["purple"]
+        if "red" in f:
+            return IRIS_PALETTES["red"]
+        return IRIS_PALETTES["blue"]
+
+    @property
+    def resolved_mouth_style(self) -> str:
+        """Estilo de boca resolvido."""
+        if self.mouth_style is not None:
+            val = self.mouth_style.value if hasattr(self.mouth_style, "value") else str(self.mouth_style)
+            v_lower = val.lower()
+            if v_lower in ("original", "default", "anime", "lips", "anime_lips"):
+                return "anime_original"
+            return v_lower
+        if self.is_faceless:
+            return "blank"
+        if self.face_str == "classic_smile":
+            return "classic"
+        if self.face_str == "anime_wink":
+            return "wink_smile"
+        return "anime_original"
+
+    @property
+    def resolved_eyebrow_style(self) -> str:
+        """Estilo de sobrancelhas resolvido."""
+        if self.eyebrow_style is not None:
+            val = self.eyebrow_style.value if hasattr(self.eyebrow_style, "value") else str(self.eyebrow_style)
+            return val.lower()
+        if self.is_faceless or self.face_str == "classic_smile":
+            return "none"
+        if self.face_str == "anime_determined":
+            return "determined"
+        return "standard"
+
+    @property
+    def resolved_eyebrow_color(self) -> Tuple[int, int, int]:
+        """Cor das sobrancelhas resolvida (harmonizada com a cor do cabelo por padrão)."""
+        if self.eyebrow_color is not None:
+            if isinstance(self.eyebrow_color, tuple) and len(self.eyebrow_color) >= 3:
+                return (int(self.eyebrow_color[0]), int(self.eyebrow_color[1]), int(self.eyebrow_color[2]))
+            val = self.eyebrow_color.value if hasattr(self.eyebrow_color, "value") else str(self.eyebrow_color)
+            return HAIR_PALETTES.get(val.lower(), (92, 62, 54))
+        # Harmonização elegante: 75% da cor do cabelo com leve sombreamento
+        h = self.hair_rgb_255
+        return (int(h[0] * 0.75), int(h[1] * 0.75), int(h[2] * 0.75))
+
+    @property
+    def resolved_hair_2d_style(self) -> str:
+        """Estilo do couro cabeludo 2D resolvido."""
+        if self.custom_hair_obj:
+            return "none"
+        if self.hair_2d_style is not None:
+            val = self.hair_2d_style.value if hasattr(self.hair_2d_style, "value") else str(self.hair_2d_style)
+            return val.lower()
+        if self.is_bald:
+            return "bald"
+        if self.hair_style_str == "buzz_cut":
+            return "bald"  # the shaved hair is a mesh of its own (character_model.SHAVED_HAIR_ID), not paint on the scalp
+        return "standard"
+
+    @property
+    def resolved_face_detail(self) -> str:
+        """Detalhe facial resolvido."""
+        if self.face_detail is not None:
+            val = self.face_detail.value if hasattr(self.face_detail, "value") else str(self.face_detail)
+            return val.lower()
+        if self.face_str in ("anime_wink", "classic_smile"):
+            return "blush"
+        return "none"
+
+    def get_cache_key(self) -> str:
+        return (
+            f"h_{self.head_type_str}_e_{self.resolved_eye_style}_i_{self.resolved_iris_color}_"
+            f"m_{self.resolved_mouth_style}_eb_{self.resolved_eyebrow_style}_ebc_{self.resolved_eyebrow_color}_"
+            f"h2_{self.resolved_hair_2d_style}_fd_{self.resolved_face_detail}_"
+            f"hc_{self.hair_rgb_255}_sk_{self.skin_rgb_255}_cf_{self.custom_face_path}_"
+            f"fa_{[round(self.face_adjust(k), 3) for k in ('olhos_tamanho', 'olhos_altura', 'olhos_distancia', 'sobrancelha_tamanho', 'sobrancelha_altura', 'sobrancelha_distancia', 'rosto_sombra')]}_"
+            f"n_{self.should_render_3d_nose}_{[round(self.face_adjust(k), 3) for k in ('nariz_tamanho', 'nariz_largura', 'nariz_altura', 'nariz_sombra')]}_"
+            f"ns_{self.nose_shadow}_{(self.nose_style, sorted((k, round(float(v), 3)) for k, v in (self.body_adjust or {}).items() if k.startswith('nariz_'))) if self.nose_shadow == 'calculada' else ''}_"
+            f"io_{self.resolved_iris_color_other}_mk_{sorted((self.makeup or {}).items())}_es_{self.eye_shape}"
+            f"_mka_{sorted((k, round(float(v), 3)) for k, v in (self.body_adjust or {}).items() if k.startswith(('batom_', 'sombra_', 'blush_')))}"
+        )
+
+    @property
+    def resolved_iris_color_other(self) -> Tuple[int, int, int]:
+        """Cor da íris do outro olho (a mesma do primeiro quando não foi escolhida)."""
+        other = parse_iris_colour(self.iris_color_other) if self.iris_color_other is not None else None
+        return self._eye_tone(other or self._iris_base, "olho_esquerdo")
+
+    def makeup_color(self, what: str) -> Optional[Tuple[int, int, int]]:
+        """A cor de um item de maquiagem ("batom", "sombra", "blush"), ou None se não é usado: a
+        escolhida (um nome de MAKEUP_COLORS ou "#rrggbb"), com o matiz, a saturação e o brilho
+        mexidos pelos controles do item."""
+        chosen = parse_makeup_colour((self.makeup or {}).get(what, ""))
+        if chosen is None:
+            return None
+        return shift_colour(chosen, self.face_adjust(f"{what}_matiz"), self.face_adjust(f"{what}_saturacao"),
+                            self.face_adjust(f"{what}_brilho"))
+
+    @property
+    def resolved_body_adjust(self) -> Dict[str, float]:
+        """Os ajustes como valem neste corpo: os dados e, para os outros, o padrão do corpo."""
+        from .body_shape import resolved
+        return resolved(self.body_adjust, "female" if self.is_female else "male")
+
+    def face_adjust(self, name: str) -> float:
+        """Um ajuste do rosto, de -1 a 1 (0 = como desenhado)."""
+        try:
+            return max(-1.0, min(1.0, float(self.resolved_body_adjust.get(name, 0.0))))
+        except (TypeError, ValueError):
+            return 0.0
+
+
+def place_face_layer(layer: Image.Image, scale: float = 1.0, lift: float = 0.0, spread: float = 0.0) -> Image.Image:
+    """Uma camada do rosto (os dois olhos, as duas sobrancelhas) com cada lado escalado em
+    torno do próprio centro, erguido ``lift`` pixels e afastado ``spread`` pixels do outro."""
+    box = layer.getbbox()
+    if box is None or (scale == 1.0 and not lift and not spread):
+        return layer
+    middle = (box[0] + box[2]) // 2
+    out = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    for side, (x0, x1) in ((-1, (0, middle)), (1, (middle, layer.width))):
+        half = layer.crop((x0, 0, x1, layer.height))
+        inner = half.getbbox()
+        if inner is None:
+            continue
+        piece = half.crop(inner)
+        if scale != 1.0:
+            piece = piece.resize((max(1, round(piece.width * scale)), max(1, round(piece.height * scale))), Image.LANCZOS)
+        cx = x0 + (inner[0] + inner[2]) / 2 + side * spread
+        cy = (inner[1] + inner[3]) / 2 - lift
+        frame = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+        frame.paste(piece, (int(round(cx - piece.width / 2)), int(round(cy - piece.height / 2))))
+        out.alpha_composite(frame)
+    return out
+
+
+# How far the face adjustments go at 1: the eyes' size (share), and pixels of the 512 px head
+# atlas for their height and distance; the same for the eyebrows, which are adjusted on their own.
+EYE_SIZE, EYE_LIFT, EYE_SPREAD = 0.22, 10.0, 8.0
+BROW_SIZE, BROW_LIFT, BROW_SPREAD = 0.25, 12.0, 10.0
+# Makeup: the colours on offer, how strongly the eye shadow is laid over the skin, and how far it
+# reaches above the eye and down over it (shares of the eye's height).
+MAKEUP_COLORS = {"vermelho": (200, 40, 55), "rosa": (235, 120, 150), "nude": (196, 132, 112), "vinho": (120, 30, 55),
+                 "roxo": (140, 85, 175), "azul": (70, 115, 205), "verde": (70, 150, 115), "dourado": (212, 170, 80),
+                 "marrom": (120, 80, 60), "preto": (40, 36, 42), "coral": (240, 128, 110), "pessego": (245, 170, 140),
+                 "laranja": (235, 130, 60), "lilas": (190, 150, 220), "turquesa": (60, 180, 180), "prata": (185, 190, 200)}
+# Eye shadow: how strongly it is laid on, how far it goes above the eye and down over it (shares of
+# the eye's height), how far past the outer corner (a share of its width), and pixels of blur (on
+# the 512 px atlas). Each grows or shrinks with the item's controls by the share after it.
+EYE_SHADOW, EYE_SHADOW_REACH, EYE_SHADOW_OUT, EYE_SHADOW_BLUR = 0.58, (0.20, 0.45), 0.12, 3.0
+# Blush: where its middle is on the left cheek (mirrored on the other), its radii, its blur, how
+# strongly it is laid on, and pixels it goes up or down the face.
+BLUSH_AT, BLUSH_RADII, BLUSH_BLUR, BLUSH, BLUSH_LIFT = (52.0, 191.0), (25.0, 10.0), 7.0, 0.50, 12.0
+MAKEUP_STRENGTH, MAKEUP_SIZE, MAKEUP_SOFT = 0.9, 0.6, 0.8  # what the controls of an item do at 1
+
+
+def parse_makeup_colour(value: Any) -> Optional[Tuple[int, int, int]]:
+    """A colour of makeup from its name (MAKEUP_COLORS), "#rrggbb" or "r,g,b"; None when it is neither."""
+    text = str(value or "").strip().lower()
+    if text in MAKEUP_COLORS:
+        return MAKEUP_COLORS[text]
+    try:
+        if text.startswith("#") and len(text) == 7:
+            return tuple(int(text[k:k + 2], 16) for k in (1, 3, 5))
+        parts = [int(p) for p in text.split(",")]
+        return tuple(parts) if len(parts) == 3 and all(0 <= p <= 255 for p in parts) else None
+    except ValueError:
+        return None
+
+
+def shift_colour(rgb: Tuple[int, int, int], hue: float = 0.0, saturation: float = 0.0, brightness: float = 0.0) -> Tuple[int, int, int]:
+    """A colour with its hue turned (half the wheel at 1 or -1) and its saturation and brightness
+    moved towards full (positive) or none (negative)."""
+    import colorsys
+    h, s, v = colorsys.rgb_to_hsv(*[c / 255.0 for c in rgb])
+    move = lambda x, by: x + (1.0 - x) * by if by > 0 else x * (1.0 + by)
+    r, g, b = colorsys.hsv_to_rgb((h + 0.5 * hue) % 1.0, move(s, saturation), move(v, brightness))
+    return int(round(r * 255)), int(round(g * 255)), int(round(b * 255))
+# The nose's shadow, as the old head texture had it: its box in the 512 px atlas, how much of the
+# darker tone is laid over the skin (and that tone, as a share of the skin's), and how it follows
+# the nose's adjustments (its size, its width, and pixels of its height).
+NOSE_SHADOW_BOX, NOSE_SHADOW, NOSE_SHADOW_TONE = (117, 143, 139, 198), 0.14, 0.55
+NOSE_SHADOW_GROWTH = (0.5, 0.6, 12.0)
+# The shadow computed from the nose: how much stronger than the legacy one where the nose casts
+# it, the share of that around the nose's outline, how far the shadow falls to the side and down
+# (pixels for each pixel the nose stands out), pixels of the rim around it, and the share of the
+# nose's height, from its top, over which the shadow fades in (none at the top of the bridge).
+NOSE_CAST, NOSE_CONTACT, NOSE_CAST_FALL, NOSE_RIM, NOSE_FADE = 2.6, 0.55, (-0.85, 0.70), 2, 0.75
+NOSE_SHADOWS = ("legado", "calculada")
+# The vampire's fangs: where each is across the mouth, pixels under the top of the mouth where they
+# start (the 512 px atlas), half the width of each two-pixel row from there down, and their colours.
+FANGS_AT, FANG_UNDER, FANG_ROWS = (0.24, 0.76), 8.0, (4, 4, 3, 2, 1)
+FANG, FANG_EDGE = (250, 248, 240, 255), (232, 226, 214, 255)
+# The band of darker skin under the face on the head atlas (the chin and the jaw take it): its
+# rows and columns, and how much darker it gets at the strongest shading.
+CHIN_BAND, CHIN_DARKER = (232, 256, 0, 256), 0.18
+# Contour makeup: how strongly each kind is laid on, the tone (a share of the skin's) of the
+# shade and of the light, and the strokes on the left half of the face (mirrored on the other):
+# (from, to, width) in pixels of the 512 px atlas. Under the cheekbone, down the temple, along the jaw.
+CONTOURS = {"suave": 0.30, "marcado": 0.52}
+CONTOUR_TONE, CONTOUR_LIGHT, CONTOUR_BLUR = 0.62, 1.10, 3.5
+CONTOUR_SHADE = (((26, 190), (84, 214), 9), ((14, 52), (14, 128), 16), ((30, 229), (104, 231), 5))
+CONTOUR_SHINE = (((40, 186), (88, 202), 4),)
+FACE_MIDDLE = 128.25
+
+
+class LayeredHeadCompositor:
+    """Compositor modular de atlas de textura da cabeça (512x512) baseado em camadas e blending."""
+
+    def __init__(self, layers_dir: Optional[str] = None):
+        if layers_dir is None:
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            layers_dir = os.path.join(base_dir, "assets", "models", "textures", "layers")
+
+        self.layers_dir = layers_dir
+        self._raw_cache: Dict[str, Image.Image] = {}
+        self._cache: Dict[str, Image.Image] = {}
+
+    def _load_layer(self, subpath: str) -> Optional[Image.Image]:
+        if subpath in self._raw_cache:
+            return self._raw_cache[subpath].copy()
+
+        full_path = os.path.join(self.layers_dir, subpath)
+        if not os.path.exists(full_path):
+            # Tenta na raiz de layers se não achou na subpasta
+            flat_name = "layer_" + os.path.basename(subpath)
+            flat_path = os.path.join(self.layers_dir, flat_name)
+            if os.path.exists(flat_path):
+                full_path = flat_path
+            else:
+                return None
+
+        img = Image.open(full_path).convert("RGBA")
+        self._raw_cache[subpath] = img
+        return img.copy()
+
+    def compose_atlas(self, cust: AvatarCustomization) -> Image.Image:
+        """Gera ou retorna do cache a textura atlas 512x512 com composição desacoplada em tempo real."""
+        key = cust.get_cache_key()
+        if key in self._cache:
+            return self._cache[key]
+
+        # ---------------------------------------------------------
+        # 1. BASE DE PELE & SOMBREAMENTO (Skin Base Tinting)
+        # ---------------------------------------------------------
+        skin_img = self._load_layer("skin/skin_base_neutral.png")
+        if skin_img is None:
+            skin_img = self._load_layer("layer_skin_base.png")
+        if skin_img is None:
+            skin_img = Image.new("RGBA", (512, 512), (250, 227, 210, 255))
+
+        arr_skin = np.array(skin_img, dtype=float)
+        ref_rgb = np.array([250.0, 227.0, 210.0])
+        target_skin = np.array(cust.skin_rgb_255, dtype=float)
+        factor = target_skin / ref_rgb
+
+        for ch in range(3):
+            arr_skin[:, :, ch] = np.clip(arr_skin[:, :, ch] * factor[ch], 0, 255)
+
+        # The darker band of the chin and the jaw, lighter (down to the skin itself) or darker.
+        chin = cust.face_adjust("rosto_sombra")
+        if chin:
+            unit = arr_skin.shape[0] / 512.0
+            y0, y1, x0, x1 = (int(round(v * unit)) for v in CHIN_BAND)
+            band = arr_skin[y0:y1, x0:x1, :3]
+            if chin < 0:
+                band += (target_skin - band) * -chin
+            else:
+                band *= 1.0 - CHIN_DARKER * chin
+            arr_skin[y0:y1, x0:x1, :3] = np.clip(band, 0, 255)
+
+        canvas = Image.fromarray(arr_skin.astype(np.uint8))
+
+        # ---------------------------------------------------------
+        # 2. CABELO 2D / COURO CABELUDO (Scalp & Bangs)
+        # ---------------------------------------------------------
+        h2d_style = cust.resolved_hair_2d_style
+        if h2d_style not in ("bald", "none"):
+            subpath = "hair_2d/scalp_buzz.png" if h2d_style == "buzz" else "hair_2d/scalp_standard.png"
+            hair_img = self._load_layer(subpath)
+            if hair_img is None:
+                hair_img = self._load_layer("layer_hair_2d.png")
+
+            if hair_img is not None:
+                arr_h = np.array(hair_img, dtype=float)
+                alpha_h = arr_h[:, :, 3] > 0
+                hair_rgb = cust.hair_rgb_255
+                # Normalização de luma calibrada para brilho e contraste vibrantes
+                luma = np.clip(arr_h[:, :, 0] / 130.0, 0.4, 1.5)
+                for ch in range(3):
+                    arr_h[alpha_h, ch] = np.clip(hair_rgb[ch] * luma[alpha_h], 0, 255)
+                canvas.alpha_composite(Image.fromarray(arr_h.astype(np.uint8)))
+
+        # ---------------------------------------------------------
+        # 3. DETALHES FACIAIS (Blush / Sardas)
+        # ---------------------------------------------------------
+        detail_style = cust.resolved_face_detail
+        if detail_style in ("blush", "blush_and_freckles"):
+            blush_img = self._load_layer("face_details/blush_soft.png")
+            if blush_img is not None:
+                canvas.alpha_composite(blush_img)
+
+        if detail_style in ("freckles", "blush_and_freckles"):
+            freckles_img = self._load_layer("face_details/freckles.png")
+            if freckles_img is not None:
+                canvas.alpha_composite(freckles_img)
+
+        # ---------------------------------------------------------
+        # 3.1 SOMBRA DO NARIZ: um trecho um pouco mais escuro entre os olhos, onde o nariz 3D se apoia
+        # (a malha do nariz usa esse pedaço da textura, então escurece com ele).
+        # ---------------------------------------------------------
+        shadow = NOSE_SHADOW * (1.0 + cust.face_adjust("nariz_sombra"))
+        if cust.should_render_3d_nose and shadow > 0.0 and getattr(cust, "nose_shadow", "legado") == "calculada":
+            # Calculada: o contorno do nariz ativo visto de frente, e a sombra que ele lança no rosto
+            # (cada ponto cai para o lado e para baixo conforme o quanto sai do rosto).
+            from . import body_shape, nose as noses
+            unit = canvas.width / 512.0
+            rows8, triangles = noses.model_rows(getattr(cust, "nose_style", "padrao"), cust.body_adjust)
+            points = rows8[:, :3].astype(np.float64)
+            if body_shape.nose_adjusted(cust.body_adjust):
+                points = body_shape.nose_shape(points, cust.body_adjust)
+            flat = noses.face_pixels(points)
+            out = np.clip(points[:, 2] - noses.FACE_FRONT, 0.0, None) * noses.FACE_PIXELS[1]  # pixels out of the face
+            fallen = flat + out[:, None] * np.array(NOSE_CAST_FALL)
+            outline, cast = Image.new("L", canvas.size, 0), Image.new("L", canvas.size, 0)
+            for pen, where in ((ImageDraw.Draw(outline), flat), (ImageDraw.Draw(cast), fallen)):
+                for trio in triangles:
+                    pen.polygon([tuple(xy) for xy in (where[trio] * unit).tolist()], fill=255)
+            # the shadow joins the nose: from each point of it to where that point's shadow falls
+            pen = ImageDraw.Draw(cast)
+            for a, b in zip((flat * unit).tolist(), (fallen * unit).tolist()):
+                pen.line([tuple(a), tuple(b)], fill=255, width=max(1, int(round(2 * unit))))
+            rim = outline.filter(ImageFilter.MaxFilter(2 * int(round(NOSE_RIM * unit)) + 1))
+            strength = min(shadow * NOSE_CAST, 1.0)
+            level = np.maximum(np.array(cast, dtype=np.float64), np.array(rim, dtype=np.float64) * NOSE_CONTACT)
+            level = np.array(Image.fromarray(level.astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2 * unit)), dtype=np.float64)
+            # It fades up the nose, to nothing at the top of the bridge.
+            top, bottom = float(flat[:, 1].min()) * unit, float(flat[:, 1].max()) * unit
+            rise = np.clip((np.arange(canvas.height) - top) / max((bottom - top) * NOSE_FADE, 1.0), 0.0, 1.0)
+            level *= (rise * rise * (3.0 - 2.0 * rise))[:, None]
+            # None of it on the nose itself: under the nose (but for its edge, where the mesh may
+            # not reach) and at the point of skin the nose takes its colour from.
+            level[np.array(outline.filter(ImageFilter.MinFilter(3))) > 0] = 0.0
+            px, py = int(round(noses.PLAIN_UV[0] * canvas.width)), int(round(noses.PLAIN_UV[1] * canvas.height))
+            level[py - 2:py + 3, px - 2:px + 3] = 0.0
+            mask = Image.fromarray((level * strength).astype(np.uint8))
+            dark = Image.new("RGBA", canvas.size, tuple(int(c * NOSE_SHADOW_TONE) for c in cust.skin_rgb_255) + (255,))
+            dark.putalpha(mask)
+            canvas.alpha_composite(dark)
+        elif cust.should_render_3d_nose and shadow > 0.0:
+            unit = canvas.width / 512.0
+            size = 1.0 + NOSE_SHADOW_GROWTH[0] * cust.face_adjust("nariz_tamanho")
+            half_w = (NOSE_SHADOW_BOX[2] - NOSE_SHADOW_BOX[0]) / 2 * size * (1.0 + NOSE_SHADOW_GROWTH[1] * cust.face_adjust("nariz_largura"))
+            half_h = (NOSE_SHADOW_BOX[3] - NOSE_SHADOW_BOX[1]) / 2 * size
+            cx = (NOSE_SHADOW_BOX[0] + NOSE_SHADOW_BOX[2]) / 2
+            cy = (NOSE_SHADOW_BOX[1] + NOSE_SHADOW_BOX[3]) / 2 - NOSE_SHADOW_GROWTH[2] * cust.face_adjust("nariz_altura")
+            mask = Image.new("L", canvas.size, 0)
+            ImageDraw.Draw(mask).rectangle([(cx - half_w) * unit, (cy - half_h) * unit, (cx + half_w) * unit, (cy + half_h) * unit],
+                                           fill=int(round(255 * min(shadow, 1.0))))
+            mask = mask.filter(ImageFilter.GaussianBlur(1.5 * unit))
+            dark = Image.new("RGBA", canvas.size, tuple(int(c * NOSE_SHADOW_TONE) for c in cust.skin_rgb_255) + (255,))
+            dark.putalpha(mask)
+            canvas.alpha_composite(dark)
+
+        # ---------------------------------------------------------
+        # 3.2 CONTORNO (maquiagem): sombra sob as maçãs do rosto, nas têmporas e no maxilar, e uma
+        # faixa de luz sobre as maçãs, esfumadas.
+        # ---------------------------------------------------------
+        contour = CONTOURS.get(str((cust.makeup or {}).get("contorno", "")).lower())
+        if contour:
+            unit = canvas.width / 512.0
+            for strokes, tone, strength in ((CONTOUR_SHADE, CONTOUR_TONE, contour), (CONTOUR_SHINE, CONTOUR_LIGHT, contour * 0.7)):
+                mask = Image.new("L", canvas.size, 0)
+                pen = ImageDraw.Draw(mask)
+                for (ax, ay), (bx, by), width in strokes:
+                    for side in (1.0, -1.0):  # the left half as given, and mirrored on the right
+                        points = [((FACE_MIDDLE + side * (x - FACE_MIDDLE)) * unit, y * unit) for x, y in ((ax, ay), (bx, by))]
+                        pen.line(points, fill=int(round(255 * strength)), width=max(1, int(round(width * unit))))
+                mask = mask.filter(ImageFilter.GaussianBlur(CONTOUR_BLUR * unit))
+                paint = Image.new("RGBA", canvas.size, tuple(int(min(c * tone, 255)) for c in cust.skin_rgb_255) + (255,))
+                paint.putalpha(mask)
+                canvas.alpha_composite(paint)
+
+        # ---------------------------------------------------------
+        # 3.3 BLUSH: uma mancha de cor esfumada em cada bochecha, sob os olhos.
+        # ---------------------------------------------------------
+        blush_rgb = cust.makeup_color("blush")
+        if blush_rgb is not None:
+            unit = canvas.width / 512.0
+            grow = 1.0 + MAKEUP_SIZE * cust.face_adjust("blush_tamanho")
+            rx, ry = BLUSH_RADII[0] * grow * unit, BLUSH_RADII[1] * grow * unit
+            cy = (BLUSH_AT[1] - BLUSH_LIFT * cust.face_adjust("blush_altura")) * unit
+            strength = min(max(BLUSH * (1.0 + MAKEUP_STRENGTH * cust.face_adjust("blush_intensidade")), 0.0), 0.95)
+            mask = Image.new("L", canvas.size, 0)
+            pen = ImageDraw.Draw(mask)
+            for cx in (BLUSH_AT[0] * unit, (2 * FACE_MIDDLE - BLUSH_AT[0]) * unit):
+                pen.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=int(round(255 * strength)))
+            mask = mask.filter(ImageFilter.GaussianBlur(max(BLUSH_BLUR * (1.0 + MAKEUP_SOFT * cust.face_adjust("blush_esfumado")), 0.5) * unit))
+            paint = Image.new("RGBA", canvas.size, tuple(blush_rgb) + (255,))
+            paint.putalpha(mask)
+            canvas.alpha_composite(paint)
+
+        # ---------------------------------------------------------
+        # 4. OLHOS & TINGIMENTO DA ÍRIS (Eyes & Iris Tint)
+        # ---------------------------------------------------------
+        eye_style = cust.resolved_eye_style
+        eye_parts = None  # what each pixel of the eyes' drawing is (eye_shapes.eye_kinds), when it is known
+        if eye_style not in ("blank", "none"):
+            if eye_style == "classic":
+                eye_img = self._load_layer("eyes/eye_classic.png")
+            elif eye_style == "anime_wink":
+                eye_img = self._load_layer("eyes/eye_anime_wink.png")
+            else:
+                # Olhos Anime com suporte a qualquer cor de íris
+                eye_img = self._load_layer("eyes/eye_anime_blue.png")
+                if eye_img is None:
+                    eye_img = self._load_layer("layer_eyes_anime_blue.png")
+
+                if eye_img is not None:
+                    drawn = np.array(eye_img)
+                    # What is lash and what is eyeball, told from the drawing as it was made: the shapes are
+                    # cut by it, whatever colour the iris is painted (a dark one is not a lash).
+                    from .eye_shapes import eye_kinds
+                    iris = iris_mask(drawn)
+                    for patch, _ in iris_shines(drawn, iris):
+                        iris = iris | patch
+                    eye_parts = eye_kinds(drawn, iris)
+                    arr_e = tint_iris(drawn, cust.resolved_iris_color, cust.resolved_iris_color_other)
+                    eye_img = Image.fromarray(arr_e)
+
+            if eye_img is not None and eye_style != "classic":
+                from .eye_shapes import shape_eyes
+                eye_img = shape_eyes(eye_img, getattr(cust, "eye_shape", "padrao"), eye_parts)
+            if eye_img is not None:
+                placed = place_face_layer(
+                    eye_img, 1.0 + EYE_SIZE * cust.face_adjust("olhos_tamanho"), EYE_LIFT * cust.face_adjust("olhos_altura"),
+                    EYE_SPREAD * cust.face_adjust("olhos_distancia"))
+                shadow_rgb = cust.makeup_color("sombra")
+                box = placed.getbbox()
+                if shadow_rgb is not None and box is not None:
+                    # Eye shadow: a soft patch of colour over each eyelid and past its outer corner,
+                    # under the eye's own drawing.
+                    mask = Image.new("L", canvas.size, 0)
+                    pen = ImageDraw.Draw(mask)
+                    centre = (box[0] + box[2]) // 2
+                    grow = 1.0 + MAKEUP_SIZE * cust.face_adjust("sombra_tamanho")
+                    strength = min(max(EYE_SHADOW * (1.0 + MAKEUP_STRENGTH * cust.face_adjust("sombra_intensidade")), 0.0), 1.0)
+                    for side, (x0, x1) in ((-1, (0, centre)), (1, (centre, placed.width))):
+                        eye = placed.crop((x0, 0, x1, placed.height)).getbbox()
+                        if eye is None:
+                            continue
+                        tall, wide = eye[3] - eye[1], eye[2] - eye[0]
+                        out = EYE_SHADOW_OUT * grow * wide
+                        pen.ellipse([x0 + eye[0] - (out if side < 0 else 0.25 * out), eye[1] - EYE_SHADOW_REACH[0] * grow * tall,
+                                     x0 + eye[2] + (out if side > 0 else 0.25 * out), eye[1] + EYE_SHADOW_REACH[1] * tall],
+                                    fill=int(round(255 * strength)))
+                    soft = max(EYE_SHADOW_BLUR * (1.0 + MAKEUP_SOFT * cust.face_adjust("sombra_esfumado")), 0.5)
+                    mask = mask.filter(ImageFilter.GaussianBlur(soft * canvas.width / 512.0))
+                    colour = Image.new("RGBA", canvas.size, tuple(shadow_rgb) + (255,))
+                    colour.putalpha(mask)
+                    canvas.alpha_composite(colour)
+                canvas.alpha_composite(placed)
+
+        # ---------------------------------------------------------
+        # 5. SOBRANCELHAS (Eyebrows)
+        # ---------------------------------------------------------
+        brow_style = cust.resolved_eyebrow_style
+        if brow_style not in ("none", "blank"):
+            if brow_style == "thick":
+                brow_img = self._load_layer("brows/brows_thick.png")
+            elif brow_style == "determined":
+                brow_img = self._load_layer("brows/brows_determined.png")
+            else:
+                brow_img = self._load_layer("brows/brows_standard.png")
+                if brow_img is None:
+                    brow_img = self._load_layer("layer_brows_standard.png")
+
+            if brow_img is not None:
+                arr_b = np.array(brow_img, dtype=float)
+                alpha_b = arr_b[:, :, 3] > 0
+                eb_rgb = cust.resolved_eyebrow_color
+                for ch in range(3):
+                    arr_b[alpha_b, ch] = np.clip(eb_rgb[ch], 0, 255)
+                canvas.alpha_composite(place_face_layer(
+                    Image.fromarray(arr_b.astype(np.uint8)), 1.0 + BROW_SIZE * cust.face_adjust("sobrancelha_tamanho"),
+                    BROW_LIFT * cust.face_adjust("sobrancelha_altura"), BROW_SPREAD * cust.face_adjust("sobrancelha_distancia")))
+
+        # ---------------------------------------------------------
+        # 6. BOCA / EXPRESSÃO (Mouth)
+        # ---------------------------------------------------------
+        mouth_style = cust.resolved_mouth_style
+        if mouth_style not in ("blank", "none"):
+            subpath = f"mouth/mouth_{mouth_style}.png"
+            mouth_img = self._load_layer(subpath)
+            if mouth_img is None:
+                if mouth_style in ("anime_original", "original", "default"):
+                    mouth_img = self._load_layer("mouth/mouth_anime_original.png")
+                elif mouth_style == "smile":
+                    mouth_img = self._load_layer("mouth/mouth_smile.png")
+                else:
+                    mouth_img = self._load_layer("mouth/mouth_anime_original.png")
+                if mouth_img is None:
+                    mouth_img = self._load_layer("layer_mouth_smile.png")
+
+            lipstick = cust.makeup_color("batom")
+            if mouth_img is not None and lipstick is not None:
+                # Lipstick: the mouth in another colour, keeping its light and dark.
+                arr_m = np.array(mouth_img.convert("RGBA"), dtype=float)
+                drawn = arr_m[:, :, 3] > 0
+                if drawn.any():
+                    light = arr_m[:, :, :3].mean(axis=2)
+                    light = light / max(float(light[drawn].mean()), 1.0)
+                    for ch in range(3):
+                        arr_m[:, :, ch] = np.where(drawn, np.clip(lipstick[ch] * light, 0, 255), arr_m[:, :, ch])
+                    mouth_img = Image.fromarray(arr_m.astype(np.uint8))
+            if mouth_img is not None:
+                canvas.alpha_composite(mouth_img)
+            if mouth_style == "vampire" and mouth_img is not None and mouth_img.getbbox() is not None:
+                # A vampire's: the anime mouth with a fang under each side of it, in steps of the
+                # drawing's pixels. Drawn after the lipstick, which they do not take.
+                unit = canvas.width / 512.0
+                x0, y0, x1, _ = mouth_img.getbbox()
+                under = y0 + FANG_UNDER * unit
+                pen = ImageDraw.Draw(canvas)
+                for at in FANGS_AT:
+                    middle = x0 + (x1 - x0) * at
+                    for row, half in enumerate(FANG_ROWS):
+                        top = under + row * 2 * unit
+                        pen.rectangle([middle - half * unit, top, middle + half * unit - 1, top + 2 * unit - 1],
+                                      fill=FANG_EDGE if half == FANG_ROWS[0] and row == 0 else FANG)
+
+        # ---------------------------------------------------------
+        # 7. ROSTO CUSTOMIZADO EM PNG (Se fornecido)
+        # ---------------------------------------------------------
+        if cust.custom_face_path and os.path.exists(cust.custom_face_path):
+            custom_face = Image.open(cust.custom_face_path).convert("RGBA").resize((256, 256))
+            canvas.paste(custom_face, (0, 0), custom_face)
+
+        self._cache[key] = canvas
+        return canvas
+
+    def save_atlas(self, cust: AvatarCustomization, filepath: str) -> str:
+        """Gera e salva a textura atlas em um arquivo PNG."""
+        img = self.compose_atlas(cust)
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        img.save(filepath)
+        return filepath
+
+    def clear_cache(self) -> None:
+        """Limpa o cache de texturas compostas."""
+        self._cache.clear()
+
+
+class HeadAtlasBuilder:
+    """Construtor dinâmico de atlas de textura da cabeça (512x512).
+    
+    Mantém compatibilidade total com a interface legada utilizando o LayeredHeadCompositor.
+    """
+
+    def __init__(self, base_texture_path: Optional[str] = None, layers_dir: Optional[str] = None):
+        self.compositor = LayeredHeadCompositor(layers_dir=layers_dir)
+        self._cache: Dict[str, Image.Image] = self.compositor._cache
+
+    def build_atlas(self, cust: AvatarCustomization) -> Image.Image:
+        """Gera ou retorna do cache a textura atlas 512x512 completa."""
+        return self.compositor.compose_atlas(cust)
+
+    def save_atlas(self, cust: AvatarCustomization, filepath: str) -> str:
+        """Gera e salva a textura atlas em um arquivo PNG."""
+        return self.compositor.save_atlas(cust, filepath)
+
+
+def get_available_faces() -> Dict[str, str]:
+    """Retorna dicionário de rostos integrados disponíveis com descrições."""
+    return {
+        FaceOption.ANIME_BLUE.value: "Olhos Azuis Anime (Padrão)",
+        FaceOption.ANIME_GREEN.value: "Olhos Verdes Esmeralda Anime",
+        FaceOption.ANIME_BROWN.value: "Olhos Castanhos Âmbar Anime",
+        FaceOption.ANIME_PURPLE.value: "Olhos Violeta Ametista Anime",
+        FaceOption.ANIME_RED.value: "Olhos Rubis Carmesim Anime",
+        FaceOption.ANIME_WINK.value: "Piscadela Animada com Bochechas Coradas 😉",
+        FaceOption.ANIME_DETERMINED.value: "Expressão Confiante / Determinada",
+        FaceOption.CLASSIC_SMILE.value: "Sorriso Retrô Clássico",
+        FaceOption.BLANK.value: "Sem Rosto (Manequim / Superfície Lisa)",
+    }
+
+
+def get_available_hair_styles() -> Dict[str, str]:
+    """Retorna dicionário de estilos de cabelo com descrições."""
+    return {
+        HairStyle.ANIME_LONG.value: "Cabelo Longo Anime 3D (com Franja e Laços)",
+        HairStyle.BUZZ_CUT.value: "Cabelo Raspado / Militar (Texturizado sem malha 3D)",
+        HairStyle.BALD.value: "Careca / Sem Cabelo (Cabeça Base Lisa)",
+    }
+
+
+def get_available_hair_colors() -> Dict[str, str]:
+    """Retorna dicionário de cores de cabelo com descrições."""
+    return {
+        HairColor.BRUNETTE.value: "Castanho Chocolate (Original)",
+        HairColor.BLONDE.value: "Loiro Dourado",
+        HairColor.BLACK.value: "Preto Corvo",
+        HairColor.PINK.value: "Rosa Pastel Anime",
+        HairColor.SILVER.value: "Prateado / Branco Platinado",
+        HairColor.AUBURN.value: "Ruivo Acobreado",
+        HairColor.CYAN.value: "Azul Celeste Anime",
+    }
+
+
+def get_available_eye_styles() -> Dict[str, str]:
+    """Retorna estilos de olhos modulares disponíveis."""
+    return {
+        EyeStyle.ANIME.value: "Olhos Anime Expressivos",
+        EyeStyle.ANIME_WINK.value: "Piscadela Animada 😉",
+        EyeStyle.CLASSIC.value: "Olhos Retrô Clássicos",
+        EyeStyle.BLANK.value: "Sem Olhos",
+    }
+
+
+def get_available_iris_colors() -> Dict[str, str]:
+    """Retorna opções de cores de íris disponíveis."""
+    return {
+        IrisColor.BLUE.value: "Azul Safira",
+        IrisColor.GREEN.value: "Verde Esmeralda",
+        IrisColor.BROWN.value: "Castanho Âmbar",
+        IrisColor.PURPLE.value: "Violeta Ametista",
+        IrisColor.RED.value: "Vermelho Rubi",
+        IrisColor.GOLD.value: "Dourado Solar",
+        IrisColor.CYAN.value: "Ciano Celeste",
+        IrisColor.CUSTOM.value: "Cor RGB Personalizada",
+    }
+
+
+def get_available_mouth_styles() -> Dict[str, str]:
+    """Retorna estilos de boca modulares disponíveis."""
+    return {
+        MouthStyle.ANIME_ORIGINAL.value: "Lábios Anime Originais (Padrão Original)",
+        MouthStyle.SMILE.value: "Sorriso Curvado Suave",
+        MouthStyle.OPEN.value: "Boca Aberta Alegre (com dentes e língua)",
+        MouthStyle.WINK_SMILE.value: "Sorriso Expressivo Animado",
+        MouthStyle.NEUTRAL.value: "Linha Neutra Fechada",
+        MouthStyle.CLASSIC.value: "Sorriso Arco Retrô Clássico",
+        MouthStyle.CAT.value: "Boquinha Fofa Estilo Gato (:3 / nya)",
+        MouthStyle.POUT.value: "Beicinho Suave (Pout)",
+        MouthStyle.BLANK.value: "Sem Boca (Superfície Lisa)",
+    }
+
+
+def get_available_eyebrow_styles() -> Dict[str, str]:
+    """Retorna estilos de sobrancelha modulares disponíveis."""
+    return {
+        EyebrowStyle.STANDARD.value: "Sobrancelhas Padrão Harmonizadas",
+        EyebrowStyle.THICK.value: "Sobrancelhas Marcadas / Espessas",
+        EyebrowStyle.DETERMINED.value: "Sobrancelhas Inclinadas / Confiantes",
+        EyebrowStyle.NONE.value: "Sem Sobrancelhas",
+    }
+
+
+def get_available_hair_2d_styles() -> Dict[str, str]:
+    """Retorna estilos de textura 2D do couro cabeludo."""
+    return {
+        Hair2DStyle.STANDARD.value: "Couro Cabeludo Completo com Franja",
+        Hair2DStyle.BUZZ.value: "Cabelo Raspado / Militar 2D",
+        Hair2DStyle.BALD.value: "Careca / Couro Cabeludo Liso",
+    }
+
+
+def get_available_face_details() -> Dict[str, str]:
+    """Retorna detalhes faciais opcionais."""
+    return {
+        FaceDetail.NONE.value: "Nenhum detalhe adicional",
+        FaceDetail.BLUSH.value: "Bochechas Coradas (Blush)",
+        FaceDetail.FRECKLES.value: "Sardas Delicadas",
+        FaceDetail.BLUSH_AND_FRECKLES.value: "Blush e Sardas Combinados",
+    }
