@@ -18,6 +18,7 @@ O projeto é dividido em **dois subprojetos complementares** desenvolvidos no me
 | [[Sistema de Roupas\|Sistema-de-Roupas]] | Roupas do Roblox por cages, HSR e camadas. |
 | [[Animação e Esqueleto\|Animacao-e-Esqueleto]] | Rig do jogo, pesos das roupas, descanso e caminhada. |
 | [[Bateria de Robustez\|Bateria-de-Robustez]] | Como medir o catálogo inteiro e os resultados. |
+| [[Scripts do Projeto\|Scripts-do-Projeto]] | O que há em `scripts/`, para que serve cada um e se ainda é usado. |
 | [[Comandos do Chat\|Comandos-do-Chat]] | Todos os comandos /skin. |
 | [[Criação de Personagem\|Criacao-de-Personagem]] | Tela com seções e grade de opções (`/skin interface`). |
 

@@ -1,6 +1,8 @@
 # 👗 Motor Universal de Roupas — Paridade com Roblox LayeredClothing
 
-> **Status:** Em implementação  
+> **Status:** documento histórico (a proposta de 23/09/2026 que deu origem ao encaixe por cage; estava na raiz do
+> repositório como `proposta_motor_universal_roupas.md`). O que foi de fato construído está em
+> [[Sistema de Roupas|Sistema-de-Roupas]] e o que foi tentado e descartado em [[Histórico de Experimentos|Historico-de-Experimentos]].  
 > **Última atualização:** 23/09/2026  
 > **Objetivo:** Vestir qualquer roupa do catálogo Roblox em qualquer avatar (masculino ou feminino) sem clipping, sem heurísticas, usando deformação por cage como o Roblox faz.
 

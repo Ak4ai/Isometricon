@@ -122,7 +122,8 @@ depois do encaixe (8 cópias ou mais de um mesmo ponto; 38 arquivos, de 15 peça
 - Juntar todas as cópias que o encaixe separa (também as duas a quatro das costuras de UV, mais de 2500 grupos no
   catálogo) é pior: 12 peças pioram e 8 melhoram no corpo feminino (Realistic White Pigeon: tecido esticado de 604
   para 16 830 cm²). As cópias seguem ossos diferentes e, juntas no encaixe, puxam mais o tecido no movimento.
-- As folhas de antes e depois ficaram em `artifacts/tampas` (fora do git).
+- As folhas de antes e depois e a cópia das roupas encaixadas foram apagadas na limpeza de 10/10/2026; para refazer,
+  reaplique o commit `1b5a453` numa cópia do projeto.
 
 Um caminho ainda não tentado: em vez de juntar as cópias, não desenhar os triângulos desses leques (a tampa some,
 e com ela os espinhos), ou pôr a tampa junto do braço. Por enquanto o pincel da seção Ajuste fino não resolve isto,
