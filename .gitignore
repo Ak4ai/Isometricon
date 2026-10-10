@@ -130,3 +130,31 @@ scripts/test_blender.py
 scripts/test_sharp_remesh.py
 scripts/test_smooth_dissolve.py
 
+
+# Saídas geradas (relatórios, bateria, imagens de estudo) e caches de roupa
+artifacts/
+assets/models/character_native_*_hsr.npz
+assets/models/character_native_*_parts.npy
+# Roupas baixadas pelo /skin vestir (as já versionadas continuam no git)
+assets/models/clothing/*.rbxm
+assets/models/clothing/*.png
+assets/models/clothing/hsr/
+assets/models/clothing/wrap_cages/
+assets/models/clothing/thumbs/
+tools/
+
+# Personagem gravado pelo jogo
+saves/
+
+# Saídas de ferramentas locais (watcher, delta)
+galeria/
+galeria.md
+.delta/
+
+# Scripts de pesquisa, exportações antigas e testes deles, guardados só nesta máquina (ver backup/README.md)
+backup/
+
+# Caches e sobras do catálogo baixado (o catálogo de exemplo entra à força: ver a wiki, Scripts do Projeto)
+assets/models/clothing/cages/
+assets/models/clothing/*.mtl
+assets/models/clothing/reference_cage_*.mesh

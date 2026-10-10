@@ -3,7 +3,7 @@
 import json
 import math
 import os
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -191,6 +191,63 @@ class CharacterPart:
             self.mesh = None
 
 
+def walk_leg_angles(phase: float) -> Tuple[float, float, float]:
+    """Calcula (hip_pitch, knee_pitch, foot_pitch) em radianos para o ciclo de passada completo.
+
+    Convenção OpenGL Isometricon (mat4_rotate_x):
+    - Ângulo negativo: gira para frente (+Z)
+    - Ângulo positivo: gira para trás (-Z)
+    """
+    phi = phase % (2.0 * math.pi)
+    # Avanço do quadril: no início do ciclo (phi=0), a perna está estendida à frente (-26 graus -> +Z)
+    hip = -math.cos(phi) * math.radians(26.0)
+
+    if phi < math.pi:
+        # Fase de apoio (Stance): pé no solo empurrando o corpo para trás (+Z para -Z)
+        # Leve amortecimento do joelho para trás (ângulo positivo)
+        cushion = math.sin(phi) * math.radians(8.0)
+        knee = cushion
+        foot = -math.sin(phi - math.pi / 4.0) * math.radians(8.0)
+    else:
+        # Fase de oscilação (Swing): pé no ar avançando de trás para frente (-Z para +Z)
+        s = (phi - math.pi) / math.pi
+        # Flexão profunda do joelho para trás (ângulo positivo de até 48 graus)
+        knee = math.sin(s * math.pi) * math.radians(48.0)
+        # Tornozelo aponta levemente para cima para não arrastar no chão
+        foot = -math.sin(s * math.pi) * math.radians(10.0)
+
+    return hip, knee, foot
+
+
+def walk_pose(walk_time: float) -> Dict[str, float]:
+    """Target joint angles (radians) and pelvis bounce (m) of the walk cycle at ``walk_time``.
+
+    Pitch angles follow mat4_rotate_x: negative swings forward (+Z), positive backward.
+    """
+    hip_L, knee_L, foot_L = walk_leg_angles(walk_time)
+    # Perna esquerda e perna direita em oposição de fase (defasadas por PI)
+    hip_R, knee_R, foot_R = walk_leg_angles(walk_time + math.pi)
+    # Braços balançam em oposição às pernas
+    arm_amp = math.radians(24.0)
+    forearm_amp = math.radians(26.0)
+    base_elbow = math.radians(6.0)
+    # Perna esquerda avança (hip_L < 0) -> Braço esquerdo recua (arm_L > 0)
+    arm_L = math.cos(walk_time) * arm_amp
+    arm_R = -math.cos(walk_time) * arm_amp
+    return {
+        "hip_L": hip_L, "knee_L": knee_L, "foot_L": foot_L,
+        "hip_R": hip_R, "knee_R": knee_R, "foot_R": foot_R,
+        "arm_L": arm_L, "arm_R": arm_R,
+        # Cotovelos flexionam para frente (ângulo negativo) quando o braço avança
+        "forearm_L": -max(0.0, -arm_L) * (forearm_amp / arm_amp) - base_elbow,
+        "forearm_R": -max(0.0, -arm_R) * (forearm_amp / arm_amp) - base_elbow,
+        # Pelvis bounce vertical (passada saltitante em cada passo)
+        "bounce": abs(math.sin(walk_time)) * 0.04,
+        # Torso: leve rotação em yaw acompanhando o balanço dos ombros
+        "torso_yaw": -math.cos(walk_time) * math.radians(4.0),
+        "head_pitch": math.sin(walk_time * 2.0) * math.radians(1.5),
+    }
+
 class ModularCharacter:
     """Gerencia a hierarquia Forward Kinematics (FK) e animação procedural de caminhada."""
 
@@ -288,57 +345,17 @@ class ModularCharacter:
             self.parts[name].local_rot[axis] += (target - curr) * factor
 
     def _compute_leg_angles(self, phase: float) -> Tuple[float, float, float]:
-        """Calcula (hip_pitch, knee_pitch, foot_pitch) em radianos para o ciclo de passada completo.
-
-        Convenção OpenGL Isometricon (mat4_rotate_x):
-        - Ângulo negativo: gira para frente (+Z)
-        - Ângulo positivo: gira para trás (-Z)
-        """
-        phi = phase % (2.0 * math.pi)
-        # Avanço do quadril: no início do ciclo (phi=0), a perna está estendida à frente (-26 graus -> +Z)
-        hip = -math.cos(phi) * math.radians(26.0)
-
-        if phi < math.pi:
-            # Fase de apoio (Stance): pé no solo empurrando o corpo para trás (+Z para -Z)
-            # Leve amortecimento do joelho para trás (ângulo positivo)
-            cushion = math.sin(phi) * math.radians(8.0)
-            knee = cushion
-            foot = -math.sin(phi - math.pi / 4.0) * math.radians(8.0)
-        else:
-            # Fase de oscilação (Swing): pé no ar avançando de trás para frente (-Z para +Z)
-            s = (phi - math.pi) / math.pi
-            # Flexão profunda do joelho para trás (ângulo positivo de até 48 graus)
-            knee = math.sin(s * math.pi) * math.radians(48.0)
-            # Tornozelo aponta levemente para cima para não arrastar no chão
-            foot = -math.sin(s * math.pi) * math.radians(10.0)
-
-        return hip, knee, foot
+        return walk_leg_angles(phase)
 
     def update_animation(self, dt: float, is_moving: bool, walk_time: float) -> None:
         """Atualiza a rotação dos membros para a caminhada natural ou postura em repouso."""
         if is_moving:
-            # Perna esquerda e perna direita em oposição de fase (defasadas por PI)
-            hip_L, knee_L, foot_L = self._compute_leg_angles(walk_time)
-            hip_R, knee_R, foot_R = self._compute_leg_angles(walk_time + math.pi)
-
-            # Braços balançam em oposição às pernas
-            arm_amp = math.radians(24.0)
-            forearm_amp = math.radians(26.0)
-            base_elbow = math.radians(6.0)
-
-            # Perna esquerda avança (hip_L < 0) -> Braço esquerdo recua (target_arm_L > 0)
-            target_arm_L = math.cos(walk_time) * arm_amp
-            target_arm_R = -math.cos(walk_time) * arm_amp
-
-            # Cotovelos flexionam para frente (ângulo negativo) quando o braço avança
-            target_forearm_L = -max(0.0, -target_arm_L) * (forearm_amp / arm_amp) - base_elbow
-            target_forearm_R = -max(0.0, -target_arm_R) * (forearm_amp / arm_amp) - base_elbow
-
-            # Pelvis bounce vertical (passada saltitante em cada passo)
-            target_bounce = abs(math.sin(walk_time)) * 0.04
-            # Torso: leve rotação em yaw acompanhando o balanço dos ombros
-            target_torso_yaw = -math.cos(walk_time) * math.radians(4.0)
-            target_head_pitch = math.sin(walk_time * 2.0) * math.radians(1.5)
+            pose = walk_pose(walk_time)
+            hip_L, knee_L, foot_L = pose["hip_L"], pose["knee_L"], pose["foot_L"]
+            hip_R, knee_R, foot_R = pose["hip_R"], pose["knee_R"], pose["foot_R"]
+            target_arm_L, target_arm_R = pose["arm_L"], pose["arm_R"]
+            target_forearm_L, target_forearm_R = pose["forearm_L"], pose["forearm_R"]
+            target_bounce, target_torso_yaw, target_head_pitch = pose["bounce"], pose["torso_yaw"], pose["head_pitch"]
         else:
             hip_L, knee_L, foot_L = 0.0, 0.0, 0.0
             hip_R, knee_R, foot_R = 0.0, 0.0, 0.0
@@ -383,6 +400,17 @@ class ModularCharacter:
                 shader.set_mat4("u_Model", part_model)
                 part.mesh.draw()
 
+    def equip_roblox_clothing(self, asset_id: Union[int, str]) -> dict:
+        """Carrega e veste qualquer roupa do Roblox em tempo de execução via motor 100% nativo em Python."""
+        from src.clothing.wear_engine import RobloxWearEngine
+        engine = RobloxWearEngine()
+        wear_data = engine.wear(asset_id)
+
+        if wear_data.get("is_top") and "torso" in self.parts:
+            self.parts["torso"].mesh = None
+
+        return wear_data
+
     def delete(self) -> None:
         for part in self.parts.values():
             part.delete()
@@ -392,14 +420,30 @@ class ModularCharacter:
 class PlayerToken:
     """Controlador de miniatura 3D com movimentação contínua estilo RPG e animação modular procedural."""
 
+    def equip_roblox_clothing(self, asset_id: Union[int, str]) -> dict:
+        """Equipa roupa do Roblox no token usando o motor nativo."""
+        if self.avatar is not None:
+            return {}  # the avatar is dressed through its own customization (/import)
+        if self.modular_character is not None:
+            return self.modular_character.equip_roblox_clothing(asset_id)
+        return {}
+
     def __init__(
         self,
         start_x: float = 0.5,
         start_z: float = 0.5,
         speed: float = 5.0,
         create_mesh: bool = True,
+        avatar: Any = None,
     ) -> None:
+        """``avatar`` is a dressed CharacterModel; when given it is the token's body, skinned
+        to the game rig and walked by a CharacterAnimator, instead of the old modular doll."""
         self.position = np.array([start_x, 10.0, start_z], dtype=np.float32)
+        self.avatar = avatar
+        self.animator = None
+        if avatar is not None:
+            from src.clothing.character_animation import CharacterAnimator
+            self.animator = CharacterAnimator(avatar, walking=False)
         self.yaw: float = 0.0
         self.speed: float = speed
         self.is_moving: bool = False
@@ -409,7 +453,10 @@ class PlayerToken:
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "assets", "models", "character_modular.json"
         )
-        if create_mesh and os.path.exists(json_path):
+        if avatar is not None:
+            self.modular_character = None
+            self.mesh = None
+        elif create_mesh and os.path.exists(json_path):
             self.modular_character: Optional[ModularCharacter] = ModularCharacter(json_path, create_mesh=True)
             self.mesh: Optional[TexturedMesh] = None
         else:
@@ -466,6 +513,10 @@ class PlayerToken:
         # Interpolação suave para subir/descer colinas e degraus
         self.position[1] += (target_y - self.position[1]) * min(dt * 18.0, 1.0)
 
+        # The avatar walks the same cycle as the token moves, and rests when it stops.
+        if self.animator is not None:
+            self.animator.walking = self.is_moving
+            self.animator.update(dt, walk_time=self.walk_time)
         # Atualiza a animação procedural modular
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
@@ -484,6 +535,9 @@ class PlayerToken:
     def draw(self, shader: Any = None, base_model: Optional[np.ndarray] = None) -> None:
         """Desenha a miniatura (modular se disponível, ou malha única)."""
         import OpenGL.GL as gl
+        if self.avatar is not None and shader is not None:
+            self.avatar.draw(shader, base_model if base_model is not None else self.get_model_matrix())
+            return
         gl.glDisable(gl.GL_CULL_FACE)
         if self.modular_character is not None and shader is not None:
             mat = base_model if base_model is not None else self.get_model_matrix()
@@ -494,6 +548,9 @@ class PlayerToken:
 
     def delete(self) -> None:
         """Libera os buffers OpenGL."""
+        if self.avatar is not None:
+            self.avatar.delete()
+            self.avatar = None
         if self.modular_character is not None:
             self.modular_character.delete()
             self.modular_character = None

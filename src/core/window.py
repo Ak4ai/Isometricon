@@ -34,7 +34,8 @@ class Window:
         self._scroll_callbacks: List[Callable[[float, float], None]] = []
         self._cursor_pos_callbacks: List[Callable[[float, float], None]] = []
         self._mouse_button_callbacks: List[Callable[[int, int, int], None]] = []
-        self._key_callbacks: List[Callable[[int, int, int, int], None]] = []
+        self._key_callbacks: List[Callable[[int, int, int, int], Optional[bool]]] = []
+        self._char_callbacks: List[Callable[[int], None]] = []
 
         self._init_glfw()
 
@@ -69,6 +70,7 @@ class Window:
         glfw.set_cursor_pos_callback(self._window, self._on_cursor_pos)
         glfw.set_mouse_button_callback(self._window, self._on_mouse_button)
         glfw.set_key_callback(self._window, self._on_key)
+        glfw.set_char_callback(self._window, self._on_char)
 
         self._last_frame_time = glfw.get_time()
 
@@ -97,11 +99,18 @@ class Window:
             cb(button, action, mods)
 
     def _on_key(self, window, key: int, scancode: int, action: int, mods: int) -> None:
-        """Callback de teclado. Fecha a janela ao pressionar ESC por padrão."""
-        if key == glfw.KEY_ESCAPE and action == glfw.PRESS:
-            glfw.set_window_should_close(self._window, True)
+        """Callback de teclado. Fecha a janela ao pressionar ESC se não consumido por outro callback."""
+        consumed = False
         for cb in self._key_callbacks:
-            cb(key, scancode, action, mods)
+            if cb(key, scancode, action, mods) is True:
+                consumed = True
+        if not consumed and key == glfw.KEY_ESCAPE and action == glfw.PRESS:
+            glfw.set_window_should_close(self._window, True)
+
+    def _on_char(self, window, codepoint: int) -> None:
+        """Callback acionado para entrada de texto Unicode."""
+        for cb in self._char_callbacks:
+            cb(codepoint)
 
     def add_resize_callback(self, callback: Callable[[int, int], None]) -> None:
         """Adiciona um observador para eventos de redimensionamento."""
@@ -119,9 +128,13 @@ class Window:
         """Adiciona um observador para cliques de mouse."""
         self._mouse_button_callbacks.append(callback)
 
-    def add_key_callback(self, callback: Callable[[int, int, int, int], None]) -> None:
-        """Adiciona um observador para eventos de teclado."""
+    def add_key_callback(self, callback: Callable[[int, int, int, int], Optional[bool]]) -> None:
+        """Adiciona um observador para eventos de teclado (pode retornar True para consumir)."""
         self._key_callbacks.append(callback)
+
+    def add_char_callback(self, callback: Callable[[int], None]) -> None:
+        """Adiciona um observador para caracteres digitados (Unicode)."""
+        self._char_callbacks.append(callback)
 
     def is_key_pressed(self, key: int) -> bool:
         """Verifica se uma tecla específica está atualmente pressionada."""

@@ -14,6 +14,7 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 | [🏛️ **Arquitetura do Motor**](ARCHITECTURE.md) | Estrutura de Chunks 3D, Face Culling na CPU e Pipeline OpenGL. | Equipe A (Mundo) |
 | [🔗 **Contrato de Integração**](INTEGRATION_SPEC.md) | Interfaces `VoxelGridProvider`, Raycasting 3D e Matrizes de Câmera. | Equipe A & Equipe B |
 | [🎨 **Guia de Shaders GLSL**](SHADERS.md) | Shaders GLSL 330 core, modelo de iluminação Lambertiana e Destaques. | Equipe A & Equipe B |
+| [📖 **Wiki do Projeto**](wiki/Home.md) | Roupas do Roblox, animação, bateria de robustez, comandos do chat e histórico de experimentos. | Equipe B |
 
 </div>
 

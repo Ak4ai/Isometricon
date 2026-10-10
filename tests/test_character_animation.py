@@ -1,0 +1,186 @@
+"""Animation must preserve the visible skin chosen by HSR, including near cloth."""
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from src.clothing.character_animation import CharacterAnimator
+
+
+class MemoryMesh:
+    def __init__(self, points):
+        self.rows = np.zeros((3, 11), dtype=np.float32)
+        self.rows[:, :3] = points
+        self.rows[:, 5] = 1
+        self.indices = np.array([0, 1, 2], dtype=np.uint32)
+
+    def read_vertices(self):
+        return self.rows.copy()
+
+    def read_indices(self):
+        return self.indices.copy()
+
+    def update_vertices(self, rows):
+        self.rows = rows.copy()
+
+    def update_buffers(self, rows, indices):
+        self.rows = rows.reshape(-1, 11).copy()
+        self.indices = indices.copy()
+
+    def delete(self):
+        self.indices = np.zeros(0, dtype=np.uint32)
+
+
+@pytest.mark.parametrize('body', ['female', 'male'])
+def test_animation_does_not_delete_skin_even_when_cloth_crosses_a_bone_ray(body):
+    # A visible triangle in front of cloth: the old bone-ray test deleted this
+    # whole triangle for every pose, even though HSR had left it visible.
+    skin_mesh = MemoryMesh([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]])
+    cloth_mesh = MemoryMesh([[-.2, .9, .15], [.2, .9, .15], [0, 1.4, .15]])
+    parts = [SimpleNamespace(name='trunk_skin', mesh=skin_mesh, transform=None, source_obj=None),
+             SimpleNamespace(name='top', mesh=cloth_mesh, transform=None, source_obj='missing.obj')]
+    model = SimpleNamespace(body=body, parts=parts.copy())
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    animator.walking = True
+    for phase in np.linspace(0, 2 * np.pi, 8, endpoint=False):
+        animator.walk_time = phase
+        animator.update(0)
+        assert len(model.parts) == 2
+        for part in parts:
+            np.testing.assert_array_equal(part.mesh.read_indices(), [0, 1, 2])
+            assert np.isfinite(part.mesh.read_vertices()).all()
+
+
+@pytest.mark.parametrize('body', ['female', 'male'])
+def test_torso_mesh_cannot_bind_to_a_nearby_arm(body):
+    from src.clothing.skeleton import Skeleton, rotation_z, skin
+    skeleton = Skeleton.load(body)
+    arm = skeleton.index('UpperArm_L')
+    # Deliberately near the arm cage: anatomical ownership must win over proximity.
+    point = skeleton.heads[arm] + .2 * (skeleton.tails[arm] - skeleton.heads[arm])
+    mesh = MemoryMesh(point + np.array([[0, 0, 0], [.01, 0, 0], [0, 0, .01]]))
+    part = SimpleNamespace(name='trunk_skin', mesh=mesh, transform=None, source_obj=None)
+    animator = CharacterAnimator(SimpleNamespace(body=body, parts=[part]))
+    animator._bind()
+    _, rows, indices, weights = animator._bindings[0]
+    posed = skin(rows, indices, weights, skeleton.pose({'UpperArm_L': rotation_z(.7)}))
+    np.testing.assert_allclose(posed, rows, atol=1e-7)
+
+
+@pytest.mark.parametrize("body", ["female", "male"])
+def test_a_skirt_is_not_split_between_the_legs(body):
+    """Cloth labelled half with each leg, all round both, gets weights without a jump along the garment."""
+    from src.clothing.skeleton import Skeleton
+
+    animator = CharacterAnimator.__new__(CharacterAnimator)
+    animator.skeleton = skeleton = Skeleton.load(body)
+    hip = skeleton.heads[skeleton.index("UpperLeg_L")]
+    turns, levels = 24, 12
+    angle = np.arange(turns) * 2 * np.pi / turns
+    points = np.array([[0.25 * np.cos(a), hip[1] + 0.08 - 0.05 * k, hip[2] + 0.25 * np.sin(a)]
+                       for k in range(levels) for a in angle])
+    faces = np.array([[k * turns + i, k * turns + (i + 1) % turns, (k + 1) * turns + i]
+                      for k in range(levels - 1) for i in range(turns)]
+                     + [[k * turns + (i + 1) % turns, (k + 1) * turns + (i + 1) % turns, (k + 1) * turns + i]
+                        for k in range(levels - 1) for i in range(turns)])
+    bones = np.where(points[:, 1] > hip[1], skeleton.index("Pelvis"),
+                     np.where(points[:, 0] > 0, skeleton.index("UpperLeg_L"), skeleton.index("UpperLeg_R")))
+    indices, weights = animator._cloth_weights(points, faces, bones, bones)
+    dense = np.zeros((len(points), len(skeleton.names)))
+    np.add.at(dense, (np.repeat(np.arange(len(points)), indices.shape[1]), indices.ravel()), weights.ravel())
+    np.testing.assert_allclose(dense.sum(1), 1.0)
+    edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    assert np.abs(dense[edges[:, 0]] - dense[edges[:, 1]]).max() < 0.5
+    side = points[:, 0] > 0.2  # the cloth beside the left leg goes with it
+    assert dense[side & (points[:, 1] < hip[1] - 0.3), skeleton.index("UpperLeg_L")].min() > 0.5
+
+
+
+@pytest.mark.parametrize('body', ['female', 'male'])
+def test_arms_swing_less_only_when_the_clothes_tear(body):
+    skin_mesh = MemoryMesh([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]])
+    model = SimpleNamespace(body=body, parts=[SimpleNamespace(name='trunk_skin', mesh=skin_mesh,
+                                                              transform=None, source_obj=None)])
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    assert animator.arm_swing == 1.0  # nothing worn, nothing to tear
+
+    def swing(amount):
+        animator.arm_swing = amount
+        upper = animator.walk_pose(0.0)[0]['UpperArm_L'] @ np.linalg.inv(animator.rest['UpperArm_L'])
+        return np.arccos(np.clip((np.trace(upper[:3, :3]) - 1) / 2, -1.0, 1.0))
+
+    assert 0.0 < swing(0.35) < swing(1.0)
+
+
+def test_torn_area_counts_only_triangles_stretched_well_past_their_size():
+    from src.clothing.character_animation import _torn_area
+    rows = np.array([[0, 0, 0], [0.1, 0, 0], [0, 0.1, 0]], dtype=np.float64)
+    faces = np.array([[0, 1, 2]])
+    assert _torn_area(rows, rows, faces) == 0.0
+    assert _torn_area(rows, rows * [2.0, 1.0, 1.0], faces) == 0.0  # twice as long: not torn
+    torn = rows * [4.0, 1.0, 1.0]
+    assert _torn_area(rows, torn, faces) == pytest.approx(0.5 * 0.4 * 0.1)
+
+
+def test_adjustments_do_not_pile_up_when_only_the_skin_is_cut_again():
+    # The clothes stay through a new cut of the skin (CharacterModel.refresh_skin): their buffers
+    # hold the vertices as adjusted, and binding again from those applied each adjustment twice.
+    def model_with(skin_points):
+        skin_mesh = MemoryMesh(skin_points)
+        return SimpleNamespace(name='trunk_skin', mesh=skin_mesh, transform=None, source_obj=None)
+
+    cloth_mesh = MemoryMesh([[-.2, .95, .15], [.2, .95, .15], [0, 1.4, .15]])
+    cloth = SimpleNamespace(name='top', mesh=cloth_mesh, transform=None, source_obj='missing.obj')
+    custom = SimpleNamespace(body_adjust={}, nose_style=None)
+    model = SimpleNamespace(body='female', parts=[model_with([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]]), cloth],
+                            customization=custom, garment_edges=lambda: {'top': (0.95, 1.4)})
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    plain = cloth_mesh.read_vertices()
+
+    def shown(value, recut):
+        custom.body_adjust = {'blusa_barra': value} if value else {}
+        if recut:  # a new skin, the same clothes
+            model.parts[0] = model_with([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.15, .2]])
+        animator.update(0)
+        return cloth_mesh.read_vertices()
+
+    first = shown(0.12, recut=False)
+    assert first[0, 1] > plain[0, 1] + 0.005 and abs(first[2, 1] - plain[2, 1]) < 1e-6      # the hem went up, the top stayed
+    again = shown(0.12, recut=True)
+    np.testing.assert_allclose(again, first, atol=1e-6)                                     # the same after the skin is cut again
+    less = shown(0.11, recut=True)
+    assert plain[0, 1] < less[0, 1] < first[0, 1]                                           # 11 is under 12, not 12 and 11 together
+    np.testing.assert_allclose(shown(0.0, recut=True), plain, atol=1e-6)                    # and zero is the garment as fitted
+
+
+def test_a_model_whose_meshes_changed_is_posed_again_before_it_is_drawn():
+    skin = lambda: SimpleNamespace(name='trunk_skin', mesh=MemoryMesh([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]]),
+                                   transform=None, source_obj=None)
+    model = SimpleNamespace(body='female', parts=[skin()])
+    animator = CharacterAnimator(model, walking=False)
+    animator.update(0)
+    bound = animator._bound_key
+    animator.sync()
+    assert animator._bound_key == bound                       # nothing changed: nothing done
+    model.parts[0] = skin()                                   # the skin cut again by a command, after the update
+    animator.sync()
+    assert animator._bound_key == animator._key() != bound    # bound and posed for this frame's drawing
+
+
+def test_the_body_is_raised_to_stand_on_its_soles_or_its_shoes():
+    from src.clothing.character_animation import SOLE_LIMIT
+    animator = CharacterAnimator.__new__(CharacterAnimator)
+    part = lambda name, low: (SimpleNamespace(name=name), np.array([[0.0, low, 0.0, 0, 1, 0, 0, 0, 1, 1, 1], [0.0, 0.5, 0.0, 0, 1, 0, 0, 0, 1, 1, 1]]), None, None)
+    animator._bindings = [part("legs_skin", -0.025), part("bottom", -0.14)]
+    assert animator._standing_height() == pytest.approx(0.025)                  # bare: on the soles of the feet; a hem on the ground does not count
+    animator._bindings = [part("legs_skin", 0.05), part("shoe_1", -0.07), part("shoe_2", -0.06), part("bottom", -0.14)]
+    assert animator._standing_height() == pytest.approx(0.07)                   # shod: on the lower of the two soles
+    animator._bindings = [part("shoe_1", -3.0)]
+    assert animator._standing_height() == SOLE_LIMIT                            # a mesh gone wrong does not send the body up
+    animator._bindings = [part("shoe_1", 0.02)]
+    assert animator._standing_height() == 0.0                                   # nothing below the origin: not lowered
+    animator._bindings = []
+    assert animator._standing_height() == 0.0

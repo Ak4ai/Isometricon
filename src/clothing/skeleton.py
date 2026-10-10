@@ -1,0 +1,283 @@
+"""Game skeleton: the 16-bone rig of each body, bone weights and linear blend skinning.
+
+The rig (assets/models/rig_<body>.json, exported from Blender by scripts/export_rig.py) is in
+the A-pose the body and the fitted garments are in, so that pose is the bind pose: a bone's
+skinning matrix is simply its posed transform.
+
+Weights: every vertex follows one bone (its body part), except near a joint, where it blends
+with the other bone of the joint. The blend only depends on the vertex position and the
+child bone's axis. Shoulders are one-sided: torso vertices stay on the torso, while
+the arm blends into it at the joint. Other joints blend both adjoining parts.
+"""
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+
+import numpy as np
+
+MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                          "assets", "models")
+# Half the length over which a joint blends its two bones (m).
+BLEND_RADIUS = 0.035
+# Body cage parts (R15) -> bones.
+CAGE_PART_BONES = {
+    "Head": "Head", "UpperTorso": "Torso", "LowerTorso": "Pelvis",
+    "LeftUpperArm": "UpperArm_L", "LeftLowerArm": "LowerArm_L", "LeftHand": "Hand_L",
+    "RightUpperArm": "UpperArm_R", "RightLowerArm": "LowerArm_R", "RightHand": "Hand_R",
+    "LeftUpperLeg": "UpperLeg_L", "LeftLowerLeg": "LowerLeg_L", "LeftFoot": "Foot_L",
+    "RightUpperLeg": "UpperLeg_R", "RightLowerLeg": "LowerLeg_R", "RightFoot": "Foot_R",
+}
+
+
+@dataclass
+class Skeleton:
+    names: list
+    parents: np.ndarray  # index of the parent bone, -1 for the root
+    heads: np.ndarray  # (B, 3) joint positions, mesh coordinates (x, y up, z front)
+    tails: np.ndarray
+
+    @classmethod
+    def load(cls, body: str) -> "Skeleton":
+        with open(os.path.join(MODELS_DIR, f"rig_{body}.json"), encoding="utf-8") as fp:
+            bones = json.load(fp)["bones"]
+        names = [b["name"] for b in bones]
+        parents = np.array([names.index(b["parent"]) if b["parent"] else -1 for b in bones])
+        return cls(names, parents, np.array([b["head"] for b in bones], dtype=np.float64),
+                   np.array([b["tail"] for b in bones], dtype=np.float64))
+
+    def index(self, name: str) -> int:
+        return self.names.index(name)
+
+    def reconcile_fitted_bones(self, fitted, nearest):
+        """Use a nearer ancestor after fitting without crossing to another limb.
+
+        A source cage label describes the wrap projection, not necessarily the final
+        garment's anatomical position. A side panel projected onto the arm can end up
+        on the torso after fitting. It must then follow the torso. A wide trouser leg,
+        however, must not switch to the other leg just because that leg is nearer.
+        """
+        fitted, nearest = np.asarray(fitted), np.asarray(nearest)
+        result = fitted.copy()
+        ancestor = fitted.copy()
+        for _ in self.names:
+            valid = ancestor >= 0
+            if not valid.any():
+                break
+            matched = valid & (ancestor == nearest)
+            result[matched] = nearest[matched]
+            ancestor[valid] = self.parents[ancestor[valid]]
+        return result
+
+    def weights(self, points: np.ndarray, bones: np.ndarray, blend: float = BLEND_RADIUS):
+        """(indices, weights), each (N, 2): the vertex's bone and the other bone of a nearby joint.
+
+        ``bones`` is each vertex's own bone. Near the joint between a bone and one of its
+        children, the child's weight rises smoothly along the child's axis, from 0 at
+        ``blend`` before the joint to 1 at ``blend`` after it. At the shoulder and
+        neck it rises from 0 at the joint to 1 at ``2 * blend`` on the child's side;
+        the torso itself never receives weights from those children.
+        """
+        points = np.asarray(points, dtype=np.float64)
+        bones = np.asarray(bones)
+        indices = np.stack([bones, bones], axis=1)
+        weights = np.zeros((len(points), 2))
+        weights[:, 0] = 1.0
+        axes = self.tails - self.heads
+        lengths = np.linalg.norm(axes, axis=1)
+        axes = axes / lengths[:, None]
+        # A parent's vertex near two of its children (the pelvis between the thighs) blends
+        # with the child whose axis it is nearest to, whatever the order of the bones.
+        claimed = np.full(len(points), np.inf)
+        for child in range(len(self.names)):
+            parent = self.parents[child]
+            if parent < 0:
+                continue
+            # Only vertices of the two bones of this joint, and only across the child's
+            # section (the thigh's width, not the whole pelvis).
+            mine = (bones == child) | (bones == parent)
+            if not mine.any():
+                continue
+            offset = points - self.heads[child]
+            along = offset @ axes[child]
+            radial = np.linalg.norm(offset - along[:, None] * axes[child], axis=1)
+            own = points[bones == child]
+            if len(own):
+                own_radial = np.linalg.norm((own - self.heads[child]) - ((own - self.heads[child]) @ axes[child])[:, None]
+                                            * axes[child], axis=1)
+                reach = 1.25 * np.percentile(own_radial, 90)
+            else:
+                reach = 0.1
+            if self.names[child].startswith("UpperArm"):
+                continue  # arms and sleeves move rigidly with the arm, independent of the torso
+            if self.names[parent] == "Torso":
+                # The neck bends on the head's side only: the torso, its skin and
+                # the body of a shirt, stays put, or an arm would drag the armhole with it.
+                # Include the parent side of the plane: leaving those vertices at their
+                # default child weight would jump from 100% child to 100% parent at zero.
+                near = (bones == child) & (along < 2 * blend) & (radial < reach)
+                t = np.clip(along[near] / (2 * blend), 0.0, 1.0)
+            else:
+                # Far from a straight limb's bone (knee, elbow) the bend sweeps a long arc, so
+                # the transition is as long as the distance to the bone, or wide cloth (a
+                # baggy trouser leg) would stretch around the joint.
+                straight = self.parents[parent] >= 0 and axes[child] @ axes[parent] > 0.7
+                width = np.maximum(blend, radial) if straight else np.full(len(points), blend)
+                near = mine & (np.abs(along) < width) & (radial < reach)
+                near &= (bones == child) | (radial < claimed)
+                claimed[near & (bones == parent)] = radial[near & (bones == parent)]
+                t = np.clip((along[near] + width[near]) / (2 * width[near]), 0.0, 1.0)
+            t = t * t * (3 - 2 * t)
+            rows = np.flatnonzero(near)
+            indices[rows] = np.stack([np.full(len(rows), child), np.full(len(rows), parent)], axis=1)
+            weights[rows] = np.stack([t, 1 - t], axis=1)
+        return indices, weights
+
+    def pose(self, rotations: dict, root_offset=(0.0, 0.0, 0.0), scales=None, height: float = 1.0) -> np.ndarray:
+        """(B, 4, 4) skinning matrices: each bone turned about its joint by ``rotations[name]``
+        (3x3, in the mesh axes), children carried by their parents.
+
+        ``scales`` (bone index -> 3x3) changes the body's proportions: what a bone carries is
+        scaled about its joint, and its children move to where their joints end up without
+        being scaled themselves. ``height`` scales the whole character from the ground."""
+        scales = scales or {}
+        frames = np.zeros((len(self.names), 4, 4))  # each bone's own frame, without its scale
+        matrices = np.zeros((len(self.names), 4, 4))
+        for bone in range(len(self.names)):  # parents come first
+            pivot = self.heads[bone]
+            local = np.eye(4)
+            rotation = rotations.get(self.names[bone])
+            if rotation is not None:
+                local[:3, :3] = rotation
+                local[:3, 3] = pivot - rotation @ pivot
+            parent = self.parents[bone]
+            if parent < 0:
+                root = np.eye(4)
+                root[:3, :3] *= height
+                root[:3, 3] = root_offset
+                frames[bone] = root @ local
+            else:
+                carried = np.eye(4)
+                if parent in scales:  # the joint moves with what the parent's scale does to it
+                    offset = pivot - self.heads[parent]
+                    carried[:3, 3] = scales[parent] @ offset - offset
+                frames[bone] = frames[parent] @ carried @ local
+            matrices[bone] = frames[bone]
+            if bone in scales:
+                scale = np.eye(4)
+                scale[:3, :3] = scales[bone]
+                scale[:3, 3] = pivot - scales[bone] @ pivot
+                matrices[bone] = frames[bone] @ scale
+        return matrices
+
+
+def rotation_x(angle: float) -> np.ndarray:
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def rotation_y(angle: float) -> np.ndarray:
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+
+
+def rotation_z(angle: float) -> np.ndarray:
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+
+def partial_rotation(rotation: np.ndarray, amount: float) -> np.ndarray:
+    """The rotation turned only ``amount`` (0 to 1) of the way, about the same axis."""
+    angle = np.arccos(np.clip((np.trace(rotation) - 1.0) / 2.0, -1.0, 1.0))
+    if angle < 1e-9:
+        return np.eye(3)
+    axis = np.array([rotation[2, 1] - rotation[1, 2], rotation[0, 2] - rotation[2, 0], rotation[1, 0] - rotation[0, 1]])
+    norm = np.linalg.norm(axis)
+    if norm < 1e-9:  # half a turn: the axis is the rotation's own eigenvector
+        axis = np.linalg.eigh(rotation + np.eye(3))[1][:, -1]
+    else:
+        axis /= norm
+    k = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    theta = angle * amount
+    return np.eye(3) + np.sin(theta) * k + (1 - np.cos(theta)) * (k @ k)
+
+
+# Angle between each arm and the vertical in the rest pose (the bodies are exported in A-pose).
+REST_ARM_ANGLE = np.radians(5.0)
+
+
+def rest_rotations(skeleton: "Skeleton", arm_angle: float = REST_ARM_ANGLE, sides: str = "LR") -> dict:
+    """Rotations from the A-pose to the game's rest pose: arms hanging close to the body.
+
+    Each upper arm turns about the front axis at the shoulder until it is ``arm_angle`` off
+    the vertical; the forearm then straightens in line with it (the hand follows).
+    """
+    rotations = {}
+    for side, sign in (("L", 1.0), ("R", -1.0)):
+        if side not in sides:
+            continue
+        upper, lower = skeleton.index(f"UpperArm_{side}"), skeleton.index(f"LowerArm_{side}")
+        angle = lambda b: np.arctan2(sign * (skeleton.tails[b, 0] - skeleton.heads[b, 0]),
+                                     skeleton.heads[b, 1] - skeleton.tails[b, 1])
+        turn = arm_angle - angle(upper)
+        rotations[f"UpperArm_{side}"] = rotation_z(sign * turn)
+        rotations[f"LowerArm_{side}"] = rotation_z(sign * (arm_angle - angle(lower) - turn))
+    return rotations
+
+
+def rest_arm_angle(skeleton: "Skeleton", body_points: np.ndarray, arm_radius: float,
+                   margin: float = 0.01, smallest: float = REST_ARM_ANGLE, largest: float = np.radians(35.0)) -> float:
+    """Smallest rest angle at which both forearms and hands clear the body (hips, thighs) by ``margin``.
+
+    ``body_points`` are the torso, pelvis and leg surface (the body cage); the arm is taken
+    as a tube of ``arm_radius`` around its bones. Wide hips need the arms further out.
+    """
+    t = np.linspace(0.0, 1.0, 6)[:, None]
+    for angle in np.arange(smallest, largest, np.radians(1.0)):
+        matrices = skeleton.pose(rest_rotations(skeleton, angle))
+        clear = True
+        for side, sign in (("L", 1.0), ("R", -1.0)):
+            points = []
+            for name in (f"LowerArm_{side}", f"Hand_{side}"):
+                b = skeleton.index(name)
+                segment = skeleton.heads[b] + t * (skeleton.tails[b] - skeleton.heads[b])
+                points.append(segment @ matrices[b][:3, :3].T + matrices[b][:3, 3])
+            for point in np.vstack(points):
+                level = body_points[np.abs(body_points[:, 1] - point[1]) < 0.03]
+                level = level[level[:, 0] * sign > 0]
+                if len(level) and sign * point[0] - arm_radius < (sign * level[:, 0]).max() + margin:
+                    clear = False
+                    break
+            if not clear:
+                break
+        if clear:
+            return float(angle)
+    return float(largest)
+
+
+def walk_rotations(walk_time: float):
+    """Bone rotations and root offset of the game's walk cycle (the one of the world token)."""
+    from src.interactive.token_system import walk_pose
+    pose = walk_pose(walk_time)
+    rotations = {
+        "UpperLeg_L": rotation_x(pose["hip_L"]), "LowerLeg_L": rotation_x(pose["knee_L"]),
+        "Foot_L": rotation_x(pose["foot_L"]),
+        "UpperLeg_R": rotation_x(pose["hip_R"]), "LowerLeg_R": rotation_x(pose["knee_R"]),
+        "Foot_R": rotation_x(pose["foot_R"]),
+        "UpperArm_L": rotation_x(pose["arm_L"]), "LowerArm_L": rotation_x(pose["forearm_L"]),
+        "UpperArm_R": rotation_x(pose["arm_R"]), "LowerArm_R": rotation_x(pose["forearm_R"]),
+        "Torso": rotation_y(pose["torso_yaw"]), "Head": rotation_x(pose["head_pitch"]),
+    }
+    return rotations, (0.0, pose["bounce"], 0.0)
+
+
+def skin(rows: np.ndarray, indices: np.ndarray, weights: np.ndarray, matrices: np.ndarray) -> np.ndarray:
+    """Vertex rows (x, y, z, nx, ny, nz, ...) moved by linear blend skinning."""
+    blended = np.einsum("nk,nkij->nij", weights, matrices[indices])
+    out = rows.copy()
+    out[:, :3] = np.einsum("nij,nj->ni", blended[:, :3, :3], rows[:, :3]) + blended[:, :3, 3]
+    normals = np.einsum("nij,nj->ni", blended[:, :3, :3], rows[:, 3:6])
+    length = np.linalg.norm(normals, axis=1, keepdims=True)
+    out[:, 3:6] = normals / np.where(length > 1e-8, length, 1.0)
+    return out
