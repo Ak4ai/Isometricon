@@ -103,6 +103,27 @@ suéter 10 → 84):
 - refinar a malha da pele ao longo da linha antes de cortar (só mostra o quanto a linha é irregular, ponto a ponto
   da cage).
 
-**Ainda em aberto:** na manga curta e aberta do crop top, olhando de lado para dentro da cava, a borda do corte da
-pele na lateral do tronco aparece em pontas. No corpo da roupa o braço enche a cava e isso não se vê; no nosso, a
-manga fica afastada do braço. O pincel da seção Ajuste fino mostra essa pele à mão.
+### Em aberto: as pontas na cava do crop top (tampas em leque)
+
+As pontas que aparecem dentro da cava do "Dark Brown Tied Crop Top" não são da pele: são da roupa. A peça fecha
+cada cava e a gola por dentro com um leque de triângulos, cada um com a sua cópia do vértice do meio (17 cópias em
+cada cava, 32 na gola, todas no mesmo ponto na malha original). O encaixe move um vértice por mais do que o lugar
+dele (a normal, o triângulo), e manda cada cópia para um lado, até 28 cm umas das outras: o leque vira um estouro
+de espinhos dentro da manga, atravessando a borda do braço. Vê-se tirando os braços do desenho.
+
+Tentado em 09/10/2026 e **retirado** (commit `1b5a453`, revertido): juntar de novo as cópias do meio dos leques
+depois do encaixe (8 cópias ou mais de um mesmo ponto; 38 arquivos, de 15 peças).
+
+- No crop top feminino as pontas somem. No masculino também, mas a tampa passa por cima do alto do braço e aparece
+  como um bloco escuro com um degrau no ombro: troca um defeito por outro.
+- Na bateria, das 30 combinações com leques, 8 sobem numa medida e 4 descem: o braço e o pescoço atravessam a tampa
+  e contam como pele furando (crop top feminino 265 → 617 cm², masculino 512 → 1042), e a tampa estica quando o
+  braço balança (terno Mafioso masculino 400 → 1454, sem diferença visível).
+- Juntar todas as cópias que o encaixe separa (também as duas a quatro das costuras de UV, mais de 2500 grupos no
+  catálogo) é pior: 12 peças pioram e 8 melhoram no corpo feminino (Realistic White Pigeon: tecido esticado de 604
+  para 16 830 cm²). As cópias seguem ossos diferentes e, juntas no encaixe, puxam mais o tecido no movimento.
+- As folhas de antes e depois ficaram em `artifacts/tampas` (fora do git).
+
+Um caminho ainda não tentado: em vez de juntar as cópias, não desenhar os triângulos desses leques (a tampa some,
+e com ela os espinhos), ou pôr a tampa junto do braço. Por enquanto o pincel da seção Ajuste fino não resolve isto,
+porque o defeito é da roupa e não da pele.
