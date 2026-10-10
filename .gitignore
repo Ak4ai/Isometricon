@@ -153,3 +153,8 @@ galeria.md
 
 # Scripts de pesquisa, exportações antigas e testes deles, guardados só nesta máquina (ver backup/README.md)
 backup/
+
+# Caches e sobras do catálogo baixado (o catálogo de exemplo entra à força: ver a wiki, Scripts do Projeto)
+assets/models/clothing/cages/
+assets/models/clothing/*.mtl
+assets/models/clothing/reference_cage_*.mesh
