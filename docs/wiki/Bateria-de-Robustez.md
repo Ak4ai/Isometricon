@@ -50,7 +50,21 @@ python scripts/audit_animation_robustness.py --output artifacts/robustness --rep
 
 ![Calibração do esticado](images/bateria/calibracao-esticado.png)
 
-## 📊 Última rodada completa (07/10/2026, cache v37)
+## 📊 Última rodada completa (09/10/2026)
+
+Depois da correção da pele contra o tecido (ver [[Sistema de Roupas|Sistema-de-Roupas]]). 204 combinações:
+**116 ok, 75 atenção, 13 falha**. Contra a rodada de 07/10 (`comparacao.md`): **nenhuma piorou, 89 melhoraram, 115
+iguais**, e nenhuma medida de buraco ou de tecido esticado mudou além do ruído.
+
+- O que melhorou foi a pele furando o tecido: a soma do total nas 204 combinações caiu de 75 808 para 63 376 cm²
+  (16%). As maiores quedas são em shorts e calças no corpo feminino (Bermuda Shorts 1338 → 504, Casual Sweats
+  1183 → 386, Floral Swim Trunks 1204 → 523).
+- As 13 falhas são as mesmas da rodada anterior, nas mesmas peças; nenhuma entrou e nenhuma saiu.
+- O único veredito que mudou é o do vestido rosa feminino, de ok para atenção, com o total menor (2023 → 1737): é
+  o efeito da diferença para a pose de vestir, descrito em "Como rodar".
+- Resultados em `artifacts/robustness/2026-10-09` (a rodada de 07/10 está em `artifacts/robustness_v37`).
+
+## 📊 Rodada de 07/10/2026 (cache v37)
 
 204 combinações (102 por corpo): **117 ok, 74 atenção, 13 falha**. Contra a rodada anterior (117 / 70 / 17), nenhuma
 peça piorou em nenhuma medida, em nenhum dos corpos; 20 melhoraram.
