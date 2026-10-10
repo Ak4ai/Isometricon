@@ -529,7 +529,7 @@ class SkinCommandHandler:
         if asset_id is None:
             return False, f"[Erro] {label} '{value}' não encontrado. Use um nome da lista ou o id do Roblox.", RED
         self.character_model.update_customization(**{slot: asset_id})
-        return True, f"[{label}] {item_name(asset_id)}.", GREEN
+        return self._worn(f"[{label}] {item_name(asset_id)}.", asset_id)
 
     def top(self, args: List[str]) -> Result:
         return self._slot(args, "top_id", "Top", OUTFIT_PRESETS)
@@ -565,7 +565,7 @@ class SkinCommandHandler:
         if asset_id is None:
             return False, f"[Erro] Jaqueta '{value}' não encontrada. {usage}", RED
         m.update_customization(outer_top_id=asset_id)
-        return True, f"[Jaqueta] {item_name(asset_id)} por cima do top (a primeira vez leva alguns segundos).", GREEN
+        return self._worn(f"[Jaqueta] {item_name(asset_id)} por cima do top (a primeira vez leva alguns segundos).", asset_id)
 
     def hsr(self, args: List[str]) -> Result:
         """/skin hsr espelhar <sim|nao> | <esconder|mostrar|apagar> <pontos> | limpar: a pele sob a roupa."""
@@ -655,7 +655,7 @@ class SkinCommandHandler:
             return True, f"[Extra] {item_name(asset_id)} removida.", GREEN
         model.extra_ids = list(getattr(model, "extra_ids", [])) + [asset_id]
         model.reload()
-        return True, f"[Extra] {item_name(asset_id)} vestida junto com as outras.", GREEN
+        return self._worn(f"[Extra] {item_name(asset_id)} vestida junto com as outras.", asset_id)
 
     def shoes(self, args: List[str]) -> Result:
         missing = self._need_model()
@@ -826,7 +826,14 @@ class SkinCommandHandler:
         slot = {"top": "top_id", "bottom": "bottom_id", "jacket": "outer_top_id"}[kind]
         model.update_customization(**{slot: asset_id})
         label = {"top": "Roupa de cima", "bottom": "Roupa de baixo", "jacket": "Jaqueta"}[kind]
-        return True, f"[Vestir] {label} '{name}' ({asset_id}) vestida.", GREEN
+        return self._worn(f"[Vestir] {label} '{name}' ({asset_id}) vestida.", asset_id)
+
+    def _worn(self, message: str, asset_id) -> Result:
+        """What is said when a garment is put on: with its known defect on this body, when it has one (it is
+        worn all the same)."""
+        from src.clothing.known_defects import defect_of
+        defect = defect_of(asset_id, getattr(self.character_model, "body", ""))
+        return (True, f"{message} Defeito conhecido neste corpo: {defect}.", GOLD) if defect else (True, message, GREEN)
 
     # ------------------------------------------------------------------ personagem inteiro
     def preset(self, args: List[str]) -> Result:

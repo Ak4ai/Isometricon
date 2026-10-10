@@ -316,3 +316,27 @@ def test_dragging_a_picker_sends_the_colour_under_the_mouse():
     editor.handle_mouse_button(x0 + 8, y0 + 87, 0, 0)
     assert editor.picked(option)[2] == 0.0 and sent[-1] == "/skin cabelo #ffffff"
     assert editor.image(*SIZE).size[0] > 0
+
+
+def test_a_garment_with_a_known_defect_is_marked_on_the_body_it_fails_on():
+    from src.clothing.known_defects import KNOWN_DEFECTS, defect_of
+    assert defect_of("107758405066471", "male") and not defect_of("107758405066471", "female")     # torn on one body only
+    assert defect_of(18135693306, "female") and defect_of("18135693306", "masculino")              # the slit skirt, on both
+    assert not defect_of("9240757332", "male") and not defect_of(None, "female")
+    assert all(set(bodies) <= {"female", "male"} and all(bodies.values()) for bodies in KNOWN_DEFECTS.values())
+    editor, _ = make_editor()
+    from src.interactive.character_editor import Option
+    skirt = Option("Saia", "/skin calca 18135693306", image="")
+    assert editor.defect(skirt) and not editor.defect(Option("Suéter", "/skin top 9240757332", image=""))
+    assert not editor.defect(Option("Azul", "/skin olhos azul"))                                       # not a garment
+    editor.handler.character_model.body = "male"
+    assert editor.defect(Option("Sully", "/skin top 107758405066471", image=""))
+    assert editor.image(*SIZE).size[0] > 0
+
+
+def test_wearing_a_garment_with_a_known_defect_says_so():
+    from src.interactive.skin_commands import GOLD, GREEN, SkinCommandHandler
+    handler = SkinCommandHandler(character_model=SimpleNamespace(body="male"))
+    ok, message, colour = handler._worn("[Calça] Saia.", "18135693306")
+    assert ok and "Defeito conhecido" in message and colour == GOLD
+    assert handler._worn("[Top] Suéter.", "9240757332") == (True, "[Top] Suéter.", GREEN)

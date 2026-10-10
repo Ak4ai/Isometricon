@@ -27,6 +27,7 @@ from src.clothing.horns import HORN_COLORS, STYLE_NAMES as HORN_STYLE_NAMES
 from src.clothing.tails import STYLE_NAMES as TAIL_STYLE_NAMES
 from src.clothing.wings import STYLE_NAMES as WING_STYLE_NAMES
 from src.clothing import underwear as underwear_models
+from src.clothing.known_defects import defect_of
 from src.clothing.races import RACES
 from src.clothing.customization import IRIS_PALETTES, MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, HANDMADE_HAIR, MODELS_DIR, SKIN_PRESETS
@@ -66,6 +67,7 @@ PICKER_TILE = 104  # height of a picker of any colour: the hues by how light, an
 PICKER_MAP = (8, 8, 72)   # the margin of the picker's map in its tile, its top and its bottom
 PICKER_BAR = (80, 94)     # the top and the bottom of the bar of how vivid
 PICKER_REDRAW = 0.10      # seconds between two colours sent while the picker is dragged
+WARNING = (245, 190, 40, 255)  # the mark on a card of a garment with a known defect
 SLIDER_SNAP = 5    # this close to the middle, a slider goes back to 0
 FACE_REDRAW = 0.06 # seconds between two redraws of the face while one of its sliders is dragged
 SCROLL_STEP = 60
@@ -288,6 +290,11 @@ class CharacterEditor:
 
     def _custom(self) -> Any:
         return getattr(self.model, "customization", None)
+
+    def defect(self, option: Option) -> str:
+        """The known defect of the garment of a card on the body shown ("" when there is none)."""
+        worn = re.search(r"(\d{6,})$", option.command) if option.kind == "card" else None
+        return defect_of(worn.group(1), getattr(self.model, "body", "")) if worn and self.model is not None else ""
 
     def _garments(self, kind: str, command: str, slot: str) -> List[Option]:
         options = [Option("Nenhum", f"/skin {command} none", selected=lambda m, s=slot: not getattr(m, s, None))]
@@ -1093,6 +1100,10 @@ class CharacterEditor:
                     pen.line((x1 - 30, y0 + 26, x0 + 30, y0 + 54), fill=MUTED, width=2)
                 for k, line in enumerate(self._fit_text(pen, payload.label, small, CARD[0] - 8, 2)):
                     pen.text(((x0 + x1) // 2, y0 + 80 + k * 13), line, font=small, fill=TEXT, anchor="ma")
+                if self.defect(payload):  # a garment with a known defect on this body: a warning at its corner
+                    cx, cy = x1 - 15, y0 + 15
+                    pen.polygon(((cx, cy - 9), (cx + 10, cy + 8), (cx - 10, cy + 8)), fill=WARNING, outline=(20, 20, 24, 255))
+                    pen.text((cx, cy + 1), "!", font=small, fill=(20, 20, 24, 255), anchor="mm")
             elif payload.check:
                 ticked = self.model is not None and payload.selected(self.model)
                 box = (x0 + 12, (y0 + y1) // 2 - 8, x0 + 28, (y0 + y1) // 2 + 8)
