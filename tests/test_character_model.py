@@ -100,7 +100,8 @@ def test_parse_clean_obj_groups_hair_fitted():
 
 
 def test_parse_obj_as_mesh_sweater():
-    sweater_obj = os.path.join(MODELS_DIR, "character_native_9240757332.obj")
+    # The sweater as the catalogue has it (the fitted ones are caches, made on first use and not in the repository).
+    sweater_obj = os.path.join(CLOTHING_DIR, "Knit_Sweater_-_Black_9240757332.obj")
     res = parse_obj_as_mesh(sweater_obj)
     assert res is not None
     v_arr, i_arr = res
