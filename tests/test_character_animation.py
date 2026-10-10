@@ -168,3 +168,19 @@ def test_a_model_whose_meshes_changed_is_posed_again_before_it_is_drawn():
     model.parts[0] = skin()                                   # the skin cut again by a command, after the update
     animator.sync()
     assert animator._bound_key == animator._key() != bound    # bound and posed for this frame's drawing
+
+
+def test_the_body_is_raised_to_stand_on_its_soles_or_its_shoes():
+    from src.clothing.character_animation import SOLE_LIMIT
+    animator = CharacterAnimator.__new__(CharacterAnimator)
+    part = lambda name, low: (SimpleNamespace(name=name), np.array([[0.0, low, 0.0, 0, 1, 0, 0, 0, 1, 1, 1], [0.0, 0.5, 0.0, 0, 1, 0, 0, 0, 1, 1, 1]]), None, None)
+    animator._bindings = [part("legs_skin", -0.025), part("bottom", -0.14)]
+    assert animator._standing_height() == pytest.approx(0.025)                  # bare: on the soles of the feet; a hem on the ground does not count
+    animator._bindings = [part("legs_skin", 0.05), part("shoe_1", -0.07), part("shoe_2", -0.06), part("bottom", -0.14)]
+    assert animator._standing_height() == pytest.approx(0.07)                   # shod: on the lower of the two soles
+    animator._bindings = [part("shoe_1", -3.0)]
+    assert animator._standing_height() == SOLE_LIMIT                            # a mesh gone wrong does not send the body up
+    animator._bindings = [part("shoe_1", 0.02)]
+    assert animator._standing_height() == 0.0                                   # nothing below the origin: not lowered
+    animator._bindings = []
+    assert animator._standing_height() == 0.0

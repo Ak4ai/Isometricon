@@ -52,3 +52,18 @@ O comando `/sapato [id]` veste calçados garantindo que a barra da calça se aco
 
 ![Sapatos em Camadas](images/roupas/sapatos-camadas.png)
 *Figura 3: Tênis esportivo, coturno plataforma, salto alto fino e bota felpuda de inverno demonstrados sozinhos e em conjunto com calça jeans.*
+
+## 👟 O corpo sobe para ficar sobre a sola
+
+A origem do corpo fica 2,5 cm acima da planta do pé, e a sola de um calçado desce mais ainda (tênis 6 a 7 cm, botas
+7,5 a 9 cm abaixo da origem): com o corpo apoiado pela origem, os pés afundavam um pouco no chão e os tênis quase
+somem dentro dele.
+
+- O animador mede, na pose de vestir, o ponto mais baixo do que o corpo pisa (`CharacterAnimator._standing_height`):
+  o dos calçados quando há (`shoe_*`), o da pele dos pés quando não. O corpo sobe isso (`_sole`, somado ao ajuste que
+  já existia para pernas mais compridas), no máximo `SOLE_LIMIT` (20 cm).
+- É recalculado a cada vez que o personagem é montado: trocar de calçado, ou tirá-lo, muda a altura sozinho.
+- **Só calçados.** A barra de uma calça larga ou de um vestido encosta no chão e não deve levantar o corpo.
+- **Limite conhecido:** botas que fazem parte da calça (o "Black Distressed Designer Jeans w/ Boots") não são
+  calçado para o jogo e continuam 5,5 cm dentro do chão; não há como distingui-las da barra de uma calça larga.
+
