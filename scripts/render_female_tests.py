@@ -48,8 +48,8 @@ def look_at(eye, center, up):
 
 
 def render_all():
-    artifact_dir = r"C:\Users\Henrique\.gemini\antigravity-cli\brain\524885b0-9c60-4258-971c-0ce525cc615a"
-    os.makedirs(artifact_dir, exist_ok=True)
+    output_dir = os.path.join(os.path.dirname(__file__), "..", "out", "renders")
+    os.makedirs(output_dir, exist_ok=True)
 
     if not glfw.init():
         raise RuntimeError("GLFW init failed")
@@ -160,7 +160,7 @@ def render_all():
             pixels = gl.glReadPixels(0, 0, width, height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
             img = Image.frombytes("RGBA", (width, height), pixels).transpose(Image.FLIP_TOP_BOTTOM)
 
-            out_file = os.path.join(artifact_dir, f"female_{name}_{view_name}.png")
+            out_file = os.path.join(output_dir, f"female_{name}_{view_name}.png")
             img.save(out_file)
             print(f"  [OK] Imagem salva: {out_file}")
 
