@@ -7,7 +7,7 @@ import pytest
 from src.camera import IsometricCamera
 from src.interactive.token_system import PlayerToken
 from src.math import transform_point, vec3
-from src.world import TerrainGenerator, WorldManager
+from src.world import BlockType, Chunk3D, TerrainGenerator, WorldManager
 
 
 def test_player_token_initialization():
@@ -318,6 +318,70 @@ def test_world_manager_reports_each_pending_streaming_stage():
         async_loading=False,
     )
     assert not manager.has_pending_streaming_work()
+
+
+def test_world_manager_water_spreads_down_then_sideways():
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=0,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    chunk = Chunk3D()
+    chunk.set_block(8, 8, 8, BlockType.WATER)
+    manager.chunks[(0, 0, 0)] = chunk
+    manager._last_center = (0, 0)
+    manager._water_tick = manager.water_step_interval
+
+    manager.update(8.0, 8.0)
+
+    assert chunk.get_block(8, 7, 8) is BlockType.WATER
+    manager.delete()
+
+
+def test_world_manager_water_spreads_sideways_when_supported():
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=0,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    chunk = Chunk3D()
+    chunk.set_block(8, 7, 8, BlockType.STONE)
+    chunk.set_block(8, 8, 8, BlockType.WATER)
+    manager.chunks[(0, 0, 0)] = chunk
+    manager._last_center = (0, 0)
+    manager._water_tick = manager.water_step_interval
+
+    manager.update(8.0, 8.0)
+
+    assert chunk.get_block(7, 8, 8) is BlockType.WATER
+    assert chunk.get_block(9, 8, 8) is BlockType.WATER
+    manager.delete()
+
+
+def test_world_manager_water_flow_has_finite_volume():
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=0,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    chunk = Chunk3D()
+    chunk.set_block(8, 8, 8, BlockType.WATER)
+    manager.chunks[(0, 0, 0)] = chunk
+    manager._last_center = (0, 0)
+
+    for _ in range(40):
+        manager._water_tick = manager.water_step_interval
+        manager.update(8.0, 8.0)
+
+    flowing_cells = [level for level in manager._water_levels.values() if level < 1.0]
+    assert flowing_cells
+    assert max(flowing_cells) <= 1.0
+    assert min(flowing_cells) > manager.water_min_level
+    assert len(flowing_cells) < 100
+    manager.delete()
 
     manager._in_progress.add((0, 0, 0))
     assert manager.has_pending_streaming_work()
