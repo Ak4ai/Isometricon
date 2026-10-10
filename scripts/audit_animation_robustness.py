@@ -509,6 +509,7 @@ def main():
                 result, thumbnail = audit(shader, label, body, samples, **ids)
             except Exception as exc:
                 skipped.append({"roupa": label, "corpo": body_name, "motivo": f"{type(exc).__name__}: {exc}"})
+                print(f"[{body_name} {index + 1}/{len(cases)}] {label}: NÃO MEDIDA ({type(exc).__name__}: {exc})", flush=True)
                 continue
             result["miniatura"] = f"miniaturas/{body_name}_{index:03d}.png"
             thumbnail.save(out / result["miniatura"])
