@@ -127,3 +127,17 @@ depois do encaixe (8 cópias ou mais de um mesmo ponto; 38 arquivos, de 15 peça
 Um caminho ainda não tentado: em vez de juntar as cópias, não desenhar os triângulos desses leques (a tampa some,
 e com ela os espinhos), ou pôr a tampa junto do braço. Por enquanto o pincel da seção Ajuste fino não resolve isto,
 porque o defeito é da roupa e não da pele.
+
+### Medido e descartado: cada parte da pele só na sua parte da cage (10/10/2026)
+
+Cada vértice da pele é posto no ponto mais próximo da cage inteira. Através da axila isso cruza as partes: no corpo
+feminino, 34 vértices da lateral do tronco ficam na parte de dentro do braço (por isso, para esconder à mão
+triângulos do tórax, pinta-se embaixo do braço), e o alto do braço fica no tronco.
+
+- **Tronco fora da cage dos braços:** o crop top melhora (masculino 512 → 404 cm² de pele furando), mas sob casacos a
+  lateral do tronco, que a máscara da manga escondia por acaso, passa a furar o tecido. Na rodada completa, 5
+  combinações pioraram (dois sobretudos, +166 e +142 cm²).
+- **Braços só na cage dos braços:** na rodada completa, 6 melhoraram (Black Oversized Warmers feminino 94 → 24) e 1
+  piorou (Blue Fish Suit masculino, já em falha, 1196 → 1330). Ganho pequeno, com uma piora: não entrou.
+
+Resultados em `artifacts/robustness/2026-10-10` (as duas regras) e `2026-10-10b` (só a dos braços), fora do git.
