@@ -65,4 +65,6 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
 ### 8. Publicação
 - **Situação Atual:** o trabalho de roupas e de criação de personagem está em commits locais no branch
   `wip/roblox-ground-truth`, sem envio ao GitHub.
-- **Pendência:** enviar o branch e juntar ao `main`; decidir se `assets/models/123.blend` (modificado) entra.
+- **Pendência:** enviar o branch e juntar ao `main`. Em 10/10/2026 o projeto foi conferido a partir de um clone limpo
+  (sem credencial do Roblox): o jogo abre nos dois corpos e veste as 32 peças de exemplo; ver "O que um clone precisa"
+  em [[Scripts do Projeto|Scripts-do-Projeto]].
