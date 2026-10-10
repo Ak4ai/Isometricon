@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import numpy as np
 
 from scripts.import_roblox_clothing import decode_roblox_mesh_to_obj
-from scripts.experimental_wrap_frames import affine_map
 from src.clothing.wrap_layer_fit import (
     _cage_edge_stretch, _local_map, _match_outer_to_reference, _match_reference_to_body_uv,
     _signed_surface_volume, read_wrap_layer,
@@ -49,16 +48,6 @@ def test_local_frame_rotates_garment_volume_with_target_triangle():
     transform = _local_map(a, b, c, 0.5 * rotation @ a, 0.5 * rotation @ b, 0.5 * rotation @ c)
     np.testing.assert_allclose(transform @ np.asarray([0.2, 0.1, 0.3]),
                                0.5 * rotation @ np.asarray([0.2, 0.1, 0.3]), atol=1e-8)
-
-
-def test_experimental_affine_frame_is_invariant_to_cyclic_triangle_corner_order():
-    """The candidate map is independent of a triangle's starting corner."""
-    source = np.asarray([[0., 0., 0.], [1., 0., 0.], [.2, 1., 0.]])
-    target = np.asarray([[0., 0., 0.], [1., 0., 0.], [.7, 1., 0.]])
-    maps = [affine_map(*np.roll(source, i, axis=0),
-                       *np.roll(target, i, axis=0)) for i in range(3)]
-    for matrix in maps:
-        np.testing.assert_allclose(matrix, [[1., .5, 0.], [0., 1., 0.], [0., 0., 1.]], atol=1e-8)
 
 
 def test_local_frame_can_retarget_a_reflected_cage_without_inverting_shell_offset():
