@@ -194,6 +194,10 @@ no grupo "Estilo" da seção Cabelo).
   de volta ao jogo, edite o objeto e chame `export(objeto, caminho, título)` do mesmo script.
 - Os `.obj` são ignorados pelo git (`*.obj`); os dois do nudred foram adicionados à força (`git add -f`), como os
   corpos.
+- No `123.blend` a coleção "Nudred" fica **oculta** (fora do viewport e do render, como os objetos antigos da cena),
+  para o arquivo abrir mostrando só o corpo do jogo. Para ver ou mexer nos cabelos, ligue a coleção no Outliner (o
+  ícone do monitor, que só aparece com o filtro "Disable in Viewports" ativado). O script recria os objetos dentro
+  dela e funciona com a coleção oculta.
 
 ## 🩲 Roupa de baixo e o personagem inicial
 
