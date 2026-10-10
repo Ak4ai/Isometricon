@@ -75,7 +75,9 @@ def test_entire_wrap_preserves_garment_when_target_frame_is_reflected():
     rbxm = directory / "-_office_shirt__BLACK_133331049150205.rbxm"
     wrap = read_wrap_layer(rbxm)
     load = lambda path: RobloxWearEngine.load_obj(None, str(path))
-    reference, faces, uv, face_uv = load(directory / "wrap_cages" / (wrap["reference_id"] + ".obj"))
+    # The cage as the fit itself gets it: the .obj is a cache made from the .mesh of the repository on first use.
+    from src.clothing.wrap_layer_fit import cached_cage_obj
+    reference, faces, uv, face_uv = load(cached_cage_obj(wrap["reference_id"], directory / "wrap_cages"))
     garment, _, _, _ = load(directory / "-_office_shirt__BLACK_133331049150205.obj")
     rotation, translation = wrap["reference_origin"]
     reflection = np.diag([1., -1., 1.])
