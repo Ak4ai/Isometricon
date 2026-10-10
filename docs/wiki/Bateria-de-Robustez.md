@@ -15,6 +15,13 @@ python scripts/audit_animation_robustness.py --output artifacts/robustness --rep
 ```
 
 - `--only <id> ...` mede só algumas peças (minutos, útil para validar uma mudança).
+- `--report <pastas novas> --compare <pastas da rodada anterior>` escreve também `comparacao.md`: cada combinação
+  contra a mesma da rodada anterior, com o que piorou primeiro (uma medida mudou quando andou mais de 15 cm² e mais
+  de 10%). Guarde a rodada anterior em outra pasta (`--output`), senão ela é sobrescrita.
+- A comparação usa a pele furando **total** (a da pose de vestir mais o que a pose acrescenta). O veredito usa só a
+  diferença para a pose de vestir, que sobe quando uma mudança melhora a pose de vestir: uma peça pode passar de ok
+  para atenção tendo melhorado no total (o vestido rosa feminino em 09/10/2026: total 2023 → 1737 cm², diferença
+  0 → 218). Cada pose guarda as duas (`pele_furando_cm2` e `pele_furando_total_cm2`).
 - Rode um corpo por vez: as duas rodadas juntas já esgotaram a memória da máquina.
 - Quando a versão do cache das roupas muda (`Universal Fitted Clothing vNN`), a primeira rodada reencaixa o
   catálogo inteiro (perto de 1 h); depois, ~10 min por corpo.
