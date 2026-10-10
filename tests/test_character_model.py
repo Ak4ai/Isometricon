@@ -1,6 +1,7 @@
 """Testes unitários para o módulo CharacterModel e montagem do personagem 3D."""
 
 import os
+from types import SimpleNamespace
 import numpy as np
 import pytest
 
@@ -217,5 +218,19 @@ def test_character_model_hair_offset_and_scale():
     model.delete()
 
 
-
-
+@pytest.mark.parametrize("hair_id", [None, "116773763268018", 116773763268018])
+def test_the_default_hair_is_worn_whether_none_or_the_default_itself_was_chosen(hair_id):
+    """Choosing "Padrão" gives the model the default hair's id; the head must not come out bald."""
+    from src.clothing.customization import AvatarCustomization, BodyType, HairStyle
+    for body in (BodyType.FEMALE, BodyType.MALE):
+        model = CharacterModel(customization=AvatarCustomization(body_type=body), top_id=None, bottom_id=None,
+                               hair_id=hair_id, create_mesh=False)
+        model._choose_hair_mesh()
+        chosen = model.customization.custom_hair_obj
+        assert chosen and os.path.basename(chosen) == f"Hair_fitted_116773763268018_{body.value}.obj" and os.path.exists(chosen)
+        assert model.customization.custom_hair_tex is None           # drawn in the character's hair colour
+        model._choose_hair_mesh()                                    # built again (another colour, another garment): still there
+        assert model.customization.custom_hair_obj == chosen
+    bald = CharacterModel(customization=AvatarCustomization(hair_style=HairStyle.BALD), top_id=None, bottom_id=None, create_mesh=False)
+    bald._choose_hair_mesh()
+    assert bald.customization.custom_hair_obj is None                # and a bald head stays bald
