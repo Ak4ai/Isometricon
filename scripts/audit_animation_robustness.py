@@ -279,7 +279,11 @@ def audit(shader, label, body, samples, tested=(), **ids):
             stretched, growth = stretched + area, max(growth, longest)
             stretch_points.append(points)
         poke, poke_points = poking(animator, matrices, triangles)
+        # The skin that pierces because of the pose (over what already does in the fitting pose), which
+        # the verdict goes by; and all of it, which is what one run can be compared with another by: the
+        # first goes up when a change makes the fitting pose better.
         result["poses"][name] = {"pele_furando_cm2": round(max(poke - base_poke, 0.0) * 1e4, 1),
+                                 "pele_furando_total_cm2": round(poke * 1e4, 1),
                                  "esticado_cm2": round(stretched * 1e4, 1), "maior_alongamento_cm": round(growth * 100, 1)}
         kept[name] = (matrices, poke_points, np.vstack(stretch_points))
     worst = max(GAME_POSES, key=lambda n: max(result["poses"][n][k] / LIMITS[k][1] for k in ("pele_furando_cm2", "esticado_cm2")))
@@ -355,6 +359,66 @@ def write_report(out, runs):
     print(f"[OK] {len(results)} testadas: {count} | {len(skipped)} fora do teste -> {out}")
 
 
+# Comparing two runs: a measure is worse (or better) when it moved by more than both of these.
+COMPARE_AREA, COMPARE_SHARE = 15.0, 0.10
+COMPARED = (("buraco", "Buraco"), ("fura", "Pele furando (total)"), ("esticado", "Esticado"))
+
+
+def compared_measures(result):
+    """What two runs are compared by, in cm2, in the game's poses. The skin piercing is all of it: what pierces in
+    the fitting pose and, over that, the most the pose adds (the larger of the two totals; a run made before the
+    total was kept gives the same number)."""
+    poses = [result["poses"][pose] for pose in GAME_POSES if pose in result["poses"]]
+    return {"buraco": result["buraco_cm2"],
+            "fura": result["fura_na_pose_de_vestir_cm2"] + max(p["pele_furando_cm2"] for p in poses),
+            "esticado": max(p["esticado_cm2"] for p in poses)}
+
+
+def write_comparison(out, new_runs, old_runs):
+    """comparacao.md in ``out``: every case of the new runs against the same case of the old ones, with what got
+    worse first. Returns (worse, better, same, without an old measure)."""
+    def cases(runs):
+        found = {}
+        for folder in runs:
+            for r in json.loads((Path(folder) / "medidas.json").read_text(encoding="utf-8"))["resultados"]:
+                r["veredito"] = "falha" if verdict(r, 1) else "atenção" if verdict(r, 0) else "ok"
+                found[(r["corpo"], tuple(sorted(r["ids"].items())))] = r
+        return found
+
+    new, old = cases(new_runs), cases(old_runs)
+    rows, missing = [], []
+    for key, r in new.items():
+        if key not in old:
+            missing.append(r)
+            continue
+        now, before = compared_measures(r), compared_measures(old[key])
+        moved = {}
+        for name, _ in COMPARED:
+            change = now[name] - before[name]
+            if abs(change) > COMPARE_AREA and abs(change) > COMPARE_SHARE * max(before[name], 1.0):
+                moved[name] = change
+        state = "piorou" if any(v > 0 for v in moved.values()) else "melhorou" if moved else "igual"
+        rows.append((state, r, old[key], now, before, moved))
+    count = {state: sum(row[0] == state for row in rows) for state in ("piorou", "melhorou", "igual")}
+    lines = ["# Bateria de robustez: comparação com a rodada anterior", "",
+             f"{len(rows)} combinações comparadas: {count['piorou']} pioraram, {count['melhorou']} melhoraram, "
+             f"{count['igual']} iguais; {len(missing)} sem medida anterior.", "",
+             f"Uma medida mudou quando andou mais de {COMPARE_AREA:.0f} cm² e mais de {COMPARE_SHARE:.0%} do que era. "
+             "Tudo em cm², nas poses do jogo, antes → depois. A pele furando é a total (a da pose de vestir mais o que a "
+             "pose acrescenta), não a diferença que o veredito usa.", "",
+             "| | Roupa | Corpo | Veredito | " + " | ".join(label for _, label in COMPARED) + " |", "|---|---|---|---|" + "---|" * len(COMPARED)]
+    order = {"piorou": 0, "melhorou": 1, "igual": 2}
+    for state, r, before_r, now, before, moved in sorted(rows, key=lambda row: (order[row[0]], -max([abs(v) for v in row[5].values()] or [0]), row[1]["roupa"])):
+        cells = [f"{'**' if name in moved else ''}{before[name]:.0f} → {now[name]:.0f}{'**' if name in moved else ''}" for name, _ in COMPARED]
+        change = before_r["veredito"] if before_r["veredito"] == r["veredito"] else f"{before_r['veredito']} → {r['veredito']}"
+        lines.append(f"| {state} | {r['roupa']} | {r['corpo']} | {change} | " + " | ".join(cells) + " |")
+    if missing:
+        lines += ["", "## Sem medida anterior", ""] + [f"- {r['roupa']} ({r['corpo']})" for r in missing]
+    (out / "comparacao.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"[Comparação] {count} | {len(missing)} sem medida anterior -> {out / 'comparacao.md'}")
+    return count["piorou"], count["melhorou"], count["igual"], len(missing)
+
+
 def local_garments():
     """(asset id, name) of every garment downloaded to assets/models/clothing."""
     found = {}
@@ -392,11 +456,15 @@ def main():
     parser.add_argument("--bodies", nargs="*", default=["female", "male"])
     parser.add_argument("--output", default=str(OUT))
     parser.add_argument("--report", nargs="*", default=None)
+    parser.add_argument("--compare", nargs="*", default=None,
+                        help="with --report: the folders of an earlier run, to list what got worse and what got better")
     args = parser.parse_args()
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     if args.report is not None:
         write_report(out, args.report or [out])
+        if args.compare:
+            write_comparison(out, args.report or [out], args.compare)
         return
     garments = local_garments()
     if args.only:
