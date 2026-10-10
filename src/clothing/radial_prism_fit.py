@@ -1,7 +1,7 @@
 """Radial outer cage + dual-cage prism binding for WrapLayer garments.
 
 Validated against Roblox Studio exports of the same garments on the official
-Blocky body (scripts/batch_compare_roblox.py): it matches Roblox within ~1-2 cm
+Blocky body (scripts/compare_roblox_ground_truth.py): it matches Roblox within ~1-2 cm
 median on tight and loose garments and is closer than the per-triangle runtime
 fit on every tested garment except one jacket.
 

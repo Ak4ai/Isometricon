@@ -21,6 +21,8 @@
 * [[🧑‍🎨 Criação de Personagem|Criacao-de-Personagem]]
 * [[🧪 Histórico de Experimentos|Historico-de-Experimentos]]
 * [[📌 Pendências e Roadmap|Pendencias]]
+* [[🧰 Scripts do Projeto|Scripts-do-Projeto]]
+* [[📜 Proposta do Motor Universal de Roupas|Proposta-do-Motor-Universal-de-Roupas]]
 
 **🔗 Integração**
 * [[🔗 Contrato de Integração A↔B|Contrato-de-Integracao]]

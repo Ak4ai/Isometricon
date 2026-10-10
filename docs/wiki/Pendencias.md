@@ -10,13 +10,28 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
 
 ### 1. Roupas que ainda esticam ou furam ao animar
 - **Situação Atual:** O personagem do mundo anda vestido (ver [[Animação e Esqueleto|Animacao-e-Esqueleto]]); a bateria
-  dá 117 ok, 74 atenção e 13 falha (ver [[Bateria de Robustez|Bateria-de-Robustez]]).
+  dá 116 ok, 75 atenção e 13 falha em 09/10/2026 (ver [[Bateria de Robustez|Bateria-de-Robustez]]). As seis peças
+  com defeito real ficam marcadas no editor e avisadas ao vestir (`src/clothing/known_defects.py`).
 - **Pendência:** fantasias de corpo inteiro que ainda rasgam (Sully, Pigeon, Strawberry); frestas entre os gomos
   da saia do Long Dress (o encaixe do tecido pendurado estica a saia 20% de frente para trás; a correção testada
   piorava capas e fantasias e foi revertida); calça de moletom com tênis em atenção; falsos alarmes de buraco no
   contorno da silhueta; cós da baggy jeans e ponta do sobretudo no
   quadril (modelo da peça e proporção do corpo).
 - **Desempenho:** resolvido em 07/10/2026 com skinning na GPU (~0,3 ms por quadro por personagem). O que falta para vários personagens na tela é o jogo criar e posicionar os outros tokens vestidos.
+
+### 1b. Defeitos que vêm do encaixe, não da pele
+- **Situação Atual:** medido em 09 e 10/10/2026 (ver "A pele contra o tecido" e as seções seguintes em
+  [[Sistema de Roupas|Sistema-de-Roupas]]). Os ajustes automáticos na pele escondida chegaram ao limite: as últimas
+  tentativas deram ganhos de poucos cm² ou trocaram um defeito por outro.
+- **Pendência:**
+  - **Tampas em leque:** o encaixe espalha as cópias do vértice do meio dos leques que fecham cavas e golas (15
+    peças); no "Dark Brown Tied Crop Top" isso aparece como pontas dentro da cava. Juntar as cópias foi tentado e
+    retirado. Ainda não tentado: não desenhar os triângulos desses leques.
+  - **Costuras separadas:** o encaixe separa por centímetros as cópias de mais de 2500 vértices ao longo das costuras
+    de UV. Juntá-las depois do encaixe piora o movimento; a correção é o encaixe mover igual o que está no mesmo
+    ponto, o que pede reencaixar o catálogo (perto de 1 h) e medir tudo de novo.
+  - **Cruzamento tronco/braço na máscara:** a lateral do tronco segue os pontos de dentro do braço (para esconder à
+    mão triângulos do tórax, pinta-se embaixo do braço). Corrigir piora casacos; fica como está.
 
 ### 2. Cache com Validação de Hash/Versão da Cage
 - **Situação Atual:** Os caches binários (`character_native_<id>_<corpo>.obj`, `*.hsr.npz`) são gravados com base no ID da roupa.
@@ -43,3 +58,12 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
   (o que se aprendeu está em [[Histórico de Experimentos|Historico-de-Experimentos]]). `artifacts/` agora é ignorado pelo git.
 - **Pendência:** vários `scripts/audit_*` e `scripts/experiment_*` do encaixe ainda são importados por
   `src/clothing/experimental_coherent_prism.py`; unificar numa CLI antes de apagar.
+- **Em 10/10/2026:** removidos os quatro scripts que já não rodavam (importavam módulos apagados em 06/10) e os
+  resultados antigos da bateria; o que há em `scripts/` e o estado de cada arquivo está em
+  [[Scripts do Projeto|Scripts-do-Projeto]]. Os 30 scripts íntegros que nada referencia (renderizadores de
+  conferência e exportações de uma vez só pelo Blender) ficaram: apagá-los é uma decisão à parte.
+
+### 8. Publicação
+- **Situação Atual:** o trabalho de roupas e de criação de personagem está em commits locais no branch
+  `wip/roblox-ground-truth`, sem envio ao GitHub.
+- **Pendência:** enviar o branch e juntar ao `main`; decidir se `assets/models/123.blend` (modificado) entra.
