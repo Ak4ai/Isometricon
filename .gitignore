@@ -145,3 +145,8 @@ tools/
 
 # Personagem gravado pelo jogo
 saves/
+
+# Saídas de ferramentas locais (claude-watcher, delta)
+galeria/
+galeria.md
+.delta/
