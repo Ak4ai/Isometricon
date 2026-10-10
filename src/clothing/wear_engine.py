@@ -39,39 +39,6 @@ def body_parts_path(fitted_obj) -> str:
     return os.path.splitext(fitted_obj)[0] + "_parts.npy"
 
 
-TOGETHER_AT, TOGETHER_APART = 1e-5, 0.001  # how close two vertices are in the garment to be one point, and metres apart after the fit to be put back
-FAN_COPIES = 8  # copies of one point, at least, for it to be the middle of a fan (a seam of the UVs has two to four)
-
-
-def keep_together(source: np.ndarray, fitted: np.ndarray) -> np.ndarray:
-    """The fitted vertices, with those that are one point in the garment as it was made brought back to one point.
-
-    A garment closes its armholes and its neck from inside with a fan of triangles, each with its own copy of the
-    vertex in the middle. The fit moves a vertex by more than where it is (its normal, its triangle), and sent
-    those copies apart: the fan came out as a burst of spikes inside the sleeve, across the arm. They go to the
-    middle of where the fit sent them.
-
-    Only the middles of fans (FAN_COPIES copies or more). The fit also parts, by centimetres, the two to four
-    copies of many vertices along the UV seams; putting those together too was tried and measured (the robustness
-    battery, female body): 12 garments worse, 8 better. The copies follow different bones, and joined at the fit
-    they pull the cloth further when the body moves (Realistic White Pigeon: 604 -> 16830 cm2 stretched).
-    """
-    source = np.asarray(source, dtype=np.float64)
-    fitted = np.array(fitted, dtype=np.float64, copy=True)
-    if len(source) != len(fitted) or not len(source):
-        return fitted
-    _, group, counts = np.unique(np.round(source / TOGETHER_AT).astype(np.int64), axis=0, return_inverse=True, return_counts=True)
-    group = group.ravel()
-    total = np.zeros((len(counts), 3))
-    np.add.at(total, group, fitted)
-    middle = total / counts[:, None]
-    apart = np.zeros(len(counts))
-    np.maximum.at(apart, group, np.linalg.norm(fitted - middle[group], axis=1))
-    moved = (counts[group] >= FAN_COPIES) & (apart[group] > TOGETHER_APART)
-    fitted[moved] = middle[group[moved]]
-    return fitted
-
-
 def hair_fitted_path(asset_id, body_type) -> str:
     """Hair (or hat) ``asset_id`` fitted to the head of ``body_type``."""
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -2318,9 +2285,6 @@ class RobloxWearEngine:
             faces = [list(f)[::-1] for f in faces]
             if face_uvs is not None and len(face_uvs) > 0:
                 face_uvs = [list(f_uv)[::-1] for f_uv in face_uvs]
-
-        # What is one point in the garment is one point on the body (the fans that close its armholes and neck).
-        deformed_verts = keep_together(np.asarray(verts, dtype=np.float64), deformed_verts)
 
         # Calcula normais suaves por vértice para Gouraud/Phong shading contínuo
         vert_normals = np.zeros_like(deformed_verts, dtype=np.float32)
