@@ -32,6 +32,7 @@ SKIN_REGIONS = {"trunk_skin": ("Torso", "Pelvis"),
                 "feet_skin": ("Foot_L", "Foot_R")}
 # Distance down the arm (m from the shoulder) past which arm-bound cloth is surely sleeve,
 # and down the thigh (m from the hip) past which leg-bound cloth is surely trouser leg.
+SOLE_LIMIT = 0.20  # metres at most the body is raised to stand on its soles (a platform shoe; more is a mesh gone wrong)
 SLEEVE_BLEND = 0.08
 LEG_BLEND = 0.10
 # (limb pair, trunk, blend distance) of the joints where cloth weights are smoothed over the garment.
@@ -160,6 +161,7 @@ class CharacterAnimator:
         self._shown = None  # "rest" or "walk": what the GPU buffers hold
         self._shape, self._warped, self._scales, self._height = None, False, {}, 1.0  # body adjustments in use
         self._lift, self._cloth_normals, self._bound_nose_style = 0.0, {}, None
+        self._sole = 0.0  # metres the body is raised for what it stands on (its soles, or its shoes') to be on the ground
         self._posed = None  # the bones of the last points given to posed()
         self._arms = []     # the bones of the two arms
         self.arms_out = False     # stand with the arms at 90 degrees (the character editor's fine adjustment)
@@ -283,6 +285,7 @@ class CharacterAnimator:
             self._bindings.append((part, rows, indices, weights))
             if hasattr(part.mesh, "set_skin"):
                 part.mesh.set_skin(indices, weights)
+        self._sole = self._standing_height()
         arms = [b for side in "LR" for b in self._subtree(self.skeleton.index("UpperArm_" + side))]
         self._arms = arms
         beside_arms = [rows[np.where(np.isin(indices, arms), weights, 0.0).sum(1) < 0.05, :3]
@@ -679,7 +682,7 @@ class CharacterAnimator:
 
     def pose(self, rotations, root=(0.0, 0.0, 0.0)):
         """Skinning matrices of a pose, with the body's proportions (``body_shape``)."""
-        root = (root[0], root[1] + self._lift * self._height, root[2])  # longer legs raise the body
+        root = (root[0], root[1] + (self._lift + self._sole) * self._height, root[2])  # longer legs and thicker soles raise the body
         return self.skeleton.pose(rotations, root, scales=self._scales, height=self._height)
 
     def _nose_style(self):
@@ -715,6 +718,16 @@ class CharacterAnimator:
             return None
         rows, _ = noses.styled_rows(self._bound_rows[named["head"]], style[0], adjust, plain=style[1])
         return rows if rows.shape == self._bound_rows[named["nose"]].shape else None
+
+    def _standing_height(self) -> float:
+        """Metres below the body's origin that the lowest point of what it stands on is, in the fitting pose: the
+        soles of its shoes when it wears them, of its feet otherwise. The body is raised by it, or the shoes,
+        whose soles are thicker than the foot's, sink into the ground. Only shoes: the hem of baggy pants or of a
+        gown lies on the ground and must not raise the body."""
+        shoes = [rows[:, 1] for part, rows, *_ in self._bindings if part.name.startswith("shoe_") and len(rows)]
+        feet = [rows[:, 1] for part, rows, *_ in self._bindings if part.name in ("legs_skin", "feet_skin") and len(rows)]
+        lowest = [float(y.min()) for y in (shoes or feet)]
+        return min(max(-min(lowest), 0.0), SOLE_LIMIT) if lowest else 0.0
 
     def _reshape(self, shape) -> None:
         """Take the model's body adjustments: the scale of each bone, the height, and the
