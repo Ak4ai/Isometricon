@@ -937,6 +937,25 @@ class CharacterModel:
             path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_id}.obj")
         return path if os.path.exists(path) else None
 
+    def _choose_hair_mesh(self) -> None:
+        """Point the customization at the mesh of the hair to draw on this body (or at none): the default
+        hair and the shaved one are fitted to each body, and are found again whenever the model is built."""
+        current = self.customization.custom_hair_obj
+        if current and os.path.basename(current).startswith(f"Hair_fitted_{DEFAULT_HAIR_ID}"):
+            self.customization.custom_hair_obj = None  # the default hair of the body shown before
+        if current and os.path.basename(current).startswith(f"Hair_fitted_{SHAVED_HAIR_ID}"):
+            self.customization.custom_hair_obj = None  # the shaved hair of the body or the style shown before
+        if self.customization.hair_style_str == "buzz_cut":
+            # The shaved style is a hair too: a cap tight on this body's head, in the hair's colour.
+            self.customization.custom_hair_obj = self._fitted_hair(SHAVED_HAIR_ID)
+            self.customization.custom_hair_tex = None
+        default_hair = self.hair_id is None or str(self.hair_id).strip() == str(DEFAULT_HAIR_ID)  # none chosen, or the default chosen by name
+        if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and default_hair:
+            # Default hair, fitted to this body's head; it keeps the customization's hair colour. (Chosen by
+            # name it has its id, and was cleared just above and never put back: the head came out bald.)
+            self.customization.custom_hair_obj = self._fitted_hair(DEFAULT_HAIR_ID)
+            self.customization.custom_hair_tex = None  # in the character's hair colour, not in the black of the Roblox item it came from
+
     def _resolve_hair(self) -> None:
         """Point the customization at ``hair_id`` fitted to this body's head, fitting it on first use."""
         if self.hair_id is None:
@@ -1618,18 +1637,7 @@ class CharacterModel:
             if horns is not None:
                 self.parts.append(CharacterPart("horns", TexturedMesh(horns[0].flatten(), horns[1].flatten()), self.white_tex_id))
 
-        current = self.customization.custom_hair_obj
-        if current and os.path.basename(current).startswith(f"Hair_fitted_{DEFAULT_HAIR_ID}"):
-            self.customization.custom_hair_obj = None  # the default hair of the body shown before
-        if current and os.path.basename(current).startswith(f"Hair_fitted_{SHAVED_HAIR_ID}"):
-            self.customization.custom_hair_obj = None  # the shaved hair of the body or the style shown before
-        if self.customization.hair_style_str == "buzz_cut":
-            # The shaved style is a hair too: a cap tight on this body's head, in the hair's colour.
-            self.customization.custom_hair_obj = self._fitted_hair(SHAVED_HAIR_ID)
-            self.customization.custom_hair_tex = None
-        if self.customization.should_render_3d_hair and not self.customization.custom_hair_obj and self.hair_id is None:
-            # Default hair, fitted to this body's head; it keeps the customization's hair colour.
-            self.customization.custom_hair_obj = self._fitted_hair(DEFAULT_HAIR_ID)
+        self._choose_hair_mesh()
 
         # 4. Cabelo 3D Customizado / Fitted
         if self.customization.custom_hair_obj and os.path.exists(self.customization.custom_hair_obj):
