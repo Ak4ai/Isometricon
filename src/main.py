@@ -1000,7 +1000,17 @@ def main() -> None:
                 gl.glClearColor(0.08, 0.10, 0.13, 1.0)
         elif terrain_demo:
             # Configuração do modo subterrâneo (cutaway) e água
-            underground_mode = player_token.is_underground()
+            underground_mode = False
+            if voxel_provider is not None:
+                underground_mode = (
+                    player_token.position[1]
+                    < float(
+                        voxel_provider.get_top_solid_block(
+                            int(np.floor(float(player_token.position[0]))),
+                            int(np.floor(float(player_token.position[2]))),
+                        )
+                    ) + 0.25
+                )
             shader.set_bool("u_UndergroundMode", underground_mode)
             shader.set_float("u_PlayerY", float(player_token.position[1]))
             shader.set_float("u_CutawayAlpha", 0.38)
