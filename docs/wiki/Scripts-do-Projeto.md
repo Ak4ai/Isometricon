@@ -100,7 +100,14 @@ necessárias se um corpo ou uma cage for refeito no Blender.
 
 ## 🗂️ Fora do git
 
-- `backup/` (ignorado): o que está descrito acima.
+- `backup/` (ignorado): o que está descrito acima. Também guarda as exportações antigas para o Roblox Studio que estavam em
+  `assets/models` (doze `.fbx` e um `.json`).
+- **O que um clone precisa e o `.gitignore` esconde:** `*.obj` é ignorado, então as malhas que o jogo abre entram no
+  git à força (`git add -f`): os corpos (`character_female_clean_apose_stage2.obj`, `character_male_clean_apose.obj`),
+  as cages (`female_cages_apose_stage2.obj`, `male_cages_apose.obj`, `roblox_reference_cages.obj`), a cabeça e o corpo
+  de referência dos testes (`character_head_rounded.obj`, `character_clean.obj`) e os cabelos padrão, nudred e
+  raspado (`clothing/Hair_fitted_*`). Conferido em 10/10/2026 com um clone limpo: o jogo abre nos dois corpos. Ao
+  acrescentar uma malha nova que o jogo abre, lembre de adicioná-la à força.
 - `artifacts/` (ignorado): resultados da bateria. Em 10/10/2026 ficaram `robustness_v37` (rodada de 07/10),
   `robustness/2026-10-09` (rodada completa de referência) e `robustness/2026-10-10` e `2026-10-10b` (os dois
   experimentos do cruzamento tronco/braço). `inspecao` é a pasta de saída de `inspect_flagged_regions.py`; estava
