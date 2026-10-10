@@ -12,11 +12,13 @@ Consulte src/interactive/README.md e docs/EQUIPE_B_ARCHITECTURE.md para detalhes
 """
 
 from src.interactive.highlight import BlockHighlightRenderer
+from src.interactive.coordinate_overlay import CoordinateOverlayRenderer
 from src.interactive.grid_overlay import GridOverlayRenderer, build_surface_grid_vertices
 from src.interactive.token_system import PlayerToken, create_token_mesh
 
 __all__ = [
     "BlockHighlightRenderer",
+    "CoordinateOverlayRenderer",
     "GridOverlayRenderer",
     "PlayerToken",
     "build_surface_grid_vertices",

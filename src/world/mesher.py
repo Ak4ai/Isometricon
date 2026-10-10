@@ -1,7 +1,7 @@
 """Face culling de chunks na CPU, sem dependência de contexto OpenGL."""
 
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,6 +77,7 @@ class ChunkMesher:
         self,
         chunk: Chunk3D,
         neighbor_at: Callable[[int, int, int], BlockType | int] | None = None,
+        water_levels: Mapping[tuple[int, int, int], float] | None = None,
     ) -> ChunkMeshData:
         """Gera a malha sem alterar o chunk nem alocar recursos de GPU.
 
@@ -162,6 +163,26 @@ class ChunkMesher:
             offsets = np.stack([xs, ys, zs], axis=-1)[:, None, :]
             v_slice[:, :, :3] = _CORNERS[face] + offsets
             v_slice[:, :, 3:6] = _NORMALS[face]
+
+            if water_levels is not None and np.any(blk == BlockType.WATER):
+                heights = np.asarray([
+                    np.clip(
+                        float(water_levels.get(
+                            (origin_x + int(x), origin_y + int(y), origin_z + int(z)),
+                            1.0,
+                        )),
+                        0.05,
+                        1.0,
+                    )
+                    for x, y, z in zip(xs, ys, zs)
+                ], dtype=np.float32)
+                water_mask = (blk == BlockType.WATER)[:, None]
+                top_vertices = v_slice[:, :, 1] > ys[:, None].astype(np.float32)
+                v_slice[:, :, 1] = np.where(
+                    water_mask & top_vertices,
+                    ys[:, None].astype(np.float32) + heights[:, None],
+                    v_slice[:, :, 1],
+                )
 
             if use_atlas:
                 v_slice[:, :, 6:8] = uv_table[blk, face]

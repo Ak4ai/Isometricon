@@ -47,6 +47,18 @@ def test_empty_and_air_removed():
     assert_mesh(ChunkMesher().build(chunk), 0)
 
 
+def test_water_level_reduces_rendered_height():
+    chunk = Chunk3D()
+    chunk.set_block(2, 5, 3, BlockType.WATER)
+    data = ChunkMesher().build(
+        chunk,
+        water_levels={(2, 5, 3): 0.35},
+    )
+
+    assert np.isclose(data.vertices[:, 1].max(), 5.35)
+    assert np.isclose(data.vertices[:, 1].min(), 5.0)
+
+
 @pytest.mark.parametrize('block', [b for b in BlockType if b != BlockType.AIR])
 def test_single_block_geometry_normals_uvs_colors(block):
     chunk = Chunk3D()

@@ -71,6 +71,7 @@ from src.core.window import Window
 from src.integration import VoxelGridProvider
 from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
+from src.interactive.coordinate_overlay import CoordinateOverlayRenderer
 from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
@@ -360,6 +361,7 @@ def main() -> None:
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
+        coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
         meshes = []
         character_model = avatar  # chat commands (/import, /corpo...) dress the player
@@ -402,6 +404,7 @@ def main() -> None:
         player_token = None
         voxel_provider = None
         highlight_renderer = None
+        coordinate_overlay = None
         grid_renderer = None
         meshes = []
     else:
@@ -410,6 +413,7 @@ def main() -> None:
         player_token = None
         voxel_provider = None
         highlight_renderer = None
+        coordinate_overlay = None
         character_model = None
         turntable_state = {"active": False, "yaw": 0.0}
         grid_renderer = None
@@ -995,6 +999,15 @@ def main() -> None:
                 shader.set_vec3("u_AmbientColor", 0.35, 0.35, 0.35)
                 gl.glClearColor(0.08, 0.10, 0.13, 1.0)
         elif terrain_demo:
+            # Configuração do modo subterrâneo (cutaway) e água
+            underground_mode = player_token.is_underground()
+            shader.set_bool("u_UndergroundMode", underground_mode)
+            shader.set_float("u_PlayerY", float(player_token.position[1]))
+            shader.set_float("u_CutawayAlpha", 0.38)
+            shader.set_float("u_CutawayFade", 0.45)
+            shader.set_bool("u_WaterMode", player_token.in_water)
+            shader.set_int("u_CutawayPass", 0)
+
             # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
@@ -1002,10 +1015,25 @@ def main() -> None:
             view_projection = projection @ view
             world_manager.render(shader, model, view_projection)
 
-            # 2. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
+            # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
+            if underground_mode:
+                gl.glEnable(gl.GL_BLEND)
+                gl.glDepthFunc(gl.GL_ALWAYS)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                gl.glDepthMask(gl.GL_FALSE)
+                shader.set_int("u_CutawayPass", 1)
+                world_manager.render(shader, model, view_projection)
+                gl.glDepthMask(gl.GL_TRUE)
+                gl.glDepthFunc(gl.GL_LESS)
+                gl.glDisable(gl.GL_BLEND)
+                shader.set_int("u_CutawayPass", 0)
+
+            gl.glEnable(gl.GL_CULL_FACE)
+
+            # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
             grid_renderer.render(projection, view, model)
 
-            # 3. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
+            # 4. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
             highlight_renderer.render(
                 view,
@@ -1018,7 +1046,7 @@ def main() -> None:
                 base_color=(1.0, 1.0, 1.0),
             )
 
-            # 4. Destaca em amarelo o primeiro voxel sob o cursor.
+            # 5. Destaca em amarelo o primeiro voxel sob o cursor.
             hover_hit = picking_state["hover_hit"]
             if hover_hit is not None:
                 hx, hy, hz = hover_hit.block
@@ -1033,8 +1061,12 @@ def main() -> None:
                     base_color=(1.0, 0.72, 0.18),
                 )
 
-            # 5. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
+            # 6. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
             shader.use()
+            # A miniatura não deve herdar o cutaway do terreno
+            shader.set_bool("u_UndergroundMode", False)
+            shader.set_bool("u_WaterMode", False)
+            shader.set_int("u_CutawayPass", 0)
             shader.set_mat4("u_Projection", projection)
             shader.set_mat4("u_View", view)
             base_model = model @ player_token.get_model_matrix()
@@ -1043,6 +1075,10 @@ def main() -> None:
             gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
             shader.set_int("u_TextureAtlas", 0)
             player_token.draw(shader=shader, base_model=base_model)
+
+            if coordinate_overlay is not None:
+                coordinate_overlay.render(window.width, window.height, player_token.position)
+                shader.use()
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
@@ -1056,6 +1092,12 @@ def main() -> None:
             for mesh, transform in meshes:
                 shader.set_mat4("u_Model", model @ transform)
                 mesh.draw()
+
+        # Restaurar estados OpenGL
+        gl.glDisable(gl.GL_BLEND)
+        gl.glDepthMask(gl.GL_TRUE)
+        shader.set_bool("u_UndergroundMode", False)
+        shader.set_int("u_CutawayPass", 0)
 
         # --------------------------------------------------------------
         # Renderizar interface 2D do Console de Chat (HUD estilo Minecraft)
@@ -1095,6 +1137,8 @@ def main() -> None:
         world_manager.delete()
         player_token.delete()
         highlight_renderer.delete()
+        if coordinate_overlay is not None:
+            coordinate_overlay.delete()
         grid_renderer.delete()
     elif char_demo:
         if character_model is not None:

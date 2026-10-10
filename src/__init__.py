@@ -1,8 +1,7 @@
-"""Isometricon - 3D Voxel-based Isometric Virtual Tabletop Engine."""
+"""Inicializa o pacote e configura o backend OpenGL antes dos submodulos."""
 
-# Bootstrap comum aos imports de módulos e à aplicação.
-from ._platform import configure_opengl_platform
+from src._platform import configure_opengl_platform
 
 configure_opengl_platform()
 
-__version__ = "0.1.0"
+__all__ = ["configure_opengl_platform"]
