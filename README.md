@@ -130,8 +130,8 @@ O **Isometricon** foi planejado com interfaces limpas no módulo `src/integratio
 | Módulo | Equipe A (Motor do Mundo) | Equipe B (Motor Interativo) |
 | :--- | :--- | :--- |
 | **Responsabilidade** | Chunks, VoxelGrid, Terreno, Shaders, Otimização | Raycasting, Grid, Miniaturas, UI |
-| **Fornece** | `VoxelGridProvider`, `CameraStateProvider` | Comandos de seleção e movimento |
-| **Consome** | Coordenadas de foco e seleção da Equipe B | `VoxelGrid`, `ViewMatrix`, `ProjectionMatrix` |
+| **Fornece** | `VoxelGridProvider` e estado de frame no loop principal | Raycasting, grid, miniaturas e destaques |
+| **Consome** | Dados de terreno por `VoxelGridProvider` | View, Projection, Model e viewport passados diretamente |
 
 > Consulte [docs/INTEGRATION_SPEC.md](docs/INTEGRATION_SPEC.md) para a especificação completa do contrato.
 

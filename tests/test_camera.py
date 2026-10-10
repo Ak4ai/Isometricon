@@ -6,7 +6,21 @@ import numpy as np
 import pytest
 
 from src.camera import IsometricCamera
-from src.math import transform_point, vec3
+from src.math import mat4_rotate_y, transform_point, transform_vector, vec3
+
+
+VIEWPORT = (1280, 720)
+
+
+def project_point(
+    camera: IsometricCamera,
+    model: np.ndarray,
+    point: np.ndarray,
+) -> np.ndarray:
+    """Projeta um ponto lógico até NDC com as matrizes usadas pelo renderer."""
+    projection = camera.get_projection_matrix(*VIEWPORT)
+    view = camera.get_view_matrix()
+    return transform_point(projection @ view @ model, point)
 
 
 def test_camera_default_angles():
@@ -309,6 +323,168 @@ def test_rotation_model_matrix():
         [0.0, 0.0, -1.0],
         atol=1e-6,
     )
+
+
+@pytest.mark.parametrize(
+    "focus",
+    [
+        vec3(18.5, 7.0, 34.25),
+        vec3(-27.75, 12.0, -19.5),
+    ],
+)
+def test_board_rotation_keeps_nonzero_focus_fixed(focus):
+    """O target deve ser o pivô em todos os quatro estados e após 360°."""
+    camera = IsometricCamera(target=focus)
+
+    for _ in range(5):
+        transformed_focus = transform_point(camera.get_model_matrix(), focus)
+        np.testing.assert_allclose(transformed_focus, focus, atol=1e-5)
+        camera.rotate_right()
+
+
+@pytest.mark.parametrize(
+    "focus",
+    [
+        vec3(18.5, 7.0, 34.25),
+        vec3(-27.75, 12.0, -19.5),
+    ],
+)
+def test_focus_projection_is_stable_across_board_rotations(focus):
+    """View e Model devem projetar o mesmo foco no mesmo ponto da tela."""
+    camera = IsometricCamera(target=focus, ortho_size=4.5)
+    initial_projection = project_point(camera, camera.get_model_matrix(), focus)
+
+    for _ in range(4):
+        camera.rotate_right()
+        rotated_projection = project_point(camera, camera.get_model_matrix(), focus)
+        np.testing.assert_allclose(rotated_projection, initial_projection, atol=1e-5)
+
+
+def test_animated_rotation_keeps_focus_fixed_at_intermediate_angle():
+    """O pivô deve permanecer fixo também durante a interpolação Q/E."""
+    focus = vec3(23.5, 9.0, -41.25)
+    camera = IsometricCamera(target=focus, ortho_size=4.5)
+    initial_projection = project_point(camera, camera.get_animated_model_matrix(), focus)
+
+    camera.rotate_right()
+    camera.update(0.05)
+
+    assert np.isclose(camera.current_rotation, 45.0)
+    animated_model = camera.get_animated_model_matrix()
+    np.testing.assert_allclose(transform_point(animated_model, focus), focus, atol=1e-5)
+    np.testing.assert_allclose(
+        project_point(camera, animated_model, focus),
+        initial_projection,
+        atol=1e-5,
+    )
+
+
+def test_animated_full_rotation_returns_to_initial_model():
+    """Quatro passos animados devem completar 360° sem drift no Model."""
+    camera = IsometricCamera(target=vec3(-48.5, 15.0, 63.25))
+    initial_model = camera.get_animated_model_matrix()
+
+    for _ in range(4):
+        camera.rotate_right()
+        camera.update(1.0)
+
+    assert camera.board_rotation_degrees == 0
+    assert np.isclose(camera.current_rotation, 360.0)
+    np.testing.assert_allclose(camera.get_animated_model_matrix(), initial_model, atol=1e-5)
+
+
+def test_rotation_pivot_tracks_target_after_pan_follow_and_zoom():
+    """Mudanças legítimas do target devem atualizar o pivô sem depender do zoom."""
+    camera = IsometricCamera(target=vec3(12.0, 8.0, -6.0), ortho_size=4.5)
+    camera.rotate_right()
+    camera.update(0.05)
+
+    camera.pan_screen(80.0, -35.0)
+    panned_target = camera.get_target()
+    np.testing.assert_allclose(
+        transform_point(camera.get_animated_model_matrix(), panned_target),
+        panned_target,
+        atol=1e-5,
+    )
+
+    # Equivale ao target atualizado pelo token-follow após o gesto de pan.
+    camera.set_target(-22.5, 11.0, 31.75)
+    followed_target = camera.get_target()
+    before_zoom = project_point(camera, camera.get_animated_model_matrix(), followed_target)
+    camera.zoom_in()
+    after_zoom = project_point(camera, camera.get_animated_model_matrix(), followed_target)
+
+    np.testing.assert_allclose(
+        transform_point(camera.get_animated_model_matrix(), followed_target),
+        followed_target,
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(after_zoom[:2], before_zoom[:2], atol=1e-5)
+
+
+def test_screen_pan_direction_is_stable_during_board_rotation():
+    """O Model pivotado não deve rotacionar a resposta visual do pan."""
+    focus = vec3(12.0, 8.0, -6.0)
+    reference_point = vec3(15.0, 8.0, -2.0)
+
+    def projected_pan_delta(angle: float) -> np.ndarray:
+        camera = IsometricCamera(target=focus, ortho_size=4.5)
+        camera.current_rotation = angle
+        before = project_point(camera, camera.get_animated_model_matrix(), reference_point)
+        camera.pan_screen(80.0, -35.0)
+        after = project_point(camera, camera.get_animated_model_matrix(), reference_point)
+        return after[:2] - before[:2]
+
+    expected_delta = projected_pan_delta(0.0)
+    for angle in (45.0, 90.0, 180.0, 270.0):
+        np.testing.assert_allclose(projected_pan_delta(angle), expected_delta, atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    "focus",
+    [
+        vec3(0.0, 0.0, 0.0),
+        vec3(-137.5, 9.0, -88.25),
+    ],
+)
+@pytest.mark.parametrize("quarter_turns", [0, 1, 2, 3, 4])
+def test_movement_directions_cancel_discrete_board_rotation(focus, quarter_turns):
+    """As direções lógicas devem manter o mesmo resultado visual após o Model."""
+    camera = IsometricCamera(target=focus)
+    base_forward = camera._forward_direction()
+    base_right = camera._right_direction()
+
+    for _ in range(quarter_turns):
+        camera.rotate_right()
+
+    movement_forward, movement_right = camera.get_movement_directions()
+    board_rotation = mat4_rotate_y(math.radians(camera.board_rotation_degrees))
+
+    np.testing.assert_allclose(
+        transform_vector(board_rotation, movement_forward),
+        base_forward,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        transform_vector(board_rotation, movement_right),
+        base_right,
+        atol=1e-6,
+    )
+    assert np.isclose(np.linalg.norm(movement_forward), 1.0)
+    assert np.isclose(np.linalg.norm(movement_right), 1.0)
+
+
+def test_movement_directions_ignore_animated_rotation():
+    """O controle usa o estado discreto, sem girar durante a interpolação."""
+    camera = IsometricCamera()
+    camera.rotate_right()
+    expected = camera.get_movement_directions()
+
+    for animated_angle in (0.0, 22.5, 45.0, 89.0):
+        camera.current_rotation = animated_angle
+        actual = camera.get_movement_directions()
+        np.testing.assert_allclose(actual[0], expected[0], atol=1e-6)
+        np.testing.assert_allclose(actual[1], expected[1], atol=1e-6)
 
 
 def test_handle_scroll_zoom_in():

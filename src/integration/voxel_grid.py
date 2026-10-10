@@ -129,10 +129,21 @@ class VoxelGridProvider:
         world_x: int,
         world_z: int,
     ) -> int:
-        # Retorna o maior Y sólido existente na coluna X/Z
-	# A busca utiliza somente chunks carregados, caso não exista nenhum bloco sólido na coluna, retorna -1
+        """Retorna o maior Y não-AIR da coluna carregada em ``(x, z)``.
+
+        O ``WorldManager`` atual transmite apenas colunas no chunk vertical
+        ``y=0``. No modo dinâmico, a busca consulta essa coluna diretamente
+        pelo ``block_lookup``: regiões descarregadas continuam retornando AIR
+        e a consulta não interage com as filas de streaming.
+        """
         x = _coordinate(world_x)
         z = _coordinate(world_z)
+        if self._block_lookup is not None:
+            for y in range(Chunk3D.SIZE - 1, -1, -1):
+                if self.get_block_at(x, y, z) != BlockType.AIR:
+                    return y
+            return -1
+
         best_y: int | None = None
         for chunk in self._chunks.values():
             chunk_x_min = chunk.chunk_x * Chunk3D.SIZE

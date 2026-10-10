@@ -55,11 +55,15 @@ class WorldManager:
 
         self.mesher = ChunkMesher(atlas=atlas)
         self._last_center: Tuple[int, int] | None = None
+        # Revisão barata para consumidores que precisam reagir a streaming sem
+        # observar o dicionário interno enquanto a worker o modifica.
+        self._chunk_revision = 0
 
         # Estruturas para geração assíncrona em background thread
         self._request_queue: queue.Queue = queue.Queue()
         self._result_queue: queue.Queue = queue.Queue()
         self._stop_event = threading.Event()
+        self._worker_busy = threading.Event()
         self._in_progress: Set[Tuple[int, int, int]] = set()
         self._worker_thread: Optional[threading.Thread] = None
 
@@ -89,6 +93,7 @@ class WorldManager:
             if positions is None or self._stop_event.is_set():
                 break
 
+            self._worker_busy.set()
             try:
                 # Descarta requisições obsoletas se o jogador já se afastou muito
                 if self._last_center is not None:
@@ -105,6 +110,7 @@ class WorldManager:
 
                 with self._chunks_lock:
                     self.chunks.update(new_chunks)
+                    self._chunk_revision += 1
 
                 # 2. Constrói a malha e envia cada chunk concluído individualmente
                 for key, chunk in new_chunks.items():
@@ -117,6 +123,7 @@ class WorldManager:
             except Exception:
                 pass
             finally:
+                self._worker_busy.clear()
                 self._request_queue.task_done()
 
     def neighbor_at(self, x: int, y: int, z: int) -> BlockType:
@@ -147,6 +154,7 @@ class WorldManager:
         new_chunks = self.generator.generate_region(target_columns)
         with self._chunks_lock:
             self.chunks.update(new_chunks)
+            self._chunk_revision += 1
 
         if self.create_gl_meshes:
             from src.rendering.mesh import TexturedMesh
@@ -226,6 +234,8 @@ class WorldManager:
                     self._pending_mesh_deletions.append(mesh)
                 self.chunks.pop(key, None)
                 self._in_progress.discard((key[0], 0, key[2]))
+            if to_unload:
+                self._chunk_revision += 1
 
         # 4. Enfileira novos chunks que precisam ser gerados
         new_positions = []
@@ -250,6 +260,7 @@ class WorldManager:
                 new_chunks = self.generator.generate_region(new_positions)
                 with self._chunks_lock:
                     self.chunks.update(new_chunks)
+                    self._chunk_revision += 1
 
                 if self.create_gl_meshes:
                     from src.rendering.mesh import TexturedMesh
@@ -264,6 +275,30 @@ class WorldManager:
     def get_height(self, world_x: float, world_z: float) -> int:
         """Retorna a altura do terreno sólido na coordenada informada."""
         return self.generator.get_height(int(math.floor(world_x)), int(math.floor(world_z)))
+
+    def get_loaded_chunks_snapshot(self) -> tuple[int, Dict[Tuple[int, int, int], Chunk3D]]:
+        """Retorna ``(revisão, cópia rasa)`` coerente dos chunks carregados.
+
+        O snapshot evita que renderizadores de overlay iterem o dicionário que
+        a worker de streaming pode alterar. Os chunks permanecem imutáveis para
+        o fluxo atual de geração; portanto uma cópia rasa é suficiente.
+        """
+        with self._chunks_lock:
+            return self._chunk_revision, dict(self.chunks)
+
+    def get_loaded_chunk_revision(self) -> int:
+        """Retorna a revisão atual sem alocar um snapshot dos chunks."""
+        with self._chunks_lock:
+            return self._chunk_revision
+
+    def has_pending_streaming_work(self) -> bool:
+        """Indica se a sequência atual ainda pode alterar os chunks carregados."""
+        return bool(
+            self._in_progress
+            or self._worker_busy.is_set()
+            or not self._request_queue.empty()
+            or not self._result_queue.empty()
+        )
 
     def render(
         self,
@@ -347,7 +382,9 @@ class WorldManager:
         self.meshes.clear()
 
         with self._chunks_lock:
+            had_chunks = bool(self.chunks)
             self.chunks.clear()
+            if had_chunks:
+                self._chunk_revision += 1
 
         self._last_center = None
-

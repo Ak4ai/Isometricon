@@ -17,6 +17,12 @@ from src.interaction.raycast import (
     screen_to_ndc,
     screen_to_world_ray,
 )
+from src.interaction.surface import (
+    TACTICAL_SURFACE_BLOCKS,
+    TACTICAL_SURFACE_BLOCKERS,
+    is_tactical_column,
+    is_tactical_surface,
+)
 
 __all__ = [
     "DEFAULT_MAX_DISTANCE",
@@ -25,6 +31,10 @@ __all__ = [
     "screen_to_ndc",
     "screen_to_world_ray",
     "raycast_voxels",
+    "TACTICAL_SURFACE_BLOCKS",
+    "TACTICAL_SURFACE_BLOCKERS",
+    "is_tactical_column",
+    "is_tactical_surface",
     "ray_aabb_intersection",
     "is_pickable_block",
 ]
