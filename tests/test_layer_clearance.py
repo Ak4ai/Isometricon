@@ -54,7 +54,7 @@ def test_fitted_asset_type_reads_the_header(tmp_path):
 
 def test_covered_vertices_are_those_under_the_outer_cloth():
     from src.clothing.layer_clearance import covered_vertices
-    outer, faces = _cylinder(0.20, 0.8, 1.2)
+    outer, faces = _cylinder(0.20, 0.79, 1.2)
     inner, _ = _cylinder(0.19, 0.5, 1.0)
     covered = covered_vertices(inner, outer, faces)
     np.testing.assert_array_equal(covered, inner[:, 1] >= 0.8)

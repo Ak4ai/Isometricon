@@ -7,4 +7,5 @@ numpy>=1.26.0
 lz4>=4.4.5
 DracoPy>=2.0.0
 Pillow>=10.0.0
+scipy>=1.12.0
 pytest>=8.0.0
