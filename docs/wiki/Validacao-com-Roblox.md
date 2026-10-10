@@ -8,7 +8,7 @@ Para garantir que o motor de vestuário seja matematicamente fiel e atinja parid
 
 ## 🔬 Metodologia de Medição
 
-O script `scripts/compare_roblox_ground_truth.py` (o `batch_compare_roblox.py`, que rodava vários casos de uma vez, foi removido em 10/10/2026: dependia de módulos de experimento já apagados e não rodava mais) executa o cálculo de diferença entre a malha gerada pelo nosso runtime em Python e o modelo de referência gerado pelo motor do Roblox Studio.
+O script `compare_roblox_ground_truth.py` (desde 10/10/2026 em `backup/scripts/`, fora do repositório, com o manequim de referência de que depende: ver [[Scripts do Projeto|Scripts-do-Projeto]]; o `batch_compare_roblox.py`, que rodava vários casos de uma vez, foi removido em 10/10/2026: dependia de módulos de experimento já apagados e não rodava mais) executa o cálculo de diferença entre a malha gerada pelo nosso runtime em Python e o modelo de referência gerado pelo motor do Roblox Studio.
 
 ### Métricas Avaliadas
 - **Alinhamento de Eixos:** $< 0.0001$ studs entre origens e orientação.

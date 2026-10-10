@@ -2,17 +2,23 @@
 
 ## 📌 Resumo
 
-O que há em `scripts/`, para que serve cada arquivo e se ainda é usado. Levantado em 10/10/2026: cada script foi
-verificado quanto a imports e arquivos que cita (existem ou não) e quanto a quem o referencia (código, testes,
-documentação, CI). "Blender" quer dizer que roda dentro do Blender (`import bpy`), não pelo Python do projeto.
+O que há em `scripts/`, para que serve cada arquivo e onde ele está. Levantado em 10/10/2026: cada script foi
+verificado quanto a imports e arquivos que cita e quanto a quem o referencia (código, testes, documentação, CI).
+"Blender" quer dizer que roda dentro do Blender (`import bpy`), não pelo Python do projeto.
 
-Nenhum script abaixo está quebrado. Os que estavam (importavam módulos de experimento apagados em 06/10/2026) foram
-removidos nesta data: `batch_compare_roblox.py`, `closeup_compare_roblox.py`, `compare_variants_roblox.py` e
-`sweep_radial_radius_roblox.py`.
+**No repositório ficaram só os 14 scripts que o jogo, a CI e as ferramentas desta wiki usam** (a primeira tabela).
+Os outros 57 — pesquisa do encaixe, renderizadores de conferência e exportações antigas — foram para a pasta
+`backup/`, na raiz do projeto, que o git ignora: existem só na máquina de quem os tinha e no histórico do git. Junto
+foram os nove módulos experimentais de `src/clothing` (`experimental_*.py`, `volumetric_cage.py`), os doze arquivos
+de teste deles (51 testes) e o manequim de referência do Roblox (`ClassicMannequin_With-Cages.fbx`). O
+`backup/README.md` diz como trazê-los de volta.
+
+Quatro scripts que já não rodavam (importavam módulos de experimento apagados em 06/10/2026) foram removidos de vez:
+`batch_compare_roblox.py`, `closeup_compare_roblox.py`, `compare_variants_roblox.py` e `sweep_radial_radius_roblox.py`.
 
 ---
 
-## ✅ Em uso (referenciados pelo código, pelos testes, pela CI ou pela wiki)
+## ✅ No repositório (`scripts/`)
 
 | Script | Para que serve |
 |---|---|
@@ -21,7 +27,6 @@ removidos nesta data: `batch_compare_roblox.py`, `closeup_compare_roblox.py`, `c
 | `inspect_flagged_regions.py` | Aproxima a câmera do que a bateria marcou (pele furando, buraco), com e sem marcação. |
 | `render_catalog_thumbnails.py` | Miniaturas dos itens e das raças para o editor de personagem. |
 | `study_rest_arm_angle.py` | Estudo de quanto os braços precisam abrir em repouso para livrar cada roupa. |
-| `compare_roblox_ground_truth.py` | Compara o nosso encaixe no corpo Blocky com a malha exportada do Roblox Studio ([[Validação com Roblox|Validacao-com-Roblox]]). |
 | `render_female_tests.py` | Renderização sem janela das imagens de teste; as funções `look_at` e `perspective` dele são usadas por vários outros scripts. |
 | `blender_nudred_hair.py` (Blender) | Gera o cabelo nudred e o raspado sobre as cabeças do jogo e exporta no formato de cabelo encaixado. |
 | `build_game_rig.py` (Blender) | Monta o rig do jogo (16 ossos) num corpo aberto no Blender. |
@@ -29,17 +34,18 @@ removidos nesta data: `batch_compare_roblox.py`, `closeup_compare_roblox.py`, `c
 | `export_male_body.py` (Blender) | Exporta o corpo masculino e as cages R15 dele ([[Corpo Masculino|Corpo-Masculino]]). |
 | `build_male_cage.py` | Constrói a cage R15 masculina a partir da feminina (mesma topologia e UVs). |
 | `import_roblox_clothing.py` (Blender) | Baixa, decodifica e importa roupas do Roblox no Blender. |
-| `blender_client.py` | Cliente TCP simples para o servidor MCP do Blender. |
+| `blender_client.py` | Cliente TCP para o servidor MCP do Blender; o `import_roblox_clothing.py` o importa. |
+| `experimental_wrap_frames.py` | Mapas locais para a transferência de cage; o teste do encaixe (`tests/test_wrap_layer_fit.py`) usa o `affine_map` dele. |
 
-## 🔬 Pesquisa do encaixe (experimentos e auditorias)
+## 🔬 Em `backup/`: pesquisa do encaixe (experimentos e auditorias)
 
-Vieram da fase em que o encaixe por cage foi desenvolvido e validado contra o Roblox. Alguns ainda são importados por
-testes ou por `src/clothing/experimental_coherent_prism.py`; a pendência de unificá-los numa CLI antes de apagar
-continua em [[Pendências|Pendencias]]. O que se aprendeu com eles está em
-[[Histórico de Experimentos|Historico-de-Experimentos]].
+Vieram da fase em que o encaixe por cage foi desenvolvido e validado contra o Roblox. O que se aprendeu com eles
+está em [[Histórico de Experimentos|Historico-de-Experimentos]]. O mais provável de voltar a ser útil é o
+`compare_roblox_ground_truth.py`: se o encaixe for mexido, é ele que mede de novo a distância para o Roblox Studio.
 
 | Script | Para que serve |
 |---|---|
+| `compare_roblox_ground_truth.py` | Compara o nosso encaixe no corpo Blocky com a malha exportada do Roblox Studio ([[Validação com Roblox|Validacao-com-Roblox]]). Depende do manequim. |
 | `audit_binding_charts.py` | Localiza quebras de borda da roupa entre ilhas de UV da cage. |
 | `audit_blocky_radial_influences.py` | Repete o encaixe congelado do Blocky e mede a influência de cada parte. |
 | `audit_blocky_target_placement.py` | Auditoria estática de posição e folga no Blocky. |
@@ -53,12 +59,11 @@ continua em [[Pendências|Pendencias]]. O que se aprendeu com eles está em
 | `experiment_dual_cage_prism.py` | Ligação por volume entre as faces das cages interna e externa. |
 | `experiment_shell_adaptive.py`, `experiment_shell_global_affine.py` | Controles de transporte local contra volume global. |
 | `experiment_synthetic_contact.py`, `experiment_synthetic_wrap.py`, `synthetic_wrap_fixture.py` | Bancadas sintéticas (braço analítico), sem assets reais. |
-| `experimental_wrap_frames.py` | Mapas locais candidatos para a transferência de cage. |
 | `test_r15_shirt_transfer.py` | Transfere uma camisa do catálogo da cage de referência dela para as cages R15 locais. |
-| `export_r15_reference_cages.py`, `inspect_classic_mannequin_fbx.py` | Leem as cages de referência de `ClassicMannequin_With-Cages.fbx` (na raiz do repositório). |
+| `export_r15_reference_cages.py`, `inspect_classic_mannequin_fbx.py` | Leem as cages de referência de `ClassicMannequin_With-Cages.fbx` (que também está em `backup/`). |
 | `robustness_catalog.py` | Baixa uma amostra do catálogo e passa pelo encaixe feminino. |
 
-## 🖼️ Renderizadores de conferência (íntegros, sem referência)
+## 🖼️ Em `backup/`: renderizadores de conferência
 
 Geram folhas de imagens para olhar um aspecto do sistema. Nada os chama; servem para conferir à mão.
 
@@ -75,7 +80,7 @@ Geram folhas de imagens para olhar um aspecto do sistema. Nada os chama; servem 
 | `render_runtime_before_after.py`, `render_new_acceptance.py`, `render_uv_binding_review.py` | Antes e depois de etapas do encaixe (prisma radial, validação do WrapLayer, ligação por UV). |
 | `build_catalog_sample.py` | Monta uma amostra do catálogo por tipo de peça. |
 
-## 📦 Exportações de uma vez só (Blender, sem referência)
+## 📦 Em `backup/`: exportações de uma vez só (Blender)
 
 Foram usadas para produzir os corpos, as cages e os pacotes que hoje estão em `assets/models`. Só voltam a ser
 necessárias se um corpo ou uma cage for refeito no Blender.
@@ -95,6 +100,7 @@ necessárias se um corpo ou uma cage for refeito no Blender.
 
 ## 🗂️ Fora do git
 
+- `backup/` (ignorado): o que está descrito acima.
 - `artifacts/` (ignorado): resultados da bateria. Em 10/10/2026 ficaram `robustness_v37` (rodada de 07/10),
   `robustness/2026-10-09` (rodada completa de referência) e `robustness/2026-10-10` e `2026-10-10b` (os dois
   experimentos do cruzamento tronco/braço). `inspecao` é a pasta de saída de `inspect_flagged_regions.py`; estava
