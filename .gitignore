@@ -150,3 +150,6 @@ saves/
 galeria/
 galeria.md
 .delta/
+
+# Scripts de pesquisa, exportações antigas e testes deles, guardados só nesta máquina (ver backup/README.md)
+backup/

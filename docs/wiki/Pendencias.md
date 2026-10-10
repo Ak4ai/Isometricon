@@ -56,12 +56,11 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
 ### 7. Scripts de auditoria antigos
 - **Situação Atual:** Em 06/10/2026 foram apagados a quarentena, `artifacts/` e os experimentos de pesos e ombro
   (o que se aprendeu está em [[Histórico de Experimentos|Historico-de-Experimentos]]). `artifacts/` agora é ignorado pelo git.
-- **Pendência:** vários `scripts/audit_*` e `scripts/experiment_*` do encaixe ainda são importados por
-  `src/clothing/experimental_coherent_prism.py`; unificar numa CLI antes de apagar.
-- **Em 10/10/2026:** removidos os quatro scripts que já não rodavam (importavam módulos apagados em 06/10) e os
-  resultados antigos da bateria; o que há em `scripts/` e o estado de cada arquivo está em
-  [[Scripts do Projeto|Scripts-do-Projeto]]. Os 30 scripts íntegros que nada referencia (renderizadores de
-  conferência e exportações de uma vez só pelo Blender) ficaram: apagá-los é uma decisão à parte.
+- **Resolvido em 10/10/2026:** os scripts de pesquisa, as exportações antigas, os renderizadores de conferência, os
+  módulos `experimental_*` e os testes deles saíram do repositório e foram para `backup/` (ignorado pelo git; ver
+  [[Scripts do Projeto|Scripts-do-Projeto]]). No repositório ficaram os 14 scripts em uso e 666 testes.
+- **Pendência:** nenhuma. Se o encaixe for mexido de novo, trazer de `backup/` o `compare_roblox_ground_truth.py` e
+  a cadeia dele (com o manequim) para medir contra o Roblox Studio.
 
 ### 8. Publicação
 - **Situação Atual:** o trabalho de roupas e de criação de personagem está em commits locais no branch
