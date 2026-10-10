@@ -66,17 +66,18 @@ O diretório `src/interactive/` contém todos os módulos da **Equipe B (Motor I
 ## Arquitetura de Integração
 
 ```
-src/integration/          ← Bridge A↔B (mantido pela Equipe A)
-    voxel_provider.py     ← Consulta de blocos do mundo
-    camera_provider.py    ← Estado da câmera (view/proj)
-    highlight_bridge.py   ← Ativa shaders de destaque
+src/integration/
+    voxel_grid.py         ← VoxelGridProvider: consulta de blocos do mundo
 
 src/interactive/          ← DOMÍNIO DA EQUIPE B
-    raycasting.py
     highlight.py
     grid_overlay.py
     token_system.py
-    ui_overlay.py
 ```
 
-Consulte [INTEGRATION_SPEC.md](../../docs/INTEGRATION_SPEC.md) para o contrato completo de interfaces.
+O loop principal passa View, Projection, Model e viewport diretamente ao
+raycasting e aos renderizadores. Highlight e grid mantêm seu próprio estado;
+`CameraStateProvider` e `HighlightBridge` não fazem parte da arquitetura atual.
+Seleção persistente, alcance de movimento e click-to-move continuam futuros.
+
+Consulte [INTEGRATION_SPEC.md](../../docs/INTEGRATION_SPEC.md) para o contrato completo.

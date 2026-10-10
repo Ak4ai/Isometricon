@@ -133,6 +133,27 @@ def test_board_rotation_uses_same_model_transform_as_renderer(quarter_turns):
     np.testing.assert_allclose(rotated.direction, expected, atol=1e-5)
 
 
+@pytest.mark.parametrize(
+    "focus",
+    [
+        vec3(18.5, 10.5, 27.5),
+        vec3(-18.5, 10.5, -27.5),
+    ],
+)
+def test_center_picking_stays_on_nonzero_focus_during_board_rotation(focus):
+    """A inversa do Model pivotado deve manter o voxel focal sob o centro."""
+    block = tuple(math.floor(float(component)) for component in focus)
+    provider = make_provider({block: BlockType.STONE})
+    camera = IsometricCamera(target=focus, ortho_size=8.0)
+
+    for _ in range(4):
+        ray = camera_ray(camera, 640, 360, model=camera.get_model_matrix())
+        hit = raycast_voxels(ray, provider)
+        assert hit is not None
+        assert hit.block == block
+        camera.rotate_right()
+
+
 def test_resize_preserves_ray_at_same_normalized_pixel():
     camera = IsometricCamera(ortho_size=8.0)
     first = camera_ray(camera, 320, 180, 1280, 720)

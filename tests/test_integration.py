@@ -4,7 +4,7 @@ import pytest
 
 from src.math.aabb import AABB
 from src.integration import VoxelGridProvider
-from src.world import BlockType, Chunk3D
+from src.world import BlockType, Chunk3D, TerrainGenerator, WorldManager
 
 
 def make_chunk(
@@ -96,6 +96,28 @@ def test_top_solid_block_across_y_chunks():
     })
 
     assert provider.get_top_solid_block(3, 4) == 16
+
+
+def test_top_solid_block_uses_loaded_dynamic_world_chunks():
+    generator = TerrainGenerator(seed=27, enable_caves=False)
+    manager = WorldManager(
+        generator=generator,
+        render_distance=0,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    try:
+        manager.load_initial_region(-1.0, -1.0)
+        provider = VoxelGridProvider(block_lookup=manager.neighbor_at)
+
+        expected_y = max(generator.get_height(-1, -1), generator.sea_level)
+        assert provider.get_top_solid_block(-1, -1) == expected_y
+
+        manager.update(32.0, -1.0)
+        assert provider.get_block_at(-1, expected_y, -1) is BlockType.AIR
+        assert provider.get_top_solid_block(-1, -1) == -1
+    finally:
+        manager.delete()
 
 
 def test_block_bounding_box():

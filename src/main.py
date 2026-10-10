@@ -70,7 +70,7 @@ from src.core.version import (
 from src.core.window import Window
 from src.integration import VoxelGridProvider
 from src.interaction import raycast_voxels, screen_to_world_ray
-from src.interactive import BlockHighlightRenderer, PlayerToken
+from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
 from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
@@ -222,7 +222,7 @@ def print_system_info(version_info: VersionInfo) -> None:
     print(f"🔹 OpenGL Version : {version}")
     print(f"🔹 GLSL Version   : {glsl_version}")
     print("=" * 68)
-    print("⌨️  [Q/E] Rotacionar | [Mouse Wheel] Zoom | [Espaço + Arrastar / MMB] Pan | [ESC] Sair\n")
+    print("⌨️  [Q/E] Rotacionar | [G] Grid | [Mouse Wheel] Zoom | [Espaço + Arrastar / MMB] Pan | [ESC] Sair\n")
 
 
 def main() -> None:
@@ -360,6 +360,7 @@ def main() -> None:
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
+        grid_renderer = GridOverlayRenderer()
         meshes = []
         character_model = avatar  # chat commands (/import, /corpo...) dress the player
         turntable_state = {"active": False, "yaw": 0.0}
@@ -401,6 +402,7 @@ def main() -> None:
         player_token = None
         voxel_provider = None
         highlight_renderer = None
+        grid_renderer = None
         meshes = []
     else:
         atlas = None
@@ -410,6 +412,7 @@ def main() -> None:
         highlight_renderer = None
         character_model = None
         turntable_state = {"active": False, "yaw": 0.0}
+        grid_renderer = None
         meshes = [(create_cube_mesh(), mat4_identity())]
 
     # Inicializa o console de comando e chat estilo Minecraft
@@ -580,6 +583,10 @@ def main() -> None:
                 camera.current_rotation = 0.0
                 turntable_state["yaw"] = 0.0
                 print("[Câmera] Posição e enquadramento resetados.")
+
+        if terrain_demo and key == glfw.KEY_G and action == glfw.PRESS:
+            visible = grid_renderer.toggle_visibility()
+            print(f"[Grid] {'Ativado' if visible else 'Desativado'}.")
 
         if key == glfw.KEY_LEFT_SHIFT:
             pan_state["shift_pressed"] = action != glfw.RELEASE
@@ -799,16 +806,24 @@ def main() -> None:
             camera.pitch = math.radians(turntable_state["pitch"])
         elif terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
+            movement_forward, movement_right = camera.get_movement_directions()
             player_token.update(
                 dt,
                 keys_pressed,
-                camera._forward_direction(),
-                camera._right_direction(),
+                movement_forward,
+                movement_right,
                 world_manager.get_height,
             )
 
             # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
             world_manager.update(player_token.position[0], player_token.position[2])
+            grid_revision = world_manager.get_loaded_chunk_revision()
+            if (
+                not world_manager.has_pending_streaming_work()
+                and grid_renderer.should_sync(grid_revision)
+            ):
+                revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
+                grid_renderer.sync_chunks(loaded_chunks, revision)
 
             # 3. Câmera acompanha o personagem fora do gesto de pan.
             if not pan_state["active"]:
@@ -987,7 +1002,10 @@ def main() -> None:
             view_projection = projection @ view
             world_manager.render(shader, model, view_projection)
 
-            # 2. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
+            # 2. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
+            grid_renderer.render(projection, view, model)
+
+            # 3. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
             highlight_renderer.render(
                 view,
@@ -1000,7 +1018,7 @@ def main() -> None:
                 base_color=(1.0, 1.0, 1.0),
             )
 
-            # 3. Destaca em amarelo o primeiro voxel sob o cursor.
+            # 4. Destaca em amarelo o primeiro voxel sob o cursor.
             hover_hit = picking_state["hover_hit"]
             if hover_hit is not None:
                 hx, hy, hz = hover_hit.block
@@ -1015,7 +1033,7 @@ def main() -> None:
                     base_color=(1.0, 0.72, 0.18),
                 )
 
-            # 4. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
+            # 5. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
             shader.use()
             shader.set_mat4("u_Projection", projection)
             shader.set_mat4("u_View", view)
@@ -1077,6 +1095,7 @@ def main() -> None:
         world_manager.delete()
         player_token.delete()
         highlight_renderer.delete()
+        grid_renderer.delete()
     elif char_demo:
         if character_model is not None:
             character_model.delete()
