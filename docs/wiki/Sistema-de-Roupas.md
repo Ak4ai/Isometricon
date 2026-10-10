@@ -103,6 +103,27 @@ suéter 10 → 84):
 - refinar a malha da pele ao longo da linha antes de cortar (só mostra o quanto a linha é irregular, ponto a ponto
   da cage).
 
-**Ainda em aberto:** na manga curta e aberta do crop top, olhando de lado para dentro da cava, a borda do corte da
-pele na lateral do tronco aparece em pontas. No corpo da roupa o braço enche a cava e isso não se vê; no nosso, a
-manga fica afastada do braço. O pincel da seção Ajuste fino mostra essa pele à mão.
+### As tampas em leque (as pontas na cava do crop top)
+
+As pontas que apareciam dentro da cava do "Dark Brown Tied Crop Top" não eram da pele: eram da roupa. A peça fecha
+cada cava e a gola por dentro com um leque de triângulos, cada um com a sua cópia do vértice do meio (17 cópias em
+cada cava, 32 na gola, todas no mesmo ponto na malha original). O encaixe move um vértice por mais do que o lugar
+dele (a normal, o triângulo), e mandava cada cópia para um lado, até 28 cm umas das outras: o leque virava um
+estouro de espinhos dentro da manga, atravessando a borda do braço.
+
+- `wear_engine.keep_together` junta de novo, depois do encaixe, as cópias do meio de um leque (`FAN_COPIES`, 8 ou
+  mais cópias de um mesmo ponto), no meio de onde o encaixe as mandou. O leque volta a ser uma tampa lisa, e o braço
+  e o pescoço passam por ela.
+- `scripts/weld_fitted_fans.py` aplica a mesma regra às roupas já encaixadas em `assets/models`, sem reencaixar o
+  catálogo: 38 arquivos, de 15 peças.
+- **Só os leques.** O encaixe também separa, por centímetros, as duas a quatro cópias de muitos vértices ao longo das
+  costuras de UV (mais de 2500 grupos no catálogo, corpo feminino). Juntar essas também foi testado e medido: 12
+  peças pioraram e 8 melhoraram no corpo feminino (Realistic White Pigeon: tecido esticado de 604 para 16 830 cm²).
+  As cópias seguem ossos diferentes e, juntas no encaixe, puxam mais o tecido quando o corpo se mexe. Fica como
+  está.
+- **Na bateria**, das 30 combinações com leques, 8 sobem numa medida e 4 descem. O que sobe é o que a tampa passa a
+  ser: o braço e o pescoço a atravessam e contam como pele furando (crop top feminino 265 → 617 cm², masculino
+  512 → 1042), e a tampa estica quando o braço balança (terno Mafioso masculino 400 → 1454 cm²). Conferido por
+  imagem, andando, em oito dessas peças: no crop top as pontas somem nos dois corpos; nas outras não há diferença
+  visível (a tampa fica por dentro). No corpo masculino a tampa do crop top cobre o alto do ombro, como uma manga
+  curta.

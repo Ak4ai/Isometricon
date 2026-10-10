@@ -162,3 +162,19 @@ def test_a_triangle_is_only_cut_where_the_cloth_covers_what_it_loses():
     cut_rows, cut_faces = clip_hidden(rows, faces, share, 0.5, covered=np.array([True, False, True, True]))
     assert [0, 1, 2] in cut_faces.tolist()
     assert not any(set(f) == {0, 2, 3} for f in cut_faces.tolist()) and len(cut_rows) > len(rows)
+
+
+def test_the_middle_of_a_fan_stays_one_point_after_the_fit():
+    from src.clothing.wear_engine import FAN_COPIES, keep_together
+    # A fan that closes an armhole: FAN_COPIES copies of its middle, a ring about them, and a seam of two copies.
+    ring = [[np.cos(a), np.sin(a), 0.0] for a in np.linspace(0, 2 * np.pi, FAN_COPIES, endpoint=False)]
+    source = np.array([[0.0, 0.0, 0.0]] * FAN_COPIES + ring + [[2.0, 0.0, 0.0]] * 2)
+    fitted = source.copy()
+    fitted[:FAN_COPIES] = np.array(ring) * 0.3 + [0.0, 0.0, 0.05]         # the fit sent each copy its own way
+    fitted[-1] += [0.0, 0.04, 0.0]                                         # and parted the seam
+    together = keep_together(source, fitted)
+    middle = together[:FAN_COPIES]
+    assert np.allclose(middle, middle[0]) and np.allclose(middle[0], fitted[:FAN_COPIES].mean(0))   # one point again: where they were sent, on average
+    assert np.array_equal(together[FAN_COPIES:], fitted[FAN_COPIES:])      # the ring and the seam are left as the fit put them
+    assert np.array_equal(keep_together(source, together), together)       # done once, nothing more to do
+    assert np.array_equal(keep_together(source[:3], fitted), fitted)       # not the same mesh: left alone
