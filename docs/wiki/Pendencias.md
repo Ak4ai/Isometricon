@@ -58,7 +58,7 @@ Este documento lista as melhorias técnicas, funcionalidades pendentes e refator
   (o que se aprendeu está em [[Histórico de Experimentos|Historico-de-Experimentos]]). `artifacts/` agora é ignorado pelo git.
 - **Resolvido em 10/10/2026:** os scripts de pesquisa, as exportações antigas, os renderizadores de conferência, os
   módulos `experimental_*` e os testes deles saíram do repositório e foram para `backup/` (ignorado pelo git; ver
-  [[Scripts do Projeto|Scripts-do-Projeto]]). No repositório ficaram os 14 scripts em uso e 666 testes.
+  [[Scripts do Projeto|Scripts-do-Projeto]]). No repositório ficaram os 13 scripts em uso e 665 testes.
 - **Pendência:** nenhuma. Se o encaixe for mexido de novo, trazer de `backup/` o `compare_roblox_ground_truth.py` e
   a cadeia dele (com o manequim) para medir contra o Roblox Studio.
 

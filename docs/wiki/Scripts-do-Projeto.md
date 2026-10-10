@@ -6,11 +6,11 @@ O que há em `scripts/`, para que serve cada arquivo e onde ele está. Levantado
 verificado quanto a imports e arquivos que cita e quanto a quem o referencia (código, testes, documentação, CI).
 "Blender" quer dizer que roda dentro do Blender (`import bpy`), não pelo Python do projeto.
 
-**No repositório ficaram só os 14 scripts que o jogo, a CI e as ferramentas desta wiki usam** (a primeira tabela).
-Os outros 57 — pesquisa do encaixe, renderizadores de conferência e exportações antigas — foram para a pasta
+**No repositório ficaram só os 13 scripts que o jogo, a CI e as ferramentas desta wiki usam** (a primeira tabela).
+Os outros 58 — pesquisa do encaixe, renderizadores de conferência e exportações antigas — foram para a pasta
 `backup/`, na raiz do projeto, que o git ignora: existem só na máquina de quem os tinha e no histórico do git. Junto
-foram os nove módulos experimentais de `src/clothing` (`experimental_*.py`, `volumetric_cage.py`), os doze arquivos
-de teste deles (51 testes) e o manequim de referência do Roblox (`ClassicMannequin_With-Cages.fbx`). O
+foram os nove módulos experimentais de `src/clothing` (`experimental_*.py`, `volumetric_cage.py`), os treze arquivos
+de teste deles (52 testes) e o manequim de referência do Roblox (`ClassicMannequin_With-Cages.fbx`). O
 `backup/README.md` diz como trazê-los de volta.
 
 Quatro scripts que já não rodavam (importavam módulos de experimento apagados em 06/10/2026) foram removidos de vez:
@@ -35,7 +35,6 @@ Quatro scripts que já não rodavam (importavam módulos de experimento apagados
 | `build_male_cage.py` | Constrói a cage R15 masculina a partir da feminina (mesma topologia e UVs). |
 | `import_roblox_clothing.py` (Blender) | Baixa, decodifica e importa roupas do Roblox no Blender. |
 | `blender_client.py` | Cliente TCP para o servidor MCP do Blender; o `import_roblox_clothing.py` o importa. |
-| `experimental_wrap_frames.py` | Mapas locais para a transferência de cage; o teste do encaixe (`tests/test_wrap_layer_fit.py`) usa o `affine_map` dele. |
 
 ## 🔬 Em `backup/`: pesquisa do encaixe (experimentos e auditorias)
 
@@ -52,6 +51,7 @@ está em [[Histórico de Experimentos|Historico-de-Experimentos]]. O mais prová
 | `audit_canonical_radial_results.py` | Recalcula a validação a partir de saídas gravadas e localiza falhas por parte da cage. |
 | `audit_outer_cage_clearance.py` | Compara a folga da cage externa original com a transferida. |
 | `audit_radial_frames.py` | Auditoria reprodutível dos referenciais de entrada. |
+| `experimental_wrap_frames.py` | Mapas locais candidatos para a transferência de cage. |
 | `benchmark_wrap_frames.py` | Compara algoritmos de referencial da cage em roupas fixas. |
 | `radial_validation_metrics.py` | Medidas geométricas offline (penetração sem usar o renderizador). |
 | `experiment_canonical_radial.py` | Comparação fixa de seis casos. |
