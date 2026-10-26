@@ -21,8 +21,8 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 
 ### Requisitos em detalhe
 
-- [SRS — estado implementado](requirements/SRS.md)
-- [Incremento — editor de mapa e objetos voxel](requirements/INCREMENTO-EDITOR-VOXEL.md)
+- [SRS — estado implementado](SRS.md)
+- [Incremento — editor de mapa e objetos voxel](SRS-INCREMENTO-EDITOR-VOXEL.md)
 - [Índice das 108 fichas atômicas](requirements/README.md)
 
 ---
