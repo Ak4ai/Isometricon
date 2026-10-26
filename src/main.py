@@ -336,9 +336,11 @@ def main() -> None:
         and not any(a.startswith("--frames=") for a in sys.argv)
     )
     if show_menu:
+        if screenshot_path:
+            menus.prepare_background(wait=True)
         def menu_mouse(button, action, mods):
-            if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
-                menus.click(*window.get_cursor_pos_framebuffer())
+            if button == glfw.MOUSE_BUTTON_LEFT:
+                menus.mouse_button(*window.get_cursor_pos_framebuffer(), action)
         window.add_key_callback(lambda key, scan, action, mods: menus.key(key, action, mods))
         window.add_char_callback(menus.char)
         window.add_mouse_button_callback(menu_mouse)
@@ -346,7 +348,7 @@ def main() -> None:
         menu_frames = 0
         while not window.should_close() and menus.result is None:
             window.poll_events()
-            glfw.swap_interval(1 if menus.preferences.data['vsync'] else 0)
+            window.set_vsync(menus.preferences.data['vsync'])
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             menus.render(window.width, window.height)
             menu_frames += 1
@@ -371,7 +373,7 @@ def main() -> None:
         terrain_demo, char_demo = True, False
     menus.go('game')
     menus.result = None
-    glfw.swap_interval(1 if menus.preferences.data['vsync'] else 0)
+    window.set_vsync(menus.preferences.data['vsync'])
 
     active_seed = {
         "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
@@ -597,6 +599,15 @@ def main() -> None:
         if character_model is not None and not getattr(character_model, 'is_loading', False):
             menus.world['character'] = character_save.to_dict(character_model)
         menus.library.save(menus.world)
+        if not menus.active:
+            menus.capture_scene(window.width,window.height)
+        if menus.scene_image is not None and menus.scene_owner == menus.world["id"]:
+            from PIL import ImageOps
+            thumbnail = ImageOps.fit(menus.scene_image.convert('RGB'), (480,300))
+            try:
+                thumbnail.save(menus.library.directory/(menus.world['id']+'.png'))
+            except OSError as error:
+                print(f'[Menu] Não foi possível gravar a miniatura: {error}')
 
     def load_world(world):
         nonlocal world_manager, voxel_provider
@@ -715,8 +726,8 @@ def main() -> None:
         """Controla o início e fim do pan com o botão central."""
         del mods
         if menus.active:
-            if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
-                menus.click(*window.get_cursor_pos_framebuffer())
+            if button == glfw.MOUSE_BUTTON_LEFT:
+                menus.mouse_button(*window.get_cursor_pos_framebuffer(), action)
             return
         if chat_console.is_open:
             if action == glfw.PRESS and button == glfw.MOUSE_BUTTON_LEFT:
@@ -883,7 +894,7 @@ def main() -> None:
                 except (OSError, ValueError) as error:
                     menus.go('pause')
                     menus.message = 'Falha ao salvar/abrir: ' + str(error)
-            glfw.swap_interval(1 if menus.preferences.data['vsync'] else 0)
+            window.set_vsync(menus.preferences.data['vsync'])
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             menus.render(window.width, window.height)
             window.swap_buffers()

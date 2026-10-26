@@ -19,3 +19,19 @@ O terreno é regenerado pela seed. Alterações transitórias dos voxels e o est
 ## Verificação
 
 `pytest tests/test_game_menus.py -q` cobre seed, persistência, conflitos de teclas, rascunho de preferências e áreas de clique redimensionadas. A aplicação mantém `--screenshot` / `--frames`; `--menu --frames 2 --screenshot menu.png` captura o menu em OpenGL.
+
+
+## Identidade visual — atlas de aventuras
+
+O menu inicial tem uma paisagem 3D de apresentação feita com o gerador, mesher e atlas de texturas do jogo. A geração ocorre em uma thread; somente a criação e desenho de recursos OpenGL ocorrem na thread da janela. Essa paisagem não modifica nenhum mundo salvo. A câmera se move lentamente; Reduzir movimento também desativa esse movimento e as transições de painéis.
+
+Os painéis usam papel procedural, cantos ornamentados, sombra, acentos dourados e ícones desenhados em código. Botões respondem ao foco, hover e pressão; o clique só é confirmado ao soltar sobre o mesmo botão. A sensibilidade permite arrastar o slider, e os interruptores mostram o estado do rascunho até Aplicar.
+
+Ao salvar, uma captura da partida é gravada em `saves/worlds/<uuid>.png`, quando disponível. Na ausência de captura, a biblioteca exibe um pequeno mapa gerado da seed. A exclusão de um mundo remove também sua miniatura. O conteúdo dos créditos permanece preservado.
+
+
+## Resposta da interface
+
+Papel, sombras e vinheta são reutilizados; os painéis das demais telas são preparados em segundo plano junto da paisagem. Textos e miniaturas possuem cache. A paisagem de apresentação usa uma malha combinada.
+
+No modo OpenGL, a interface permanece na resolução lógica: escala, deslocamento e transparência das transições são aplicados na GPU. Hover e pressão enviam somente os retângulos alterados à textura, sem realocar a textura nem reconstruir a imagem por causa do fade. Mudanças de conteúdo ou de página atualizam a imagem inteira. A sincronização vertical só é reconfigurada quando a preferência muda.
