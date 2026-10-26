@@ -223,7 +223,7 @@ def print_system_info(version_info: VersionInfo) -> None:
     print(f"🔹 OpenGL Version : {version}")
     print(f"🔹 GLSL Version   : {glsl_version}")
     print("=" * 68)
-    print("⌨️  [Q/E] Rotacionar | [G] Grid | [Mouse Wheel] Zoom | [Espaço + Arrastar / MMB] Pan | [ESC] Sair\n")
+    print("⌨️  [Q/E] Rotacionar | [G] Grid | [Mouse Wheel] Zoom | [Shift + Arrastar / MMB] Pan | [ESC] Pausar\n")
 
 
 def main() -> None:
@@ -328,6 +328,51 @@ def main() -> None:
             chat_text = arg.split("=", 1)[1]
             open_chat = True
 
+    from src.interactive.game_menus import GameMenus
+    menus = GameMenus(version_info.full_version)
+    selected_world = None
+    show_menu = "--menu" in sys.argv or (
+        not any(flag in sys.argv for flag in ("--terrain", "--char", "--character", "--frames"))
+        and not any(a.startswith("--frames=") for a in sys.argv)
+    )
+    if show_menu:
+        def menu_mouse(button, action, mods):
+            if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
+                menus.click(*window.get_cursor_pos_framebuffer())
+        window.add_key_callback(lambda key, scan, action, mods: menus.key(key, action, mods))
+        window.add_char_callback(menus.char)
+        window.add_mouse_button_callback(menu_mouse)
+        window.add_cursor_pos_callback(lambda x, y: menus.hover(*window.get_cursor_pos_framebuffer()))
+        menu_frames = 0
+        while not window.should_close() and menus.result is None:
+            window.poll_events()
+            glfw.swap_interval(1 if menus.preferences.data['vsync'] else 0)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            menus.render(window.width, window.height)
+            menu_frames += 1
+            if max_frames is not None and menu_frames >= max_frames:
+                if screenshot_path:
+                    os.makedirs(os.path.dirname(os.path.abspath(screenshot_path)), exist_ok=True)
+                    pixels = gl.glReadPixels(0, 0, window.width, window.height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
+                    Image.frombytes('RGBA', (window.width, window.height), pixels).transpose(Image.Transpose.FLIP_TOP_BOTTOM).save(screenshot_path)
+                menus.result = ('exit', None)
+            window.swap_buffers()
+        window._key_callbacks.clear()
+        window._char_callbacks.clear()
+        window._mouse_button_callbacks.clear()
+        window._cursor_pos_callbacks.clear()
+        if window.should_close() or menus.result[0] == 'exit':
+            menus.delete()
+            shader.delete()
+            window.close()
+            return
+        selected_world = menus.result[1]
+        custom_seed = selected_world['seed']
+        terrain_demo, char_demo = True, False
+    menus.go('game')
+    menus.result = None
+    glfw.swap_interval(1 if menus.preferences.data['vsync'] else 0)
+
     active_seed = {
         "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
     }
@@ -335,6 +380,8 @@ def main() -> None:
     # O personagem gravado (saves/personagem.json) volta, a menos que a linha de comando escolha outro.
     from src.clothing import character_save
     saved_character = character_save.load() if character_save.wanted(sys.argv[1:]) else None
+    if selected_world and selected_world.get('character'):
+        saved_character = selected_world['character']
     if saved_character is not None:
         print("[Skin] Personagem salvo carregado (use --novo para começar do padrão).")
 
@@ -358,6 +405,8 @@ def main() -> None:
             avatar = CharacterModel(create_mesh=True, async_loading=screenshot_path is None, **worn)
         player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0, avatar=avatar)
         player_token.position[1] = float(start_surface_y) + 1.0
+        if selected_world and selected_world.get('position'):
+            player_token.position[:] = selected_world['position']
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
@@ -532,6 +581,43 @@ def main() -> None:
     # ------------------------------------------------------------------
 
     keys_pressed: dict[int, bool] = {}
+    if terrain_demo and selected_world is None:
+        # Modos de diagnóstico via CLI só criam um save quando o usuário pede.
+        menus.world = None
+    else:
+        menus.world = selected_world
+
+    def save_world():
+        if not terrain_demo:
+            return
+        if menus.world is None:
+            menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'])
+        menus.world['seed'] = active_seed['value']
+        menus.world['position'] = [float(v) for v in player_token.position]
+        if character_model is not None and not getattr(character_model, 'is_loading', False):
+            menus.world['character'] = character_save.to_dict(character_model)
+        menus.library.save(menus.world)
+
+    def load_world(world):
+        nonlocal world_manager, voxel_provider
+        world_manager.delete()
+        active_seed['value'] = world['seed']
+        world_manager = WorldManager(TerrainGenerator(seed=world['seed'], enable_caves=True),
+                                     render_distance=2, atlas=atlas)
+        x, z = .5, .5
+        player_token.position[:] = world.get('position') or [x, world_manager.get_height(x, z) + 1., z]
+        player_token.vertical_velocity = 0.0
+        player_token._collision_controller = None
+        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+        voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
+        camera.target[:] = player_token.position
+        picking_state.update(click_pending=False, hover_hit=None, clicked_hit=None)
+        # Invalida o cache de revisão da grade ao substituir o WorldManager.
+        grid_renderer.sync_chunks({}, -1)
+        if world.get('character') and character_model is not None:
+            character_save.apply(character_model, world['character'])
+        menus.world = world
+
 
     def handle_camera_key(
         key: int,
@@ -541,12 +627,18 @@ def main() -> None:
     ) -> Optional[bool]:
         """Encaminha eventos de teclado para a câmera e registra teclas ativas."""
         del scancode
+        if action == glfw.RELEASE:
+            keys_pressed[menus.preferences.canonical(key)] = False
+        if menus.active:
+            return menus.key(key, action, mods)
 
         # Intercepta eventos de teclado para o console de chat estilo Minecraft
         try:
             if character_editor.typing and character_editor.handle_key(key, action, mods):
                 return True  # o campo de adicionar item da tela de criação tem o teclado
-            if chat_console.handle_key(key, action, mods):
+            chat_key = key if chat_console.is_open else menus.preferences.canonical(key)
+            if chat_console.handle_key(chat_key, action, mods):
+                keys_pressed.clear()
                 return True
         except Exception as e:
             print(f"[Input] Erro ao processar tecla no console de chat: {e}")
@@ -555,6 +647,14 @@ def main() -> None:
         if character_editor.handle_key(key, action, mods):
             return True
 
+        if key == glfw.KEY_ESCAPE and action == glfw.PRESS:
+            keys_pressed.clear()
+            pan_state['active'] = False
+            picking_state['click_pending'] = False
+            menus.capture_scene(window.width, window.height)
+            menus.go('pause')
+            return True
+        key = menus.preferences.canonical(key)
         keys_pressed[key] = (action != glfw.RELEASE)
 
         if terrain_demo and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
@@ -597,7 +697,12 @@ def main() -> None:
             if action == glfw.RELEASE and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
                 pan_state["active"] = False
 
-        camera.handle_key(key, action)
+        camera_key = key
+        if menus.preferences.data['invert_rotation'] and key in (glfw.KEY_Q, glfw.KEY_E):
+            camera_key = glfw.KEY_E if key == glfw.KEY_Q else glfw.KEY_Q
+        camera.handle_key(camera_key, action)
+        if menus.preferences.data['reduce_motion']:
+            camera.current_rotation = float(camera.board_rotation)
         return None
 
 
@@ -609,6 +714,10 @@ def main() -> None:
     ) -> None:
         """Controla o início e fim do pan com o botão central."""
         del mods
+        if menus.active:
+            if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
+                menus.click(*window.get_cursor_pos_framebuffer())
+            return
         if chat_console.is_open:
             if action == glfw.PRESS and button == glfw.MOUSE_BUTTON_LEFT:
                 cx, cy = window.get_cursor_pos()
@@ -622,7 +731,7 @@ def main() -> None:
                 return
 
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
-        is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(glfw.KEY_LEFT_SHIFT))
+        is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(menus.preferences.data['bindings']['pan_modifier']))
 
         if action == glfw.PRESS:
             if is_middle or is_left_with_shift:
@@ -645,11 +754,14 @@ def main() -> None:
         y: float,
     ) -> None:
         """Move o ponto focal enquanto o botão central estiver pressionado."""
+        if menus.active:
+            menus.hover(*window.get_cursor_pos_framebuffer())
+            return
         if chat_console.is_open:
             return
         character_editor.handle_cursor(x, y)
         if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
-            if not window.is_key_pressed(glfw.KEY_LEFT_SHIFT):
+            if not window.is_key_pressed(menus.preferences.data['bindings']['pan_modifier']):
                 pan_state["active"] = False
                 return
         
@@ -660,8 +772,8 @@ def main() -> None:
         dy = y - pan_state["last_y"]
 
         camera.pan_screen(
-            dx,
-            dy,
+            dx * menus.preferences.data['sensitivity'],
+            dy * menus.preferences.data['sensitivity'],
         )
 
         pan_state["last_x"] = x
@@ -670,6 +782,8 @@ def main() -> None:
     # Registrar callbacks na janela.
     def handle_scroll(x_offset: float, y_offset: float) -> None:
         """A roda do mouse rola a grade da tela de criação; fora dela, é o zoom da câmera."""
+        if menus.active:
+            return
         if character_editor.handle_scroll(window.get_cursor_pos()[0], y_offset):
             return
         camera.handle_scroll(x_offset, y_offset)
@@ -683,6 +797,9 @@ def main() -> None:
     )
 
     def handle_char(codepoint: int) -> None:
+        if menus.active:
+            menus.char(codepoint)
+            return
         if not character_editor.handle_char(codepoint):
             chat_console.handle_char(codepoint)
 
@@ -748,7 +865,34 @@ def main() -> None:
     mouse_steps = [step.split(",") for step in mouse_script.split(";") if step.strip()]
     while not window.should_close():
         dt = window.update_delta_time()
+        if menus.active:
+            window.poll_events()
+            if menus.result:
+                action, world = menus.result
+                menus.result = None
+                try:
+                    if action == 'exit':
+                        break
+                    if action == 'save_exit':
+                        save_world()
+                        if not terrain_demo:
+                            break
+                        menus.go('welcome')
+                    elif action == 'play':
+                        load_world(world)
+                except (OSError, ValueError) as error:
+                    menus.go('pause')
+                    menus.message = 'Falha ao salvar/abrir: ' + str(error)
+            glfw.swap_interval(1 if menus.preferences.data['vsync'] else 0)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            menus.render(window.width, window.height)
+            window.swap_buffers()
+            continue
+        if menus.world is not None:
+            menus.world['played'] += dt
         camera.update(dt)
+        if menus.preferences.data['reduce_motion']:
+            camera.current_rotation = float(camera.board_rotation)
         chat_console.update(dt)
 
         # Abrir e fechar a tela de criação: a câmera enquadra o personagem e volta ao sair.
@@ -1138,6 +1282,13 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 8. Liberar recursos
     # ------------------------------------------------------------------
+    if terrain_demo and menus.world is not None and max_frames is None:
+        try:
+            save_world()
+        except (OSError, ValueError) as error:
+            print(f'[Save] Não foi possível salvar ao fechar: {error}')
+    menus.delete()
+    character_editor.delete()
     gl.glDeleteTextures(1, [current_texture["id"]])
     gl.glDeleteTextures(1, [token_tex_id])
     chat_console.delete()
