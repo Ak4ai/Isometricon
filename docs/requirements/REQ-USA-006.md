@@ -1,0 +1,113 @@
+# REQ-USA-006 — Barra de ferramentas e atalhos
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `UR-006`
+> **Origem:** incremento proposto
+> **Arquivo-fonte:** `INCREMENTO-EDITOR-VOXEL.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `UR-006` |
+| **Nome** | Barra de ferramentas e atalhos |
+| **Tipo** | Usabilidade |
+| **Prioridade** | Essencial |
+| **Status** | Proposto |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O editor deve oferecer barra de ferramentas com ferramenta ativa, paleta de cores, biblioteca de texturas, controle de dimensões do grid e comandos de salvar, exportar e desfazer, acessíveis por mouse e por atalho de teclado.
+
+### Condições de Aplicação
+
+- um usuário opera a interface do sistema
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Pedido de extensão de 21/10/2026 e pesquisa do Replicube |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | Inspeção de UI; teste de interação (a criar). |
+
+---
+
+## Justificativa (Rationale)
+
+Torna a operação compreensível e eficiente para o usuário.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [x] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Barra de ferramentas e atalhos
+  Cenário: Exercitar Barra de ferramentas e atalhos
+    Dado que um usuário opera a interface do sistema
+    Quando o usuário executa a tarefa descrita
+    Então a barra, a paleta, a biblioteca, o grid e os comandos estão acessíveis
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Inspeção de UI; teste de interação (a criar). | O editor deve oferecer barra de ferramentas com ferramenta ativa, paleta de cores, biblioteca de texturas, controle de dimensões do grid e comandos de salvar, exportar e desfazer, acessíveis por mouse e por atalho de teclado. |
+
+Testes existentes: A criar (nenhum teste existe no baseline).
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial de usabilidade. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condição e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condição, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Previsto no incremento proposto. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Inspeção / Revisão, Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Nenhuma restrição adicional identificada.
+
+### Notas e Suposições
+
+- Requisito proposto; ainda não implementado.
+
+### Anexos / Referências
+
+- Verificação: Inspeção de UI; teste de interação (a criar).
+- Documento de origem: `INCREMENTO-EDITOR-VOXEL.md`
+
+---

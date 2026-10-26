@@ -1,0 +1,114 @@
+# REQ-FUNC-030 — Animação esquelética
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-030`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `SRS.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-030` |
+| **Nome** | Animação esquelética |
+| **Tipo** | Funcional |
+| **Prioridade** | Essencial |
+| **Status** | Verificado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve animar o personagem com um rig de 16 ossos, pose de repouso, caminhada com balanço de braços ajustado ao rasgo da roupa e skinning de até quatro ossos por vértice.
+
+### Condições de Aplicação
+
+- Personagem montado; andando ou parado; editor pode solicitar braços a 90°.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `src/clothing/skeleton.py`; `character_animation.py`; `src/rendering/mesh.py`; `assets/shaders/world_textured.vert`; `tests/test_skeleton.py`. |
+
+---
+
+## Justificativa (Rationale)
+
+A animação integra o personagem ao movimento do tabuleiro.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Animação esquelética
+  Cenário: Exercitar Animação esquelética
+    Dado o personagem montado
+    Quando ele anda
+    Então quadril, joelhos, tornozelos e braços se movem com pesos e o ombro não puxa o tronco
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste automatizado (`tests/test_skeleton.py`, 13 casos; `tests/test_character_animation.py`, 8 casos). | O rig tem 16 ossos com pais antes dos filhos; ombros não movem o tronco; joelho e cotovelo misturam pesos; a caminhada move quadril, joelhos, tornozelos e braços; o balanço reduz apenas quando a roupa rasga acima de 1500 cm². |
+
+Testes existentes: `tests/test_skeleton.py`, `tests/test_character_animation.py`.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial para animação esquelética. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: —
+
+### Notas e Suposições
+
+- Nenhuma observação adicional.
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Código/testes: `src/clothing/skeleton.py`; `character_animation.py`; `src/rendering/mesh.py`; `assets/shaders/world_textured.vert`; `tests/test_skeleton.py`.
+- Documento de origem: `SRS.md`
+
+---

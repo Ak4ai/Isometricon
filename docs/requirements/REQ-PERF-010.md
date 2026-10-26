@@ -1,0 +1,113 @@
+# REQ-PERF-010 — Colocação multi-chunk sem travar
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `PR-010`
+> **Origem:** incremento proposto
+> **Arquivo-fonte:** `INCREMENTO-EDITOR-VOXEL.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `PR-010` |
+| **Nome** | Colocação multi-chunk sem travar |
+| **Tipo** | Performance |
+| **Prioridade** | Desejável |
+| **Status** | Proposto |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> A colocação de um objeto que ocupa vários chunks deve atualizar apenas os chunks afetados e não bloquear o laço de renderização por mais de um quadro.
+
+### Condições de Aplicação
+
+- o sistema opera com dados e carga compatíveis com o requisito
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Pedido de extensão de 21/10/2026 e pesquisa do Replicube |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | Teste de integração e medição (a criar). |
+
+---
+
+## Justificativa (Rationale)
+
+Garante resposta interativa e uso previsível de recursos.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Colocação multi-chunk sem travar
+  Cenário: Exercitar Colocação multi-chunk sem travar
+    Dado que o sistema opera com dados e carga compatíveis com o requisito
+    Quando a condição de desempenho é exercitada
+    Então só os chunks afetados são remalhados e o quadro não trava
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste de integração e medição (a criar). | A colocação de um objeto que ocupa vários chunks deve atualizar apenas os chunks afetados e não bloquear o laço de renderização por mais de um quadro. |
+
+Testes existentes: A criar (nenhum teste existe no baseline).
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito desejável de desempenho. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condição e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condição, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Previsto no incremento proposto. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Nenhuma restrição adicional identificada.
+
+### Notas e Suposições
+
+- Requisito proposto; ainda não implementado.
+
+### Anexos / Referências
+
+- Verificação: Teste de integração e medição (a criar).
+- Documento de origem: `INCREMENTO-EDITOR-VOXEL.md`
+
+---

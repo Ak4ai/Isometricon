@@ -1,0 +1,114 @@
+# REQ-FUNC-007 — Streaming de chunks
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-007`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `SRS.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-007` |
+| **Nome** | Streaming de chunks |
+| **Tipo** | Funcional |
+| **Prioridade** | Essencial |
+| **Status** | Verificado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve carregar e descarregar chunks ao redor da posição do jogador em um raio de duas colunas, priorizar chunks próximos e tratar regiões ausentes como ar sem iniciar carregamento em consultas.
+
+### Condições de Aplicação
+
+- Modo terreno; deslocamento do token entre colunas de chunk.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `src/world/manager.py`; `src/integration/voxel_grid.py`; `tests/test_interactive.py`. |
+
+---
+
+## Justificativa (Rationale)
+
+O mundo é maior que a memória e precisa carregar ao redor do jogador.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Streaming de chunks
+  Cenário: Exercitar Streaming de chunks
+    Dado um token em uma coluna de chunk
+    Quando ele cruza para a coluna vizinha
+    Então a nova coluna entra na fila e as colunas fora do raio são descarregadas
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste automatizado (`tests/test_interactive.py`, casos de streaming e revisões; `tests/test_integration.py`). | Ao cruzar uma fronteira de chunk, colunas fora do raio são descarregadas e as novas entram na fila; consultas ao provedor não bloqueiam a thread principal. |
+
+Testes existentes: `tests/test_interactive.py`, `tests/test_integration.py`.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial para streaming de chunks. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: —
+
+### Notas e Suposições
+
+- Nenhuma observação adicional.
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Código/testes: `src/world/manager.py`; `src/integration/voxel_grid.py`; `tests/test_interactive.py`.
+- Documento de origem: `SRS.md`
+
+---
