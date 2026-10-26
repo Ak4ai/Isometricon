@@ -141,4 +141,5 @@ class WorldLibrary:
         """Exclui somente o arquivo do mundo identificado pelo UUID."""
         if not isinstance(world_id, str) or len(world_id) != 32 or any(c not in '0123456789abcdef' for c in world_id):
             raise ValueError('Identificador de mundo inválido.')
+        (self.directory / (world_id + '.png')).unlink(missing_ok=True)
         (self.directory / (world_id + '.json')).unlink()

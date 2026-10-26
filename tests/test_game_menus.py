@@ -137,3 +137,94 @@ def test_leaving_creation_discards_name_and_seed(tmp_path, exit_action):
     menus.activate('create')
     assert menus.fields == {'name': '', 'seed': ''}
     assert library.list() == []
+
+
+
+def test_mouse_activation_requires_release_over_same_button(tmp_path):
+    import glfw
+    menus = GameMenus('test', Preferences(tmp_path/'prefs.json'), WorldLibrary(tmp_path/'worlds'), create_gl=False)
+    menus.render(1320,876)
+    rect, _ = menus.hits[0]
+    x,y=(rect[0]+rect[2])/2,(rect[1]+rect[3])/2
+    menus.mouse_button(x,y,glfw.PRESS)
+    assert menus.page=='welcome'
+    menus.mouse_button(0,0,glfw.RELEASE)
+    assert menus.page=='welcome'
+    menus.mouse_button(x,y,glfw.PRESS)
+    menus.mouse_button(x,y,glfw.RELEASE)
+    assert menus.page=='create'
+
+
+def test_sensitivity_slider_changes_only_draft_until_apply(tmp_path):
+    import glfw
+    menus = GameMenus('test', Preferences(tmp_path/'prefs.json'), WorldLibrary(tmp_path/'worlds'), create_gl=False)
+    menus.settings()
+    menus.render(1320,876)
+    rect=next(r for r,a in menus.hits if a=='sensitivity')
+    y=(rect[1]+rect[3])/2
+    menus.mouse_button(rect[2]-186,y,glfw.PRESS)
+    menus.hover(rect[2]-70,y)
+    menus.mouse_button(rect[2]-70,y,glfw.RELEASE)
+    assert menus.draft['sensitivity']==2.
+    assert menus.preferences.data['sensitivity']==1.
+    menus.activate('apply')
+    assert Preferences(menus.preferences.path).data['sensitivity']==2.
+
+
+def test_delete_removes_world_preview_without_touching_other_saves(tmp_path):
+    library=WorldLibrary(tmp_path/'worlds')
+    first=library.create('Primeiro','11')
+    second=library.create('Segundo','22')
+    preview=library.directory/(first['id']+'.png')
+    preview.write_bytes(b'preview')
+    library.delete(first['id'])
+    assert not preview.exists()
+    assert library.list()==[second]
+
+def test_gpu_menu_updates_only_changed_controls_and_keeps_texture_correct(tmp_path):
+    from types import SimpleNamespace
+    from PIL import Image
+    import glfw
+
+    class Texture:
+        def __init__(self):
+            self.image=None
+            self.uploads=[]
+        def set_image(self,image,*,region=None):
+            self.uploads.append(region)
+            if region is None:
+                self.image=image.copy()
+            else:
+                self.image.paste(image.crop(region),region[:2])
+        def draw(self,*args,**kwargs):
+            pass
+
+    menus=GameMenus('test',Preferences(tmp_path/'prefs.json'),WorldLibrary(tmp_path/'worlds'),create_gl=False)
+    menus.preferences.data['reduce_motion']=True
+    menus.quad=Texture()
+    menus.scrim_quad=Texture()
+    menus.landscape=SimpleNamespace(prepare=lambda *a:None,draw=lambda *a:None)
+    menus.render(1280,720)
+    # Assenta o foco inicial; a transição não deve reconstruir a textura por quadro.
+    menus.render(1280,720)
+    initial_uploads=len(menus.quad.uploads)
+    for _ in range(5):
+        menus.render(1280,720)
+    assert len(menus.quad.uploads)==initial_uploads
+    for rect,action in list(menus.hits):
+        x,y=(rect[0]+rect[2])/2,(rect[1]+rect[3])/2
+        menus.hover(x,y)
+        menus.render(1280,720)
+        assert menus.quad.image.tobytes()==menus.last_image.tobytes()
+    assert any(region is not None for region in menus.quad.uploads)
+    rect,_=menus.hits[0]
+    x,y=(rect[0]+rect[2])/2,(rect[1]+rect[3])/2
+    menus.mouse_button(x,y,glfw.PRESS)
+    menus.render(1280,720)
+    assert menus.quad.image.tobytes()==menus.last_image.tobytes()
+    menus.mouse_button(0,0,glfw.RELEASE)
+    menus.render(1280,720)
+    assert menus.quad.image.tobytes()==menus.last_image.tobytes()
+    menus.go('create')
+    menus.render(1280,720)
+    assert menus.quad.uploads[-1] is None
