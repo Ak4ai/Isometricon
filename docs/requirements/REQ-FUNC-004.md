@@ -1,0 +1,114 @@
+# REQ-FUNC-004 — Geração determinística de terreno
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-004`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `SRS.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-004` |
+| **Nome** | Geração determinística de terreno |
+| **Tipo** | Funcional |
+| **Prioridade** | Essencial |
+| **Status** | Verificado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve gerar o terreno a partir de uma seed inteira, com altura contínua por coluna, camadas de pedra, terra e grama, água até o nível do mar e resultado independente da ordem de geração e do processo.
+
+### Condições de Aplicação
+
+- `TerrainGenerator(seed=...)`, com parâmetros padrão ou configurados; `enable_caves` opcional.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `src/world/terrain.py`; `tests/test_terrain.py`. |
+
+---
+
+## Justificativa (Rationale)
+
+O tabuleiro precisa ser reproduzível a partir de uma seed.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Geração determinística de terreno
+  Cenário: Exercitar Geração determinística de terreno
+    Dado um gerador com seed 1234
+    Quando a mesma região é gerada duas vezes
+    Então alturas e blocos são idênticos e a ordem de geração não altera o resultado
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste automatizado (`tests/test_terrain.py`, 14 casos), incluindo reprodutibilidade entre processos. | A mesma seed produz as mesmas alturas e blocos; seeds diferentes produzem relevos diferentes; as faixas de camada respeitam `dirt_depth` e `sea_level`. |
+
+Testes existentes: `tests/test_terrain.py`.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial para geração determinística de terreno. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: —
+
+### Notas e Suposições
+
+- Nenhuma observação adicional.
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Código/testes: `src/world/terrain.py`; `tests/test_terrain.py`.
+- Documento de origem: `SRS.md`
+
+---

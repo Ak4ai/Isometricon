@@ -1,0 +1,114 @@
+# REQ-FUNC-049 — Exportar e importar MagicaVoxel (opcional)
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-049`
+> **Origem:** incremento proposto
+> **Arquivo-fonte:** `INCREMENTO-EDITOR-VOXEL.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-049` |
+| **Nome** | Exportar e importar MagicaVoxel (opcional) |
+| **Tipo** | Funcional |
+| **Prioridade** | Opcional |
+| **Status** | Proposto |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve poder exportar um objeto voxel para o formato MagicaVoxel `.vox` e importar um arquivo `.vox`, preservando dimensões, posições e cores da paleta suportada.
+
+### Condições de Aplicação
+
+- Objeto voxel válido; arquivo `.vox` acessível; funcionalidade habilitada.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Pedido de extensão de 21/10/2026 e pesquisa do Replicube (ver `INCREMENTO-EDITOR-VOXEL.md`) |
+| **Requisito Pai** | FR-041 |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | Implementação do formato aberto MagicaVoxel; sem dependência de runtime externo. |
+
+---
+
+## Justificativa (Rationale)
+
+A interoperabilidade com MagicaVoxel aproxima o fluxo do Replicube.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [x] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Exportar e importar MagicaVoxel (opcional)
+  Cenário: Exercitar Exportar e importar MagicaVoxel (opcional)
+    Dado uma casa com cores
+    Quando o usuário exporta para .vox e importa de volta
+    Então dimensões e cores são preservadas e a perda de textura é avisada
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste de round-trip com arquivo de referência (a criar); demonstração. | Um objeto exportado abre em ferramenta compatível com MagicaVoxel; a importação reproduz dimensões e cores; texturas (não suportadas pelo `.vox`) são substituídas por cor sólida e o usuário é avisado. |
+
+Testes existentes: A criar (nenhum teste existe no baseline).
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito opcional para exportar e importar magicavoxel (opcional). |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Previsto no incremento proposto. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste, Demonstração. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: FR-041
+
+### Notas e Suposições
+
+- Requisito proposto; ainda não implementado.
+- O requisito é proposto e pode mudar até a implementação.
+
+### Anexos / Referências
+
+- Código/testes: Implementação do formato aberto MagicaVoxel; sem dependência de runtime externo.
+- Documento de origem: `INCREMENTO-EDITOR-VOXEL.md`
+
+---

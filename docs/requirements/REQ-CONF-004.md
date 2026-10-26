@@ -1,0 +1,113 @@
+# REQ-CONF-004 — Especificação MagicaVoxel
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `SR-004`
+> **Origem:** incremento proposto
+> **Arquivo-fonte:** `INCREMENTO-EDITOR-VOXEL.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `SR-004` |
+| **Nome** | Especificação MagicaVoxel |
+| **Tipo** | Conformidade |
+| **Prioridade** | Opcional |
+| **Status** | Proposto |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> Quando FR-049 for implementado, o formato `.vox` deve seguir a especificação pública do MagicaVoxel e a paleta suportada deve ser documentada.
+
+### Condições de Aplicação
+
+- o artefato sujeito à conformidade está disponível
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Pedido de extensão de 21/10/2026 e pesquisa do Replicube |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | Teste com arquivo de referência. |
+
+---
+
+## Justificativa (Rationale)
+
+Atende ao padrão ou à norma aplicável.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Especificação MagicaVoxel
+  Cenário: Exercitar Especificação MagicaVoxel
+    Dado que o artefato sujeito à conformidade está disponível
+    Quando a conformidade é verificada
+    Então o .vox segue a especificação MagicaVoxel e a paleta é documentada
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste com arquivo de referência. | Quando FR-049 for implementado, o formato `.vox` deve seguir a especificação pública do MagicaVoxel e a paleta suportada deve ser documentada. |
+
+Testes existentes: A criar (nenhum teste existe no baseline).
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito opcional de conformidade. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condição e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condição, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Previsto no incremento proposto. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Nenhuma restrição adicional identificada.
+
+### Notas e Suposições
+
+- Requisito proposto; ainda não implementado.
+
+### Anexos / Referências
+
+- Verificação: Teste com arquivo de referência.
+- Documento de origem: `INCREMENTO-EDITOR-VOXEL.md`
+
+---

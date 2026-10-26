@@ -1,0 +1,113 @@
+# REQ-USA-003 — Autocompletar e ajuda
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `UR-003`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `SRS.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `UR-003` |
+| **Nome** | Autocompletar e ajuda |
+| **Tipo** | Usabilidade |
+| **Prioridade** | Desejável |
+| **Status** | Verificado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve completar comandos e opções com Tab e oferecer ajuda por grupo e por comando individual.
+
+### Condições de Aplicação
+
+- um usuário opera a interface do sistema
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `tests/test_chat_console.py` (autocomplete e ajuda). |
+
+---
+
+## Justificativa (Rationale)
+
+Torna a operação compreensível e eficiente para o usuário.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [ ] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Autocompletar e ajuda
+  Cenário: Exercitar Autocompletar e ajuda
+    Dado que um usuário opera a interface do sistema
+    Quando o usuário executa a tarefa descrita
+    Então Tab completa as opções e a ajuda lista grupos e comandos
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | `tests/test_chat_console.py` (autocomplete e ajuda). | O sistema deve completar comandos e opções com Tab e oferecer ajuda por grupo e por comando individual. |
+
+Testes existentes: `tests/test_chat_console.py`.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito desejável de usabilidade. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condição e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condição, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: inspeção. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Nenhuma restrição adicional identificada.
+
+### Notas e Suposições
+
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Verificação: `tests/test_chat_console.py` (autocomplete e ajuda).
+- Documento de origem: `SRS.md`
+
+---
