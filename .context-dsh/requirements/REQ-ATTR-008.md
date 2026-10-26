@@ -1,0 +1,113 @@
+# REQ-ATTR-008 — Credenciais em .env ignorado
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `AR-008`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `requirements.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `AR-008` |
+| **Nome** | Credenciais em .env ignorado |
+| **Tipo** | Segurança |
+| **Prioridade** | Essencial |
+| **Status** | Implementado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> Credenciais do Roblox devem ser lidas de um arquivo `.env` local ignorado pelo Git, não gravadas no repositório.
+
+### Condições de Aplicação
+
+- o sistema está em operação
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `.gitignore`; `scripts/import_roblox_clothing.py`; inspeção. |
+
+---
+
+## Justificativa (Rationale)
+
+Sustenta confiabilidade, portabilidade ou segurança do sistema.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [x] Inspeção / Revisão
+- [ ] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Credenciais em .env ignorado
+  Cenário: Exercitar Credenciais em .env ignorado
+    Dado que o sistema está em operação
+    Quando a condição do atributo é exercitada
+    Então o cookie fica no .env ignorado, fora do repositório
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | `.gitignore`; `scripts/import_roblox_clothing.py`; inspeção. | Credenciais do Roblox devem ser lidas de um arquivo `.env` local ignorado pelo Git, não gravadas no repositório. |
+
+Testes existentes: Inspeção/demonstração.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial de atributo do sistema. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condição e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condição, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Inspeção / Revisão. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Nenhuma restrição adicional identificada.
+
+### Notas e Suposições
+
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Verificação: `.gitignore`; `scripts/import_roblox_clothing.py`; inspeção.
+- Documento de origem: `requirements.md`
+
+---
