@@ -11,7 +11,7 @@
 
 **Um motor gráfico 3D isométrico baseado em blocos (Voxel-based Virtual Tabletop Engine) para mesas de RPG tático.**
 
-[📖 GitHub Wiki](https://github.com/Ak4ai/Isometricon/wiki) • [🏛️ Arquitetura A](docs/ARCHITECTURE.md) • [🟦 Arquitetura B](docs/EQUIPE_B_ARCHITECTURE.md) • [🎨 Shaders](docs/SHADERS.md) • [🔗 Integração](docs/INTEGRATION_SPEC.md) • [📋 Requisitos](docs/requirements/SRS.md) • [📋 Proposta](proposta.md)
+[📖 GitHub Wiki](https://github.com/Ak4ai/Isometricon/wiki) • [🏛️ Arquitetura A](docs/ARCHITECTURE.md) • [🟦 Arquitetura B](docs/EQUIPE_B_ARCHITECTURE.md) • [🎨 Shaders](docs/SHADERS.md) • [🔗 Integração](docs/INTEGRATION_SPEC.md) • [📋 Requisitos](docs/SRS.md) • [📋 Proposta](proposta.md)
 
 </div>
 
