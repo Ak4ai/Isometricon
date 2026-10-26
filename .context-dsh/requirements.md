@@ -889,11 +889,11 @@ local.
 | Interfaces externas (EI) | 0 | 6 | 0 | 6 |
 | Usabilidade (UR) | 4 | 1 | 0 | 5 |
 | Desempenho (PR) | 6 | 1 | 0 | 7 |
-| Dados (DR) | 4 | 1 | 0 | 5 |
+| Dados (DR) | 3 | 2 | 0 | 5 |
 | Restrições (CR) | 0 | 9 | 0 | 9 |
 | Conformidade (SR) | 1 | 2 | 0 | 3 |
 | Atributos (AR) | 5 | 4 | 0 | 9 |
-| **Total** | **44** | **33** | **1** | **78** |
+| **Total** | **43** | **34** | **1** | **78** |
 
 ### 4.4 Matriz de rastreabilidade requisito → teste
 
@@ -1049,3 +1049,14 @@ mundo isométrico) está em:
 O incremento é **aditivo**: não altera o status nem o texto dos requisitos deste documento.
 A única extensão consciente é a persistência de mapa (`FR-045`), que convive com `DR-004`
 (“sem persistência de mundo”) porque `DR-004` continua valendo para o modo terreno atual.
+
+## Apêndice E — Requisitos atômicos (um arquivo por requisito)
+
+A versão navegável e atômica deste documento está em `.context-dsh/requirements/`, com **108
+fichas**, uma por requisito, no formato do `TEMPLATE_REQUISITO.md`: 78 do baseline implementado e
+30 do incremento proposto. Cada ficha tem identificação, descrição, rastreabilidade,
+justificativa, critério de aceitação em **Gherkin**, método de verificação, casos de teste
+associados e checklist de conformidade com a ISO/IEC/IEEE 29148:2018.
+
+- Índice: [`requirements/README.md`](requirements/README.md)
+- Índice para ferramentas: [`requirements/INDICE.csv`](requirements/INDICE.csv)

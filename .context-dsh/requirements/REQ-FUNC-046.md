@@ -1,0 +1,114 @@
+# REQ-FUNC-046 — Desfazer e refazer
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-046`
+> **Origem:** incremento proposto
+> **Arquivo-fonte:** `requirements-voxel-editor.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-046` |
+| **Nome** | Desfazer e refazer |
+| **Tipo** | Funcional |
+| **Prioridade** | Desejável |
+| **Status** | Proposto |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O editor deve manter um histórico de pelo menos 50 operações de edição e permitir desfazer e refazer por atalho de teclado e por botões visíveis.
+
+### Condições de Aplicação
+
+- Modo editor; pelo menos uma operação realizada.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Pedido de extensão de 21/10/2026 e pesquisa do Replicube (ver `requirements-voxel-editor.md`) |
+| **Requisito Pai** | FR-036 |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | Padrão semelhante ao histórico de HSR (FR-028), mas para operações de mapa. |
+
+---
+
+## Justificativa (Rationale)
+
+Edição sem desfazer é inviável para construções grandes.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [x] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Desfazer e refazer
+  Cenário: Exercitar Desfazer e refazer
+    Dado 50 operações de edição
+    Quando o usuário desfaz 50 vezes e refaz 50 vezes
+    Então o estado volta ao inicial e ao final, e uma nova edição descarta o ramo refeito
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste unitário de histórico (a criar); demonstração. | Desfazer reverte a última operação; refazer reaplica; uma nova operação após desfazer descarta o ramo refeito; o histórico inclui colocação, remoção, pintura, cor, textura, tamanho do grid e transformação de objeto. |
+
+Testes existentes: A criar (nenhum teste existe no baseline).
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito desejável para desfazer e refazer. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Previsto no incremento proposto. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste, Demonstração. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: FR-036, FR-037, FR-038, FR-047
+
+### Notas e Suposições
+
+- Requisito proposto; ainda não implementado.
+- O requisito é proposto e pode mudar até a implementação.
+
+### Anexos / Referências
+
+- Código/testes: Padrão semelhante ao histórico de HSR (FR-028), mas para operações de mapa.
+- Documento de origem: `requirements-voxel-editor.md`
+
+---

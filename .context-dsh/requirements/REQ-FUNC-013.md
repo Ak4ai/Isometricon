@@ -1,0 +1,114 @@
+# REQ-FUNC-013 — Grade tática
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-013`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `requirements.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-013` |
+| **Nome** | Grade tática |
+| **Tipo** | Funcional |
+| **Prioridade** | Essencial |
+| **Status** | Verificado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve desenhar uma grade de linhas sobre a superfície de células suportadas por terra, grama, pedra ou madeira, não criar célula sobre água ou folhas e alternar a visibilidade com a tecla G.
+
+### Condições de Aplicação
+
+- Modo terreno; chunks carregados; grade visível.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `src/interaction/surface.py`; `src/interactive/grid_overlay.py`; `tests/test_grid_overlay.py`. |
+
+---
+
+## Justificativa (Rationale)
+
+A grade converte o mundo em células táticas.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Grade tática
+  Cenário: Exercitar Grade tática
+    Dado chunks carregados com terra, água e folhas
+    Quando a grade tática é construída
+    Então há célula sobre terra e nenhuma sobre água ou folhas, e G alterna a visibilidade
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste automatizado (`tests/test_grid_overlay.py`, 15 casos). | Células planas compartilham a aresta; degraus mantêm cada contorno na própria altura; água invalida a célula do leito; a grade é desenhada em uma chamada de linhas. |
+
+Testes existentes: `tests/test_grid_overlay.py`.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial para grade tática. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: —
+
+### Notas e Suposições
+
+- Nenhuma observação adicional.
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Código/testes: `src/interaction/surface.py`; `src/interactive/grid_overlay.py`; `tests/test_grid_overlay.py`.
+- Documento de origem: `requirements.md`
+
+---

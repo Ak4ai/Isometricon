@@ -1,0 +1,113 @@
+# REQ-CONS-012 — Sem ferramenta externa obrigatória
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `CR-012`
+> **Origem:** incremento proposto
+> **Arquivo-fonte:** `requirements-voxel-editor.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `CR-012` |
+| **Nome** | Sem ferramenta externa obrigatória |
+| **Tipo** | Restrição de Design |
+| **Prioridade** | Essencial |
+| **Status** | Proposto |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O editor não deve exigir ferramenta externa para criar, salvar, abrir e colocar objetos; a interoperabilidade com MagicaVoxel é opcional.
+
+### Condições de Aplicação
+
+- o código-fonte e o ambiente de execução estão disponíveis
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Pedido de extensão de 21/10/2026 e pesquisa do Replicube |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | Demonstração em ambiente limpo. |
+
+---
+
+## Justificativa (Rationale)
+
+Preserva o escopo e a arquitetura definidos para o projeto.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [ ] Teste
+- [x] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Sem ferramenta externa obrigatória
+  Cenário: Exercitar Sem ferramenta externa obrigatória
+    Dado que o código-fonte e o ambiente de execução estão disponíveis
+    Quando a restrição é verificada
+    Então o fluxo básico funciona sem ferramenta externa
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Demonstração em ambiente limpo. | O editor não deve exigir ferramenta externa para criar, salvar, abrir e colocar objetos; a interoperabilidade com MagicaVoxel é opcional. |
+
+Testes existentes: A criar (nenhum teste existe no baseline).
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial de restrição de design. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condição e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condição, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Previsto no incremento proposto. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Demonstração. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Nenhuma restrição adicional identificada.
+
+### Notas e Suposições
+
+- Requisito proposto; ainda não implementado.
+
+### Anexos / Referências
+
+- Verificação: Demonstração em ambiente limpo.
+- Documento de origem: `requirements-voxel-editor.md`
+
+---

@@ -1,0 +1,114 @@
+# REQ-FUNC-019 — Console de chat
+
+> **Norma de referência:** ISO/IEC/IEEE 29148:2018 (Seções 5.2.5 e 5.2.8)
+> **ID original:** `FR-019`
+> **Origem:** baseline implementado
+> **Arquivo-fonte:** `requirements.md`
+
+---
+
+## Identificação
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | `FR-019` |
+| **Nome** | Console de chat |
+| **Tipo** | Funcional |
+| **Prioridade** | Essencial |
+| **Status** | Verificado |
+
+---
+
+## Descrição
+
+### Texto do Requisito
+
+> O sistema deve oferecer um console de texto aberto por T ou barra, com edição de linha, histórico, autocompletar por Tab, colagem, mensagens coloridas e indicador de carregamento.
+
+### Condições de Aplicação
+
+- Janela ativa; console aberto ou fechado; modelo de personagem opcional.
+
+---
+
+## Rastreabilidade
+
+| Campo | Valor |
+|-------|-------|
+| **Fonte (Source)** | Código e testes do commit `0b5c1fe` |
+| **Requisito Pai** | — |
+| **Requisitos Filhos** | — |
+| **Casos de Uso / Histórias Relacionadas** | — |
+| **Rastreabilidade técnica** | `src/interactive/chat_console.py`; `src/interactive/skin_commands.py`; `tests/test_chat_console.py`. |
+
+---
+
+## Justificativa (Rationale)
+
+O chat é a interface de comando do projeto.
+
+---
+
+## Critérios de Verificação e Aceitação
+
+### Método de Verificação
+
+- [ ] Inspeção / Revisão
+- [x] Teste
+- [ ] Demonstração
+- [ ] Análise
+- [ ] Simulação
+
+### Critérios de Aceitação (Gherkin)
+
+```gherkin
+Funcionalidade: Console de chat
+  Cenário: Exercitar Console de chat
+    Dado o console fechado
+    Quando o usuário pressiona T ou /, digita e usa Tab e Enter
+    Então o console abre, completa, executa e fecha conforme os atalhos
+```
+
+### Casos de Teste Associados
+
+| ID do Teste | Descrição | Resultado Esperado |
+|-------------|-----------|--------------------|
+| TEST-001 | Teste automatizado (`tests/test_chat_console.py`, 20 casos). | Tab completa e cicla opções; Enter executa; Esc fecha; colagem insere o texto; mensagens de erro e sucesso têm cores distintas; o indicador aparece durante importação. |
+
+Testes existentes: `tests/test_chat_console.py`.
+
+---
+
+## Análise de Conformidade com a Norma
+
+| Característica | Atende? | Observações |
+|----------------|---------|-------------|
+| **Necessary (Necessário)** | [x] Sim [ ] Não | Requisito essencial para console de chat. |
+| **Appropriate (Apropriado)** | [x] Sim [ ] Não | Descreve comportamento ou restrição, sem impor implementação. |
+| **Unambiguous (Não ambíguo)** | [x] Sim [ ] Não | Redação única, com condições e critério de aceitação. |
+| **Complete (Completo)** | [x] Sim [ ] Não | Texto, condições, verificação e rastreabilidade declarados. |
+| **Singular (Singular)** | [x] Sim [ ] Não | Trata de uma única capacidade ou restrição. |
+| **Feasible (Factível)** | [x] Sim [ ] Não | Implementado no baseline. |
+| **Verifiable (Verificável)** | [x] Sim [ ] Não | Método: Teste. |
+| **Correct (Correto)** | [x] Sim [ ] Não | Rastreável à fonte declarada. |
+| **Conforming (Conforme)** | [x] Sim [ ] Não | Segue este template e a ISO/IEC/IEEE 29148:2018. |
+
+---
+
+## Informações Complementares
+
+### Restrições e Dependências
+
+- Requisitos relacionados: —
+
+### Notas e Suposições
+
+- Nenhuma observação adicional.
+- O comportamento descrito vale para o commit de referência.
+
+### Anexos / Referências
+
+- Código/testes: `src/interactive/chat_console.py`; `src/interactive/skin_commands.py`; `tests/test_chat_console.py`.
+- Documento de origem: `requirements.md`
+
+---

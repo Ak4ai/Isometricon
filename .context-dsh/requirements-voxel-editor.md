@@ -7,6 +7,10 @@
 > **Natureza:** requisitos **propostos**; nada desta lista está implementado no baseline
 > **Data:** 21/10/2026
 
+> **Versão atômica:** cada requisito deste incremento também está em
+> `.context-dsh/requirements/` (`REQ-FUNC-035.md` … `REQ-FUNC-050.md` e afins), com ficha completa
+> e Gherkin. Índice em `.context-dsh/requirements/README.md`.
+
 Este documento é um **incremento** de `requirements.md`. Ele não repete os requisitos atuais:
 referencia os IDs existentes e adiciona apenas o que falta para o editor de mapa/objetos voxel.
 Todos os requisitos novos têm status **Proposto** e IDs que continuam as faixas existentes
