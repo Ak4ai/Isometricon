@@ -75,6 +75,35 @@ def test_player_token_yaw_alignment():
     assert token.yaw > 0.0
 
 
+def test_player_token_enters_cave_through_water_with_voxel_provider():
+    water = {(0, y, 0) for y in range(1, 4)}
+    floor = {(x, -3, z) for x in range(-1, 2) for z in range(-1, 2)}
+
+    class CaveWorld:
+        def get_block_at(self, x: int, y: int, z: int) -> BlockType:
+            if (x, y, z) in water:
+                return BlockType.WATER
+            if (x, y, z) in floor:
+                return BlockType.STONE
+            return BlockType.AIR
+
+    token = PlayerToken(start_x=0.5, start_z=0.5, create_mesh=False)
+    world = CaveWorld()
+
+    for _ in range(120):
+        token.update(
+            1.0 / 60.0,
+            {},
+            np.zeros(3, dtype=np.float32),
+            np.zeros(3, dtype=np.float32),
+            world,
+        )
+
+    assert token.grounded
+    assert np.isclose(token.position[1], -2.0, atol=1e-5)
+    assert token.get_current_block() == (0, -3, 0)
+
+
 @pytest.mark.parametrize("quarter_turns", [0, 1, 2, 3, 4])
 @pytest.mark.parametrize(
     ("key_name", "expected_axis", "expected_sign"),
