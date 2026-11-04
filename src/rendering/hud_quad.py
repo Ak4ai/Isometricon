@@ -42,18 +42,33 @@ class HudQuad:
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
 
-    def set_image(self, image: Any) -> None:
+    def set_image(self, image: Any, *, region: tuple[int,int,int,int] | None = None) -> None:
         """Envia uma imagem PIL RGBA como textura."""
-        data = np.asarray(image.convert("RGBA"), dtype=np.uint8)
-        self.size = (image.width, image.height)
+        size = (image.width,image.height)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, image.width, image.height, 0,
-                        gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, data)
+        if region is not None and self.size == size:
+            left,top,right,bottom=region
+            cropped=image.crop(region)
+            rgba=cropped if cropped.mode=='RGBA' else cropped.convert('RGBA')
+            data=np.asarray(rgba,dtype=np.uint8)
+            gl.glTexSubImage2D(gl.GL_TEXTURE_2D,0,left,top,right-left,bottom-top,
+                              gl.GL_RGBA,gl.GL_UNSIGNED_BYTE,data)
+        else:
+            rgba=image if image.mode=='RGBA' else image.convert('RGBA')
+            data=np.asarray(rgba,dtype=np.uint8)
+            if self.size == size:
+                gl.glTexSubImage2D(gl.GL_TEXTURE_2D,0,0,0,image.width,image.height,
+                                  gl.GL_RGBA,gl.GL_UNSIGNED_BYTE,data)
+            else:
+                gl.glTexImage2D(gl.GL_TEXTURE_2D,0,gl.GL_RGBA,image.width,image.height,0,
+                               gl.GL_RGBA,gl.GL_UNSIGNED_BYTE,data)
+        self.size = size
 
-    def draw(self, x: float, y: float, window_width: int, window_height: int) -> None:
+    def draw(self, x: float, y: float, window_width: int, window_height: int,
+             *, size: tuple[float,float] | None = None, opacity: float = 1.) -> None:
         """Desenha a imagem com o canto superior esquerdo em (x, y), por cima da cena."""
-        w, h = self.size
+        w, h = size or self.size
         if not w or not h:
             return
         vertices = np.array([x, y, 0.0, 0.0,  x + w, y, 1.0, 0.0,  x + w, y + h, 1.0, 1.0,  x, y + h, 0.0, 1.0],
@@ -68,6 +83,7 @@ class HudQuad:
         gl.glActiveTexture(gl.GL_TEXTURE0)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
         self.shader.set_int("u_Texture", 0)
+        self.shader.set_float("u_Opacity", opacity)
         gl.glBindVertexArray(self.vao)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vbo)
         gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, vertices.nbytes, vertices)

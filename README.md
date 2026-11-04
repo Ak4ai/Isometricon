@@ -206,6 +206,10 @@ gantt
 
 > 💡 **GPU Dedicada:** O programa detecta e usa automaticamente sua GPU NVIDIA/AMD dedicada via driver hints (NVIDIA Optimus / AMD PowerXpress).
 
+O jogo abre no menu de boas-vindas: crie um mundo por nome e seed, continue um mundo salvo, configure controles ou consulte os créditos. Durante a partida, **ESC** abre a pausa. Veja [Menus e mundos](docs/MENUS.md) para os dados salvos e as opções disponíveis.
+
+Os modos de diagnóstico continuam acessíveis com `python src/main.py --terrain` e `python src/main.py --char`.
+
 ### 🕹️ Controles
 
 | Ação | Controle |
@@ -216,7 +220,7 @@ gantt
 | Toggle grid | `G` *(Equipe B)* |
 | Selecionar bloco | `Clique esquerdo` *(Equipe B)* |
 | Mover miniatura | `Clique no destino` *(Equipe B)* |
-| Sair | `ESC` |
+| Pausar / retomar | `ESC` |
 
 ### 🧪 Executando os Testes Unitários
 ```bash
