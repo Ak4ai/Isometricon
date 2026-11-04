@@ -158,3 +158,6 @@ backup/
 assets/models/clothing/cages/
 assets/models/clothing/*.mtl
 assets/models/clothing/reference_cage_*.mesh
+
+# Contexto local de análise (DSH)
+.context-dsh/
