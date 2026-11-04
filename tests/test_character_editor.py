@@ -57,18 +57,25 @@ def test_catalog_sorts_items_by_asset_type_and_pairs_the_shoes(tmp_path):
     assert [i.asset_id for i in found["other"]] == ["999999"]
 
 
-def test_catalog_remembers_the_types_so_a_fresh_clone_sorts_it_without_fitted_items(tmp_path):
+def test_the_fixed_catalogue_is_sorted_without_fitted_items_and_imports_stay_local(tmp_path):
+    import json
     clothing, models = tmp_path / "clothing", tmp_path / "models"
     touch(clothing / "Knit_Sweater_111111.rbxm")
     touch(clothing / "Baggy_Jeans_333333.rbxm")
-    touch(models / "character_native_111111_female.obj", "# asset_type 68\n")
-    touch(models / "character_native_333333_male.obj", "# asset_type 66\n")
-    catalog(str(clothing), str(models))                      # this machine has them fitted: the types are written down
-    assert (clothing / "catalog_types.json").exists()
-    found = catalog(str(clothing), str(tmp_path / "clone"))  # a clone has no fitted items
+    touch(clothing / "catalog_types.json", json.dumps({"111111": 68, "333333": 66}))  # the versioned, fixed catalogue
+    fixed = (clothing / "catalog_types.json").read_text(encoding="utf-8")
+    found = catalog(str(clothing), str(models))              # a fresh clone: nothing fitted yet
     assert [i.asset_id for i in found["top"]] == ["111111"]
     assert [i.asset_id for i in found["bottom"]] == ["333333"]
     assert found["other"] == []
+    touch(clothing / "Zip_Jacket_222222.rbxm")               # the player imports an item and it gets fitted
+    touch(models / "character_native_222222_female.obj", "# asset_type 67\n")
+    touch(models / "character_native_111111_female.obj", "# asset_type 68\n")
+    catalog(str(clothing), str(models))
+    assert (clothing / "catalog_types.json").read_text(encoding="utf-8") == fixed  # the fixed list is never written
+    assert json.loads((clothing / "catalog_types.local.json").read_text(encoding="utf-8")) == {"222222": 67}
+    (models / "character_native_222222_female.obj").unlink()
+    assert [i.asset_id for i in catalog(str(clothing), str(models))["jacket"]] == ["222222"]  # remembered locally
 
 
 def test_a_click_on_an_option_runs_its_chat_command():

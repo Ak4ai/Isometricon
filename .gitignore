@@ -135,12 +135,16 @@ scripts/test_smooth_dissolve.py
 artifacts/
 assets/models/character_native_*_hsr.npz
 assets/models/character_native_*_parts.npy
-# Roupas baixadas pelo /skin vestir (as já versionadas continuam no git)
+# Roupas baixadas pelo /skin vestir (as do catálogo fixo continuam no git)
 assets/models/clothing/*.rbxm
 assets/models/clothing/*.png
 assets/models/clothing/hsr/
 assets/models/clothing/wrap_cages/
 assets/models/clothing/thumbs/
+# Peças importadas pelo jogador são só dele: o catálogo fixo (versionado à força, listado em
+# catalog_types.json) não muda; os tipos e os pacotes de calçado das importadas ficam nesta máquina
+assets/models/clothing/catalog_types.local.json
+assets/models/clothing/shoe_bundles.json
 tools/
 
 # Personagem gravado pelo jogo
