@@ -57,6 +57,20 @@ def test_catalog_sorts_items_by_asset_type_and_pairs_the_shoes(tmp_path):
     assert [i.asset_id for i in found["other"]] == ["999999"]
 
 
+def test_catalog_remembers_the_types_so_a_fresh_clone_sorts_it_without_fitted_items(tmp_path):
+    clothing, models = tmp_path / "clothing", tmp_path / "models"
+    touch(clothing / "Knit_Sweater_111111.rbxm")
+    touch(clothing / "Baggy_Jeans_333333.rbxm")
+    touch(models / "character_native_111111_female.obj", "# asset_type 68\n")
+    touch(models / "character_native_333333_male.obj", "# asset_type 66\n")
+    catalog(str(clothing), str(models))                      # this machine has them fitted: the types are written down
+    assert (clothing / "catalog_types.json").exists()
+    found = catalog(str(clothing), str(tmp_path / "clone"))  # a clone has no fitted items
+    assert [i.asset_id for i in found["top"]] == ["111111"]
+    assert [i.asset_id for i in found["bottom"]] == ["333333"]
+    assert found["other"] == []
+
+
 def test_a_click_on_an_option_runs_its_chat_command():
     editor, sent = make_editor()
     option = next(payload for _, kind, payload in editor.layout(*SIZE) if kind == "option" and payload.label == "Masculino")
