@@ -108,12 +108,15 @@ necessárias se um corpo ou uma cage for refeito no Blender.
   de referência dos testes (`character_head_rounded.obj`, `character_clean.obj`) e os cabelos padrão, nudred e
   raspado (`clothing/Hair_fitted_*`). Conferido em 10/10/2026 com um clone limpo: o jogo abre nos dois corpos. Ao
   acrescentar uma malha nova que o jogo abre, lembre de adicioná-la à força.
-- **O catálogo de exemplo:** sem credencial do Roblox (`ROBLOSECURITY` no `.env`, que não vai para o git) o download
-  de roupas responde 401, então um clone só veste o que vem no repositório. Vão 32 peças (roupas, cabelos e a
-  katana), cada uma com o `.rbxm`, a textura, a malha de origem (`.obj`, à força) e os dados de cage e de máscara que
-  ela lê (`wrap_cages/*.mesh`, `hsr/*.bin`). Conferido num clone limpo e sem credencial: as 32 vestem nos dois
-  corpos. Os outros itens baixados nesta máquina, as roupas já encaixadas (`character_native_*`), os cabelos
-  encaixados do catálogo e as miniaturas são cache local e ficam fora do git.
+- **O catálogo:** sem credencial do Roblox (`ROBLOSECURITY` no `.env`, que não vai para o git) o download
+  de roupas responde 401, então um clone só veste o que vem no repositório. Desde 04/11/2026 vai o catálogo inteiro
+  (115 itens: roupas, calçados, cabelos e a katana), cada um com o `.rbxm`, a textura, a malha de origem (`.obj`, à
+  força) e os dados de cage e de máscara que ele lê (`wrap_cages/*.mesh`, `hsr/*.bin`), e as miniaturas da tela de
+  criação (`thumbs/`, também à força). O tipo de cada item (camiseta, calça, vestido...) vem da roupa já encaixada,
+  que é cache; por isso `character_editor.catalog()` anota os tipos em `clothing/catalog_types.json`, que vai para o
+  git e é o que um clone usa para separar as seções. As roupas já encaixadas (`character_native_*`) e os cabelos
+  encaixados do catálogo continuam cache local. Ao baixar um item novo, adicione à força o `.rbxm`, a textura, o
+  `.obj`, os `wrap_cages/*.mesh` e `hsr/*.bin` novos e a miniatura, e versione o `catalog_types.json` atualizado.
 - **Testes num clone:** 664 passam e 1 é pulado (precisa de roupas já encaixadas, que são cache).
 - `artifacts/` (ignorado): resultados da bateria. Em 10/10/2026 ficaram `robustness_v37` (rodada de 07/10),
   `robustness/2026-10-09` (rodada completa de referência) e `robustness/2026-10-10` e `2026-10-10b` (os dois

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import glob
+import json
 import os
 import re
 import subprocess
@@ -182,6 +183,8 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
     """
     found: Dict[str, List[CatalogItem]] = {k: [] for k in ("top", "jacket", "bottom", "dress", "shoes", "hair", "tool", "other")}
     halves: Dict[str, Dict[str, CatalogItem]] = {}
+    known = _load_types(clothing_dir)
+    learned = dict(known)
     for path in sorted(glob.glob(os.path.join(clothing_dir, "*.rbxm"))):
         base = os.path.basename(path)
         match = re.search(r"_(\d{6,})\.rbxm$", base)
@@ -191,6 +194,10 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
         lower = stem.lower()
         asset_type = next((t for t in (fitted_asset_type(os.path.join(models_dir, f"character_native_{asset_id}_{body}.obj"))
                                        for body in ("female", "male")) if t is not None), None)
+        if asset_type is None:
+            asset_type = known.get(asset_id)  # not fitted on this machine (a fresh clone): the type seen when it was
+        else:
+            learned[asset_id] = asset_type
         kind = KIND_OF_TYPE.get(asset_type)
         if kind is None:
             is_side = any(w in lower for w in LEFT_WORDS + RIGHT_WORDS)
@@ -212,7 +219,31 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
             left, right = pair["left"], pair["right"]
             name = re.sub(r"(?i)\s*-?\s*(left|right)\s*(shoe)?\s*(accessory)?", "", left.name).strip(" -") or left.name
             found["shoes"].append(CatalogItem(f"{left.asset_id},{right.asset_id}", name, "shoes", left.image))
+    if learned != known:
+        _save_types(clothing_dir, learned)
     return found
+
+
+TYPES_FILE = "catalog_types.json"  # asset id -> Roblox asset type, versioned so a clone sorts the catalogue too
+
+
+def _load_types(clothing_dir: str) -> Dict[str, int]:
+    try:
+        with open(os.path.join(clothing_dir, TYPES_FILE), encoding="utf-8") as fp:
+            return {str(k): int(v) for k, v in json.load(fp).items()}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _save_types(clothing_dir: str, types: Dict[str, int]) -> None:
+    path = os.path.join(clothing_dir, TYPES_FILE)
+    try:
+        with open(path + ".tmp", "w", encoding="utf-8") as fp:
+            json.dump(dict(sorted(types.items(), key=lambda kv: int(kv[0]))), fp, indent=1)
+            fp.write("\n")
+        os.replace(path + ".tmp", path)
+    except OSError:
+        pass
 
 
 class CharacterEditor:
