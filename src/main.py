@@ -816,7 +816,7 @@ def main() -> None:
                 keys_pressed,
                 movement_forward,
                 movement_right,
-                world_manager.get_height,
+                voxel_provider,
             )
 
             # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
@@ -831,10 +831,7 @@ def main() -> None:
 
             # 3. Câmera acompanha o personagem fora do gesto de pan.
             if not pan_state["active"]:
-                cam_speed = 8.0
-                camera.target[0] += (player_token.position[0] - camera.target[0]) * min(dt * cam_speed, 1.0)
-                camera.target[2] += (player_token.position[2] - camera.target[2]) * min(dt * cam_speed, 1.0)
-                camera.target[1] += (player_token.position[1] - camera.target[1]) * min(dt * cam_speed, 1.0)
+                camera.follow_target(player_token.position, dt, response=10.0)
         elif char_demo:
             if turntable_state["active"]:
                 turntable_state["yaw"] = (turntable_state["yaw"] + dt * 45.0) % 360.0
