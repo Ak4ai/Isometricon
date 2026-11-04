@@ -183,8 +183,10 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
     """
     found: Dict[str, List[CatalogItem]] = {k: [] for k in ("top", "jacket", "bottom", "dress", "shoes", "hair", "tool", "other")}
     halves: Dict[str, Dict[str, CatalogItem]] = {}
-    known = _load_types(clothing_dir)
-    learned = dict(known)
+    fixed = _load_types(os.path.join(clothing_dir, TYPES_FILE))
+    user = _load_types(os.path.join(clothing_dir, USER_TYPES_FILE))
+    known = {**user, **fixed}
+    learned = dict(user)
     for path in sorted(glob.glob(os.path.join(clothing_dir, "*.rbxm"))):
         base = os.path.basename(path)
         match = re.search(r"_(\d{6,})\.rbxm$", base)
@@ -196,8 +198,8 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
                                        for body in ("female", "male")) if t is not None), None)
         if asset_type is None:
             asset_type = known.get(asset_id)  # not fitted on this machine (a fresh clone): the type seen when it was
-        else:
-            learned[asset_id] = asset_type
+        elif asset_id not in fixed:
+            learned[asset_id] = asset_type    # an item the player imported: remembered only on this machine
         kind = KIND_OF_TYPE.get(asset_type)
         if kind is None:
             is_side = any(w in lower for w in LEFT_WORDS + RIGHT_WORDS)
@@ -219,24 +221,26 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
             left, right = pair["left"], pair["right"]
             name = re.sub(r"(?i)\s*-?\s*(left|right)\s*(shoe)?\s*(accessory)?", "", left.name).strip(" -") or left.name
             found["shoes"].append(CatalogItem(f"{left.asset_id},{right.asset_id}", name, "shoes", left.image))
-    if learned != known:
-        _save_types(clothing_dir, learned)
+    if learned != user:
+        _save_types(os.path.join(clothing_dir, USER_TYPES_FILE), learned)
     return found
 
 
-TYPES_FILE = "catalog_types.json"  # asset id -> Roblox asset type, versioned so a clone sorts the catalogue too
+# asset id -> Roblox asset type. The fixed catalogue that ships with the game is versioned and
+# never written by the game; items the player imports are noted in a local file the git ignores.
+TYPES_FILE = "catalog_types.json"
+USER_TYPES_FILE = "catalog_types.local.json"
 
 
-def _load_types(clothing_dir: str) -> Dict[str, int]:
+def _load_types(path: str) -> Dict[str, int]:
     try:
-        with open(os.path.join(clothing_dir, TYPES_FILE), encoding="utf-8") as fp:
+        with open(path, encoding="utf-8") as fp:
             return {str(k): int(v) for k, v in json.load(fp).items()}
     except (OSError, ValueError, AttributeError):
         return {}
 
 
-def _save_types(clothing_dir: str, types: Dict[str, int]) -> None:
-    path = os.path.join(clothing_dir, TYPES_FILE)
+def _save_types(path: str, types: Dict[str, int]) -> None:
     try:
         with open(path + ".tmp", "w", encoding="utf-8") as fp:
             json.dump(dict(sorted(types.items(), key=lambda kv: int(kv[0]))), fp, indent=1)
