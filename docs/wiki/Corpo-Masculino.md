@@ -51,11 +51,9 @@ Conforme registrado em `artifacts/male_cage/relatorio.json`, a cage masculina fo
 ![Wireframe da Cage sobre o Corpo](images/corpo-masculino/cage-sobre-corpo.png)
 *Figura 2: Cage feminina (topo) e cage masculina (base) sobrepostas diretamente aos seus respectivos corpos poligonais.*
 
-````carousel
 ![Braços da Cage](images/corpo-masculino/cage-bracos.png)
-<!-- slide -->
+
 ![Pernas da Cage](images/corpo-masculino/cage-pernas.png)
-````
 
 ---
 

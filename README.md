@@ -78,7 +78,7 @@ Isometricon/
 │   ├── test_rendering.py      # 🟩 Testes de renderização
 │   ├── test_version.py        # 🟩 Testes de versão
 │   └── test_interaction.py    # 🟦 Testes do motor interativo (Equipe B)
-├── proposta.md                # Proposta acadêmica original
+├── docs/wiki/Proposta-do-Projeto.md  # Proposta acadêmica original
 ├── CONTRIBUTING.md            # Guia de contribuição
 ├── LICENSE
 └── README.md

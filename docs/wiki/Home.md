@@ -17,7 +17,12 @@ O projeto é dividido em **dois subprojetos complementares** desenvolvidos no me
 | [[Guia de Shaders GLSL\|Guia-de-Shaders]] | Shaders GLSL 330 core, matrizes MVP e iluminação direcional. |
 | [[Sistema de Roupas\|Sistema-de-Roupas]] | Roupas do Roblox por cages, HSR e camadas. |
 | [[Animação e Esqueleto\|Animacao-e-Esqueleto]] | Rig do jogo, pesos das roupas, descanso e caminhada. |
+| [[Testes e Verificações com o Claude\|Testes-e-Verificacoes-com-o-Claude]] | Como os testes foram feitos com ajuda do Claude e onde estão os resultados. |
+| [[Mapa de Testes e Ajustes|Mapa-de-Testes-e-Ajustes]] | Linha do tempo: o que estava errado, qual teste mostrou e o ajuste, até o modelo atual. |
 | [[Bateria de Robustez\|Bateria-de-Robustez]] | Como medir o catálogo inteiro e os resultados. |
+| [[Validação com Roblox\|Validacao-com-Roblox]] | Comparação com o Roblox Studio (ground truth). |
+| [[Histórico de Experimentos\|Historico-de-Experimentos]] | Hipóteses testadas, resultados e decisões. |
+| [[Pendências\|Pendencias]] | O que ainda falta. |
 | [[Scripts do Projeto\|Scripts-do-Projeto]] | O que há em `scripts/`, para que serve cada um e se ainda é usado. |
 | [[Comandos do Chat\|Comandos-do-Chat]] | Todos os comandos /skin. |
 | [[Criação de Personagem\|Criacao-de-Personagem]] | Tela com seções e grade de opções (`/skin interface`). |
