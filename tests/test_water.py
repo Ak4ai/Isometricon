@@ -143,3 +143,22 @@ def test_surface_heights_follow_the_level():
     place_source(world, sim, (0, 1, 0))
     run(sim, 3)
     assert sim.heights[(1, 1, 0)] == surface_height(1) and (0, 1, 0) not in sim.heights  # a fonte fica no padrão
+
+
+def test_a_step_split_over_frames_gives_the_same_water():
+    """A onda avaliada aos poucos (algumas células por quadro) chega à mesma água que de uma vez."""
+    whole_world, split_world = DictWorld(), DictWorld()
+    whole, split = WaterSimulation(whole_world), WaterSimulation(split_world)
+    for world, sim in ((whole_world, whole), (split_world, split)):
+        place_source(world, sim, (0, 1, 0))
+        world.set_block(3, 1, 0, BlockType.STONE)
+        place_source(world, sim, (-4, 6, 2))
+    for _ in range(25):
+        whole.step()
+        split.begin_step()
+        changed = None
+        while changed is None:
+            changed = split.advance(3)
+            assert split.stepping == (changed is None)
+    assert water_cells(whole_world) == water_cells(split_world)
+    assert {c: whole.level(c) for c in water_cells(whole_world)} == {c: split.level(c) for c in water_cells(split_world)}

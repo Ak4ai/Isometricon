@@ -174,9 +174,12 @@ def test_tracker_recomputes_only_when_something_changed():
     version = tracker.version
     assert tracker.update(0.016, (13.5, 3.0, 13.5), chunks, 1) is first
     assert tracker.version == version                       # nada mudou: não recalculou
-    tracker.update(0.016, (13.5, 3.0, 13.5), chunks, 2)      # o mundo mudou
+    tracker.update(0.016, (13.5, 3.0, 13.5), chunks, 2)      # a revisão subiu, mas nada mudou perto (a água longe)
+    assert tracker.version == version
+    changed = world(lambda b: (box(b, 10, 10), b.__setitem__((12, 3, 12), BlockType.STONE)))
+    tracker.update(0.016, (13.5, 3.0, 13.5), changed, 3)     # o mundo mudou dentro da janela
     assert tracker.version == version + 1
-    tracker.update(1.0, (14.5, 3.0, 13.5), chunks, 2)        # o jogador andou e já passou o intervalo
+    tracker.update(1.0, (14.5, 3.0, 13.5), changed, 3)       # o jogador andou e já passou o intervalo
     assert tracker.version == version + 2
     assert tracker.active
 

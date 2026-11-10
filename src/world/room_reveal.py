@@ -349,6 +349,17 @@ def story_center(mask: RoomMask, feet_y: int, cut_y: int):
     return float(cells[:, 0].mean()) + ox + 0.5, float(cells[:, 2].mean()) + oz + 0.5
 
 
+def _same_window(old: Optional["WindowCells"], new: "WindowCells", origin, old_origin) -> bool:
+    """As duas janelas têm o mesmo de tudo o que a máscara e as tampas usam."""
+    if old is None or tuple(origin) != tuple(old_origin):
+        return False
+    return (np.array_equal(old.solid, new.solid) and np.array_equal(old.roof, new.roof)
+            and np.array_equal(old.occupied, new.occupied) and np.array_equal(old.blocks, new.blocks)
+            and np.array_equal(old.owner, new.owner)
+            and (old.doors is None) == (new.doors is None)
+            and (old.doors is None or np.array_equal(old.doors, new.doors)))
+
+
 class RoomRevealTracker:
     """Recalcula a máscara quando preciso (o jogador mudou de célula, ou o mundo mudou)."""
 
@@ -380,6 +391,11 @@ class RoomRevealTracker:
             return self.mask  # só andou: espera o intervalo mínimo
         origin = window_origin(position)
         window = extract_window_cells(origin, chunks, structures)
+        if self.mask is not None and key[0] == self._key[0] and _same_window(self.mask.window, window, origin,
+                                                                              self.mask.origin):
+            # o mundo mudou longe (a água corre, um chunk chegou): o cômodo é o mesmo, nada a refazer
+            self._key, self._age = key, 0.0
+            return self.mask
         self.mask = compute_room(window.solid, window.roof, origin, position, was_active=self.active,
                                  doors=window.doors)
         self.mask.window = window

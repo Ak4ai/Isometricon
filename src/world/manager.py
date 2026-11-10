@@ -15,6 +15,8 @@ from src.world.mesher import ChunkMeshData, ChunkMesher
 from src.world.terrain import TerrainGenerator
 from src.world.water import TICK as WATER_TICK, WaterSimulation
 
+WATER_CELLS_PER_FRAME = 64  # células de água avaliadas por quadro (até ~8 ms nas encostas): a onda leva alguns quadros
+
 if TYPE_CHECKING:
     from src.rendering.mesh import TexturedMesh
 
@@ -108,6 +110,20 @@ class WorldManager:
 
             self._worker_busy.set()
             try:
+                if isinstance(positions, tuple) and positions[0] == "remesh":
+                    # a água mudou: refaz as malhas aqui, fora do quadro (era um travamento de ~15 ms por chunk)
+                    for key in positions[1]:
+                        if self._stop_event.is_set():
+                            break
+                        with self._chunks_lock:
+                            chunk = self.chunks.get(key)
+                        if chunk is None:
+                            continue
+                        mesh_data = self.mesher.build(chunk, self.neighbor_at, self._water_levels)
+                        if not self._stop_event.is_set():
+                            self._result_queue.put((key, chunk, mesh_data))
+                        time.sleep(0.0005)
+                    continue
                 # Descarta requisições obsoletas se o jogador já se afastou muito
                 if self._last_center is not None:
                     ccx, ccz = self._last_center
@@ -199,6 +215,11 @@ class WorldManager:
 
                 key, chunk, data = item
                 self._in_progress.discard((key[0], 0, key[2]))
+                if key not in self.chunks:
+                    self._result_queue.task_done()
+                    continue  # descarregado enquanto a malha era feita
+                if self.create_gl_meshes and data.face_count == 0 and key in self.meshes:
+                    self._pending_mesh_deletions.append(self.meshes.pop(key)[0])  # a malha refeita ficou vazia
 
                 if self.create_gl_meshes and data.face_count > 0:
                     from src.rendering.mesh import TexturedMesh
@@ -300,15 +321,19 @@ class WorldManager:
                             self.meshes[key] = (mesh, transform)
 
     def _simulate_water(self, focus_x: float, focus_z: float) -> None:
-        """Avança a água (uma onda de blocos a cada ``water_step_interval``) e refaz as malhas que mudaram."""
+        """Avança a água (uma onda de blocos a cada ``water_step_interval``) e refaz as malhas que mudaram.
+
+        A onda é avaliada aos poucos, ``WATER_CELLS_PER_FRAME`` células por quadro, e aplicada quando termina."""
         self._water_tick += 1.0 / 60.0
-        if self._water_tick < self.water_step_interval:
-            return
-        self._water_tick = 0.0
-        self._seed_water(focus_x, focus_z)
-        if not self.water.busy:
-            return
-        changed_cells = self.water.step()
+        if not self.water.stepping:
+            if self._water_tick < self.water_step_interval:
+                return
+            self._water_tick = 0.0
+            self._seed_water(focus_x, focus_z)
+            if not self.water.busy:
+                return
+            self.water.begin_step()
+        changed_cells = self.water.advance(WATER_CELLS_PER_FRAME)
         if not changed_cells:
             return
 
@@ -394,6 +419,9 @@ class WorldManager:
             self._chunk_revision += 1          # a máscara das sombras e o contorno veem a água nova
 
         if not self.create_gl_meshes:
+            return
+        if self.async_loading and self._worker_thread is not None and self._worker_thread.is_alive():
+            self._request_queue.put(("remesh", sorted(changed)))   # a worker refaz; o quadro só envia à GPU
             return
         from src.rendering.mesh import TexturedMesh
         for key in changed:

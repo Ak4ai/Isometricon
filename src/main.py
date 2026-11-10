@@ -4,6 +4,7 @@ import math
 import os
 import random
 import sys
+import time
 from typing import Optional
 
 # Garante que o diretório raiz e o diretório 'src' estejam no PYTHONPATH
@@ -55,6 +56,14 @@ if sys.platform == "win32":
 
 # Inicializa o pacote e seleciona o backend antes de importar OpenGL.
 import src
+
+import OpenGL  # depois do bootstrap do ``src`` (ele escolhe a plataforma do PyOpenGL)
+
+# O PyOpenGL confere glGetError depois de CADA chamada (~3 ms por quadro aqui); --gl-debug liga de volta.
+OpenGL.ERROR_CHECKING = "--gl-debug" in sys.argv
+# A thread dos chunks e da água é Python puro: com a troca padrão (5 ms) o quadro esperava o GIL várias vezes
+# seguidas a cada passo pequeno do numpy. Trocando mais vezes, o quadro volta logo.
+sys.setswitchinterval(0.0005)
 
 import glfw
 import OpenGL.GL as gl
@@ -956,12 +965,35 @@ def main() -> None:
     # --keys="150:E;200:Q": teclas apertadas (e soltas) num quadro, pelos mesmos caminhos do teclado (conferências)
     key_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--keys=")), "")
     key_steps = {}
+    key_holds = {}  # "120-300:W": a tecla fica apertada do quadro 120 ao 300 (andar num roteiro)
     for step in key_script.split(";"):
         frame_text, _, key_name = step.strip().partition(":")
-        if frame_text.isdigit() and hasattr(glfw, "KEY_" + key_name.strip().upper()):
-            key_steps.setdefault(int(frame_text), []).append(getattr(glfw, "KEY_" + key_name.strip().upper()))
+        key_code = getattr(glfw, "KEY_" + key_name.strip().upper(), None)
+        if key_code is None:
+            continue
+        start, _, end = frame_text.partition("-")
+        if start.isdigit() and end.isdigit():
+            key_holds.setdefault(int(start), []).append((key_code, glfw.PRESS))
+            key_holds.setdefault(int(end), []).append((key_code, glfw.RELEASE))
+        elif frame_text.isdigit():
+            key_steps.setdefault(int(frame_text), []).append(key_code)
+    # --frametimes=arquivo.csv: o tempo de cada quadro (ms), para achar os travamentos
+    frametimes_path = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--frametimes=")), "")
+    frametimes = []
+    frame_marks = []  # (seção, tempo) do quadro atual, com --frametimes
+    frame_sections = []
+
+    def mark(name):
+        if frametimes_path:
+            frame_marks.append((name, time.perf_counter()))
     while not window.should_close():
         dt = window.update_delta_time()
+        if frametimes_path:
+            if frame_marks:
+                frame_sections.append({n: (t - frame_marks[i - 1][1]) * 1000.0
+                                       for i, (n, t) in enumerate(frame_marks) if i})
+            frame_marks.clear()
+            mark("start")
         if menus.active:
             window.poll_events()
             if menus.result:
@@ -1062,6 +1094,7 @@ def main() -> None:
 
             # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
             world_manager.update(player_token.position[0], player_token.position[2])
+            mark("world_update")
             grid_revision = world_manager.get_loaded_chunk_revision()
             if (
                 not world_manager.has_pending_streaming_work()
@@ -1069,6 +1102,7 @@ def main() -> None:
             ):
                 revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
                 grid_renderer.sync_chunks(loaded_chunks, revision)
+            mark("grid_sync")
 
             # 3. Câmera acompanha o personagem fora do gesto de pan.
             if not pan_state["active"]:
@@ -1126,6 +1160,10 @@ def main() -> None:
         # Processar eventos de I/O
         # --------------------------------------------------------------
         window.poll_events()
+        for scripted_key, key_action in key_holds.pop(frame_index, ()):
+            window._on_key(window._window, scripted_key, 0, key_action, 0)
+        if frametimes_path:
+            frametimes.append(dt * 1000.0)
         for scripted_key in key_steps.pop(frame_index, ()):
             window._on_key(window._window, scripted_key, 0, glfw.PRESS, 0)
             window._on_key(window._window, scripted_key, 0, glfw.RELEASE, 0)
@@ -1241,11 +1279,15 @@ def main() -> None:
                 gl.glClearColor(0.08, 0.10, 0.13, 1.0)
         elif terrain_demo:
             # Espaço fechado do jogador: a máscara e a suavização do efeito
+            mark("misc")
             chunk_revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
             room_tracker.update(dt, player_token.position, loaded_chunks, chunk_revision,
                                 schematic_tool.layer.structures)
+            mark("room_tracker")
             room_renderer.update(dt, room_tracker)
+            mark("room_renderer")
             shadow_renderer.update(room_tracker)
+            mark("shadows")
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
             if voxel_provider is not None and not room_renderer.visible:
@@ -1273,6 +1315,7 @@ def main() -> None:
             shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
             shadow_renderer.apply(shader, model)
             room_renderer.apply(shader, model, view)
+            mark("room_apply_caps")
             # água: na passada 1 (esta) ela é descartada e o fundo recebe a luz que a atravessa; a 2 vem no fim
             shader.set_vec4("u_WaterRect", *water_rect)
             shader.set_float("u_Time", float(window.time))
@@ -1319,6 +1362,7 @@ def main() -> None:
             shader.set_mat4("u_SightInvModel", np.linalg.inv(np.asarray(model, dtype=np.float64)).astype(np.float32))
             world_manager.render(shader, model, view_projection)
             room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
+            mark("story_and_world_draw")
 
             # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
             if underground_mode:
@@ -1453,12 +1497,22 @@ def main() -> None:
                 os.makedirs(os.path.dirname(os.path.abspath(screenshot_path)), exist_ok=True)
                 img.save(screenshot_path)
                 print(f"[Screenshot] Frame capturado salvo em: {screenshot_path}")
+            if frametimes_path:
+                with open(frametimes_path, "w", encoding="utf-8") as handle:
+                    handle.write(chr(10).join(f"{value:.3f}" for value in frametimes))
+                names = sorted({n for row in frame_sections for n in row})
+                with open(frametimes_path + ".sections.csv", "w", encoding="utf-8") as handle:
+                    handle.write(",".join(names) + chr(10))
+                    for row in frame_sections:
+                        handle.write(",".join(f"{row.get(n, 0.0):.3f}" for n in names) + chr(10))
             break
 
+        mark("rest_draw")
         # --------------------------------------------------------------
         # Apresentar frame
         # --------------------------------------------------------------
         window.swap_buffers()
+        mark("swap")
 
     # ------------------------------------------------------------------
     # 8. Liberar recursos

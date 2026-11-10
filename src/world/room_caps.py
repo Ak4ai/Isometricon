@@ -109,6 +109,13 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         cut = occupied & ~interior & covers & ~furniture & ((ahead < -0.9) | ~toward_camera)
     else:
         cut = occupied & ~interior & ~furniture & covers & ~toward_camera
+    # parede da frente: a face de dentro olha o cômodo do lado oposto à câmera (pega a ponta junto à quina)
+    front_wall = np.zeros_like(interior)
+    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        if dx * flat[0] + dz * flat[1] > 0.3:
+            front_wall |= _shifted(interior, (dx, 0, dz))
+    band_ok = ys < story.cut_y if story is not None else True
+    cut |= occupied & ~interior & ~furniture & front_wall & band_ok
     if sight is not None:
         cut &= ys > sight.feet_y                          # a fileira dos pés fica (a borda da parede)
     if story is not None:
@@ -116,7 +123,8 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         cut |= occupied & (ys >= story.cut_y) & near & (~_behind_room(interior, room.origin, story, flat) | covers)
     if sight is not None:
         # a fileira dos pés (a borda da parede, os móveis no chão) fica; o piso de cima, na frente, sai
-        cut |= occupied & (ys > sight.feet_y) & covers & _in_corridor(occupied.shape, room.origin, sight)
+        candidates = occupied & (ys > sight.feet_y) & covers
+        cut |= _in_corridor(occupied.shape, room.origin, sight, candidates)
     return cut & ~window.doors if window.doors is not None else cut
 
 
@@ -132,18 +140,30 @@ def _behind_room(interior: np.ndarray, origin, story: StoryCut, flat) -> np.ndar
     return _reaches(floor, toward, CAMERA_STEPS)
 
 
-def _in_corridor(shape, origin, sight: SightCut) -> np.ndarray:
-    """As células (pelo centro) dentro do cilindro do corredor, como em ``sightCarved``."""
-    centers = np.stack(np.meshgrid(*(np.arange(n) + o + 0.5 for n, o in zip(shape, origin)), indexing="ij"), -1)
+def _in_corridor(shape, origin, sight: SightCut, candidates: Optional[np.ndarray] = None) -> np.ndarray:
+    """As células (pelo centro) dentro do cilindro do corredor, como em ``sightCarved``. Com ``candidates`` (bool),
+    só elas são medidas (o resto da janela fica False): a conta por célula é a parte cara."""
+    ys_ok = (np.arange(shape[1]) + origin[1]) >= sight.feet_y
+    pick = np.zeros(shape, dtype=bool) if candidates is None else candidates.copy()
+    if candidates is None:
+        pick[:, ys_ok, :] = True
+    else:
+        pick[:, ~ys_ok, :] = False
+    cells = np.argwhere(pick)
+    out = np.zeros(shape, dtype=bool)
+    if len(cells) == 0:
+        return out
+    centers = cells + np.asarray(origin, dtype=np.float64) + 0.5
     target = np.asarray(sight.target, dtype=np.float64)
     line = np.asarray(sight.camera, dtype=np.float64) - target
     direction = line / max(float(np.linalg.norm(line)), 1e-4)
     rel = centers - target
     t = rel @ direction
-    off = np.linalg.norm(rel - t[..., None] * direction, axis=-1)
+    off = np.linalg.norm(rel - t[:, None] * direction, axis=-1)
     radius = sight.radius * (0.75 + 0.25 * np.clip((t - 0.9) / 3.0, 0.0, 1.0))
-    ys = np.arange(shape[1])[None, :, None] + origin[1]
-    return (t >= 0.85) & (off < radius) & (ys >= sight.feet_y)  # a borda pontilhada inteira
+    inside = (t >= 0.85) & (off < radius)  # a borda pontilhada inteira
+    out[tuple(cells[inside].T)] = True
+    return out
 
 
 def hidden_cells(occupied: np.ndarray, interior: np.ndarray, view_dir) -> np.ndarray:
@@ -245,45 +265,61 @@ def _terrain_caps(window, visible, hidden, origin, atlas):
 
 
 def _structure_caps(window, visible, culling, origin, uv_lookup):
-    vertices, indices, base = [], [], 0
+    """As tampas das construções. Os cubos inteiros saem em lote (numpy, por bloco e face); só os blocos com forma
+    (laje, escada, porta) passam um a um, caixa por caixa."""
+    vertices, indices = [], []
     cache = {}
+    shapes = {}
+    base = 0
+
+    def uv_of(name, face_key):
+        key = (name, face_key)
+        if key not in cache:
+            cache[key] = uv_lookup(name, face_key)
+        return cache[key]
+
     for face, ((dx, dy, dz), normal, face_key, corners, uv_order) in enumerate(_STRUCTURE_FACES):
         mask = visible & _toward(culling, (dx, dy, dz)) & (window.owner >= 0)
-        for cell in np.argwhere(mask):
-            placed = window.structures[window.owner[tuple(cell)]]
-            world = cell + origin.astype(np.int64)
-            lx, ly, lz = (int(world[0]) - placed.origin[0], int(world[1]) - placed.origin[1],
-                          int(world[2]) - placed.origin[2])
-            block = placed.schematic.grid[ly, lz, lx]
-            center = cell.astype(np.float32) + origin + 0.5
-            boxes = shape_for(block)
-            if boxes is not None:
-                # um bloco com forma: só as faces das caixas que encostam, inteiras, no limite da célula
-                for box in boxes:
-                    if not box.covers_face(face):
-                        continue
-                    name = box.texture or block
-                    key = (name, face_key)
-                    if key not in cache:
-                        cache[key] = uv_lookup(name, face_key)
-                    vertices.append(box_face_quad(box, face, center - 0.5, cache[key]))
-                    indices.append(base + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32))
-                    base += 4
-                continue
-            key = (block, face_key)
-            if key not in cache:
-                cache[key] = uv_lookup(block, face_key)
-            u0, v0, u1, v1 = cache[key]
-            us, vs = (u0, u1), (v0, v1)
-            quad = np.empty((4, 11), dtype=np.float32)
-            for i, (corner, (cu, cv)) in enumerate(zip(corners, uv_order)):
-                quad[i, :3] = center + 0.5 * np.array(corner, dtype=np.float32)
-                quad[i, 3:6] = normal
-                quad[i, 6:8] = (us[cu], vs[cv])
-                quad[i, 8:11] = 1.0
-            vertices.append(quad)
-            indices.append(base + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32))
-            base += 4
+        cells = np.argwhere(mask)
+        if len(cells) == 0:
+            continue
+        owners = window.owner[tuple(cells.T)]
+        corner_offsets = 0.5 * np.asarray(corners, dtype=np.float32)            # (4, 3)
+        for index in np.unique(owners):
+            placed = window.structures[int(index)]
+            group = cells[owners == index]
+            local = group + np.asarray(origin, dtype=np.int64) - np.asarray(placed.origin)
+            names = placed.schematic.grid[local[:, 1], local[:, 2], local[:, 0]]
+            centers = group.astype(np.float32) + origin + 0.5
+            for name in set(names.tolist()):
+                pick = names == name
+                if name not in shapes:
+                    shapes[name] = shape_for(name)
+                boxes = shapes[name]
+                if boxes is not None:
+                    # um bloco com forma: só as faces das caixas que encostam, inteiras, no limite da célula
+                    for center in centers[pick]:
+                        for box in boxes:
+                            if not box.covers_face(face):
+                                continue
+                            vertices.append(box_face_quad(box, face, center - 0.5, uv_of(box.texture or name,
+                                                                                            face_key)))
+                            indices.append(base + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32))
+                            base += 4
+                    continue
+                u0, v0, u1, v1 = uv_of(name, face_key)
+                us, vs = (u0, u1), (v0, v1)
+                at = centers[pick]
+                count = len(at)
+                quad = np.empty((count, 4, 11), dtype=np.float32)
+                quad[:, :, :3] = at[:, None, :] + corner_offsets[None, :, :]
+                quad[:, :, 3:6] = normal
+                quad[:, :, 6:8] = np.array([(us[cu], vs[cv]) for cu, cv in uv_order], dtype=np.float32)
+                quad[:, :, 8:11] = 1.0
+                vertices.append(quad.reshape(-1, 11))
+                first = base + np.arange(count, dtype=np.uint32)[:, None] * 4
+                indices.append((first + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32)).ravel())
+                base += count * 4
     return _join(vertices, indices)
 
 

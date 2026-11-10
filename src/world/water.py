@@ -52,6 +52,7 @@ class WaterSimulation:
     def __init__(self, world: FluidWorld, budget: int = 512) -> None:
         self.world = world
         self.budget = budget                 # células reavaliadas por atualização, no máximo
+        self._step = None                    # atualização em andamento: (células, próxima, cache, decisões)
         self.levels: Dict[Cell, int] = {}    # só a água que não é fonte (1..7 ou FALLING); a fonte é o padrão
         self.heights: Dict[Cell, float] = {} # altura da superfície por célula, para a malha (fonte fica de fora)
         self._pending: deque[Cell] = deque()
@@ -192,15 +193,32 @@ class WaterSimulation:
     # ------------------------------------------------------------------ passo
     def step(self) -> Set[Cell]:
         """Uma atualização: reavalia as células marcadas a partir do mesmo estado; devolve as que mudaram."""
+        self.begin_step()
+        return self.advance(None)
+
+    @property
+    def stepping(self) -> bool:
+        """Há uma atualização começada e ainda não aplicada (``advance`` continua)."""
+        return self._step is not None
+
+    def begin_step(self) -> None:
+        """Separa as células da próxima atualização; ``advance`` avalia aos poucos e aplica no fim."""
         batch = []
         while self._pending and len(batch) < self.budget:
             cell = self._pending.popleft()
             self._queued.discard(cell)
             batch.append(cell)
+        self._step = (batch, 0, {}, [])
 
-        cache: Dict[Cell, Set[Tuple[int, int]]] = {}
-        decisions = []
-        for cell in batch:
+    def advance(self, limit: Optional[int]) -> Optional[Set[Cell]]:
+        """Avalia até ``limit`` células da atualização começada (``None``: todas). Quando a última foi avaliada,
+        aplica as mudanças e devolve as células que mudaram; antes disso devolve ``None``. Dividir assim tira o
+        travamento do quadro (cada célula custa ~40 µs em Python)."""
+        if self._step is None:
+            return set()
+        batch, index, cache, decisions = self._step
+        end = len(batch) if limit is None else min(len(batch), index + limit)
+        for cell in batch[index:end]:
             block = self.world.block(*cell)
             if block is None or block not in (BlockType.AIR, BlockType.WATER):
                 continue                      # sólido ou desconhecido: a água não entra
@@ -210,6 +228,10 @@ class WaterSimulation:
             desired = self._desired(cell, cache)
             if desired != current:
                 decisions.append((cell, desired))
+        if end < len(batch):
+            self._step = (batch, end, cache, decisions)
+            return None
+        self._step = None
 
         changed: Set[Cell] = set()
         for cell, desired in decisions:
