@@ -66,7 +66,7 @@ class StructureMeshes:
         if self.door_cells is None:
             return
         vertices, indices = StructureMesher.build_arrays(self.schematic, self.uv_lookup, center=False,
-                                                         cells=self.door_cells)
+                                                         cells=self.door_cells, cull=False)
         if self.doors is None:
             self.doors = TexturedMesh(vertices, indices)
         else:

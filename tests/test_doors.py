@@ -75,3 +75,21 @@ def test_the_tool_does_not_close_a_door_on_the_player():
     assert tool.toggle_door(door, player_cells=[(12, 3, 11)])   # abre
     assert not tool.toggle_door(door, player_cells=[(12, 3, 10)])  # parado dentro da porta: não fecha
     assert door.is_open
+
+
+def test_the_door_mesh_keeps_the_face_against_the_wall():
+    """A parede ao lado da porta pode sumir no corte de visão: a malha da porta não descarta faces pelo vizinho."""
+    import numpy as np
+    from src.world import Schematic
+    from src.world.structure_mesher import StructureMesher
+
+    grid = np.full((2, 1, 3), "minecraft:stone", dtype=object)
+    grid[0, 0, 1] = "minecraft:spruce_door[facing=north,half=lower,hinge=left,open=true]"
+    grid[1, 0, 1] = "minecraft:spruce_door[facing=north,half=upper,hinge=left,open=true]"
+    house = Schematic(3, 2, 1, grid, palette={}, name="porta")
+    doors = np.zeros((2, 1, 3), dtype=bool)
+    doors[:, 0, 1] = True
+    uv = lambda block, face: (0.0, 0.0, 1.0, 1.0)
+    _, culled = StructureMesher.build_arrays(house, uv, center=False, cells=doors)
+    _, full = StructureMesher.build_arrays(house, uv, center=False, cells=doors, cull=False)
+    assert len(full) // 6 == 12 and len(culled) < len(full)      # 2 metades x 6 faces, nenhuma descartada

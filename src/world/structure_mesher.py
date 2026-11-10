@@ -46,6 +46,7 @@ class StructureMesher:
         uv_lookup: UvLookup,
         center: bool = True,
         cells: Optional[np.ndarray] = None,
+        cull: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Gera (vértices float32, índices uint32) com as faces expostas ao ar.
 
@@ -55,6 +56,8 @@ class StructureMesher:
             center: Se True, centraliza a estrutura em torno da origem (0, 0, 0).
             cells: máscara [y, z, x] das células a desenhar (None = todas); o descarte de faces continua
                 vendo a construção inteira, então as partes desenhadas à parte se encaixam sem buracos.
+            cull: se False, nenhuma face é descartada pelo vizinho (as portas: a parede ao lado pode sumir no
+                corte de visão, e a face encostada nela, virada para dentro da parede, nunca aparece com ela lá).
         """
         w, h, l = schematic.width, schematic.height, schematic.length
         # Os centros dos blocos vão de 0 a dim-1: o meio deles está em (dim-1)/2
@@ -66,7 +69,8 @@ class StructureMesher:
         if cells is not None:
             occupied = occupied & cells
         padded = np.zeros((h + 2, l + 2, w + 2), dtype=bool)
-        padded[1:-1, 1:-1, 1:-1] = schematic.full_cube_mask
+        if cull:
+            padded[1:-1, 1:-1, 1:-1] = schematic.full_cube_mask
         shapes = {}
 
         uv_cache = {}

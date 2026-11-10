@@ -442,7 +442,8 @@ void main()
         // some só a borda do cômodo virada para a câmera (parede da frente, teto) que tapa o cômodo; o fundo, um
         // pilar ou um mezanino ficam. A decisão parte do CENTRO do bloco, e não do pixel: é a mesma para todas as
         // faces dele (partindo do pixel, uma parede fina era cortada em escada no meio da face).
-        if (!u_KeepVisible && here < 0.7 && u_RoomActive > roomDither())
+        // a fileira da parede na altura dos pés fica sempre: a borda que sobra tem a mesma altura em volta toda
+        if (!u_KeepVisible && here < 0.7 && blockCell.y > u_SightFeetY && u_RoomActive > roomDither())
         {
             vec3 c = blockCell + 0.5;
             // na metade da frente do cômodo (medida do centro dele) some tudo o que o tapa, até divisórias; do
@@ -453,6 +454,9 @@ void main()
                 discard;
         }
         float inside = here >= 0.2 ? 1.0 : 0.0;   // o espaço, a casca e a borda pela quina (64)
+        // do teto do andar para cima é outro andar: escurece como o lado de fora (a escada liga, mas não é o cômodo)
+        if (blockCell.y >= u_StoryCutY)
+            inside *= 1.0 - u_StoryActive;
         roomFactor = mix(1.0, mix(u_RoomExterior, 1.0, inside), u_RoomActive);
     }
 
