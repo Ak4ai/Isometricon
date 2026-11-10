@@ -399,8 +399,8 @@ bool sightCarved()
     }
     if (u_SightActive <= 0.001 || cell.y < u_SightFeetY)
         return false;
-    if (u_RoomActive > 0.001 && (!coversRoom(cell + 0.5) || (roomCell(cell + 0.5) > 0.7 && cell.y < u_SightFeetY + 1.0)))
-        return false;                                   // num cômodo, o corredor não corta o fundo nem um móvel no chão
+    if (u_RoomActive > 0.001 && (!coversRoom(cell + 0.5) || cell.y <= u_SightFeetY))
+        return false;                                   // num cômodo, o corredor não corta o fundo nem a borda da parede
     vec3 center = (u_SightModel * vec4(cell + 0.5, 1.0)).xyz;
     vec3 line = u_CameraPos - u_SightTarget;
     float len = length(line);

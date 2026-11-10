@@ -310,6 +310,7 @@ def story_ceiling(mask: RoomMask, position) -> Optional[int]:
         return None
     roof = mask.window.roof
     solid = mask.window.solid
+    doors = mask.window.doors
     ox, oy, oz = mask.origin
     x0, y0, z0 = (int(np.floor(float(v))) - o for v, o in zip(position, mask.origin))
     if not (0 <= x0 < WINDOW[0] and 0 <= z0 < WINDOW[2] and 0 <= y0 < WINDOW[1]):
@@ -324,8 +325,8 @@ def story_ceiling(mask: RoomMask, position) -> Optional[int]:
             x, z = x0 + dx, z0 + dz
             if not (0 <= x < WINDOW[0] and 0 <= z < WINDOW[2]):
                 continue
-            if solid[x, y0:first, z].any():
-                continue  # parede ou móvel na altura do corpo: não é o teto deste espaço
+            if solid[x, y0:first, z].any() or (doors is not None and doors[x, y0:first, z].any()):
+                continue  # parede, móvel ou porta na altura do corpo: o que vem em cima não é o teto deste espaço
             hits = np.flatnonzero(roof[x, first:top, z])
             if hits.size and (best is None or hits[0] < best):
                 best = int(hits[0])

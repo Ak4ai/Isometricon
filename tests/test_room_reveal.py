@@ -349,3 +349,21 @@ def test_an_open_door_does_not_join_two_rooms():
     assert apart.data[13 - ox, 3 - oy, 13 - oz] == INTERIOR
     in_door = compute_room(solid, roof, origin, (10.5, 3.0, 13.5), doors=doors)
     assert in_door.active                                         # parado na porta, ainda está num cômodo
+
+
+def test_the_lintel_over_a_door_is_not_the_story_ceiling():
+    """Perto da porta, a parede em cima do vão não é o teto do andar (senão as paredes do fundo encolhem)."""
+    from src.world.room_reveal import compute_room, extract_window_cells, story_ceiling, window_origin
+
+    def room(b):
+        box(b, 10, 10)                                   # teto em y = 7
+        b[10, 3:5, 13] = BlockType.AIR                   # vão da porta, verga em y = 5
+    position = (11.5, 3.0, 13.5)
+    origin = window_origin(position)
+    cells = extract_window_cells(origin, world(room))
+    ox, oy, oz = origin
+    cells.doors = np.zeros_like(cells.solid)
+    cells.doors[10 - ox, 3 - oy:5 - oy, 13 - oz] = True
+    mask = compute_room(cells.solid, cells.roof, origin, position, doors=cells.doors)
+    mask.window = cells
+    assert story_ceiling(mask, position) == 7

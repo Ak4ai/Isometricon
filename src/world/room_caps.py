@@ -115,8 +115,8 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < story.radius ** 2  # com o pontilhado
         cut |= occupied & (ys >= story.cut_y) & near & (~_behind_room(interior, room.origin, story, flat) | covers)
     if sight is not None:
-        low = furniture & (ys < sight.feet_y + 1)        # móvel no chão fica; o piso de cima, na frente, sai
-        cut |= occupied & ~low & covers & _in_corridor(occupied.shape, room.origin, sight)
+        # a fileira dos pés (a borda da parede, os móveis no chão) fica; o piso de cima, na frente, sai
+        cut |= occupied & (ys > sight.feet_y) & covers & _in_corridor(occupied.shape, room.origin, sight)
     return cut & ~window.doors if window.doors is not None else cut
 
 
