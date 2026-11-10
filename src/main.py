@@ -597,11 +597,12 @@ def main() -> None:
         near=0.1,
         far=400.0,
     )
-    if terrain_demo and "--cam=dungeons" in sys.argv[1:]:
-        # câmera de teste, no estilo de um dungeon crawler: de cima, em perspectiva e fora dos 45° da isométrica
+    if terrain_demo and "--cam=ortho" not in sys.argv[1:]:
+        # câmera do terreno no padrão do Isocraft: yaw 45°, pitch 30°, FOV estreito de 18° (quase ortográfica).
+        # Page Up/Down inclinam de 15° a 75°; --cam=ortho volta à isométrica exata
         camera.perspective = True
-        camera.pitch = math.radians(58.0)
-        camera.yaw = math.radians(30.0)
+        camera.pitch = math.radians(30.0)
+        camera.yaw = math.radians(45.0)
 
 
     # Estado utilizado pelo pan com botão central do mouse.

@@ -82,14 +82,28 @@ class IsometricCamera:
         # Valores possíveis: 0, 90, 180, 270.
         self.board_rotation = 0
         self.current_rotation = 0
-        # Perspectiva (câmera de teste): a distância até o foco vira real e o ortho_size passa a ser a meia-altura
-        # visível no plano do foco, então o zoom e o enquadramento continuam os mesmos.
+        # Perspectiva (a do Isocraft: FOV estreito e fixo). O zoom muda a distância até o foco, de modo que o
+        # ortho_size continue sendo a meia-altura visível no plano do foco e o enquadramento seja o de sempre.
         self.perspective = False
-        self.eye_distance = 14.0
+        self.fov_degrees = 18.0
         self.rotation_speed = 10.0  # Velocidade de rotação do tabuleiro
     # ------------------------------------------------------------------
     # Propriedades da câmera
     # ------------------------------------------------------------------
+    PITCH_STEP_DEGREES = 5.0
+    MIN_PITCH_DEGREES = 15.0
+    MAX_PITCH_DEGREES = 75.0
+
+    @property
+    def eye_distance(self) -> float:
+        """Distância da câmera ao foco na perspectiva: a que enquadra ``ortho_size`` com o FOV fixo."""
+        return self.ortho_size / math.tan(math.radians(self.fov_degrees) / 2.0)
+
+    def tilt(self, degrees: float) -> None:
+        """Inclina a câmera (só na perspectiva), dentro de 15° a 75°."""
+        value = math.degrees(self.pitch) + float(degrees)
+        self.pitch = math.radians(min(max(value, self.MIN_PITCH_DEGREES), self.MAX_PITCH_DEGREES))
+
     @property
     def yaw_degrees(self) -> float:
         #Retorna o yaw em graus
@@ -185,7 +199,7 @@ class IsometricCamera:
             )
         aspect = float(width) / float(height)
         if self.perspective:
-            fovy = 2.0 * math.atan(self.ortho_size / self.eye_distance)
+            fovy = math.radians(self.fov_degrees)
             return mat4_perspective(fovy, aspect, self.near, self.far)
         vertical_size = self.ortho_size
         horizontal_size = vertical_size * aspect
@@ -329,6 +343,9 @@ class IsometricCamera:
         # GLFW_KEY_E = 69
         if key == 69:
             self.rotate_right()
+            return True
+        if self.perspective and key in (266, 267):  # Page Up / Page Down: inclina a câmera
+            self.tilt(self.PITCH_STEP_DEGREES if key == 266 else -self.PITCH_STEP_DEGREES)
             return True
         if key in (61, 334, 107):  # '=' / keypad add
             self.zoom_in()
