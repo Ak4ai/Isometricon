@@ -86,24 +86,57 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
     return clamp(occ / 3.2, 0.0, 1.0);
 }
 
-// Fração da luz do sol que chega ao ponto (1 = sol inteiro). Três raios um pouco inclinados dão uma borda macia.
+// Ruído de gradiente intercalado: um valor estável 0..1 por pixel, para girar o cone de raios sem formar padrão.
+float interleavedNoise(vec2 pixel)
+{
+    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
+}
+
+// Um raio exato pelos voxels (Amanatides-Woo): 1 se o sol chega, 0 se um bloco sólido está no caminho.
+float traceSun(vec3 worldPos, vec3 dir)
+{
+    vec3 q = worldPos - u_ShadowOrigin;                       // em células da janela
+    ivec3 cell = ivec3(floor(q));
+    ivec3 size = ivec3(u_ShadowSize);
+    vec3 safe = vec3(abs(dir.x) < 1e-5 ? 1e-5 : dir.x, abs(dir.y) < 1e-5 ? 1e-5 : dir.y, abs(dir.z) < 1e-5 ? 1e-5 : dir.z);
+    ivec3 stepDir = ivec3(sign(safe));
+    vec3 tDelta = abs(1.0 / safe);
+    vec3 frac = q - floor(q);
+    vec3 tMax = vec3(safe.x > 0.0 ? 1.0 - frac.x : frac.x,
+                     safe.y > 0.0 ? 1.0 - frac.y : frac.y,
+                     safe.z > 0.0 ? 1.0 - frac.z : frac.z) * tDelta;
+    for (int i = 0; i < 56; i++)
+    {
+        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
+            return 1.0;                                       // saiu da janela (para cima ou para longe): sol livre
+        if (texelFetch(u_ShadowMask, cell, 0).r > 0.5)
+            return 0.0;
+        if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
+        else if (tMax.y < tMax.z)               { cell.y += stepDir.y; tMax.y += tDelta.y; }
+        else                                    { cell.z += stepDir.z; tMax.z += tDelta.z; }
+    }
+    return 1.0;
+}
+
+// Fração da luz do sol que chega ao ponto (1 = sol inteiro). O sol tem tamanho: um cone de raios, girado por pixel,
+// dá a penumbra suave (nítida junto ao bloco, macia longe dele) como numa sombra com filtragem.
 float sunVisibility(vec3 worldPos, vec3 worldNormal, vec3 sunDir)
 {
-    vec3 tilt[3] = vec3[3](vec3(0.0), vec3(0.09, 0.0, -0.05), vec3(-0.09, 0.0, 0.05));
+    const int RAYS = 8;
+    const float SOFTNESS = 0.085;                              // abertura do cone (≈5°)
+    vec3 origin = worldPos + worldNormal * 0.04;
+    vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(sunDir, t1);
+    float spin = interleavedNoise(gl_FragCoord.xy) * 6.2831853;
     float visible = 0.0;
-    for (int k = 0; k < 3; k++)
+    for (int k = 0; k < RAYS; k++)
     {
-        vec3 d = normalize(sunDir + tilt[k]);
-        vec3 p = worldPos + worldNormal * 0.1 + d * 0.45;
-        float lit = 1.0;
-        for (int i = 0; i < 16; i++)
-        {
-            if (shadowCell(p) > 0.5) { lit = 0.0; break; }
-            p += d * 0.75;
-        }
-        visible += lit;
+        float r = sqrt((float(k) + 0.5) / float(RAYS)) * SOFTNESS;
+        float a = float(k) * 2.3999632 + spin;                 // ângulo áureo: espalha os raios no disco
+        vec3 d = normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r);
+        visible += traceSun(origin, d);
     }
-    return visible / 3.0;
+    return visible / float(RAYS);
 }
 
 // Brilho da face: topo 1.0, faces em Z 0.82, faces em X 0.64, fundo 0.5 (como no Minecraft), contínuo na normal.
