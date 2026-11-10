@@ -368,9 +368,11 @@ bool storyCovers(vec3 cell)
     return coversRoom(c);
 }
 
+uniform bool u_KeepVisible;      // portas: nenhum corte de visão as remove
+
 bool sightCarved()
 {
-    if (u_SightActive <= 0.001 && u_StoryActive <= 0.001)
+    if (u_KeepVisible || (u_SightActive <= 0.001 && u_StoryActive <= 0.001))
         return false;
     vec3 worldPos = (u_SightInvModel * vec4(v_FragPos, 1.0)).xyz;
     vec3 worldNormal = normalize(mat3(u_SightInvModel) * v_Normal);
@@ -427,7 +429,7 @@ void main()
         // some só a borda do cômodo virada para a câmera (parede da frente, teto) que tapa o cômodo; o fundo, um
         // pilar ou um mezanino ficam. A decisão parte do CENTRO do bloco, e não do pixel: é a mesma para todas as
         // faces dele (partindo do pixel, uma parede fina era cortada em escada no meio da face).
-        if (here <= 0.9 && u_RoomActive > roomDither())
+        if (!u_KeepVisible && here <= 0.9 && u_RoomActive > roomDither())
         {
             vec3 c = blockCell + 0.5;
             if (coversRoom(c) && facesCamera(c))

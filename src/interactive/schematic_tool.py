@@ -72,10 +72,15 @@ class StructureMeshes:
         else:
             self.doors.update_buffers(vertices, indices)
 
-    def draw(self) -> None:
+    def draw(self, shader=None) -> None:
         self.main.draw()
         if self.doors is not None:
+            # as portas escapam dos cortes de visão (cômodo, andar, corredor): sempre se vê por onde se entra
+            if shader is not None:
+                shader.set_bool("u_KeepVisible", True)
             self.doors.draw()
+            if shader is not None:
+                shader.set_bool("u_KeepVisible", False)
 
     def delete(self) -> None:
         for mesh in (self.main, self.doors):
@@ -311,7 +316,10 @@ class SchematicTool:
             if placed.mesh is not None:
                 ox, oy, oz = placed.origin
                 shader.set_mat4("u_Model", base_model @ mat4_translate(ox + 0.5, oy + 0.5, oz + 0.5))
-                placed.mesh.draw()
+                if isinstance(placed.mesh, StructureMeshes):
+                    placed.mesh.draw(shader)
+                else:
+                    placed.mesh.draw()
 
         if self.preview is not None:
             ox, oy, oz = self.preview.origin
