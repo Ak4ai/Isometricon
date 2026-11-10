@@ -321,6 +321,31 @@ uniform float u_StoryActive;     // 0 desligado; 0..1 intensidade (entra e sai c
 uniform float u_StoryCutY;       // célula y (mundo) do teto do andar: dela para cima, corta
 uniform vec2 u_StoryCenter;      // x, z (mundo) do personagem
 uniform float u_StoryRadius;     // raio do círculo cortado, em blocos
+uniform vec3 u_StoryView;        // para onde a câmera olha, no mundo
+
+// Casa de bonecas: acima do teto do andar, a metade da frente (do lado da câmera) some inteira, e a de trás só
+// some se tapa o andar (o raio da câmera, seguindo dela para dentro da cena, cai no espaço do personagem). Assim
+// as paredes do fundo ficam de pé, inteiras, e o teto e o andar de cima sobre o cômodo somem.
+bool storyCovers(vec3 cell)
+{
+    vec3 c = cell + 0.5;
+    vec2 f = normalize(u_StoryView.xz);
+    float behind = dot(c.xz - u_StoryCenter, f);       // > 0: atrás do personagem, longe da câmera
+    if (behind < 0.5)
+        return true;
+    if (u_RoomActive <= 0.001)
+        return false;
+    vec3 q = c + u_StoryView * 0.9;
+    for (int i = 0; i < 64; i++)
+    {
+        if (q.y < u_SightFeetY)
+            break;                                      // já passou do chão do andar
+        if (q.y < u_StoryCutY && roomCell(q) > 0.9)
+            return true;
+        q += u_StoryView * 0.5;
+    }
+    return false;
+}
 
 bool sightCarved()
 {
@@ -329,7 +354,7 @@ bool sightCarved()
     vec3 worldPos = (u_SightInvModel * vec4(v_FragPos, 1.0)).xyz;
     vec3 worldNormal = normalize(mat3(u_SightInvModel) * v_Normal);
     vec3 cell = floor(worldPos - worldNormal * 0.05);
-    if (u_StoryActive > 0.001 && cell.y >= u_StoryCutY)
+    if (u_StoryActive > 0.001 && cell.y >= u_StoryCutY && storyCovers(cell))
     {
         float d = length(cell.xz + 0.5 - u_StoryCenter);
         float keep = smoothstep(u_StoryRadius - 3.0, u_StoryRadius, d);
@@ -376,7 +401,11 @@ void main()
         // a célula do bloco que está sendo desenhado (um pouco para dentro da face)
         vec3 blockCell = floor(worldPos - worldNormal * 0.05);
         float here = roomCell(blockCell + 0.5);
-        if (here <= 0.9 && u_RoomActive > roomDither())
+        // na casa de bonecas (corte do andar ligado), o que fica atrás do personagem e abaixo do teto fica de pé:
+        // um mezanino, um pilar ou um móvel do fundo nunca tapam o personagem (só o chão atrás deles)
+        bool backOfStory = u_StoryActive > 0.001 && blockCell.y < u_StoryCutY
+                        && dot(blockCell.xz + 0.5 - u_StoryCenter, normalize(u_StoryView.xz)) > 0.5;
+        if (here <= 0.9 && !backOfStory && u_RoomActive > roomDither())
         {
             // O raio parte do CENTRO do bloco, e não do pixel: a decisão é a mesma para todas as faces
             // do bloco. Partindo do pixel, uma parede fina com mais espaço atrás era cortada em escada
@@ -384,7 +413,9 @@ void main()
             vec3 q = blockCell + 0.5 + u_ViewDir * 0.9;
             for (int i = 0; i < 64; i++)
             {
-                if (roomCell(q) > 0.9)
+                // com o corte do andar ligado, só conta o espaço do andar do personagem (abaixo do teto): o andar
+                // de cima, ligado pela escada, não faz sumir as paredes do fundo
+                if (roomCell(q) > 0.9 && (u_StoryActive <= 0.001 || q.y < u_StoryCutY))
                     discard;
                 q += u_ViewDir * 0.5;
             }
