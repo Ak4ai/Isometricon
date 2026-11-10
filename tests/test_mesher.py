@@ -136,7 +136,7 @@ def test_corner(position):
     (BlockType.STONE, BlockType.WOOD, 10),
     (BlockType.STONE, BlockType.WATER, 11),
     (BlockType.LEAVES, BlockType.STONE, 11),
-    (BlockType.WATER, BlockType.WATER, 12),
+    (BlockType.WATER, BlockType.WATER, 10),  # entre duas águas não há face (a água é translúcida)
     (BlockType.LEAVES, BlockType.LEAVES, 12),
     (BlockType.WATER, BlockType.LEAVES, 12),
 ])
@@ -150,7 +150,8 @@ def test_mixed_types_and_transparency(first, second, faces):
         color = np.float32(get_block_color(block))
         actual = np.count_nonzero(np.all(data.vertices[:, 8:11] == color, axis=1))
         multiplier = 2 if first == second else 1
-        assert actual == multiplier * (6 - int(is_opaque(neighbor))) * 4
+        hidden = int(is_opaque(neighbor)) or int(block == neighbor == BlockType.WATER)
+        assert actual == multiplier * (6 - hidden) * 4
 
 
 @pytest.mark.parametrize('block,opaque', [

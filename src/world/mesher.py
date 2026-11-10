@@ -100,8 +100,9 @@ class ChunkMesher:
     """Converte voxels em quads visíveis: O(n) tempo, O(f) memória de saída.
 
     Cada voxel não AIR consulta até seis vizinhos; somente vizinhos opacos
-    descartam faces. WATER/LEAVES geram geometria, mas não ocultam faces,
-    inclusive entre dois blocos transparentes do mesmo tipo.
+    descartam faces. WATER/LEAVES geram geometria, mas não ocultam faces dos
+    outros blocos. Entre duas águas não há face: a água é desenhada
+    translúcida, e uma face interna seria uma camada a mais no meio dela.
     """
 
     def __init__(self, atlas: object = None, ambient_occlusion: bool = False) -> None:
@@ -130,6 +131,14 @@ class ChunkMesher:
 
         padded = np.zeros((18, 18, 18), dtype=bool)
         padded[1:17, 1:17, 1:17] = _OPAQUE_LUT[blocks]
+        water = int(BlockType.WATER)
+        padded_water = np.zeros((18, 18, 18), dtype=bool)
+        padded_water[1:17, 1:17, 1:17] = blocks == water
+
+        def shell(i: int, j: int, k: int, value) -> None:
+            """Um vizinho de fora do chunk: se esconde faces (opaco) e se é água."""
+            padded[i, j, k] = is_opaque(value)
+            padded_water[i, j, k] = int(value) == water
 
         if neighbor_at is not None and self.ambient_occlusion:
             # o AO também olha as arestas e os cantos do cubo de 18³: a casca inteira vem do mundo
@@ -138,43 +147,44 @@ class ChunkMesher:
                     for k in range(-1, 17):
                         if 0 <= i < 16 and 0 <= j < 16 and 0 <= k < 16:
                             continue
-                        padded[i + 1, j + 1, k + 1] = is_opaque(
-                            neighbor_at(origin_x + i, origin_y + j, origin_z + k))
+                        shell(i + 1, j + 1, k + 1, neighbor_at(origin_x + i, origin_y + j, origin_z + k))
         elif neighbor_at is not None:
             y_idx, z_idx = np.where(blocks[15, :, :] != BlockType.AIR)
             for y, z in zip(y_idx, z_idx):
-                padded[17, y + 1, z + 1] = is_opaque(neighbor_at(origin_x + 16, origin_y + y, origin_z + z))
+                shell(17, y + 1, z + 1, neighbor_at(origin_x + 16, origin_y + y, origin_z + z))
 
             y_idx, z_idx = np.where(blocks[0, :, :] != BlockType.AIR)
             for y, z in zip(y_idx, z_idx):
-                padded[0, y + 1, z + 1] = is_opaque(neighbor_at(origin_x - 1, origin_y + y, origin_z + z))
+                shell(0, y + 1, z + 1, neighbor_at(origin_x - 1, origin_y + y, origin_z + z))
 
             x_idx, z_idx = np.where(blocks[:, 15, :] != BlockType.AIR)
             for x, z in zip(x_idx, z_idx):
-                padded[x + 1, 17, z + 1] = is_opaque(neighbor_at(origin_x + x, origin_y + 16, origin_z + z))
+                shell(x + 1, 17, z + 1, neighbor_at(origin_x + x, origin_y + 16, origin_z + z))
 
             x_idx, z_idx = np.where(blocks[:, 0, :] != BlockType.AIR)
             for x, z in zip(x_idx, z_idx):
-                padded[x + 1, 0, z + 1] = is_opaque(neighbor_at(origin_x + x, origin_y - 1, origin_z + z))
+                shell(x + 1, 0, z + 1, neighbor_at(origin_x + x, origin_y - 1, origin_z + z))
 
             x_idx, y_idx = np.where(blocks[:, :, 15] != BlockType.AIR)
             for x, y in zip(x_idx, y_idx):
-                padded[x + 1, y + 1, 17] = is_opaque(neighbor_at(origin_x + x, origin_y + y, origin_z + 16))
+                shell(x + 1, y + 1, 17, neighbor_at(origin_x + x, origin_y + y, origin_z + 16))
 
             x_idx, y_idx = np.where(blocks[:, :, 0] != BlockType.AIR)
             for x, y in zip(x_idx, y_idx):
-                padded[x + 1, y + 1, 0] = is_opaque(neighbor_at(origin_x + x, origin_y + y, origin_z - 1))
+                shell(x + 1, y + 1, 0, neighbor_at(origin_x + x, origin_y + y, origin_z - 1))
 
         non_air = (blocks != BlockType.AIR)
-
-        vis = [
-            non_air & (~padded[2:18, 1:17, 1:17]),  # +X (0)
-            non_air & (~padded[0:16, 1:17, 1:17]),  # -X (1)
-            non_air & (~padded[1:17, 2:18, 1:17]),  # +Y (2)
-            non_air & (~padded[1:17, 0:16, 1:17]),  # -Y (3)
-            non_air & (~padded[1:17, 1:17, 2:18]),  # +Z (4)
-            non_air & (~padded[1:17, 1:17, 0:16]),  # -Z (5)
-        ]
+        is_water = padded_water[1:17, 1:17, 1:17]
+        neighbours = (
+            np.s_[2:18, 1:17, 1:17],  # +X (0)
+            np.s_[0:16, 1:17, 1:17],  # -X (1)
+            np.s_[1:17, 2:18, 1:17],  # +Y (2)
+            np.s_[1:17, 0:16, 1:17],  # -Y (3)
+            np.s_[1:17, 1:17, 2:18],  # +Z (4)
+            np.s_[1:17, 1:17, 0:16],  # -Z (5)
+        )
+        # a face some atrás de um vizinho opaco, e a da água também atrás de outra água
+        vis = [non_air & ~padded[n] & ~(is_water & padded_water[n]) for n in neighbours]
 
         total_faces = sum(int(v.sum()) for v in vis)
         if total_faces == 0:

@@ -76,7 +76,7 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
         for (int k = 0; k < 4; k++)
         {
             float t = 0.3 + 0.55 * float(k);
-            if (shadowCell(base + vec3(dir.x, 0.0, dir.y) * t) > 0.5)
+            if (shadowCell(base + vec3(dir.x, 0.0, dir.y) * t) > 0.75)
             {
                 occ += axis * (1.0 - 0.22 * float(k));           // a primeira parede achada basta
                 break;
@@ -86,7 +86,9 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
     return clamp(occ / 3.2, 0.0, 1.0);
 }
 
-// Um raio exato pelos voxels (Amanatides-Woo): 1 se o sol chega, 0 se um bloco sólido está no caminho.
+// Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
+// água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol).
+const float WATER_TRANSMIT = 0.82;
 float traceSun(vec3 worldPos, vec3 dir)
 {
     vec3 q = worldPos - u_ShadowOrigin;                       // em células da janela
@@ -99,17 +101,87 @@ float traceSun(vec3 worldPos, vec3 dir)
     vec3 tMax = vec3(safe.x > 0.0 ? 1.0 - frac.x : frac.x,
                      safe.y > 0.0 ? 1.0 - frac.y : frac.y,
                      safe.z > 0.0 ? 1.0 - frac.z : frac.z) * tDelta;
+    float light = 1.0;
     for (int i = 0; i < 56; i++)
     {
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
-            return 1.0;                                       // saiu da janela (para cima ou para longe): sol livre
-        if (texelFetch(u_ShadowMask, cell, 0).r > 0.5)
+            return light;                                     // saiu da janela (para cima ou para longe): sol livre
+        float value = texelFetch(u_ShadowMask, cell, 0).r;
+        if (value > 0.75)
             return 0.0;
+        if (value > 0.25)
+            light *= WATER_TRANSMIT;
         if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
         else if (tMax.y < tMax.z)               { cell.y += stepDir.y; tMax.y += tDelta.y; }
         else                                    { cell.z += stepDir.z; tMax.z += tDelta.z; }
     }
-    return 1.0;
+    return light;
+}
+
+// --------------------------------------------------------------------------------------------------- água
+// A água é desenhada em duas passadas (ver src/main.py): na 1 (opaca) ela é descartada e o fundo recebe a luz que a
+// atravessa; na 2 só ela é desenhada, translúcida, sobre o que já está na tela. Um fragmento é água pela região da
+// textura dela no atlas.
+uniform int u_WaterPass;        // 0 desligado (personagem), 1 passada opaca, 2 passada da água
+uniform vec4 u_WaterRect;       // (u mín, v mín, u máx, v máx) da textura da água no atlas
+uniform float u_Time;           // segundos, para as ondas e as cáusticas
+uniform vec3 u_CameraPos;       // olho da câmera, no espaço desenhado
+
+bool isWaterTexel(vec2 uv)
+{
+    return uv.x >= u_WaterRect.x - 1e-4 && uv.x <= u_WaterRect.z + 1e-4
+        && uv.y >= u_WaterRect.y - 1e-4 && uv.y <= u_WaterRect.w + 1e-4;
+}
+
+bool insideShadowWindow(vec3 worldPos)
+{
+    vec3 c = floor(worldPos - u_ShadowOrigin);
+    return all(greaterThanEqual(c, vec3(0.0))) && all(lessThan(c, u_ShadowSize));
+}
+
+bool waterCell(vec3 worldPos)
+{
+    float value = shadowCell(worldPos);
+    return value > 0.25 && value < 0.75;
+}
+
+// Quantos blocos de água há a partir de ``start`` seguindo ``dir`` (para cima: a coluna sobre o fundo; para baixo: a
+// profundidade sob a superfície).
+float waterRun(vec3 start, vec3 dir)
+{
+    float n = 0.0;
+    for (int i = 0; i < 16; i++)
+    {
+        if (!waterCell(start + dir * float(i))) break;
+        n += 1.0;
+    }
+    return n;
+}
+
+// Cáusticas: as linhas de luz que a superfície ondulada concentra no fundo. Camadas de ondas que se cruzam, presas à
+// grade de texels (16 por bloco) para ficarem com cara de pixel, como o resto do mundo.
+float caustics(vec2 p, float t)
+{
+    p = (floor(p * 16.0) + 0.5) / 16.0;
+    vec2 q = p * 1.6;
+    float c = 0.0;
+    for (int i = 0; i < 3; i++)
+    {
+        float fi = float(i);
+        q += vec2(sin(q.y * 1.9 + t * 0.85 + fi * 1.7), cos(q.x * 1.7 - t * 0.75 + fi * 2.3)) * 0.55;
+        c += abs(sin(q.x + q.y + t * 0.3));
+    }
+    c = 1.0 - c / 3.0;                                          // claro onde as ondas se alinham
+    return smoothstep(0.62, 0.95, c);
+}
+
+// A normal da superfície com ondas pequenas (soma de senos no plano), também presa aos texels.
+vec3 waveNormal(vec2 p, float t)
+{
+    p = (floor(p * 16.0) + 0.5) / 16.0;
+    float dx = 0.055 * cos(p.x * 2.1 + t * 1.3) + 0.035 * cos((p.x + p.y) * 3.3 - t * 1.7) + 0.02 * cos(p.x * 5.7 + t * 2.1);
+    float dz = 0.055 * cos(p.y * 1.9 - t * 1.1) + 0.035 * cos((p.x - p.y) * 2.9 + t * 1.5) + 0.02 * cos(p.y * 6.1 - t * 2.3);
+    return normalize(vec3(-dx, 1.0, -dz));
 }
 
 // Sombras "em pixel", como nos shader packs de Minecraft: o ponto da face é levado ao centro do seu texel (16 por
@@ -241,6 +313,10 @@ void main()
     if (texColor.a < 0.1) {
         discard;
     }
+    bool water = u_WaterPass > 0 && isWaterTexel(v_TexCoord);
+    if ((u_WaterPass == 1 && water) || (u_WaterPass == 2 && !water)) {
+        discard;
+    }
 
     // Espaço do jogador: o que está fora é escurecido, e o que tapa a vista dele (teto, parede
     // da frente, terra por cima) some. Um fragmento tapa se, seguindo o raio da câmera para dentro
@@ -309,22 +385,36 @@ void main()
         underside_shadow = mix(0.68, 1.0, smoothstep(-0.15, 0.35, norm.y));
     }
     vec3 lighting = (u_AmbientColor + diffuse) * underside_shadow;
+    float sunVis = 1.0;
+    vec3 worldPos = v_FragPos;
+    vec3 worldNormal = norm;
+    float waterAbove = 0.0;           // blocos de água sobre este fragmento (0 fora da água)
     if (u_WorldStyle) {
-        float sunVis = 1.0;
         float contact = 0.0;
         if (u_ShadowStrength > 0.001)
         {
-            vec3 worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
+            worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
             vec3 exactPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
-            vec3 worldPos = snapToTexel(exactPos, worldNormal);
+            worldPos = snapToTexel(exactPos, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
-            if (dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
+            if (dot(norm, lightDir) > 0.02 || water)  // a face de costas para o sol já é sombra (a água não tem costas)
             {
                 vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
                 sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld);
             }
+            if (!water)
+                waterAbove = waterRun(worldPos + worldNormal * 0.05, vec3(0.0, 1.0, 0.0));
         }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
+        if (waterAbove > 0.0)
+        {
+            // o fundo debaixo da água: a luz chega tingida (a água absorve primeiro o vermelho) e as ondas da
+            // superfície a concentram em cáusticas, mais fracas quanto mais fundo
+            vec3 absorb = exp(-waterAbove * vec3(0.38, 0.14, 0.07));
+            float sunDown = sunVis * exp(-waterAbove * 0.22);
+            lighting = lighting * mix(vec3(0.55, 0.78, 0.95), vec3(1.0), absorb.g) * absorb
+                     + vec3(0.85, 0.97, 0.88) * caustics(worldPos.xz, u_Time) * 0.85 * sunDown;
+        }
     }
 
     if (u_UndergroundMode) {
@@ -383,6 +473,30 @@ void main()
         // cores um pouco mais vivas, sem sair do visual do Minecraft
         float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
         albedo = clamp(mix(vec3(luma), albedo, 1.14), 0.0, 1.0);
+    }
+
+    if (u_WaterPass == 2)
+    {
+        // A superfície: cor pela profundidade (rasa e clara, funda e escura), deixa ver o fundo onde é rasa, reflete o
+        // céu mais em ângulo raso (Fresnel) e brilha onde reflete o sol.
+        bool top = worldNormal.y > 0.5;
+        vec3 n = top ? transpose(mat3(u_ShadowInvModel)) * waveNormal(worldPos.xz, u_Time) : norm;
+        vec3 v = normalize(u_CameraPos - v_FragPos);
+        // fora da janela da máscara não se sabe o fundo: vale como água funda (não deixa ver um fundo sem tinta)
+        vec3 below = worldPos - vec3(0.0, 0.5, 0.0);
+        float depth = (u_ShadowStrength > 0.001 && insideShadowWindow(below))
+                    ? waterRun(below, vec3(0.0, -1.0, 0.0)) : 6.0;
+        float deep = 1.0 - exp(-(depth + 0.5) * 0.30);
+        float detail = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 body = mix(vec3(0.26, 0.66, 0.84), vec3(0.07, 0.24, 0.50), deep) * mix(1.0, detail * 1.5, 0.25);
+        float fresnel = 0.03 + 0.97 * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 5.0);
+        vec3 r = reflect(-v, n);
+        vec3 sky = mix(vec3(0.62, 0.76, 0.92), vec3(0.30, 0.50, 0.86), clamp(r.y, 0.0, 1.0));
+        float glint = pow(max(dot(r, lightDir), 0.0), 140.0) * 1.8 * sunVis;
+        vec3 color = mix(body * lighting, sky * mix(0.55, 1.0, sunVis), fresnel) + vec3(1.0, 0.95, 0.82) * glint;
+        float alpha = clamp(mix(0.22, 0.90, deep) + fresnel * 0.40 + glint, 0.0, 1.0);
+        FragColor = vec4(color * roomFactor, alpha * u_Alpha);
+        return;
     }
 
     vec3 result = lighting * albedo * roomFactor;

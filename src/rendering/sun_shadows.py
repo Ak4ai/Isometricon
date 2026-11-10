@@ -10,9 +10,20 @@ from typing import Optional
 import numpy as np
 import OpenGL.GL as gl
 
+from src.world.block import BlockType
 from src.world.room_reveal import WINDOW, RoomRevealTracker
 
 SHADOW_UNIT = 3  # unidade de textura da máscara de sombra (0 atlas, 2 máscara do espaço)
+
+
+SOLID_VALUE, WATER_VALUE = 255, 128  # na textura: o shader lê sólido > 0.75 e água entre 0.25 e 0.75
+
+
+def mask_values(window) -> np.ndarray:
+    """O valor de cada célula da janela: sólido (bloqueia o sol), água (a luz atravessa tingida) ou ar."""
+    values = np.where(window.solid, SOLID_VALUE, 0).astype(np.uint8)
+    values[(window.blocks == int(BlockType.WATER)) & ~window.solid] = WATER_VALUE
+    return values
 
 
 class SunShadowRenderer:
@@ -33,7 +44,7 @@ class SunShadowRenderer:
         self._ensure_texture()
         sx, sy, sz = WINDOW
         # a janela é [x, y, z]; a textura 3D quer (profundidade z, altura y, largura x)
-        data = np.ascontiguousarray((mask.window.solid.transpose(2, 1, 0) * 255).astype(np.uint8))
+        data = np.ascontiguousarray(mask_values(mask.window).transpose(2, 1, 0))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)

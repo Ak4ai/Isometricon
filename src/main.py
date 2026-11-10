@@ -390,6 +390,10 @@ def main() -> None:
     if terrain_demo:
         print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
         atlas = TextureAtlas()
+        # a região da textura da água no atlas: o shader reconhece a água por ela (as duas passadas do terreno)
+        water_uv = atlas.uv_table[int(BlockType.WATER)].reshape(-1, 2)
+        water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
+                      float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
         generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True)
         world_manager = WorldManager(generator=generator, render_distance=2, atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
@@ -1234,6 +1238,11 @@ def main() -> None:
             shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
             shadow_renderer.apply(shader, model)
             room_renderer.apply(shader, model, view)
+            # água: na passada 1 (esta) ela é descartada e o fundo recebe a luz que a atravessa; a 2 vem no fim
+            shader.set_vec4("u_WaterRect", *water_rect)
+            shader.set_float("u_Time", float(window.time))
+            shader.set_vec3("u_CameraPos", *(float(v) for v in camera._camera_position()))
+            shader.set_int("u_WaterPass", 1)
             world_manager.render(shader, model, view_projection)
             room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
 
@@ -1252,9 +1261,24 @@ def main() -> None:
 
             gl.glEnable(gl.GL_CULL_FACE)
 
-            # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma
+            # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma. Usam outro atlas, em que a
+            # região da água do terreno pode ser outra textura: nada delas é tratado como água.
+            shader.set_int("u_WaterPass", 0)
             schematic_tool.draw(shader, model, window.time)
             room_renderer.draw_structure_caps(shader, model)
+
+            # 2c. A água, translúcida, sobre tudo o que já está na tela (sem escrever profundidade)
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
+            shader.set_int("u_TextureAtlas", 0)
+            shader.set_int("u_WaterPass", 2)
+            gl.glEnable(gl.GL_BLEND)
+            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            gl.glDepthMask(gl.GL_FALSE)
+            world_manager.render(shader, model, view_projection)
+            gl.glDepthMask(gl.GL_TRUE)
+            gl.glDisable(gl.GL_BLEND)
+            shader.set_int("u_WaterPass", 0)
             room_renderer.disable(shader)
             shadow_renderer.disable(shader)
             shader.set_bool("u_WorldStyle", False)
