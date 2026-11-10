@@ -160,7 +160,10 @@ vec3 worldLighting(vec3 n, vec3 l, float worldY, float sunVis)
     vec3 cool = vec3(0.86, 0.94, 1.10);                          // céu, nas faces de sombra
     vec3 tint = mix(cool, warm, smoothstep(0.05, 0.6, sun));
     // quanto mais fundo o terreno, mais escuro: numa vista sem perspectiva a altura é a pista de profundidade
-    float altitude = mix(0.74, 1.0, smoothstep(1.0, 14.0, worldY));
+    // o que está abaixo dos pés do jogador escurece com a profundidade (≈6% por bloco, até 6 blocos): cada terraço
+    // fica com um tom próprio em qualquer altitude do mundo, e quanto mais fundo, mais escuro
+    float depth = clamp(u_PlayerY - worldY, 0.0, 6.0);
+    float altitude = 1.0 - 0.062 * depth;
     return vec3(0.96) * shade * tint * altitude;
 }
 
