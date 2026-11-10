@@ -359,13 +359,13 @@ bool facesCamera(vec3 c)
 bool storyCovers(vec3 cell)
 {
     vec3 c = cell + 0.5;
-    if (u_RoomActive <= 0.001)
-    {
-        // sem cômodo para consultar: some a metade da frente (do lado da câmera)
-        vec2 f = normalize(u_StoryView.xz);
-        return dot(c.xz - u_StoryCenter, f) < 0.5;
-    }
-    return coversRoom(c);
+    // a metade da frente (do lado da câmera), medida do CENTRO do cômodo (com cômodo, ele não muda enquanto o
+    // personagem anda dentro dele: chegar perto de uma parede do fundo não a corta), some inteira
+    vec2 f = normalize(u_StoryView.xz);
+    if (dot(c.xz - u_StoryCenter, f) < 0.5)
+        return true;
+    // atrás do centro, só o que tapa o cômodo (o teto e o andar de cima sobre ele); as paredes do fundo ficam
+    return u_RoomActive > 0.001 && coversRoom(c);
 }
 
 uniform bool u_KeepVisible;      // portas: nenhum corte de visão as remove
@@ -432,7 +432,10 @@ void main()
         if (!u_KeepVisible && here <= 0.9 && u_RoomActive > roomDither())
         {
             vec3 c = blockCell + 0.5;
-            if (coversRoom(c) && facesCamera(c))
+            // na metade da frente do cômodo (medida do centro dele) some tudo o que o tapa, até divisórias; do
+            // centro para trás, só a borda virada para a câmera (pilar, mezanino e móveis do fundo ficam)
+            bool frontHalf = dot(c.xz - u_StoryCenter, normalize(u_StoryView.xz)) < -1.0;
+            if (coversRoom(c) && (frontHalf || facesCamera(c)))
                 discard;
         }
         float inside = here >= 0.2 ? 1.0 : 0.0;   // o espaço, a casca e a borda pela quina (64)

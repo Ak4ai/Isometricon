@@ -6,11 +6,13 @@ atrás dele está sem a face que encostava, e se vê o vazio por dentro. Este m�
 regra do shader para achar os blocos escondidos e gera só as faces que faltam: as dos blocos à vista
 voltadas para um bloco escondido. Sem OpenGL.
 
-A regra (a mesma de ``world_textured.frag``): um bloco sólido, fora do espaço do jogador, some se o
-raio da câmera, partindo do centro dele, chega ao espaço do jogador em até 64 passos de meio bloco.
+As regras são as mesmas de ``world_textured.frag`` (ver ``cut_cells``): a borda do cômodo virada para a
+câmera que o tapa, o andar de cima sobre ele (corte do andar) e o corredor entre a câmera e o personagem. As
+portas nunca somem.
 """
 
-from typing import Callable, Tuple
+from dataclasses import dataclass
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -22,6 +24,27 @@ from src.world.structure_mesher import _FACES as _STRUCTURE_FACES
 RAY_START = 0.9   # distância do centro em que o raio começa (sai do bloco)
 RAY_STEP = 0.5    # passo do raio, em blocos
 RAY_STEPS = 64
+CAMERA_STEPS = 24  # passos do raio de volta para a câmera (facesCamera no shader)
+
+
+@dataclass
+class StoryCut:
+    """O corte do andar como o shader o recebe: teto (célula y), pés, centro do cômodo (x, z) e raio."""
+
+    cut_y: int
+    feet_y: int
+    center: Tuple[float, float]
+    radius: float
+
+
+@dataclass
+class SightCut:
+    """O corredor da câmera, no mundo: peito do personagem, olho da câmera, raio e célula y dos pés."""
+
+    target: Tuple[float, float, float]
+    camera: Tuple[float, float, float]
+    radius: float
+    feet_y: int
 
 UvLookup = Callable[[str, str], Tuple[float, float, float, float]]
 
@@ -38,6 +61,89 @@ def _shifted(array: np.ndarray, offset) -> np.ndarray:
         dst.append(slice(0, size - d) if d >= 0 else slice(-d, size))
     out[tuple(dst)] = array[tuple(src)]
     return out
+
+
+def _reaches(mask: np.ndarray, direction, steps: int) -> np.ndarray:
+    """Para cada célula: o raio que parte do centro dela em ``direction`` encontra ``mask`` em ``steps`` passos."""
+    direction = np.asarray(direction, dtype=np.float64)
+    offsets = {
+        tuple(int(v) for v in np.floor(0.5 + direction * (RAY_START + RAY_STEP * step)))
+        for step in range(steps)
+    }
+    out = np.zeros(mask.shape, dtype=bool)
+    for offset in offsets:
+        out |= _shifted(mask, offset)
+    return out
+
+
+def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
+              sight: Optional[SightCut] = None, center: Optional[Tuple[float, float]] = None) -> np.ndarray:
+    """Tudo o que o shader esconde com o cômodo ativo, bool [x, y, z] da janela.
+
+    * revelação: fora do espaço, tapa o cômodo (o raio para dentro da cena cai no espaço do andar) e, do centro do
+      cômodo (``center``, x e z) para trás, está na borda virada para a câmera (o raio de volta não passa pelo
+      espaço); na metade da frente, basta tapar;
+    * corte do andar: do teto para cima, dentro do raio, a metade da frente (medida do centro do cômodo) e, atrás
+      dele, o que tapa o cômodo;
+    * corredor: do pé para cima, no cilindro entre a câmera e o personagem, o que tapa o cômodo;
+    * as portas ficam.
+    """
+    window = room.window
+    occupied = window.occupied
+    interior = room.data == INTERIOR
+    ox, oy, oz = room.origin
+    ys = np.arange(occupied.shape[1])[None, :, None] + oy
+    band = interior & (ys < story.cut_y) if story is not None else interior
+    covers = _reaches(band, view_dir, RAY_STEPS)
+    toward_camera = _reaches(interior, -np.asarray(view_dir, dtype=np.float64), CAMERA_STEPS)
+    xs = np.arange(occupied.shape[0])[:, None, None] + ox + 0.5
+    zs = np.arange(occupied.shape[2])[None, None, :] + oz + 0.5
+    flat = np.asarray(view_dir, dtype=np.float64)[[0, 2]]
+    flat = flat / max(float(np.linalg.norm(flat)), 1e-9)
+    if center is None and story is not None:
+        center = story.center
+    if center is not None:
+        ahead = (xs - center[0]) * flat[0] + (zs - center[1]) * flat[1]   # < 0: do lado da câmera
+        cut = occupied & ~interior & covers & ((ahead < -1.0) | ~toward_camera)
+    else:
+        cut = occupied & ~interior & covers & ~toward_camera
+    if story is not None:
+        near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < (story.radius - 1.5) ** 2
+        front = (xs - story.center[0]) * flat[0] + (zs - story.center[1]) * flat[1] < 0.5
+        cut |= occupied & (ys >= story.cut_y) & near & (front | covers)
+    if sight is not None:
+        cut |= occupied & covers & _in_corridor(occupied.shape, room.origin, sight)
+    return cut & ~_door_cells(window, room.origin)
+
+
+def _in_corridor(shape, origin, sight: SightCut) -> np.ndarray:
+    """As células (pelo centro) dentro do cilindro do corredor, como em ``sightCarved``."""
+    centers = np.stack(np.meshgrid(*(np.arange(n) + o + 0.5 for n, o in zip(shape, origin)), indexing="ij"), -1)
+    target = np.asarray(sight.target, dtype=np.float64)
+    line = np.asarray(sight.camera, dtype=np.float64) - target
+    direction = line / max(float(np.linalg.norm(line)), 1e-4)
+    rel = centers - target
+    t = rel @ direction
+    off = np.linalg.norm(rel - t[..., None] * direction, axis=-1)
+    radius = sight.radius * (0.75 + 0.25 * np.clip((t - 0.9) / 3.0, 0.0, 1.0))
+    ys = np.arange(shape[1])[None, :, None] + origin[1]
+    return (t >= 0.9) & (off < radius - 0.25) & (ys >= sight.feet_y)
+
+
+def _door_cells(window, origin) -> np.ndarray:
+    """As células da janela ocupadas por portas das construções (o shader nunca as esconde)."""
+    from src.world.doors import is_door
+
+    doors = np.zeros(window.owner.shape, dtype=bool)
+    for index, placed in enumerate(window.structures):
+        cells = np.argwhere(window.owner == index)
+        if len(cells) == 0:
+            continue
+        local = cells + np.asarray(origin) - np.asarray(placed.origin)
+        names = placed.schematic.grid[local[:, 1], local[:, 2], local[:, 0]]
+        marks = np.fromiter((is_door(name) for name in names), dtype=bool, count=len(names))
+        doors[tuple(cells[marks].T)] = True
+    return doors
 
 
 def hidden_cells(occupied: np.ndarray, interior: np.ndarray, view_dir) -> np.ndarray:
@@ -88,7 +194,9 @@ class Caps:
         self.structures = self.EMPTY
 
 
-def build_caps(room: RoomMask, view_dir, terrain_atlas, structure_uv: UvLookup) -> Caps:
+def build_caps(room: RoomMask, view_dir, terrain_atlas, structure_uv: UvLookup,
+               story: Optional[StoryCut] = None, sight: Optional[SightCut] = None,
+               center: Optional[Tuple[float, float]] = None) -> Caps:
     """Gera as tampas para a máscara ``room`` e a direção da câmera ``view_dir``.
 
     Args:
@@ -101,8 +209,7 @@ def build_caps(room: RoomMask, view_dir, terrain_atlas, structure_uv: UvLookup) 
     window = room.window
     if window is None or not room.active:
         return caps
-    interior = room.data == INTERIOR
-    hidden = hidden_cells(window.occupied, interior, view_dir)
+    hidden = cut_cells(room, view_dir, story, sight, center)
     if not hidden.any():
         return caps
     visible = window.occupied & ~hidden

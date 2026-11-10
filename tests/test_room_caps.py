@@ -149,3 +149,46 @@ def test_caps_are_cheap_enough_to_rebuild_when_the_camera_turns(atlas):
     for _ in range(10):
         build_caps(room, ISO, atlas, lambda b, f: (0, 0, 1, 1))
     assert (time.perf_counter() - start) / 10 < 0.05    # bem abaixo de um quadro de folga
+
+
+def _iso_room(extra=None):
+    def build(b):
+        box(b, 10, 10)                                   # paredes x/z = 10 e 16, interior 11..15, teto y = 7
+        if extra:
+            extra(b)
+    return room_in(world(build), (13.5, 3.0, 13.5))
+
+
+def test_cut_cells_keep_the_back_walls_and_cut_the_front_ones():
+    """Como o shader: com o centro do cômodo, a parede do fundo fica inteira e a da frente (lado da câmera) some."""
+    from src.world.room_caps import cut_cells
+
+    room = _iso_room()
+    ox, oy, oz = room.origin
+    cut = cut_cells(room, ISO, center=(13.5, 13.5))
+    assert not cut[10 - ox, 4 - oy, 13 - oz] and not cut[13 - ox, 4 - oy, 10 - oz]   # fundo
+    assert cut[16 - ox, 4 - oy, 13 - oz] and cut[13 - ox, 4 - oy, 16 - oz]           # frente
+    assert cut[13 - ox, 7 - oy, 13 - oz]                                             # o teto sobre o espaço
+
+
+def test_cut_cells_follow_the_story_cut_above_the_ceiling():
+    """Acima do teto do andar some a metade da frente; atrás do centro só o que tapa o cômodo."""
+    from src.world.room_caps import StoryCut, cut_cells
+
+    def upstairs(b):
+        b[10, 8, 10] = BlockType.STONE                   # canto do fundo, no andar de cima
+        b[16, 8, 16] = BlockType.STONE                   # canto da frente
+    room = _iso_room(upstairs)
+    ox, oy, oz = room.origin
+    story = StoryCut(cut_y=7, feet_y=3, center=(13.5, 13.5), radius=12.0)
+    cut = cut_cells(room, ISO, story=story)
+    assert cut[16 - ox, 8 - oy, 16 - oz]
+    assert not cut[10 - ox, 8 - oy, 10 - oz]
+    assert not cut[10 - ox, 4 - oy, 13 - oz]             # a parede do fundo do andar continua
+
+
+def test_caps_close_the_faces_left_open_by_the_cuts(atlas):
+    """Com a parede da frente cortada, os blocos atrás dela ganham as faces que o mesher tinha descartado."""
+    room = _iso_room()
+    caps = build_caps(room, ISO, atlas, lambda block, face: (0.0, 0.0, 1.0, 1.0), center=(13.5, 13.5))
+    assert caps.terrain is not None and len(caps.terrain[0]) > 0

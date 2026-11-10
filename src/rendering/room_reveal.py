@@ -41,6 +41,11 @@ class RoomRevealRenderer:
         self.level = 0.0                 # intensidade suavizada, 0 a 1
         self.texture_id = 0
         self._shown: Optional[RoomMask] = None  # a máscara que está na GPU
+        # os outros cortes do shader, para as tampas os seguirem (definidos pelo laço principal a cada quadro)
+        self.story = None   # room_caps.StoryCut ou None
+        self.sight = None   # room_caps.SightCut ou None
+        self.center = None  # (x, z) do centro do cômodo (u_StoryCenter), referência de frente e fundo
+        self.caps_ms = 0.0  # quanto levou a última reconstrução das tampas
         self._uploaded = None
 
     # ------------------------------------------------------------------ estado
@@ -117,18 +122,30 @@ class RoomRevealRenderer:
     # ------------------------------------------------------------------ tampas
     def _update_caps(self, view_dir: np.ndarray) -> None:
         """Refaz as tampas quando a máscara ou a direção da câmera mudou."""
-        key = (id(self._shown), tuple(np.round(view_dir, 3)))
+        story = self.story
+        sight = self.sight
+        key = (id(self._shown), tuple(np.round(view_dir, 3)),
+               None if story is None else (story.cut_y, story.feet_y, tuple(np.round(story.center, 1))),
+               None if sight is None else tuple(int(np.floor(v)) for v in sight.target),
+               None if self.center is None else tuple(np.round(self.center, 1)))
         if key == self._caps_key or self.terrain_atlas is None:
             return
         self._caps_key = key
+        import time
+        started = time.perf_counter()
+        if sight is not None:
+            # o olho da câmera muda a cada quadro; para as tampas basta a direção, de longe
+            target = np.asarray(sight.target, dtype=np.float64)
+            sight = type(sight)(tuple(target), tuple(target - view_dir * 64.0), sight.radius, sight.feet_y)
 
         def structure_uv(block: str, face: str):
             atlas = self.structure_atlas()
             return atlas.get_uv(block, face) if atlas is not None else (0.0, 0.0, 1.0, 1.0)
 
-        caps = build_caps(self._shown, view_dir, self.terrain_atlas, structure_uv)
+        caps = build_caps(self._shown, view_dir, self.terrain_atlas, structure_uv, story, sight, self.center)
         self._terrain_caps = self._store(self._terrain_caps, caps.terrain)
         self._structure_caps = self._store(self._structure_caps, caps.structures)
+        self.caps_ms = (time.perf_counter() - started) * 1000.0
 
     @staticmethod
     def _store(mesh: Optional[TexturedMesh], data) -> Optional[TexturedMesh]:

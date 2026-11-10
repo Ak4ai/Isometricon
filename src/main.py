@@ -1303,6 +1303,14 @@ def main() -> None:
                                                      int(story_state["cut_y"]))
             center = story_state["center"] or (feet[0], feet[2])  # fora de cômodo, o próprio personagem
             shader.set_vec2("u_StoryCenter", float(center[0]), float(center[1]))
+            # as tampas seguem os mesmos cortes (o corte do andar só quando ele está inteiro, sem o fade)
+            from src.world.room_caps import SightCut, StoryCut
+            room_renderer.story = (StoryCut(int(story_state["cut_y"]), int(np.floor(feet[1] + 0.05)),
+                                            (float(center[0]), float(center[1])), 24.0)
+                                   if story_state["level"] >= 0.999 else None)
+            room_renderer.center = (float(center[0]), float(center[1]))
+            room_renderer.sight = SightCut((feet[0], feet[1] + 1.1, feet[2]), (0.0, 0.0, 0.0), 2.6,
+                                           int(np.floor(feet[1] + 0.05)))
             shader.set_float("u_StoryRadius", 24.0)
             story_view = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (-np.asarray(view, dtype=np.float64)[2, :3])
             story_view /= max(float(np.linalg.norm(story_view)), 1e-9)

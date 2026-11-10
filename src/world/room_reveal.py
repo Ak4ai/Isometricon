@@ -261,8 +261,8 @@ STORY_MIN_COVERAGE = 0.45  # só há "andar" com teto em boa parte da volta (um 
 def story_ceiling(mask: RoomMask, position) -> Optional[int]:
     """A célula y (mundo) do teto do andar do jogador: o separador de cima do Isocraft (``StoryBand``).
 
-    É o teto mais alto acima da cabeça entre as colunas perto do jogador (um mezanino junto à parede não baixa o
-    corte do cômodo inteiro). Tudo dali para cima, em volta dele,
+    É o teto mais baixo acima da cabeça entre as colunas perto do jogador (as paredes do fundo não somem por isso:
+    acima do teto só some a frente do cômodo e o que o tapa). Tudo dali para cima, em volta dele,
     pode sumir para mostrar o andar. ``None`` ao ar livre, ou se o teto é pouco (menos que
     ``STORY_MIN_COVERAGE`` das colunas em volta) ou alto demais.
     """
@@ -284,8 +284,10 @@ def story_ceiling(mask: RoomMask, position) -> Optional[int]:
             x, z = x0 + dx, z0 + dz
             if not (0 <= x < WINDOW[0] and 0 <= z < WINDOW[2]):
                 continue
+            if solid[x, y0:first, z].any():
+                continue  # parede ou móvel na altura do corpo: não é o teto deste espaço
             hits = np.flatnonzero(roof[x, first:top, z])
-            if hits.size and (best is None or hits[0] > best):
+            if hits.size and (best is None or hits[0] < best):
                 best = int(hits[0])
     return None if best is None else oy + first + best
 
