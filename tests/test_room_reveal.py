@@ -6,6 +6,7 @@ import pytest
 from src.world import BlockType, Schematic
 from src.world.chunk import Chunk3D
 from src.world.room_reveal import (
+    OBJECT,
     INTERIOR,
     SHELL,
     WINDOW,
@@ -61,7 +62,7 @@ def test_enclosed_room_is_revealed_with_a_shell():
     assert data[13 - ox, 3 - oy, 13 - oz] == INTERIOR
     assert data[10 - ox, 3 - oy, 13 - oz] == SHELL          # a parede
     assert data[13 - ox, 7 - oy, 13 - oz] == SHELL          # o teto
-    assert data[13 - ox, 2 - oy, 13 - oz] == SHELL          # o piso
+    assert data[13 - ox, 2 - oy, 13 - oz] == OBJECT         # o piso: o espaço em cima, não é parede
     assert data[5 - ox, 3 - oy, 5 - oz] == 0                # longe da sala, fora da máscara
     assert (data == INTERIOR).sum() == room.cells
 

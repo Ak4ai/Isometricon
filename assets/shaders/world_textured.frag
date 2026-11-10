@@ -261,7 +261,7 @@ vec3 worldLighting(vec3 n, vec3 l, float worldY, float sunVis)
 
 // Revelação do espaço do jogador (cômodo, caverna): ver src/world/room_reveal.py.
 uniform float u_RoomActive;     // 0 = desligado; 0..1 = intensidade do efeito
-uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 128 casca de sólido ao redor, 64 borda pela quina, 0 fora
+uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 192 móvel/degrau, 128 casca, 64 borda pela quina, 0 fora
 uniform vec3 u_RoomOrigin;      // célula do mundo do canto (0,0,0) da máscara
 uniform vec3 u_RoomSize;        // tamanho da máscara em células
 uniform vec3 u_ViewDir;         // para onde a câmera olha, em coordenadas do mundo
@@ -386,8 +386,8 @@ bool sightCarved()
     }
     if (u_SightActive <= 0.001 || cell.y < u_SightFeetY)
         return false;
-    if (u_RoomActive > 0.001 && !coversRoom(cell + 0.5))
-        return false;                                   // num cômodo, o corredor nunca corta uma parede do fundo
+    if (u_RoomActive > 0.001 && (!coversRoom(cell + 0.5) || (roomCell(cell + 0.5) > 0.7 && cell.y < u_SightFeetY + 1.0)))
+        return false;                                   // num cômodo, o corredor não corta o fundo nem um móvel no chão
     vec3 center = (u_SightModel * vec4(cell + 0.5, 1.0)).xyz;
     vec3 line = u_CameraPos - u_SightTarget;
     float len = length(line);
@@ -429,11 +429,12 @@ void main()
         // some só a borda do cômodo virada para a câmera (parede da frente, teto) que tapa o cômodo; o fundo, um
         // pilar ou um mezanino ficam. A decisão parte do CENTRO do bloco, e não do pixel: é a mesma para todas as
         // faces dele (partindo do pixel, uma parede fina era cortada em escada no meio da face).
-        if (!u_KeepVisible && here <= 0.9 && u_RoomActive > roomDither())
+        if (!u_KeepVisible && here < 0.7 && u_RoomActive > roomDither())
         {
             vec3 c = blockCell + 0.5;
             // na metade da frente do cômodo (medida do centro dele) some tudo o que o tapa, até divisórias; do
             // centro para trás, só a borda virada para a câmera (pilar, mezanino e móveis do fundo ficam)
+            // (móvel, degrau e piso, 192 na máscara, nunca somem por aqui: só o corte do andar os tira)
             bool frontHalf = dot(c.xz - u_StoryCenter, normalize(u_StoryView.xz)) < -1.0;
             if (coversRoom(c) && (frontHalf || facesCamera(c)))
                 discard;

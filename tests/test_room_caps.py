@@ -192,3 +192,30 @@ def test_caps_close_the_faces_left_open_by_the_cuts(atlas):
     room = _iso_room()
     caps = build_caps(room, ISO, atlas, lambda block, face: (0.0, 0.0, 1.0, 1.0), center=(13.5, 13.5))
     assert caps.terrain is not None and len(caps.terrain[0]) > 0
+
+
+def test_stairs_and_furniture_in_the_front_half_are_not_cut():
+    """Degraus e móveis (o espaço logo acima deles) não são parede: ficam, mesmo na metade da frente do cômodo."""
+    from src.world.room_caps import StoryCut, cut_cells
+    from src.world.room_reveal import OBJECT, story_center, story_ceiling
+
+    def two_floors(b):
+        b[5:16, 3:13, 5:16] = BlockType.STONE
+        b[6:15, 3:7, 6:15] = BlockType.AIR               # térreo y 3..6, laje em y = 7
+        b[6:15, 8:12, 6:15] = BlockType.AIR              # andar de cima, telhado em y = 12
+        b[7:11, 7, 12:14] = BlockType.AIR                # só a abertura da escada
+        for i, x in enumerate(range(7, 11)):
+            b[x, 3:4 + i, 12:14] = BlockType.STONE       # degraus de y = 3 a 6
+        b[13, 3, 13] = BlockType.WOOD                    # um móvel na frente
+    position = (11.5, 3.0, 8.5)
+    room = room_in(world(two_floors), position)
+    ox, oy, oz = room.origin
+    assert room.data[10 - ox, 6 - oy, 12 - oz] == OBJECT
+    assert room.data[14 - ox, 4 - oy, 15 - oz] != OBJECT          # a parede da frente continua parede
+    ceiling = story_ceiling(room, position)
+    center = story_center(room, 3, ceiling)
+    cut = cut_cells(room, ISO, story=StoryCut(ceiling, 3, center, 12.0), center=center)
+    steps = [(x, y, z) for i, x in enumerate(range(7, 11)) for y in range(3, 4 + i) for z in (12, 13)]
+    assert not any(cut[x - ox, y - oy, z - oz] for x, y, z in steps)
+    assert not cut[13 - ox, 3 - oy, 13 - oz]
+    assert cut[14 - ox, 4 - oy, 15 - oz]

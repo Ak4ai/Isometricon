@@ -39,6 +39,7 @@ WALL_REACH = 8                 # até onde cada raio procura
 INTERIOR = 255
 SHELL = 128
 EDGE = 64                      # sólido que só encosta no espaço pela quina: iluminado como o cômodo
+OBJECT = 192                   # sólido com o espaço logo acima (móvel, degrau, piso): não é parede, não some na frente
 
 # Blocos que não contam como teto (a copa de uma árvore não faz um cômodo)
 _NOT_ROOF = (int(BlockType.LEAVES),)
@@ -206,7 +207,21 @@ def compute_room(
         shell = ndimage.binary_dilation(space, structure=_FACE_STRUCTURE) & solid
         mask[shell] = SHELL
         mask[space] = INTERIOR
+        mask[(mask > 0) & (mask < INTERIOR) & _space_above_run(solid, space)] = OBJECT
     return RoomMask(origin, mask, active, cells, exposure, coverage, walls)
+
+
+def _space_above_run(solid: np.ndarray, space: np.ndarray) -> np.ndarray:
+    """Para cada célula: subindo pela coluna de sólidos dela, a primeira célula livre é o espaço do jogador.
+
+    Separa o que está dentro do cômodo (móvel, degrau da escada, o piso) da parede: a parede termina no telhado
+    ou no lado de fora, nunca com o cômodo em cima."""
+    out = np.zeros(solid.shape, dtype=bool)
+    above = np.zeros((solid.shape[0], solid.shape[2]), dtype=bool)  # o que vem em cima da célula y
+    for y in range(solid.shape[1] - 1, -1, -1):
+        out[:, y, :] = above
+        above = np.where(solid[:, y, :], above, space[:, y, :])
+    return out
 
 
 def wall_coverage(solid: np.ndarray, seed) -> float:

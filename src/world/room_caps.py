@@ -18,7 +18,7 @@ import numpy as np
 
 from src.world.mesher import _CORNERS, _NORMALS
 from src.world.block_shapes import box_face_quad, shape_for
-from src.world.room_reveal import INTERIOR, RoomMask
+from src.world.room_reveal import INTERIOR, OBJECT, RoomMask
 from src.world.structure_mesher import _FACES as _STRUCTURE_FACES
 
 RAY_START = 0.9   # distância do centro em que o raio começa (sai do bloco)
@@ -91,6 +91,7 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
     window = room.window
     occupied = window.occupied
     interior = room.data == INTERIOR
+    furniture = room.data == OBJECT
     ox, oy, oz = room.origin
     ys = np.arange(occupied.shape[1])[None, :, None] + oy
     band = interior & (ys < story.cut_y) if story is not None else interior
@@ -104,15 +105,16 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         center = story.center
     if center is not None:
         ahead = (xs - center[0]) * flat[0] + (zs - center[1]) * flat[1]   # < 0: do lado da câmera
-        cut = occupied & ~interior & covers & ((ahead < -1.0) | ~toward_camera)
+        cut = occupied & ~interior & covers & ~furniture & ((ahead < -1.0) | ~toward_camera)
     else:
-        cut = occupied & ~interior & covers & ~toward_camera
+        cut = occupied & ~interior & ~furniture & covers & ~toward_camera
     if story is not None:
         near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < (story.radius - 1.5) ** 2
         front = (xs - story.center[0]) * flat[0] + (zs - story.center[1]) * flat[1] < 0.5
         cut |= occupied & (ys >= story.cut_y) & near & (front | covers)
     if sight is not None:
-        cut |= occupied & covers & _in_corridor(occupied.shape, room.origin, sight)
+        low = furniture & (ys < sight.feet_y + 1)        # móvel no chão fica; o piso de cima, na frente, sai
+        cut |= occupied & ~low & covers & _in_corridor(occupied.shape, room.origin, sight)
     return cut & ~_door_cells(window, room.origin)
 
 
