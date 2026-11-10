@@ -431,7 +431,7 @@ def main() -> None:
         from src.rendering.room_reveal import RoomRevealRenderer
         from src.world.room_reveal import RoomRevealTracker
         room_tracker = RoomRevealTracker()
-        room_renderer = RoomRevealRenderer()
+        room_renderer = RoomRevealRenderer(terrain_atlas=atlas, structure_atlas=lambda: schematic_tool.atlas_if_ready())
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -1222,6 +1222,7 @@ def main() -> None:
             view_projection = projection @ view
             room_renderer.apply(shader, model, view)
             world_manager.render(shader, model, view_projection)
+            room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
 
             # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
             if underground_mode:
@@ -1240,6 +1241,7 @@ def main() -> None:
 
             # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma
             schematic_tool.draw(shader, model, window.time)
+            room_renderer.draw_structure_caps(shader, model)
             room_renderer.disable(shader)
 
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.

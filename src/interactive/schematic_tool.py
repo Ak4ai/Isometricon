@@ -204,6 +204,10 @@ class SchematicTool:
         return True
 
     # ------------------------------------------------------------------ desenho (OpenGL)
+    def atlas_if_ready(self):
+        """O atlas das construções, se já foi criado (não cria um só para consultar)."""
+        return self._atlas
+
     def _ensure_atlas(self):
         if self._atlas is None:
             from src.rendering.schematic_atlas import SchematicAtlas

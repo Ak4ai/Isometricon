@@ -13,6 +13,8 @@ from typing import Optional
 import numpy as np
 import OpenGL.GL as gl
 
+from src.rendering.mesh import TexturedMesh
+from src.world.room_caps import build_caps
 from src.world.room_reveal import WINDOW, RoomMask, RoomRevealTracker
 
 MASK_UNIT = 2          # unidade de textura da máscara (a 0 é o atlas)
@@ -22,7 +24,18 @@ FADE_HALF_LIFE = 0.12  # segundos para o efeito andar metade do caminho
 class RoomRevealRenderer:
     """Mantém a textura da máscara na GPU e os uniforms do efeito."""
 
-    def __init__(self, exterior: float = 0.12) -> None:
+    def __init__(self, exterior: float = 0.12, terrain_atlas=None, structure_atlas=None) -> None:
+        """
+        Args:
+            exterior: brilho do que fica fora do espaço (0 preto, 1 normal).
+            terrain_atlas: TextureAtlas do terreno, de onde saem as UVs das tampas.
+            structure_atlas: função que devolve o SchematicAtlas (ou None), para as tampas das construções.
+        """
+        self.terrain_atlas = terrain_atlas
+        self.structure_atlas = structure_atlas or (lambda: None)
+        self._caps_key = None
+        self._terrain_caps: Optional[TexturedMesh] = None
+        self._structure_caps: Optional[TexturedMesh] = None
         self.enabled = True
         self.exterior = float(exterior)  # brilho do que está fora do espaço: 0 preto, 1 normal
         self.level = 0.0                 # intensidade suavizada, 0 a 1
@@ -89,6 +102,7 @@ class RoomRevealRenderer:
         view_dir /= max(float(np.linalg.norm(view_dir)), 1e-9)
         ox, oy, oz = self._shown.origin
 
+        self._update_caps(view_dir)
         gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -100,12 +114,59 @@ class RoomRevealRenderer:
         shader.set_float("u_RoomExterior", self.exterior)
         shader.set_float("u_RoomActive", float(self.level))
 
+    # ------------------------------------------------------------------ tampas
+    def _update_caps(self, view_dir: np.ndarray) -> None:
+        """Refaz as tampas quando a máscara ou a direção da câmera mudou."""
+        key = (id(self._shown), tuple(np.round(view_dir, 3)))
+        if key == self._caps_key or self.terrain_atlas is None:
+            return
+        self._caps_key = key
+
+        def structure_uv(block: str, face: str):
+            atlas = self.structure_atlas()
+            return atlas.get_uv(block, face) if atlas is not None else (0.0, 0.0, 1.0, 1.0)
+
+        caps = build_caps(self._shown, view_dir, self.terrain_atlas, structure_uv)
+        self._terrain_caps = self._store(self._terrain_caps, caps.terrain)
+        self._structure_caps = self._store(self._structure_caps, caps.structures)
+
+    @staticmethod
+    def _store(mesh: Optional[TexturedMesh], data) -> Optional[TexturedMesh]:
+        vertices, indices = data
+        if len(indices) == 0:
+            if mesh is not None:
+                mesh.delete()
+            return None
+        if mesh is None:
+            return TexturedMesh(vertices, indices)
+        mesh.update_buffers(vertices, indices)
+        return mesh
+
+    def draw_terrain_caps(self, shader, base_model: np.ndarray) -> None:
+        """Desenha as tampas do terreno (com o atlas do terreno já ligado)."""
+        if self.visible and self._terrain_caps is not None:
+            shader.set_mat4("u_Model", np.asarray(base_model, dtype=np.float32))
+            self._terrain_caps.draw()
+
+    def draw_structure_caps(self, shader, base_model: np.ndarray) -> None:
+        """Desenha as tampas das construções, ligando o atlas delas."""
+        atlas = self.structure_atlas()
+        if self.visible and self._structure_caps is not None and atlas is not None:
+            atlas.bind(0)
+            shader.set_int("u_TextureAtlas", 0)
+            shader.set_mat4("u_Model", np.asarray(base_model, dtype=np.float32))
+            self._structure_caps.draw()
+
     @staticmethod
     def disable(shader) -> None:
         """Desliga o efeito (o personagem e o resto não devem ser escurecidos nem descartados)."""
         shader.set_float("u_RoomActive", 0.0)
 
     def delete(self) -> None:
+        for mesh in (self._terrain_caps, self._structure_caps):
+            if mesh is not None:
+                mesh.delete()
+        self._terrain_caps = self._structure_caps = self._caps_key = None
         if self.texture_id:
             gl.glDeleteTextures(1, [self.texture_id])
             self.texture_id = 0

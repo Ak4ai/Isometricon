@@ -44,6 +44,7 @@ class RoomMask:
     active: bool                   # o jogador está num espaço fechado
     cells: int                     # células de ar do espaço do jogador
     exposure: float                # fração delas aberta ao céu
+    window: Optional["WindowCells"] = None  # o que há em cada célula (preenchido pelo rastreador)
 
 
 def window_origin(position) -> Tuple[int, int, int]:
@@ -52,16 +53,38 @@ def window_origin(position) -> Tuple[int, int, int]:
     return x - WINDOW[0] // 2, y - BELOW_PLAYER, z - WINDOW[2] // 2
 
 
+@dataclass
+class WindowCells:
+    """O que há em cada célula da janela, todos os arrays indexados [x, y, z]."""
+
+    solid: np.ndarray       # bool: o personagem não atravessa (tudo menos ar e água)
+    roof: np.ndarray        # bool: sólido que fecha um espaço por cima (sem a folhagem)
+    blocks: np.ndarray      # uint8: BlockType do terreno (0 onde só há construção)
+    owner: np.ndarray       # int8: -1 terreno ou ar; i = índice da construção que ocupa a célula
+    structures: list        # as construções, na ordem dos índices de ``owner``
+
+
 def extract_window(
     origin: Tuple[int, int, int],
     chunks: Dict[Tuple[int, int, int], Chunk3D],
     structures: Iterable = (),
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Devolve (sólido, teto) da janela, ambos bool [x, y, z].
+    """Devolve (sólido, teto) da janela, ambos bool [x, y, z]; ver ``extract_window_cells``."""
+    cells = extract_window_cells(origin, chunks, structures)
+    return cells.solid, cells.roof
+
+
+def extract_window_cells(
+    origin: Tuple[int, int, int],
+    chunks: Dict[Tuple[int, int, int], Chunk3D],
+    structures: Iterable = (),
+) -> WindowCells:
+    """Copia para a janela o que é sólido no terreno e nas construções.
 
     Sólido é o que o personagem não atravessa (tudo menos ar e água); teto é o sólido que fecha
     um espaço por cima (sólido sem a folhagem). Abaixo de y = 0 é o chão do mundo, sólido.
     """
+    structures = list(structures)
     ox, oy, oz = origin
     sx, sy, sz = WINDOW
     blocks = np.zeros(WINDOW, dtype=np.uint8)
@@ -77,13 +100,14 @@ def extract_window(
 
     solid = ~np.isin(blocks, _PASSABLE)
     roof = solid & ~np.isin(blocks, _NOT_ROOF)
+    owner = np.full(WINDOW, -1, dtype=np.int8)
 
     floor_rows = max(0, min(sy, -oy))  # as camadas com y < 0
     if floor_rows:
         solid[:, :floor_rows, :] = True
         roof[:, :floor_rows, :] = True
 
-    for placed in structures:
+    for index, placed in enumerate(structures):
         (bx0, by0, bz0), (bx1, by1, bz1) = placed.bounds()
         lo = (max(ox, bx0), max(oy, by0), max(oz, bz0))
         hi = (min(ox + sx, bx1 + 1), min(oy + sy, by1 + 1), min(oz + sz, bz1 + 1))
@@ -95,7 +119,8 @@ def extract_window(
         sel = (slice(lo[0] - ox, hi[0] - ox), slice(lo[1] - oy, hi[1] - oy), slice(lo[2] - oz, hi[2] - oz))
         solid[sel] |= part
         roof[sel] |= part
-    return solid, roof
+        owner[sel][part] = index
+    return WindowCells(solid, roof, blocks, owner, structures)
 
 
 def _covered(roof: np.ndarray) -> np.ndarray:
@@ -181,8 +206,9 @@ class RoomRevealTracker:
         if self.mask is not None and self._age < self.MIN_INTERVAL and key[1:] == self._key[1:]:
             return self.mask  # só andou: espera o intervalo mínimo
         origin = window_origin(position)
-        solid, roof = extract_window(origin, chunks, structures)
-        self.mask = compute_room(solid, roof, origin, position, was_active=self.active)
+        window = extract_window_cells(origin, chunks, structures)
+        self.mask = compute_room(window.solid, window.roof, origin, position, was_active=self.active)
+        self.mask.window = window
         self._key, self._age = key, 0.0
         self.version += 1
         return self.mask
