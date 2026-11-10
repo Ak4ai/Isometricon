@@ -1,22 +1,28 @@
 """Ponto de entrada principal do Isometricon (OpenGL 3.3 Core Profile)."""
 
-import math
 import os
-import random
 import sys
-from typing import Optional
 
-# Garante que o diretório raiz e o diretório 'src' estejam no PYTHONPATH
+# Ao rodar ``python src/main.py``, o diretório do script entra em sys.path[0] e
+# ``src/math`` sombreia o módulo padrão ``math``. Remove-o e deixa a raiz do
+# projeto no caminho antes de importar qualquer módulo que use ``math``.
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+if sys.path:
+    first = sys.path[0]
+    if first and os.path.normcase(os.path.abspath(first)) == os.path.normcase(CURRENT_DIR):
+        sys.path.pop(0)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+import math
+import random
+from typing import Optional
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr and hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 
 # ---------------------------------------------------------------------------
@@ -270,8 +276,18 @@ def main() -> None:
     )
 
     shader = Shader(shader_vert, shader_frag)
-    terrain_demo = "--terrain" in sys.argv[1:]
-    char_demo = "--char" in sys.argv[1:] or "--character" in sys.argv[1:]
+    argv = sys.argv[1:]
+    editor_mode = "--map-editor" in argv or "--editor-mapa" in argv
+    map_path = None
+    for arg in argv:
+        if arg.startswith("--map-editor=") or arg.startswith("--editor-mapa="):
+            editor_mode = True
+            map_path = arg.split("=", 1)[1]
+        elif arg.startswith(("--map=", "--mapa=")):
+            editor_mode = True
+            map_path = arg.split("=", 1)[1]
+    terrain_demo = ("--terrain" in argv) and not editor_mode
+    char_demo = ("--char" in argv or "--character" in argv) and not editor_mode
 
     screenshot_path = None
     max_frames = None
@@ -280,7 +296,7 @@ def main() -> None:
     initial_cmd = None
     open_chat = False
     chat_text = None
-    for i, arg in enumerate(sys.argv[1:]):
+    for i, arg in enumerate(argv):
         if arg == "--seed" and i + 1 < len(sys.argv[1:]):
             try:
                 custom_seed = int(sys.argv[1:][i + 1])
@@ -319,6 +335,9 @@ def main() -> None:
                 custom_yaw = float(arg.split("=", 1)[1])
             except ValueError:
                 pass
+        elif arg in ("--map", "--mapa") and i + 1 < len(argv):
+            map_path = argv[i + 1]
+            editor_mode = True
         elif arg in ("--open-chat", "--chat"):
             open_chat = True
         elif arg in ("--chat-text",) and i + 1 < len(sys.argv[1:]):
@@ -327,6 +346,10 @@ def main() -> None:
         elif arg.startswith("--chat-text="):
             chat_text = arg.split("=", 1)[1]
             open_chat = True
+
+    if editor_mode:
+        terrain_demo = False
+        char_demo = False
 
     active_seed = {
         "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
@@ -513,6 +536,14 @@ def main() -> None:
         far=400.0,
     )
 
+    map_editor = None
+    if editor_mode:
+        from src.editor.map_editor import MapEditor
+        map_editor = MapEditor(camera=camera, map_path=map_path, create_gl=True)
+        camera.board_rotation = 0
+        camera.current_rotation = 0.0
+        gl.glClearColor(0.055, 0.070, 0.095, 1.0)
+        print("[Editor] Modo editor de mapa/objetos ativo.")
 
     # Estado utilizado pelo pan com botão central do mouse.
     pan_state = {
@@ -541,6 +572,12 @@ def main() -> None:
     ) -> Optional[bool]:
         """Encaminha eventos de teclado para a câmera e registra teclas ativas."""
         del scancode
+
+        # O editor de mapa consome os atalhos próprios; Q/E, WASD e o chat continuam
+        # disponíveis para a câmera e para o console.
+        if map_editor is not None and not chat_console.is_open:
+            if map_editor.handle_key(key, action, mods):
+                return True
 
         # Intercepta eventos de teclado para o console de chat estilo Minecraft
         try:
@@ -619,6 +656,10 @@ def main() -> None:
             cx, cy = window.get_cursor_pos()
             character_editor.ctrl = window.is_key_pressed(glfw.KEY_LEFT_CONTROL)
             if character_editor.handle_mouse_button(cx, cy, button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
+                return
+
+        if map_editor is not None:
+            if map_editor.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
                 return
 
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
@@ -808,6 +849,8 @@ def main() -> None:
                     (camera.target, camera.ortho_size, turntable_state["pitch"], turntable_state["active"],
                      turntable_state["yaw"]) = editor_camera.pop("body")
             camera.pitch = math.radians(turntable_state["pitch"])
+        elif map_editor is not None:
+            map_editor.update(dt)
         elif terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
             movement_forward, movement_right = camera.get_movement_directions()
@@ -868,7 +911,9 @@ def main() -> None:
                 )
             )
 
-            if terrain_demo:
+            if map_editor is not None:
+                mode_badge = "🗺️ Editor de mapa | "
+            elif terrain_demo:
                 mode_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | "
             elif char_demo:
                 spin_str = "Auto-spin: ON" if turntable_state["active"] else "Auto-spin: OFF"
@@ -998,6 +1043,17 @@ def main() -> None:
                 shader.set_vec3("u_LightColor", 0.9, 0.9, 0.9)
                 shader.set_vec3("u_AmbientColor", 0.35, 0.35, 0.35)
                 gl.glClearColor(0.08, 0.10, 0.13, 1.0)
+        elif map_editor is not None:
+            gl.glClearColor(0.055, 0.070, 0.095, 1.0)
+            shader.use()
+            shader.set_vec3("u_LightDir", 0.5, 1.0, 0.7)
+            shader.set_vec3("u_LightColor", 0.95, 0.95, 0.95)
+            shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.40)
+            mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
+            map_editor.update_cursor(mouse_x, mouse_y, window.width, window.height, view, projection, model)
+            map_editor.process_click()
+            map_editor.render(shader, projection, view, model, window.time,
+                              window.width, window.height)
         elif terrain_demo:
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
@@ -1103,9 +1159,10 @@ def main() -> None:
                 shader.set_mat4("u_Model", model @ transform)
                 mesh.draw()
 
-        # Restaurar estados OpenGL
+        # Restaurar estados OpenGL (o HUD pode ter deixado outro programa ativo)
         gl.glDisable(gl.GL_BLEND)
         gl.glDepthMask(gl.GL_TRUE)
+        shader.use()
         shader.set_bool("u_UndergroundMode", False)
         shader.set_int("u_CutawayPass", 0)
 
@@ -1113,7 +1170,8 @@ def main() -> None:
         # Renderizar interface 2D do Console de Chat (HUD estilo Minecraft)
         # --------------------------------------------------------------
         character_editor.render(window.width, window.height)
-        chat_console.render(window.width, window.height)
+        if map_editor is None or chat_console.is_open:
+            chat_console.render(window.width, window.height)
 
         # --------------------------------------------------------------
         # Captura de screenshot e limite de frames (para testes e automação)
@@ -1141,6 +1199,8 @@ def main() -> None:
     gl.glDeleteTextures(1, [current_texture["id"]])
     gl.glDeleteTextures(1, [token_tex_id])
     chat_console.delete()
+    if map_editor is not None:
+        map_editor.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

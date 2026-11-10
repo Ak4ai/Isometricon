@@ -14,6 +14,7 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 | [🏛️ **Arquitetura do Motor**](ARCHITECTURE.md) | Estrutura de Chunks 3D, Face Culling na CPU e Pipeline OpenGL. | Equipe A (Mundo) |
 | [🔗 **Contrato de Integração**](INTEGRATION_SPEC.md) | Interfaces `VoxelGridProvider`, Raycasting 3D e Matrizes de Câmera. | Equipe A & Equipe B |
 | [🎨 **Guia de Shaders GLSL**](SHADERS.md) | Shaders GLSL 330 core, modelo de iluminação Lambertiana e Destaques. | Equipe A & Equipe B |
+| [🗺️ **Editor de Mapa/Objetos**](EDITOR.md) | Plataforma em shader, voxels com cor/textura, exportar/carimbar objetos e salvar mapa. | Equipe & Avaliação |
 | [📖 **Wiki do Projeto**](wiki/Home.md) | Roupas do Roblox, animação, bateria de robustez, comandos do chat e histórico de experimentos. | Equipe B |
 
 </div>
@@ -27,6 +28,7 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 * [🎨 **`src/rendering/`**](../src/rendering/README.md) — Buffers de GPU (VAO/VBO/EBO), Frustum Culling e Shaders.
 * [🧮 **`src/math/`**](../src/math/README.md) — Álgebra Linear (Vetores, Matrizes $4\times4$, Bounding Boxes AABB).
 * [🔌 **`src/integration/`**](../src/integration/README.md) — Pontos de extensão e pontes de comunicação com a Equipe B.
+* [🗺️ **`src/editor/`**](../src/editor/README.md) — Editor de mapa/objetos voxel (malha, materiais, plataforma, HUD).
 
 ---
 

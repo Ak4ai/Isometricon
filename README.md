@@ -200,11 +200,30 @@ gantt
 
 3. **Inicie o motor gráfico:**
    ```bash
-   python src/main.py
+   python src/main.py              # demonstração do cubo
+   python src/main.py --terrain    # mundo voxel
+   python src/main.py --char       # personagem
+   python src/main.py --map-editor # editor de mapa/objetos voxel
    ```
    *(Ou abra no VS Code e pressione **F5**!)*
 
 > 💡 **GPU Dedicada:** O programa detecta e usa automaticamente sua GPU NVIDIA/AMD dedicada via driver hints (NVIDIA Optimus / AMD PowerXpress).
+
+### 🗺️ Editor de mapa/objetos
+
+O modo `--map-editor` abre uma plataforma com shader próprio para construir
+objetos voxel com cor e textura por voxel, exportar/carimbar objetos e salvar o
+mapa. Há uma casa de exemplo em `assets/objects/casa_exemplo.json`:
+
+```bash
+python src/main.py --map-editor
+python src/main.py --map=assets/objects/casa_exemplo.json
+```
+
+Controles principais: `Tab` troca a ferramenta, `C`/`X` escolhem cor/textura,
+clique esquerdo aplica, `R` gira o objeto carimbado, `F2` exporta, `F3` carrega
+objeto, `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume e
+`Ctrl+Z`/`Ctrl+Y` desfazem/refazem. Detalhes em [`docs/EDITOR.md`](docs/EDITOR.md).
 
 ### 🕹️ Controles
 
