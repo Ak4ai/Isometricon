@@ -103,6 +103,9 @@ class SchematicTool:
         self.schematics_dir = schematics_dir
         self.preview: Optional[Preview] = None
         self.notify: Callable[[str], None] = lambda text: None
+        # avisos ao mundo: a construção fixada tira o terreno da caixa dela; ao sair, ele volta
+        self.on_place: Callable[[object], None] = lambda placed: None
+        self.on_remove: Callable[[object], None] = lambda placed: None
         self._mesh_factory = mesh_factory or self._build_mesh
         self._atlas = None  # SchematicAtlas, criado na primeira construção (precisa de OpenGL)
 
@@ -174,7 +177,8 @@ class SchematicTool:
         if self.preview is None:
             return False, "Nenhuma construção em prévia. Use /schem load <nome>."
         p, self.preview = self.preview, None
-        self.layer.add(p.name, p.schematic, tuple(p.origin), p.mesh)
+        placed = self.layer.add(p.name, p.schematic, tuple(p.origin), p.mesh)
+        self.on_place(placed)
         return True, f"{p.name} fixada em x={p.origin[0]} y={p.origin[1]} z={p.origin[2]}."
 
     def cancel(self, silent: bool = False) -> Tuple[bool, str]:
@@ -189,6 +193,7 @@ class SchematicTool:
         if removed is None:
             return False, "Não há construções fixadas."
         self._delete_mesh(removed.mesh)
+        self.on_remove(removed)
         return True, f"{removed.name} removida."
 
     def clear(self) -> Tuple[bool, str]:
@@ -197,6 +202,7 @@ class SchematicTool:
         removed = self.layer.clear()
         for placed in removed:
             self._delete_mesh(placed.mesh)
+            self.on_remove(placed)
         return True, f"{len(removed)} construção(ões) removida(s)."
 
     def describe(self) -> List[str]:

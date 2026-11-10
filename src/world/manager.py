@@ -76,6 +76,9 @@ class WorldManager:
         self._water_tick = 0.0
         self.water_step_interval = WATER_TICK
         self.water_radius = 48.0
+        # Caixas (mín, máx, inclusive) onde o terreno vira ar: o espaço das construções fixadas. Aplicadas também
+        # aos chunks gerados depois (um chunk descarregado volta da semente e perderia o corte).
+        self.cleared_boxes: List[Tuple[Tuple[int, int, int], Tuple[int, int, int]]] = []
 
         if self.async_loading:
             self._start_worker()
@@ -119,6 +122,7 @@ class WorldManager:
                 new_chunks = self.generator.generate_region(positions)
 
                 with self._chunks_lock:
+                    self._apply_clearings(new_chunks)  # sob a trava: não perde um corte feito agora
                     self.chunks.update(new_chunks)
                     self._chunk_revision += 1
 
@@ -162,6 +166,7 @@ class WorldManager:
         ]
 
         new_chunks = self.generator.generate_region(target_columns)
+        self._apply_clearings(new_chunks)
         with self._chunks_lock:
             self.chunks.update(new_chunks)
             self._chunk_revision += 1
@@ -325,6 +330,63 @@ class WorldManager:
         self._rebuild_after_water({(x // size, y // size, z // size)})
         return True
 
+    # ------------------------------------------------------------------ terreno sob as construções
+    @staticmethod
+    def _box_slices(chunk_key, lo, hi):
+        """Fatias locais [x, y, z] da caixa dentro do chunk, ou ``None`` se não se encostam."""
+        size = Chunk3D.SIZE
+        origin = [k * size for k in chunk_key]
+        slices = []
+        for axis in range(3):
+            a = max(lo[axis], origin[axis]) - origin[axis]
+            b = min(hi[axis] + 1, origin[axis] + size) - origin[axis]
+            if b <= a:
+                return None
+            slices.append(slice(a, b))
+        return tuple(slices)
+
+    def _apply_clearings(self, chunks: Dict[Tuple[int, int, int], Chunk3D]) -> None:
+        for key, chunk in chunks.items():
+            for lo, hi in self.cleared_boxes:
+                cut = self._box_slices(key, lo, hi)
+                if cut is not None:
+                    chunk.blocks[cut] = int(BlockType.AIR)
+
+    def _keys_touching(self, lo, hi) -> set:
+        """Chunks da caixa e os vizinhos de borda (a face entre os dois muda)."""
+        size = Chunk3D.SIZE
+        return {(cx, cy, cz)
+                for cx in range((lo[0] - 1) // size, (hi[0] + 1) // size + 1)
+                for cy in range((lo[1] - 1) // size, (hi[1] + 1) // size + 1)
+                for cz in range((lo[2] - 1) // size, (hi[2] + 1) // size + 1)}
+
+    def clear_box(self, lo: Tuple[int, int, int], hi: Tuple[int, int, int]) -> None:
+        """O terreno da caixa (inclusive) vira ar, agora e nos chunks gerados depois (o espaço de uma construção)."""
+        lo, hi = tuple(int(v) for v in lo), tuple(int(v) for v in hi)
+        with self._chunks_lock:
+            self.cleared_boxes.append((lo, hi))
+            self._apply_clearings({k: c for k, c in self.chunks.items() if self._box_slices(k, lo, hi) is not None})
+        self.water.forget(lambda cell: all(lo[i] <= cell[i] <= hi[i] for i in range(3)))
+        self._rebuild_after_water(self._keys_touching(lo, hi))
+
+    def restore_box(self, lo: Tuple[int, int, int], hi: Tuple[int, int, int]) -> None:
+        """Devolve o terreno da caixa (a construção saiu): gera de novo pela semente, mantendo os outros cortes."""
+        lo, hi = tuple(int(v) for v in lo), tuple(int(v) for v in hi)
+        if (lo, hi) not in self.cleared_boxes:
+            return  # não foi cortada aqui (outro mundo, ou o mundo já foi refeito)
+        self.cleared_boxes.remove((lo, hi))
+        with self._chunks_lock:
+            keys = [k for k in self.chunks if self._box_slices(k, lo, hi) is not None]
+        fresh = self.generator.generate_region(keys) if keys else {}
+        self._apply_clearings(fresh)
+        with self._chunks_lock:
+            for key, chunk in fresh.items():
+                current = self.chunks.get(key)
+                if current is not None:
+                    cut = self._box_slices(key, lo, hi)
+                    current.blocks[cut] = chunk.blocks[cut]
+        self._rebuild_after_water(self._keys_touching(lo, hi))
+
     def _rebuild_after_water(self, changed: set) -> None:
         """Refaz as malhas dos chunks em que a água mudou e avisa quem segue a revisão."""
         with self._chunks_lock:
@@ -451,6 +513,7 @@ class WorldManager:
 
     def delete(self) -> None:
         """Libera todas as malhas de chunks da GPU e encerra threads ativas."""
+        self.cleared_boxes = []  # as construções vão junto com o mundo
         if self.async_loading and self._worker_thread is not None and self._worker_thread.is_alive():
             self._stop_event.set()
             try:

@@ -431,6 +431,9 @@ def main() -> None:
             player_position=lambda: tuple(player_token.position),
             view_axes=schematic_view_axes,
         )
+        # a construção fixada ocupa a caixa dela: o terreno ali dentro vira ar (como colar no Minecraft)
+        schematic_tool.on_place = lambda placed: world_manager.clear_box(*placed.bounds())
+        schematic_tool.on_remove = lambda placed: world_manager.restore_box(*placed.bounds())
         voxel_provider = VoxelGridProvider(
             block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
         )
