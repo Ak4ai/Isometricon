@@ -597,6 +597,11 @@ def main() -> None:
         near=0.1,
         far=400.0,
     )
+    if terrain_demo and "--cam=dungeons" in sys.argv[1:]:
+        # câmera de teste, no estilo de um dungeon crawler: de cima, em perspectiva e fora dos 45° da isométrica
+        camera.perspective = True
+        camera.pitch = math.radians(58.0)
+        camera.yaw = math.radians(30.0)
 
 
     # Estado utilizado pelo pan com botão central do mouse.

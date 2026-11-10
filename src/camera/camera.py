@@ -16,6 +16,7 @@ import numpy as np
 from src.math import (
     mat4_look_at,
     mat4_ortho,
+    mat4_perspective,
     mat4_rotate_y,
     mat4_translate,
     transform_vector,
@@ -81,6 +82,10 @@ class IsometricCamera:
         # Valores possíveis: 0, 90, 180, 270.
         self.board_rotation = 0
         self.current_rotation = 0
+        # Perspectiva (câmera de teste): a distância até o foco vira real e o ortho_size passa a ser a meia-altura
+        # visível no plano do foco, então o zoom e o enquadramento continuam os mesmos.
+        self.perspective = False
+        self.eye_distance = 14.0
         self.rotation_speed = 10.0  # Velocidade de rotação do tabuleiro
     # ------------------------------------------------------------------
     # Propriedades da câmera
@@ -153,7 +158,8 @@ class IsometricCamera:
             ],
             dtype=np.float32,
         )
-        return self.target + offset * self.DEFAULT_DISTANCE
+        distance = self.eye_distance if self.perspective else self.DEFAULT_DISTANCE
+        return self.target + offset * distance
     # ------------------------------------------------------------------
     # Matrizes
     # ------------------------------------------------------------------
@@ -178,6 +184,9 @@ class IsometricCamera:
                 "width e height devem ser maiores que zero."
             )
         aspect = float(width) / float(height)
+        if self.perspective:
+            fovy = 2.0 * math.atan(self.ortho_size / self.eye_distance)
+            return mat4_perspective(fovy, aspect, self.near, self.far)
         vertical_size = self.ortho_size
         horizontal_size = vertical_size * aspect
         return mat4_ortho(
