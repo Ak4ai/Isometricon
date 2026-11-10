@@ -247,10 +247,10 @@ def test_flat_terrain_has_no_contour_at_all():
 
 def test_a_step_gets_one_line_on_the_top_edge_of_the_higher_column():
     c = flat_chunk(3)
-    c.blocks[5, 4, 5] = BlockType.STONE            # uma coluna 1 bloco mais alta (topo em y = 5)
+    c.blocks[5, 4:6, 5] = BlockType.STONE          # uma coluna 2 blocos mais alta (topo em y = 6)
     vertices = build_relief_contour_vertices({(0, 0, 0): c})
     found = set(segments(vertices))
-    y = 5.0 + SURFACE_EPSILON
+    y = 6.0 + SURFACE_EPSILON
     # quatro lados: oeste (plano x = 5), leste (x = 6), norte (z = 5) e sul (z = 6), todos na altura do topo da coluna alta
     for segment in [((5.0, y, 5.0), (5.0, y, 6.0)), ((6.0, y, 5.0), (6.0, y, 6.0)),
                     ((5.0, y, 5.0), (6.0, y, 5.0)), ((5.0, y, 6.0), (6.0, y, 6.0))]:
@@ -277,10 +277,10 @@ def test_contour_crosses_chunk_borders_and_ignores_leaves():
 
 
 def test_contour_is_far_sparser_than_the_full_grid():
-    gen = TerrainGenerator(seed=12345)
-    chunks = gen.generate_region([(cx, 0, cz) for cx in range(-1, 2) for cz in range(-1, 2)])
-    contour = line_count(build_relief_contour_vertices(chunks))
-    full = line_count(build_surface_grid_vertices(chunks))
+    c = flat_chunk(2)
+    c.blocks[:8, :9, :] = BlockType.STONE          # um paredão de 6 blocos no meio do chunk
+    contour = line_count(build_relief_contour_vertices({(0, 0, 0): c}))
+    full = line_count(build_surface_grid_vertices({(0, 0, 0): c}))
     assert 0 < contour < full / 3
 
 
@@ -296,11 +296,11 @@ def test_grid_mode_cycles_contour_grid_off():
 
 def test_contour_ribbons_lie_on_the_higher_top_and_point_inwards():
     c = flat_chunk(3)
-    c.blocks[5, 4, 5] = BlockType.STONE            # a coluna (5, 5) é 1 bloco mais alta
+    c.blocks[5, 4:6, 5] = BlockType.STONE          # a coluna (5, 5) é 2 blocos mais alta
     ribbons = build_relief_contour_ribbons({(0, 0, 0): c})
     triangles = ribbons.reshape(-1, 3, 3)
     assert len(triangles) == 4 * 2                  # 4 lados, 2 triângulos por fita
-    assert {round(float(v[1]), 4) for v in ribbons} == {round(5.0 + SURFACE_EPSILON, 4)}
+    assert {round(float(v[1]), 4) for v in ribbons} == {round(6.0 + SURFACE_EPSILON, 4)}
     # toda a fita fica sobre a coluna mais alta (x e z entre 5 e 6), e tem a largura pedida
     assert ribbons[:, 0].min() >= 5.0 - 1e-6 and ribbons[:, 0].max() <= 6.0 + 1e-6
     assert ribbons[:, 2].min() >= 5.0 - 1e-6 and ribbons[:, 2].max() <= 6.0 + 1e-6
@@ -310,3 +310,9 @@ def test_contour_ribbons_lie_on_the_higher_top_and_point_inwards():
 
 def test_contour_ribbons_are_empty_on_flat_ground():
     assert len(build_relief_contour_ribbons({(0, 0, 0): flat_chunk()})) == 0
+
+
+def test_one_block_steps_get_no_contour_because_they_line_up_in_isometric():
+    c = flat_chunk(3)
+    c.blocks[5, 4, 5] = BlockType.STONE            # degrau de 1 bloco: o tom do nível o separa, não uma linha
+    assert len(build_relief_contour_vertices({(0, 0, 0): c})) == 0

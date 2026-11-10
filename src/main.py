@@ -506,6 +506,7 @@ def main() -> None:
     skin_command_handler.schematic_tool = schematic_tool
     skin_command_handler.room_reveal = room_renderer
     skin_command_handler.sun_shadows = shadow_renderer
+    skin_command_handler.world_seed = (lambda: active_seed["value"]) if terrain_demo else None
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
         create_gl=True,

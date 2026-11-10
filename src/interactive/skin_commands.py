@@ -180,6 +180,7 @@ class SkinCommandHandler:
         self.schematic_tool = None  # SchematicTool do terreno (/schem); None fora dele
         self.room_reveal = None  # RoomRevealRenderer do terreno (/revelar); None fora dele
         self.sun_shadows = None  # SunShadowRenderer do terreno (/sombras); None fora dele
+        self.world_seed = None  # () -> int, a seed do mundo aberto (/seed); None fora do terreno
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
@@ -307,6 +308,24 @@ class SkinCommandHandler:
         else:
             renderer.enabled = not renderer.enabled
         return True, f"[Revelar] {'ligado' if renderer.enabled else 'desligado'}.", CYAN
+
+    # ------------------------------------------------------------------ /seed
+    def seed(self, args: List[str]) -> Result:
+        """/seed: mostra a seed do mundo aberto e a copia para a área de transferência."""
+        getter = self.world_seed
+        if getter is None:
+            return False, "[Seed] Só funciona no terreno (--terrain).", RED
+        value = getter()
+        copied = False
+        window = getattr(self.chat_console, "glfw_window", None)
+        if window is not None:
+            try:
+                import glfw
+                glfw.set_clipboard_string(window, str(value))
+                copied = True
+            except Exception:
+                copied = False
+        return True, f"[Seed] {value}" + (" (copiada)" if copied else ""), CYAN
 
     # ------------------------------------------------------------------ /sombras
     def shadows(self, args: List[str]) -> Result:
@@ -1300,6 +1319,7 @@ ROOT_COMMANDS: List[Command] = [
     Command(("skin",), "/skin <comando>", "muda o personagem", SkinCommandHandler.skin, None),
     Command(("ajuda", "help", "?"), "/ajuda [comando]", "lista os comandos", SkinCommandHandler.help, None),
     Command(("girar", "spin"), "/girar [on|off]", "rotação automática no visualizador", SkinCommandHandler.spin, ["on", "off"]),
+    Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>]",
             "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca"]),
     Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>]",
@@ -1340,6 +1360,7 @@ COMMAND_TREE: Dict[str, Any] = {
     "skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"],
     "revelar": ["on", "off", "escuro"],
     "sombras": ["on", "off", "forca"],
+    "seed": [],
     "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},
 }
 
