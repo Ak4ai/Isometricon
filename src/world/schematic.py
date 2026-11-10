@@ -115,6 +115,8 @@ class Schematic:
         self.palette = palette
         self.name = name
         self._solid_mask: Optional[np.ndarray] = None
+        self._occupied_mask: Optional[np.ndarray] = None
+        self._full_cube_mask: Optional[np.ndarray] = None
 
     def get_block(self, x: int, y: int, z: int) -> str:
         """Retorna o nome do bloco na coordenada local da estrutura."""
@@ -126,13 +128,37 @@ class Schematic:
         """Verifica se a coordenada é ar ou fora dos limites."""
         return is_air_name(self.get_block(x, y, z))
 
+    def _mask(self, test) -> np.ndarray:
+        lookup = {name: bool(test(name)) for name in set(self.grid.ravel().tolist())}
+        return np.vectorize(lookup.__getitem__, otypes=[bool])(self.grid)
+
+    @property
+    def occupied_mask(self) -> np.ndarray:
+        """Máscara booleana (height, length, width): True onde há bloco que não é ar (é desenhado)."""
+        if self._occupied_mask is None:
+            self._occupied_mask = self._mask(lambda name: not is_air_name(name))
+        return self._occupied_mask
+
     @property
     def solid_mask(self) -> np.ndarray:
-        """Máscara booleana (height, length, width): True onde há bloco que não é ar."""
+        """Máscara booleana: True onde o bloco barra o personagem (colisão e cômodos).
+
+        Tochas, tapetes, placas, botões, velas e vasos são desenhados mas não barram.
+        """
         if self._solid_mask is None:
-            lookup = {name: not is_air_name(name) for name in set(self.grid.ravel().tolist())}
-            self._solid_mask = np.vectorize(lookup.__getitem__, otypes=[bool])(self.grid)
+            from src.world.block_shapes import collides
+
+            self._solid_mask = self._mask(lambda name: not is_air_name(name) and collides(name))
         return self._solid_mask
+
+    @property
+    def full_cube_mask(self) -> np.ndarray:
+        """Máscara booleana: True nos cubos inteiros (só eles escondem a face do vizinho)."""
+        if self._full_cube_mask is None:
+            from src.world.block_shapes import is_full_cube
+
+            self._full_cube_mask = self._mask(lambda name: not is_air_name(name) and is_full_cube(name))
+        return self._full_cube_mask
 
     @classmethod
     def load_from_file(cls, filepath: str) -> "Schematic":

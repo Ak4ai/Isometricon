@@ -30,6 +30,7 @@ SHELL = 128
 
 # Blocos que não contam como teto (a copa de uma árvore não faz um cômodo)
 _NOT_ROOF = (int(BlockType.LEAVES),)
+_OPAQUE = tuple(int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD))
 _PASSABLE = (int(BlockType.AIR), int(BlockType.WATER))
 
 _FACE_STRUCTURE = ndimage.generate_binary_structure(3, 1)  # vizinhança de 6 faces
@@ -62,6 +63,8 @@ class WindowCells:
     blocks: np.ndarray      # uint8: BlockType do terreno (0 onde só há construção)
     owner: np.ndarray       # int8: -1 terreno ou ar; i = índice da construção que ocupa a célula
     structures: list        # as construções, na ordem dos índices de ``owner``
+    occupied: np.ndarray    # bool: há algo desenhado na célula (um sólido, ou um enfeite como tocha e tapete)
+    culls: np.ndarray       # bool: cubo inteiro e opaco, o único que esconde a face do vizinho
 
 
 def extract_window(
@@ -101,11 +104,14 @@ def extract_window_cells(
     solid = ~np.isin(blocks, _PASSABLE)
     roof = solid & ~np.isin(blocks, _NOT_ROOF)
     owner = np.full(WINDOW, -1, dtype=np.int8)
+    culls = np.isin(blocks, _OPAQUE)
 
     floor_rows = max(0, min(sy, -oy))  # as camadas com y < 0
     if floor_rows:
         solid[:, :floor_rows, :] = True
         roof[:, :floor_rows, :] = True
+        culls[:, :floor_rows, :] = True
+    occupied = solid.copy()
 
     for index, placed in enumerate(structures):
         (bx0, by0, bz0), (bx1, by1, bz1) = placed.bounds()
@@ -114,13 +120,17 @@ def extract_window_cells(
         if any(h <= l for l, h in zip(lo, hi)):
             continue
         # a máscara da construção é [y, z, x]; a janela é [x, y, z]
-        part = placed._solid[lo[1] - by0:hi[1] - by0, lo[2] - bz0:hi[2] - bz0, lo[0] - bx0:hi[0] - bx0]
-        part = part.transpose(2, 0, 1)
+        window = (slice(lo[1] - by0, hi[1] - by0), slice(lo[2] - bz0, hi[2] - bz0), slice(lo[0] - bx0, hi[0] - bx0))
+        part = placed._solid[window].transpose(2, 0, 1)
+        shown = placed._occupied[window].transpose(2, 0, 1)
+        cube = placed._culls[window].transpose(2, 0, 1)
         sel = (slice(lo[0] - ox, hi[0] - ox), slice(lo[1] - oy, hi[1] - oy), slice(lo[2] - oz, hi[2] - oz))
         solid[sel] |= part
         roof[sel] |= part
-        owner[sel][part] = index
-    return WindowCells(solid, roof, blocks, owner, structures)
+        occupied[sel] |= shown
+        culls[sel] |= cube
+        owner[sel][shown] = index
+    return WindowCells(solid, roof, blocks, owner, structures, occupied, culls)
 
 
 def _covered(roof: np.ndarray) -> np.ndarray:

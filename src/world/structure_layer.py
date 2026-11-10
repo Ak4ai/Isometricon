@@ -27,7 +27,9 @@ class PlacedStructure:
     _solid: np.ndarray = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._solid = self.schematic.solid_mask  # indexado [y, z, x]
+        self._solid = self.schematic.solid_mask          # indexados [y, z, x]
+        self._occupied = self.schematic.occupied_mask
+        self._culls = self.schematic.full_cube_mask
 
     def bounds(self) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
         """Células (mínima, máxima) ocupadas pela caixa da construção, inclusive."""

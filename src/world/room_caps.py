@@ -15,6 +15,7 @@ from typing import Callable, Tuple
 import numpy as np
 
 from src.world.mesher import _CORNERS, _NORMALS
+from src.world.block_shapes import box_face_quad, shape_for
 from src.world.room_reveal import INTERIOR, RoomMask
 from src.world.structure_mesher import _FACES as _STRUCTURE_FACES
 
@@ -39,15 +40,15 @@ def _shifted(array: np.ndarray, offset) -> np.ndarray:
     return out
 
 
-def hidden_cells(solid: np.ndarray, interior: np.ndarray, view_dir) -> np.ndarray:
-    """Células sólidas que o shader esconde: o raio da câmera, vindo delas, chega ao espaço do jogador.
+def hidden_cells(occupied: np.ndarray, interior: np.ndarray, view_dir) -> np.ndarray:
+    """Células desenhadas que o shader esconde: o raio da câmera, vindo delas, chega ao espaço do jogador.
 
     O raio parte do centro da célula (inteiro + 0,5), então a célula que ele atinge no passo i é
     ``c + floor(0,5 + dir * t_i)``: um deslocamento inteiro igual para todas as células. Em vez de
     lançar um raio por célula, desloca-se a máscara do espaço uma vez por passo distinto.
 
     Args:
-        solid: bool [x, y, z], o que é sólido na janela.
+        occupied: bool [x, y, z], o que é desenhado na janela (sólidos e enfeites).
         interior: bool [x, y, z], o espaço do jogador.
         view_dir: para onde a câmera olha, em coordenadas do mundo.
     """
@@ -56,10 +57,10 @@ def hidden_cells(solid: np.ndarray, interior: np.ndarray, view_dir) -> np.ndarra
         tuple(int(v) for v in np.floor(0.5 + direction * (RAY_START + RAY_STEP * step)))
         for step in range(RAY_STEPS)
     }
-    reaches = np.zeros(solid.shape, dtype=bool)
+    reaches = np.zeros(occupied.shape, dtype=bool)
     for offset in offsets:
         reaches |= _shifted(interior, offset)
-    return solid & ~interior & reaches
+    return occupied & ~interior & reaches
 
 
 def _toward(array: np.ndarray, offset) -> np.ndarray:
@@ -101,13 +102,14 @@ def build_caps(room: RoomMask, view_dir, terrain_atlas, structure_uv: UvLookup) 
     if window is None or not room.active:
         return caps
     interior = room.data == INTERIOR
-    hidden = hidden_cells(window.solid, interior, view_dir)
+    hidden = hidden_cells(window.occupied, interior, view_dir)
     if not hidden.any():
         return caps
-    visible = window.solid & ~hidden
+    visible = window.occupied & ~hidden
     origin = np.array(room.origin, dtype=np.float32)
-    caps.terrain = _terrain_caps(window, visible, hidden, origin, terrain_atlas)
-    caps.structures = _structure_caps(window, visible, hidden, origin, structure_uv)
+    culling = hidden & window.culls  # só um cubo inteiro escondido deixou a face do vizinho sem tampa
+    caps.terrain = _terrain_caps(window, visible, culling, origin, terrain_atlas)
+    caps.structures = _structure_caps(window, visible, culling, origin, structure_uv)
     return caps
 
 
@@ -133,23 +135,37 @@ def _terrain_caps(window, visible, hidden, origin, atlas):
     return _join(vertices, indices)
 
 
-def _structure_caps(window, visible, hidden, origin, uv_lookup):
+def _structure_caps(window, visible, culling, origin, uv_lookup):
     vertices, indices, base = [], [], 0
     cache = {}
-    for (dx, dy, dz), normal, face_key, corners, uv_order in _STRUCTURE_FACES:
-        mask = visible & _toward(hidden, (dx, dy, dz)) & (window.owner >= 0)
+    for face, ((dx, dy, dz), normal, face_key, corners, uv_order) in enumerate(_STRUCTURE_FACES):
+        mask = visible & _toward(culling, (dx, dy, dz)) & (window.owner >= 0)
         for cell in np.argwhere(mask):
             placed = window.structures[window.owner[tuple(cell)]]
             world = cell + origin.astype(np.int64)
             lx, ly, lz = (int(world[0]) - placed.origin[0], int(world[1]) - placed.origin[1],
                           int(world[2]) - placed.origin[2])
             block = placed.schematic.grid[ly, lz, lx]
+            center = cell.astype(np.float32) + origin + 0.5
+            boxes = shape_for(block)
+            if boxes is not None:
+                # um bloco com forma: só as faces das caixas que encostam, inteiras, no limite da célula
+                for box in boxes:
+                    if not box.covers_face(face):
+                        continue
+                    name = box.texture or block
+                    key = (name, face_key)
+                    if key not in cache:
+                        cache[key] = uv_lookup(name, face_key)
+                    vertices.append(box_face_quad(box, face, center - 0.5, cache[key]))
+                    indices.append(base + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32))
+                    base += 4
+                continue
             key = (block, face_key)
             if key not in cache:
                 cache[key] = uv_lookup(block, face_key)
             u0, v0, u1, v1 = cache[key]
             us, vs = (u0, u1), (v0, v1)
-            center = cell.astype(np.float32) + origin + 0.5
             quad = np.empty((4, 11), dtype=np.float32)
             for i, (corner, (cu, cv)) in enumerate(zip(corners, uv_order)):
                 quad[i, :3] = center + 0.5 * np.array(corner, dtype=np.float32)

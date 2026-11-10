@@ -8,6 +8,7 @@ from typing import Callable, Tuple
 
 import numpy as np
 
+from src.world.block_shapes import box_face_quad, shape_for
 from src.world.schematic import Schematic
 
 # (u0, v0, u1, v1) de um bloco e face
@@ -28,6 +29,9 @@ _FACES = (
     ((0, 0, -1), (0.0, 0.0, -1.0), "south", ((1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)), _SIDE_UV),
     ((-1, 0, 0), (-1.0, 0.0, 0.0), "west", ((-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1)), _SIDE_UV),
 )
+
+# block_shapes.FACES tem a mesma ordem de _FACES; o índice da face vale nas duas tabelas
+_FACES_BY_SHAPE_ORDER = _FACES
 
 # Layout por vértice do TexturedMesh: posição(3), normal(3), uv(2), cor(3)
 FLOATS_PER_VERTEX = 11
@@ -53,10 +57,12 @@ class StructureMesher:
         # Os centros dos blocos vão de 0 a dim-1: o meio deles está em (dim-1)/2
         offset = (np.array([w, h, l], dtype=np.float32) - 1.0) / 2.0 if center else np.zeros(3, dtype=np.float32)
 
+        # Só um cubo inteiro esconde a face do vizinho (uma laje ou uma cerca ao lado não esconde).
         # A máscara ganha uma borda de ar: tudo que está fora da estrutura é ar.
-        solid = schematic.solid_mask
+        occupied = schematic.occupied_mask
         padded = np.zeros((h + 2, l + 2, w + 2), dtype=bool)
-        padded[1:-1, 1:-1, 1:-1] = solid
+        padded[1:-1, 1:-1, 1:-1] = schematic.full_cube_mask
+        shapes = {}
 
         uv_cache = {}
         vertices = []
@@ -64,9 +70,29 @@ class StructureMesher:
         vertex_offset = 0
 
         # argwhere devolve [y, z, x] na ordem de varredura (y, z, x)
-        for y, z, x in np.argwhere(solid):
+        for y, z, x in np.argwhere(occupied):
             block = schematic.grid[y, z, x]
             block_pos = np.array([x, y, z], dtype=np.float32) - offset
+            if block not in shapes:
+                shapes[block] = shape_for(block)
+            boxes = shapes[block]
+            if boxes is not None:
+                for box in boxes:
+                    for face, ((dx, dy, dz), _, face_key, _, _) in enumerate(_FACES_BY_SHAPE_ORDER):
+                        if box.covers_face(face) and padded[y + 1 + dy, z + 1 + dz, x + 1 + dx]:
+                            continue
+                        name = box.texture or block
+                        key = (name, face_key)
+                        if key not in uv_cache:
+                            uv_cache[key] = uv_lookup(name, face_key)
+                        quad = box_face_quad(box, face, block_pos - 0.5, uv_cache[key])
+                        vertices.extend(quad.ravel())
+                        indices.extend((
+                            vertex_offset, vertex_offset + 1, vertex_offset + 2,
+                            vertex_offset + 2, vertex_offset + 3, vertex_offset,
+                        ))
+                        vertex_offset += 4
+                continue
             for (dx, dy, dz), normal, face_key, corners, uv_order in _FACES:
                 if padded[y + 1 + dy, z + 1 + dz, x + 1 + dx]:
                     continue  # há bloco do lado: a face não aparece

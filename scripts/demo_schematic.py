@@ -1,7 +1,7 @@
 """Demo: mostra uma construção Schematic (.schem) em 3D, girando em projeção isométrica.
 
 Uso:
-    python scripts/demo_schematic.py [arquivo.schem] [--frames N] [--capture saida.png]
+    python scripts/demo_schematic.py [arquivo.schem] [--formas] [--frames N] [--capture saida.png]
 
 Sem argumentos abre assets/schematics/31422.schem. Com --frames N a janela fecha sozinha
 depois de N quadros; com --capture salva o último quadro em PNG (para conferir sem olhar a tela).
@@ -39,6 +39,10 @@ def save_frame(path: str, width: int, height: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Visualizador 3D de schematics (.schem)")
     parser.add_argument("schematic", nargs="?", default=DEFAULT_SCHEMATIC)
+    parser.add_argument("--formas", action="store_true", help="mostra uma amostra de cada forma de bloco")
+    parser.add_argument("--zoom", type=float, default=1.0, help="aproxima a câmera (2 = o dobro)")
+    parser.add_argument("--olhar", type=float, nargs=2, metavar=("X", "Z"), default=None,
+                        help="aponta a câmera para este ponto da construção (a partir do canto)")
     parser.add_argument("--frames", type=int, default=None, help="fecha depois de N quadros")
     parser.add_argument("--capture", default=None, help="salva o último quadro neste PNG")
     args = parser.parse_args()
@@ -64,7 +68,12 @@ def main() -> None:
     )
     atlas = SchematicAtlas(create_gl=True)
 
-    schematic = Schematic.load_from_file(args.schematic)
+    if args.formas:
+        from src.world.shape_showcase import showcase_schematic
+
+        schematic = showcase_schematic()
+    else:
+        schematic = Schematic.load_from_file(args.schematic)
     print(f"Estrutura: {schematic.name} ({schematic.width}x{schematic.height}x{schematic.length})")
     mesh = StructureMesher.build_mesh(schematic, atlas, center=True)
     print(f"Malha: {mesh.index_count // 3} triângulos, com as faces ocultas descartadas.")
@@ -76,7 +85,11 @@ def main() -> None:
     shader.set_vec3("u_AmbientColor", 0.45, 0.45, 0.48)
 
     max_dim = max(schematic.width, schematic.height, schematic.length)
-    ortho_size = max_dim * 0.75
+    ortho_size = max_dim * 0.75 / max(args.zoom, 0.05)
+    look_at = np.zeros(3, dtype=np.float32)
+    if args.olhar is not None:  # a construção está centrada na origem: o canto fica em -dim/2
+        look_at = np.array([args.olhar[0] - schematic.width / 2.0, 0.0, args.olhar[1] - schematic.length / 2.0],
+                           dtype=np.float32)
     cam_dist = max_dim * 2.0
 
     frame = 0
@@ -93,8 +106,8 @@ def main() -> None:
         aspect = window.get_aspect_ratio()
         projection = mat4_ortho(-ortho_size * aspect, ortho_size * aspect, -ortho_size, ortho_size, 0.1, 500.0)
         view = mat4_look_at(
-            eye=vec3(cam_dist, cam_dist, cam_dist),
-            target=vec3(0.0, 0.0, 0.0),
+            eye=vec3(cam_dist, cam_dist, cam_dist) + look_at,
+            target=look_at,
             up=vec3(0.0, 1.0, 0.0),
         )
         # Gira devagar em torno do eixo Y; com --capture fica parado num ângulo fixo
