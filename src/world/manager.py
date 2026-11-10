@@ -54,7 +54,7 @@ class WorldManager:
         self.meshes: Dict[Tuple[int, int, int], Tuple[TexturedMesh, np.ndarray]] = {}
         self._pending_mesh_deletions: List[object] = []
 
-        self.mesher = ChunkMesher(atlas=atlas)
+        self.mesher = ChunkMesher(atlas=atlas, ambient_occlusion=True)
         self._last_center: Tuple[int, int] | None = None
         # Revisão barata para consumidores que precisam reagir a streaming sem
         # observar o dicionário interno enquanto a worker o modifica.

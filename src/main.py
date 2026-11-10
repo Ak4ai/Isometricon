@@ -430,6 +430,8 @@ def main() -> None:
         # Revela só o espaço fechado do jogador (cômodo, caverna) e escurece o resto
         from src.rendering.room_reveal import RoomRevealRenderer
         from src.world.room_reveal import RoomRevealTracker
+        from src.rendering.sun_shadows import SunShadowRenderer
+        shadow_renderer = SunShadowRenderer()
         room_tracker = RoomRevealTracker()
         room_renderer = RoomRevealRenderer(terrain_atlas=atlas, structure_atlas=lambda: schematic_tool.atlas_if_ready())
         highlight_renderer = BlockHighlightRenderer()
@@ -474,7 +476,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = None
+        room_tracker = room_renderer = shadow_renderer = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -503,6 +505,7 @@ def main() -> None:
     )
     skin_command_handler.schematic_tool = schematic_tool
     skin_command_handler.room_reveal = room_renderer
+    skin_command_handler.sun_shadows = shadow_renderer
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
         create_gl=True,
@@ -740,8 +743,8 @@ def main() -> None:
                 print("[Câmera] Posição e enquadramento resetados.")
 
         if terrain_demo and key == glfw.KEY_G and action == glfw.PRESS:
-            visible = grid_renderer.toggle_visibility()
-            print(f"[Grid] {'Ativado' if visible else 'Desativado'}.")
+            labels = {"contour": "Contorno do relevo", "grid": "Grade completa", "off": "Desativado"}
+            print(f"[Grid] {labels[grid_renderer.cycle_mode()]}.")
 
         if key == glfw.KEY_LEFT_SHIFT:
             pan_state["shift_pressed"] = action != glfw.RELEASE
@@ -1196,6 +1199,7 @@ def main() -> None:
             room_tracker.update(dt, player_token.position, loaded_chunks, chunk_revision,
                                 schematic_tool.layer.structures)
             room_renderer.update(dt, room_tracker)
+            shadow_renderer.update(room_tracker)
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
             if voxel_provider is not None and not room_renderer.visible:
@@ -1220,6 +1224,8 @@ def main() -> None:
             gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
             shader.set_int("u_TextureAtlas", 0)
             view_projection = projection @ view
+            shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
+            shadow_renderer.apply(shader, model)
             room_renderer.apply(shader, model, view)
             world_manager.render(shader, model, view_projection)
             room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
@@ -1243,6 +1249,8 @@ def main() -> None:
             schematic_tool.draw(shader, model, window.time)
             room_renderer.draw_structure_caps(shader, model)
             room_renderer.disable(shader)
+            shadow_renderer.disable(shader)
+            shader.set_bool("u_WorldStyle", False)
 
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
             grid_renderer.render(projection, view, model)
@@ -1356,6 +1364,8 @@ def main() -> None:
         schematic_tool.delete()
     if room_renderer is not None:
         room_renderer.delete()
+    if shadow_renderer is not None:
+        shadow_renderer.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

@@ -16,6 +16,7 @@ from src.world import Chunk3D
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SURFACE_EPSILON = 0.002
+CONTOUR_WIDTH = 0.07  # espessura, em blocos, da fita de contorno do relevo
 _LOCAL_Y = np.arange(Chunk3D.SIZE, dtype=np.int32)[None, :, None]
 _SURFACE_LUT = np.zeros(256, dtype=bool)
 _SURFACE_LUT[[int(block) for block in TACTICAL_SURFACE_BLOCKS]] = True
@@ -79,6 +80,96 @@ def _grid_edges(
     return np.column_stack(
         (x, y, z, x + x_offset, y, z + z_offset)
     ).astype(np.float32, copy=False).reshape(-1, 2, 3)
+
+
+def _surface_heights(
+    chunks: Mapping[tuple[int, int, int], Chunk3D],
+) -> dict[tuple[int, int], int]:
+    """Altura da superfície tática de cada coluna (x, z); colunas bloqueadas por folhagem ficam de fora."""
+
+    heights: dict[tuple[int, int], int] = {}
+    blocker_heights: dict[tuple[int, int], int] = {}
+    for (chunk_x, chunk_y, chunk_z), chunk in chunks.items():
+        origin_x = chunk_x * Chunk3D.SIZE
+        origin_y = chunk_y * Chunk3D.SIZE
+        origin_z = chunk_z * Chunk3D.SIZE
+        for mask, target in (
+            (_SURFACE_LUT[chunk.blocks], heights),
+            (_BLOCKER_LUT[chunk.blocks], blocker_heights),
+        ):
+            if not mask.any():
+                continue
+            local_heights = np.where(mask, _LOCAL_Y, -1).max(axis=1)
+            for local_x, local_z in np.argwhere(local_heights >= 0):
+                position = (origin_x + int(local_x), origin_z + int(local_z))
+                height = origin_y + int(local_heights[local_x, local_z])
+                target[position] = max(target.get(position, -1), height)
+    return {pos: h for pos, h in heights.items() if blocker_heights.get(pos, -1) <= h}
+
+
+def _relief_segments(
+    chunks: Mapping[tuple[int, int, int], Chunk3D],
+    epsilon: float,
+) -> list[tuple[float, float, float, float, float, float, float, float]]:
+    """Segmentos (x0, y, z0, x1, y, z1, ix, iz) onde a altura da superfície muda.
+
+    O segmento corre pela aresta de cima do degrau, na altura da coluna mais alta e sobre o plano que separa as
+    duas; (ix, iz) é a direção, no plano, que aponta para dentro da coluna mais alta.
+    """
+
+    heights = _surface_heights(chunks)
+    segments = []
+    for (x, z), height in heights.items():
+        for dx, dz in ((1, 0), (0, 1)):
+            other = heights.get((x + dx, z + dz))
+            if other is None or other == height:
+                continue
+            y = float(max(height, other) + 1) + float(epsilon)
+            higher_is_this = height > other
+            if dx:  # vizinha a leste: o degrau está no plano x + 1, ao longo de z
+                inward = -1.0 if higher_is_this else 1.0
+                segments.append((x + 1.0, y, float(z), x + 1.0, y, z + 1.0, inward, 0.0))
+            else:   # vizinha ao sul: o degrau está no plano z + 1, ao longo de x
+                inward = -1.0 if higher_is_this else 1.0
+                segments.append((float(x), y, z + 1.0, x + 1.0, y, z + 1.0, 0.0, inward))
+    return sorted(segments)
+
+
+def build_relief_contour_vertices(
+    chunks: Mapping[tuple[int, int, int], Chunk3D],
+    *,
+    epsilon: float = SURFACE_EPSILON,
+) -> np.ndarray:
+    """Segmentos ``GL_LINES`` só onde a altura da superfície muda, como curvas de nível.
+
+    Em terreno plano não há linha nenhuma, e uma escarpa de vários blocos recebe uma linha só, no topo.
+    """
+
+    segments = _relief_segments(chunks, epsilon)
+    if not segments:
+        return np.empty((0, 3), dtype=np.float32)
+    return np.asarray([s[:6] for s in segments], dtype=np.float32).reshape(-1, 3)
+
+
+def build_relief_contour_ribbons(
+    chunks: Mapping[tuple[int, int, int], Chunk3D],
+    *,
+    width: float = CONTOUR_WIDTH,
+    epsilon: float = SURFACE_EPSILON,
+) -> np.ndarray:
+    """O mesmo contorno como fitas de ``width`` blocos (``GL_TRIANGLES``), deitadas na borda da coluna mais alta.
+
+    Uma fita tem espessura fixa no mundo, então aparece igual em qualquer zoom (uma linha de 1 pixel some).
+    """
+
+    triangles = []
+    for x0, y, z0, x1, _, z1, ix, iz in _relief_segments(chunks, epsilon):
+        a, b = (x0, y, z0), (x1, y, z1)
+        a2, b2 = (x0 + ix * width, y, z0 + iz * width), (x1 + ix * width, y, z1 + iz * width)
+        triangles += [a, b, b2, a, b2, a2]
+    if not triangles:
+        return np.empty((0, 3), dtype=np.float32)
+    return np.asarray(triangles, dtype=np.float32).reshape(-1, 3)
 
 
 def build_surface_grid_vertices(
@@ -169,13 +260,20 @@ def build_surface_grid_vertices(
 class GridOverlayRenderer:
     """Mantém um VBO dedicado e desenha a grade em uma única chamada."""
 
-    def __init__(self, *, color: tuple[float, float, float, float] = (0.06, 0.08, 0.11, 0.72)) -> None:
+    def __init__(
+        self,
+        *,
+        color: tuple[float, float, float, float] = (0.06, 0.08, 0.11, 0.72),
+        contour_color: tuple[float, float, float, float] = (0.04, 0.06, 0.09, 0.62),
+    ) -> None:
         self.shader = Shader(
             os.path.join(PROJECT_ROOT, "assets", "shaders", "grid.vert"),
             os.path.join(PROJECT_ROOT, "assets", "shaders", "grid.frag"),
         )
         self.color = color
+        self.contour_color = contour_color
         self.visible = True
+        self.mode = "contour"  # "contour": só onde o relevo muda; "grid": a grade completa de células
         self.vertex_count = 0
         self._chunk_revision = -1
         self._pending_chunk_revision: int | None = None
@@ -198,6 +296,19 @@ class GridOverlayRenderer:
         self.visible = not self.visible
         return self.visible
 
+    MODES = ("contour", "grid", "off")
+
+    def cycle_mode(self) -> str:
+        """Alterna contorno -> grade completa -> desligado; devolve o modo novo."""
+        current = "off" if not self.visible else self.mode
+        new = self.MODES[(self.MODES.index(current) + 1) % len(self.MODES)]
+        self.visible = new != "off"
+        if self.visible:
+            self.mode = new
+        self._chunk_revision = -1  # a geometria muda com o modo: refaz no próximo sync
+        self._pending_chunk_revision = None
+        return new
+
     def needs_sync(self, revision: int) -> bool:
         """Indica se é necessário obter o snapshot do WorldManager neste frame."""
         return self.visible and revision != self._chunk_revision
@@ -219,7 +330,8 @@ class GridOverlayRenderer:
         if not self.needs_sync(revision):
             return False
         started = perf_counter()
-        vertices = build_surface_grid_vertices(chunks)
+        build = build_relief_contour_ribbons if self.mode == "contour" else build_surface_grid_vertices
+        vertices = build(chunks)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, self.vbo)
         gl.glBufferData(gl.GL_ARRAY_BUFFER, vertices.nbytes, vertices, gl.GL_DYNAMIC_DRAW)
         self.vertex_count = len(vertices)
@@ -239,15 +351,21 @@ class GridOverlayRenderer:
         self.shader.set_mat4("u_Projection", projection)
         self.shader.set_mat4("u_View", view)
         self.shader.set_mat4("u_Model", model)
-        self.shader.set_vec4("u_GridColor", *self.color)
+        contour = self.mode == "contour"
+        self.shader.set_vec4("u_GridColor", *(self.contour_color if contour else self.color))
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glDepthMask(gl.GL_FALSE)
         gl.glLineWidth(1.0)
+        culling = gl.glIsEnabled(gl.GL_CULL_FACE)
+        if contour:  # as fitas são triângulos: sem descarte de faces, quem olha de qualquer lado vê
+            gl.glDisable(gl.GL_CULL_FACE)
         gl.glBindVertexArray(self.vao)
-        gl.glDrawArrays(gl.GL_LINES, 0, self.vertex_count)
+        gl.glDrawArrays(gl.GL_TRIANGLES if contour else gl.GL_LINES, 0, self.vertex_count)
         gl.glBindVertexArray(0)
+        if culling:
+            gl.glEnable(gl.GL_CULL_FACE)
         gl.glDepthMask(gl.GL_TRUE)
         gl.glDisable(gl.GL_BLEND)
         self.last_render_cpu_ms = (perf_counter() - started) * 1000.0

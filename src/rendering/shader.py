@@ -10,7 +10,7 @@ class Shader:
     """Carrega, compila e gerencia programas de shaders GLSL."""
 
     # Unidade de textura fixa de samplers adicionais do shader do mundo (u_RoomMask: máscara 3D do espaço)
-    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2}
+    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3}
 
     def __init__(self, vertex_path: str, fragment_path: str):
         """Inicializa e compila o programa de shader a partir de arquivos no disco.

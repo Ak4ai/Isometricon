@@ -30,7 +30,7 @@ def run(handler, line):
 
 
 def test_only_the_known_root_commands_exist():
-    assert sorted(COMMAND_TREE) == ["ajuda", "girar", "revelar", "schem", "skin"]
+    assert sorted(COMMAND_TREE) == ["ajuda", "girar", "revelar", "schem", "skin", "sombras"]
     handler = SkinCommandHandler(character_model=None)
     for old in ("/top sweater", "/eyes blue", "/import 9240757332", "/cabelo rosa", "/manga largura 1.1", "/cintura alta"):
         ok, msg, _ = run(handler, old)
@@ -171,9 +171,9 @@ def test_autocomplete_follows_the_command_table():
     import glfw
     chat = ChatConsole(create_gl=False)
     chat.open("/")
-    assert chat.suggestions == ["/ajuda", "/girar", "/revelar", "/schem", "/skin"]
+    assert chat.suggestions == ["/ajuda", "/girar", "/revelar", "/schem", "/skin", "/sombras"]
     chat.handle_char(ord("s"))
-    assert chat.suggestions == ["/schem", "/skin"]
+    assert chat.suggestions == ["/schem", "/skin", "/sombras"]
     chat.handle_char(ord("k"))
     assert chat.suggestions == ["/skin"] and chat.ghost_text == "in "
     chat.handle_key(glfw.KEY_TAB, glfw.PRESS, 0)

@@ -41,6 +41,70 @@ uniform float u_CutawayFade;    // Atenuação vertical das camadas superiores
 uniform bool u_WaterMode;       // Token está dentro de água
 uniform int u_CutawayPass;      // 0 = opaco; 1 = transparentes acima
 
+// Estilo do mundo (terreno e construções): luz com o brilho por face do Minecraft, sol quente, cota e
+// saturação, pensado para ler a profundidade na vista isométrica. O personagem não usa (fica desligado).
+uniform bool u_WorldStyle;
+
+// Sombras do sol (ver src/rendering/sun_shadows.py): blocos sólidos em volta do jogador, em coordenadas do mundo.
+uniform sampler3D u_ShadowMask;
+uniform vec3 u_ShadowOrigin;
+uniform vec3 u_ShadowSize;
+uniform mat4 u_ShadowInvModel;   // do espaço desenhado (girado pelo modelo) de volta ao mundo
+uniform float u_ShadowStrength;  // 0 sem sombra
+
+float shadowCell(vec3 worldPos)
+{
+    vec3 c = floor(worldPos - u_ShadowOrigin);
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)))
+        return 0.0;
+    return texelFetch(u_ShadowMask, ivec3(c), 0).r;
+}
+
+// Fração da luz do sol que chega ao ponto (1 = sol inteiro). Três raios um pouco inclinados dão uma borda macia.
+float sunVisibility(vec3 worldPos, vec3 worldNormal, vec3 sunDir)
+{
+    vec3 tilt[3] = vec3[3](vec3(0.0), vec3(0.09, 0.0, -0.05), vec3(-0.09, 0.0, 0.05));
+    float visible = 0.0;
+    for (int k = 0; k < 3; k++)
+    {
+        vec3 d = normalize(sunDir + tilt[k]);
+        vec3 p = worldPos + worldNormal * 0.1 + d * 0.45;
+        float lit = 1.0;
+        for (int i = 0; i < 16; i++)
+        {
+            if (shadowCell(p) > 0.5) { lit = 0.0; break; }
+            p += d * 0.75;
+        }
+        visible += lit;
+    }
+    return visible / 3.0;
+}
+
+// Brilho da face: topo 1.0, faces em Z 0.82, faces em X 0.64, fundo 0.5 (como no Minecraft), contínuo na normal.
+float faceShade(vec3 n)
+{
+    float top = clamp(n.y, 0.0, 1.0);
+    float bottom = clamp(-n.y, 0.0, 1.0);
+    float zShare = abs(n.z) / (abs(n.x) + abs(n.z) + 1e-4);
+    float side = 1.0 - top - bottom;
+    return top + bottom * 0.5 + side * mix(0.64, 0.82, zShare);
+}
+
+// Luz do mundo: o brilho da face, com o tom do sol, e um fundo frio vindo do céu nas faces que não pegam sol.
+vec3 worldLighting(vec3 n, vec3 l, float worldY, float sunVis)
+{
+    float shade = faceShade(n);
+    float sun = clamp(dot(n, l), 0.0, 1.0);                      // quanto a face olha para o sol
+    sun *= sunVis;                                                // à sombra o sol não conta
+    shade *= mix(1.0 - 0.38 * u_ShadowStrength, 1.0, sunVis);     // e a face escurece
+    vec3 warm = vec3(1.08, 1.00, 0.88);                          // sol
+    vec3 cool = vec3(0.86, 0.94, 1.10);                          // céu, nas faces de sombra
+    vec3 tint = mix(cool, warm, smoothstep(0.05, 0.6, sun));
+    // quanto mais fundo o terreno, mais escuro: numa vista sem perspectiva a altura é a pista de profundidade
+    float altitude = mix(0.74, 1.0, smoothstep(1.0, 14.0, worldY));
+    return vec3(0.96) * shade * tint * altitude;
+}
+
 // Revelação do espaço do jogador (cômodo, caverna): ver src/world/room_reveal.py.
 uniform float u_RoomActive;     // 0 = desligado; 0..1 = intensidade do efeito
 uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 128 casca de sólido ao redor, 0 fora
@@ -163,6 +227,17 @@ void main()
         underside_shadow = mix(0.68, 1.0, smoothstep(-0.15, 0.35, norm.y));
     }
     vec3 lighting = (u_AmbientColor + diffuse) * underside_shadow;
+    if (u_WorldStyle) {
+        float sunVis = 1.0;
+        if (u_ShadowStrength > 0.001 && dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
+        {
+            vec3 worldPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
+            vec3 worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
+            vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
+            sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld);
+        }
+        lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis);
+    }
 
     if (u_UndergroundMode) {
         float top_light = max(norm.y, 0.0);
@@ -214,6 +289,12 @@ void main()
         // está sendo visto através de água.
         albedo = mix(albedo, vec3(0.12, 0.40, 0.72), 0.42);
         lighting = mix(lighting, lighting * vec3(0.72, 0.88, 1.12), 0.65);
+    }
+
+    if (u_WorldStyle) {
+        // cores um pouco mais vivas, sem sair do visual do Minecraft
+        float luma = dot(albedo, vec3(0.299, 0.587, 0.114));
+        albedo = clamp(mix(vec3(luma), albedo, 1.14), 0.0, 1.0);
     }
 
     vec3 result = lighting * albedo * roomFactor;
