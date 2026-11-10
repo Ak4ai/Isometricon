@@ -405,11 +405,13 @@ def test_world_manager_water_flow_has_finite_volume():
         manager._water_tick = manager.water_step_interval
         manager.update(8.0, 8.0)
 
+    # a fonte corre 1 bloco para os lados, cai até o fundo do chunk e lá se espalha no máximo 7 blocos (regras do
+    # Minecraft): nada passa de 8 blocos da fonte
     flowing_cells = [level for level in manager._water_levels.values() if level < 1.0]
     assert flowing_cells
-    assert max(flowing_cells) <= 1.0
-    assert min(flowing_cells) > manager.water_min_level
-    assert len(flowing_cells) < 100
+    assert all(0.0 < level < 1.0 for level in flowing_cells)
+    water = np.argwhere(chunk.blocks == int(BlockType.WATER))
+    assert (np.abs(water[:, 0] - 8) + np.abs(water[:, 2] - 8)).max() <= 8
     manager.delete()
 
     manager._in_progress.add((0, 0, 0))
@@ -580,3 +582,23 @@ def test_modular_character_walk_cycle_animation():
     assert abs(coxa_e.local_rot[0]) < 0.05
 
     char.delete()
+
+
+def test_world_manager_water_does_not_leak_below_the_world_floor():
+    manager = WorldManager(
+        generator=TerrainGenerator(seed=123, enable_caves=False),
+        render_distance=0,
+        create_gl_meshes=False,
+        async_loading=False,
+    )
+    chunk, below = Chunk3D(), Chunk3D()
+    chunk.set_block(8, 0, 8, BlockType.WATER)          # água no fundo do mundo, sobre um chunk vazio
+    manager.chunks[(0, 0, 0)] = chunk
+    manager.chunks[(0, -1, 0)] = below
+    manager._last_center = (0, 0)
+    for _ in range(10):
+        manager._water_tick = manager.water_step_interval
+        manager.update(8.0, 8.0)
+    assert not (below.blocks == int(BlockType.WATER)).any()
+    assert chunk.get_block(9, 0, 8) is BlockType.WATER  # espalha no chão em vez de cair
+    manager.delete()

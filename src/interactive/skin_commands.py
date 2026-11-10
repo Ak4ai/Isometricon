@@ -181,6 +181,8 @@ class SkinCommandHandler:
         self.room_reveal = None  # RoomRevealRenderer do terreno (/revelar); None fora dele
         self.sun_shadows = None  # SunShadowRenderer do terreno (/sombras); None fora dele
         self.world_seed = None  # () -> int, a seed do mundo aberto (/seed); None fora do terreno
+        self.place_water = None  # (x, y, z) -> bool e a célula do jogador (/agua); None fora do terreno
+        self.player_cell = None
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
@@ -326,6 +328,28 @@ class SkinCommandHandler:
             except Exception:
                 copied = False
         return True, f"[Seed] {value}" + (" (copiada)" if copied else ""), CYAN
+
+    # ------------------------------------------------------------------ /agua
+    def water(self, args: List[str]) -> Result:
+        """/agua [x y z]: põe uma fonte de água (sem posição: no ar, 2 blocos à frente e até 3 acima do jogador)."""
+        if self.place_water is None or self.player_cell is None:
+            return False, "[Agua] Só funciona no terreno (--terrain).", RED
+        if args:
+            try:
+                x, y, z = (int(float(a.replace(",", "."))) for a in args[:3])
+            except ValueError:
+                return False, "[Agua] Use /agua ou /agua <x> <y> <z>.", RED
+            if len(args) < 3:
+                return False, "[Agua] Use /agua ou /agua <x> <y> <z>.", RED
+            if not self.place_water(x, y, z):
+                return False, f"[Agua] Não dá para pôr água em {x} {y} {z} (ocupado ou fora do mundo carregado).", RED
+            return True, f"[Agua] Fonte em {x} {y} {z}.", CYAN
+        px, py, pz = self.player_cell()
+        x, z = px + 2, pz
+        for y in (py + 3, py + 2, py + 1):  # o mais alto que der, para ela cair
+            if self.place_water(x, y, z):
+                return True, f"[Agua] Fonte em {x} {y} {z}.", CYAN
+        return False, f"[Agua] Não dá para pôr água perto de {x} {py} {z} (ocupado ou fora do mundo carregado).", RED
 
     # ------------------------------------------------------------------ /sombras
     def shadows(self, args: List[str]) -> Result:
@@ -1320,6 +1344,8 @@ ROOT_COMMANDS: List[Command] = [
     Command(("ajuda", "help", "?"), "/ajuda [comando]", "lista os comandos", SkinCommandHandler.help, None),
     Command(("girar", "spin"), "/girar [on|off]", "rotação automática no visualizador", SkinCommandHandler.spin, ["on", "off"]),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
+    Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
+            SkinCommandHandler.water, None),
     Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>]",
             "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca"]),
     Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>]",
@@ -1361,6 +1387,7 @@ COMMAND_TREE: Dict[str, Any] = {
     "revelar": ["on", "off", "escuro"],
     "sombras": ["on", "off", "forca"],
     "seed": [],
+    "agua": [],
     "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},
 }
 

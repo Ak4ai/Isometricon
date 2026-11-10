@@ -511,6 +511,9 @@ def main() -> None:
     skin_command_handler.room_reveal = room_renderer
     skin_command_handler.sun_shadows = shadow_renderer
     skin_command_handler.world_seed = (lambda: active_seed["value"]) if terrain_demo else None
+    if terrain_demo:
+        skin_command_handler.place_water = lambda x, y, z: world_manager.place_water(x, y, z)
+        skin_command_handler.player_cell = lambda: tuple(int(np.floor(float(v))) for v in player_token.position)
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
         create_gl=True,

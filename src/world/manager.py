@@ -13,6 +13,7 @@ from src.world.block import BlockType
 from src.world.chunk import Chunk3D
 from src.world.mesher import ChunkMeshData, ChunkMesher
 from src.world.terrain import TerrainGenerator
+from src.world.water import TICK as WATER_TICK, WaterSimulation
 
 if TYPE_CHECKING:
     from src.rendering.mesh import TexturedMesh
@@ -67,16 +68,14 @@ class WorldManager:
         self._worker_busy = threading.Event()
         self._in_progress: Set[Tuple[int, int, int]] = set()
         self._worker_thread: Optional[threading.Thread] = None
-        self._water_frontier: deque[tuple[int, int, int]] = deque()
-        self._water_levels: dict[tuple[int, int, int], float] = {}
-        self._water_sources_seen: set[tuple[int, int, int]] = set()
-        self._water_seeded = False
+        # Água com as regras do Minecraft (src/world/water.py). ``_water_levels`` é a altura da superfície de cada
+        # célula de água corrente, que a malha usa; a fonte fica de fora (cheia).
+        self.water = WaterSimulation(_ManagerFluidWorld(self))
+        self._water_levels = self.water.heights
+        self._water_seeded_chunks: set[tuple[int, int, int]] = set()
         self._water_tick = 0.0
-        self._water_scan_tick = 0.0
-        self.water_step_interval = 0.18
-        self.water_step_budget = 24
-        self.water_min_level = 0.20
-        self.water_flow_loss = 0.28
+        self.water_step_interval = WATER_TICK
+        self.water_radius = 48.0
 
         if self.async_loading:
             self._start_worker()
@@ -251,22 +250,12 @@ class WorldManager:
                 origin_x = key[0] * Chunk3D.SIZE
                 origin_y = key[1] * Chunk3D.SIZE
                 origin_z = key[2] * Chunk3D.SIZE
-                self._water_sources_seen = {
-                    source for source in self._water_sources_seen
-                    if not (
-                        origin_x <= source[0] < origin_x + Chunk3D.SIZE
-                        and origin_y <= source[1] < origin_y + Chunk3D.SIZE
-                        and origin_z <= source[2] < origin_z + Chunk3D.SIZE
-                    )
-                }
-                self._water_levels = {
-                    source: level for source, level in self._water_levels.items()
-                    if not (
-                        origin_x <= source[0] < origin_x + Chunk3D.SIZE
-                        and origin_y <= source[1] < origin_y + Chunk3D.SIZE
-                        and origin_z <= source[2] < origin_z + Chunk3D.SIZE
-                    )
-                }
+                self._water_seeded_chunks.discard(key)
+                self.water.forget(lambda cell, ox=origin_x, oy=origin_y, oz=origin_z: (
+                    ox <= cell[0] < ox + Chunk3D.SIZE
+                    and oy <= cell[1] < oy + Chunk3D.SIZE
+                    and oz <= cell[2] < oz + Chunk3D.SIZE
+                ))
             if to_unload:
                 self._chunk_revision += 1
 
@@ -306,107 +295,43 @@ class WorldManager:
                             self.meshes[key] = (mesh, transform)
 
     def _simulate_water(self, focus_x: float, focus_z: float) -> None:
-        """Propaga água em passos discretos dentro dos chunks carregados."""
+        """Avança a água (uma onda de blocos a cada ``water_step_interval``) e refaz as malhas que mudaram."""
         self._water_tick += 1.0 / 60.0
         if self._water_tick < self.water_step_interval:
             return
         self._water_tick = 0.0
+        self._seed_water(focus_x, focus_z)
+        if not self.water.busy:
+            return
+        changed_cells = self.water.step()
+        if not changed_cells:
+            return
 
-        radius = 48.0
-        self._water_scan_tick += self.water_step_interval
-        if not self._water_seeded or (
-            not self._water_frontier and self._water_scan_tick >= 0.5
-        ):
-            self._water_scan_tick = 0.0
-            seed_candidates: list[tuple[float, tuple[int, int, int]]] = []
-            with self._chunks_lock:
-                chunks_snapshot = list(self.chunks.values())
-            for chunk in chunks_snapshot:
-                origin_x, origin_y, origin_z = chunk.local_to_world(0, 0, 0)
-                water_cells = np.argwhere(chunk.blocks == int(BlockType.WATER))
-                for local_x, local_y, local_z in water_cells:
-                    world_x = origin_x + int(local_x)
-                    world_y = origin_y + int(local_y)
-                    world_z = origin_z + int(local_z)
-                    if (world_x - focus_x) ** 2 + (world_z - focus_z) ** 2 <= radius * radius:
-                        neighbors = (
-                            (world_x, world_y - 1, world_z),
-                            (world_x - 1, world_y, world_z),
-                            (world_x + 1, world_y, world_z),
-                            (world_x, world_y, world_z - 1),
-                            (world_x, world_y, world_z + 1),
-                        )
-                        if any(
-                            self.neighbor_at(nx, ny, nz) is BlockType.AIR
-                            for nx, ny, nz in neighbors
-                        ):
-                            distance = (world_x - focus_x) ** 2 + (world_z - focus_z) ** 2
-                            source = (world_x, world_y, world_z)
-                            if source in self._water_sources_seen:
-                                continue
-                            self._water_sources_seen.add(source)
-                            self._water_levels[source] = 1.0
-                            seed_candidates.append((distance, source))
-            for _, source in sorted(seed_candidates, key=lambda item: item[0]):
-                self._water_frontier.append(source)
-            self._water_seeded = True
-
+        size = Chunk3D.SIZE
         changed: set[tuple[int, int, int]] = set()
-        processed = 0
-        while self._water_frontier and processed < self.water_step_budget:
-            source = self._water_frontier.popleft()
-            processed += 1
-            source_level = self._water_levels.get(source, 0.0)
-            if source_level <= self.water_min_level:
-                continue
-            source_x, source_y, source_z = source
-            below = (source_x, source_y - 1, source_z)
-            with self._chunks_lock:
-                below_chunk = self.chunks.get((
-                    below[0] // Chunk3D.SIZE,
-                    below[1] // Chunk3D.SIZE,
-                    below[2] // Chunk3D.SIZE,
-                ))
-                below_is_air = below_chunk is not None and below_chunk.get_block(
-                    *below_chunk.world_to_local(*below)
-                ) is BlockType.AIR
+        for x, y, z in changed_cells:
+            # o chunk da célula e, se ela está na borda, o vizinho (a face entre os dois muda)
+            for dx, dy, dz in ((0, 0, 0), (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+                changed.add(((x + dx) // size, (y + dy) // size, (z + dz) // size))
+        self._rebuild_after_water(changed)
 
-            if below_is_air:
-                candidates = ((below, 0.18),)
-            else:
-                candidates = (
-                    ((source_x - 1, source_y, source_z), self.water_flow_loss),
-                    ((source_x + 1, source_y, source_z), self.water_flow_loss),
-                    ((source_x, source_y, source_z - 1), self.water_flow_loss),
-                    ((source_x, source_y, source_z + 1), self.water_flow_loss),
-                )
-            for (target_x, target_y, target_z), flow_loss in candidates:
-                target_level = source_level - flow_loss
-                if target_level <= self.water_min_level:
-                    continue
-                if (target_x - focus_x) ** 2 + (target_z - focus_z) ** 2 > radius * radius:
-                    continue
-                with self._chunks_lock:
-                    target_chunk = self.chunks.get((
-                        target_x // Chunk3D.SIZE,
-                        target_y // Chunk3D.SIZE,
-                        target_z // Chunk3D.SIZE,
-                    ))
-                    if target_chunk is None:
-                        continue
-                    local = target_chunk.world_to_local(target_x, target_y, target_z)
-                    if target_chunk.get_block(*local) is not BlockType.AIR:
-                        continue
-                    target = (target_x, target_y, target_z)
-                    if target_level <= self._water_levels.get(target, 0.0):
-                        continue
-                    target_chunk.set_block(*local, BlockType.WATER)
-                    changed.add((target_chunk.chunk_x, target_chunk.chunk_y, target_chunk.chunk_z))
-                    self._water_sources_seen.add(target)
-                    self._water_levels[target] = target_level
-                    self._water_frontier.append(target)
+    def place_water(self, x: int, y: int, z: int) -> bool:
+        """Põe uma fonte de água numa célula de ar carregada (para testar a água); ``False`` se não dá."""
+        if self.water.world.block(x, y, z) is not BlockType.AIR:
+            return False
+        self.water.world.set_block(x, y, z, BlockType.WATER)
+        self.water.wake([(x, y, z)])
+        size = Chunk3D.SIZE
+        self._rebuild_after_water({(x // size, y // size, z // size)})
+        return True
 
-        if not changed or not self.create_gl_meshes:
+    def _rebuild_after_water(self, changed: set) -> None:
+        """Refaz as malhas dos chunks em que a água mudou e avisa quem segue a revisão."""
+        with self._chunks_lock:
+            changed &= set(self.chunks)
+            self._chunk_revision += 1          # a máscara das sombras e o contorno veem a água nova
+
+        if not self.create_gl_meshes:
             return
         from src.rendering.mesh import TexturedMesh
         for key in changed:
@@ -414,7 +339,7 @@ class WorldManager:
             if chunk is None:
                 continue
             data = self.mesher.build(chunk, self.neighbor_at, self._water_levels)
-            old_mesh = self.meshes.get(key)
+            old_mesh = self.meshes.pop(key, None)
             if old_mesh is not None:
                 self._pending_mesh_deletions.append(old_mesh[0])
             if data.face_count > 0:
@@ -422,6 +347,40 @@ class WorldManager:
                     TexturedMesh(data.vertices, data.indices),
                     mat4_translate(*chunk.local_to_world(0, 0, 0)),
                 )
+
+    def _seed_water(self, focus_x: float, focus_z: float) -> None:
+        """Acorda a água dos chunks novos perto do foco: só a que encosta em ar (o resto já está parado)."""
+        size = Chunk3D.SIZE
+        with self._chunks_lock:
+            candidates = [
+                (key, chunk) for key, chunk in self.chunks.items()
+                if key not in self._water_seeded_chunks
+            ]
+        radius = self.water_radius + size
+        for key, chunk in candidates:
+            center_x = key[0] * size + size / 2
+            center_z = key[2] * size + size / 2
+            if (center_x - focus_x) ** 2 + (center_z - focus_z) ** 2 > radius * radius:
+                continue
+            self._water_seeded_chunks.add(key)
+            water = chunk.blocks == int(BlockType.WATER)
+            if not water.any():
+                continue
+            air = chunk.blocks == int(BlockType.AIR)
+            # água com ar embaixo ou do lado, dentro do chunk; na borda, olha-se o mundo
+            touches = np.zeros_like(water)
+            touches[:, 1:, :] |= air[:, :-1, :]
+            touches[1:, :, :] |= air[:-1, :, :]
+            touches[:-1, :, :] |= air[1:, :, :]
+            touches[:, :, 1:] |= air[:, :, :-1]
+            touches[:, :, :-1] |= air[:, :, 1:]
+            border = np.zeros_like(water)
+            border[[0, -1], :, :] = True
+            border[:, [0, -1], :] = True
+            border[:, :, [0, -1]] = True
+            origin = chunk.local_to_world(0, 0, 0)
+            for lx, ly, lz in np.argwhere(water & (touches | border)):
+                self.water.wake([(origin[0] + int(lx), origin[1] + int(ly), origin[2] + int(lz))])
 
     def get_height(self, world_x: float, world_z: float) -> int:
         """Retorna a altura do terreno sólido na coordenada informada."""
@@ -539,3 +498,28 @@ class WorldManager:
                 self._chunk_revision += 1
 
         self._last_center = None
+
+
+class _ManagerFluidWorld:
+    """O mundo carregado visto pela água: ``None`` onde não há chunk (a água não entra no desconhecido) e sólido
+    abaixo de y = 0."""
+
+    def __init__(self, manager: "WorldManager") -> None:
+        self.manager = manager
+
+    def block(self, x: int, y: int, z: int) -> Optional[BlockType]:
+        if y < 0:
+            return BlockType.STONE  # abaixo de y = 0 é o chão do mundo (como em room_reveal): a água não vaza
+        size = Chunk3D.SIZE
+        with self.manager._chunks_lock:
+            chunk = self.manager.chunks.get((x // size, y // size, z // size))
+        if chunk is None:
+            return None
+        return chunk.get_block(*chunk.world_to_local(x, y, z))
+
+    def set_block(self, x: int, y: int, z: int, block: BlockType) -> None:
+        size = Chunk3D.SIZE
+        with self.manager._chunks_lock:
+            chunk = self.manager.chunks.get((x // size, y // size, z // size))
+        if chunk is not None:
+            chunk.set_block(*chunk.world_to_local(x, y, z), block)

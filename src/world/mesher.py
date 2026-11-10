@@ -110,6 +110,31 @@ class ChunkMesher:
         self.atlas = atlas
         self.ambient_occlusion = ambient_occlusion
 
+    @staticmethod
+    def _water_corner_height(blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels) -> float:
+        """Altura (0..1) do canto (cx, cz) do topo da água na camada ``y``: a média das quatro células em volta que
+        são água; cheia se alguma delas tem água logo acima (a superfície encosta na água de cima sem degrau)."""
+        water = int(BlockType.WATER)
+
+        def block_at(lx: int, ly: int, lz: int) -> int:
+            if 0 <= lx < 16 and 0 <= ly < 16 and 0 <= lz < 16:
+                return int(blocks[lx, ly, lz])
+            if neighbor_at is None:
+                return int(BlockType.AIR)
+            return int(neighbor_at(origin_x + lx, origin_y + ly, origin_z + lz))
+
+        total, count = 0.0, 0
+        for lx in (cx - 1, cx):
+            for lz in (cz - 1, cz):
+                if block_at(lx, y, lz) != water:
+                    continue
+                if block_at(lx, y + 1, lz) == water:
+                    return 1.0
+                level = water_levels.get((origin_x + lx, origin_y + y, origin_z + lz), 1.0)
+                total += min(max(float(level), 0.05), 1.0)
+                count += 1
+        return total / count if count else 1.0
+
     def build(
         self,
         chunk: Chunk3D,
@@ -203,6 +228,7 @@ class ChunkMesher:
 
         flip = np.zeros(total_faces, dtype=bool)
         current_face_idx = 0
+        corner_heights: dict[tuple[int, int, int], float] = {}
         for face in range(6):
             mask = vis[face]
             count = int(mask.sum())
@@ -222,24 +248,18 @@ class ChunkMesher:
             v_slice[:, :, 3:6] = _NORMALS[face]
 
             if water_levels is not None and np.any(blk == BlockType.WATER):
-                heights = np.asarray([
-                    np.clip(
-                        float(water_levels.get(
-                            (origin_x + int(x), origin_y + int(y), origin_z + int(z)),
-                            1.0,
-                        )),
-                        0.05,
-                        1.0,
-                    )
-                    for x, y, z in zip(xs, ys, zs)
-                ], dtype=np.float32)
-                water_mask = (blk == BlockType.WATER)[:, None]
-                top_vertices = v_slice[:, :, 1] > ys[:, None].astype(np.float32)
-                v_slice[:, :, 1] = np.where(
-                    water_mask & top_vertices,
-                    ys[:, None].astype(np.float32) + heights[:, None],
-                    v_slice[:, :, 1],
-                )
+                # a superfície inclina como no Minecraft: cada canto do topo tem a altura média das águas que o tocam
+                for i in np.flatnonzero(blk == BlockType.WATER):
+                    y = int(ys[i])
+                    for corner in range(4):
+                        if v_slice[i, corner, 1] <= y:
+                            continue                       # vértice de baixo: fica no chão do bloco
+                        cx, cz = int(round(float(v_slice[i, corner, 0]))), int(round(float(v_slice[i, corner, 2])))
+                        key = (cx, y, cz)
+                        if key not in corner_heights:
+                            corner_heights[key] = self._water_corner_height(
+                                blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels)
+                        v_slice[i, corner, 1] = y + corner_heights[key]
 
             if use_atlas:
                 v_slice[:, :, 6:8] = uv_table[blk, face]
