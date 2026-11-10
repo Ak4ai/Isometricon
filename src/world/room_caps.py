@@ -78,7 +78,8 @@ def _reaches(mask: np.ndarray, direction, steps: int) -> np.ndarray:
 
 def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
               sight: Optional[SightCut] = None, center: Optional[Tuple[float, float]] = None) -> np.ndarray:
-    """Tudo o que o shader esconde com o cômodo ativo, bool [x, y, z] da janela.
+    """Tudo o que o shader PODE esconder com o cômodo ativo, bool [x, y, z] da janela (um pouco a mais, nunca a
+    menos: as tampas são geradas em volta disso e o shader descarta as que sobram).
 
     * revelação: fora do espaço, tapa o cômodo (o raio para dentro da cena cai no espaço do andar) e, do centro do
       cômodo (``center``, x e z) para trás, está na borda virada para a câmera (o raio de volta não passa pelo
@@ -94,8 +95,8 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
     furniture = room.data == OBJECT
     ox, oy, oz = room.origin
     ys = np.arange(occupied.shape[1])[None, :, None] + oy
-    band = interior & (ys < story.cut_y) if story is not None else interior
-    covers = _reaches(band, view_dir, RAY_STEPS)
+    # folgado de propósito: o shader só tapa entre os pés e o teto do andar; aqui qualquer espaço conta
+    covers = _reaches(interior, view_dir, RAY_STEPS)
     toward_camera = _reaches(interior, -np.asarray(view_dir, dtype=np.float64), CAMERA_STEPS)
     xs = np.arange(occupied.shape[0])[:, None, None] + ox + 0.5
     zs = np.arange(occupied.shape[2])[None, None, :] + oz + 0.5
@@ -105,12 +106,12 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         center = story.center
     if center is not None:
         ahead = (xs - center[0]) * flat[0] + (zs - center[1]) * flat[1]   # < 0: do lado da câmera
-        cut = occupied & ~interior & covers & ~furniture & ((ahead < -1.0) | ~toward_camera)
+        cut = occupied & ~interior & covers & ~furniture & ((ahead < -0.9) | ~toward_camera)
     else:
         cut = occupied & ~interior & ~furniture & covers & ~toward_camera
     if story is not None:
-        near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < (story.radius - 1.5) ** 2
-        front = (xs - story.center[0]) * flat[0] + (zs - story.center[1]) * flat[1] < 0.5
+        near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < story.radius ** 2  # com o pontilhado
+        front = (xs - story.center[0]) * flat[0] + (zs - story.center[1]) * flat[1] < 0.6
         cut |= occupied & (ys >= story.cut_y) & near & (front | covers)
     if sight is not None:
         low = furniture & (ys < sight.feet_y + 1)        # móvel no chão fica; o piso de cima, na frente, sai
@@ -129,7 +130,7 @@ def _in_corridor(shape, origin, sight: SightCut) -> np.ndarray:
     off = np.linalg.norm(rel - t[..., None] * direction, axis=-1)
     radius = sight.radius * (0.75 + 0.25 * np.clip((t - 0.9) / 3.0, 0.0, 1.0))
     ys = np.arange(shape[1])[None, :, None] + origin[1]
-    return (t >= 0.9) & (off < radius - 0.25) & (ys >= sight.feet_y)
+    return (t >= 0.85) & (off < radius) & (ys >= sight.feet_y)  # a borda pontilhada inteira
 
 
 def _door_cells(window, origin) -> np.ndarray:
@@ -214,7 +215,9 @@ def build_caps(room: RoomMask, view_dir, terrain_atlas, structure_uv: UvLookup,
     hidden = cut_cells(room, view_dir, story, sight, center)
     if not hidden.any():
         return caps
-    visible = window.occupied & ~hidden
+    # toda célula ganha a tampa virada para um vizinho que PODE ter sumido: se ela mesma sumiu, o shader descarta a
+    # tampa junto (a decisão é pela célula dona da face); se o vizinho ficou, a tampa fica escondida dentro dele
+    visible = window.occupied
     origin = np.array(room.origin, dtype=np.float32)
     culling = hidden & window.culls  # só um cubo inteiro escondido deixou a face do vizinho sem tampa
     caps.terrain = _terrain_caps(window, visible, culling, origin, terrain_atlas)

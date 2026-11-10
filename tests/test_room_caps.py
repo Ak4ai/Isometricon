@@ -41,6 +41,17 @@ def room_in(chunks, position, structures=()):
     return tracker.update(1.0, position, chunks, 1, structures)
 
 
+def shown_caps(room, vertices, view_dir):
+    """As tampas que o shader deixa: a célula dona da face (atrás dela) não sumiu."""
+    from src.world.room_caps import cut_cells
+
+    cut = cut_cells(room, view_dir)
+    verts = vertices.reshape(-1, 4, 11)
+    owners = np.floor(verts[:, :, :3].mean(axis=1) - verts[:, 0, 3:6] * 0.5).astype(int) - np.array(room.origin)
+    keep = ~cut[tuple(owners.T)]
+    return verts[keep]
+
+
 @pytest.mark.parametrize("direction", [DOWN, ISO, (0.5, -0.6, 0.62), (-0.8, -0.3, 0.52)])
 def test_hidden_cells_match_the_shader_ray_march(direction):
     """O deslocamento inteiro da máscara dá exatamente o resultado do raio por célula."""
@@ -75,9 +86,9 @@ def test_terrain_caps_cover_the_faces_the_mesher_dropped(atlas):
     room = room_in(chunks, (13.5, 3.0, 13.5))
     caps = build_caps(room, DOWN, atlas, lambda block, face: (0, 0, 1, 1))
     vertices, indices = caps.terrain
-    assert len(indices) // 6 == 20                       # 5 células x 4 lados do anel
+    verts = shown_caps(room, vertices, DOWN)
+    assert len(verts) == 20                              # 5 células x 4 lados do anel
     assert len(caps.structures[1]) == 0
-    verts = vertices.reshape(-1, 4, 11)
     normals = verts[:, 0, 3:6]
     assert (np.abs(normals[:, 1]) == 0).all()            # só faces laterais
     # cada tampa é a face de uma célula do anel, voltada para dentro (para o teto escondido)
@@ -124,7 +135,7 @@ def test_structure_caps_use_the_schematic_atlas_and_not_the_terrain_one(atlas):
         return (0.25, 0.5, 0.5, 0.75)
 
     caps = build_caps(room, DOWN, atlas, structure_uv)
-    assert len(caps.terrain[1]) == 0 and len(caps.structures[1]) // 6 == 20
+    assert len(caps.terrain[1]) == 0 and len(shown_caps(room, caps.structures[0], DOWN)) == 20
     assert {block for block, _ in asked} == {"minecraft:stone"}
     uvs = caps.structures[0].reshape(-1, 11)[:, 6:8]
     assert uvs[:, 0].min() == 0.25 and uvs[:, 0].max() == 0.5 and uvs[:, 1].min() == 0.5 and uvs[:, 1].max() == 0.75
