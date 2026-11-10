@@ -326,3 +326,26 @@ def test_a_lone_beam_overhead_is_not_a_story():
         b[5:25, 6, 13] = BlockType.WOOD                 # uma viga só, passando por cima
     mask = RoomRevealTracker().update(0.0, (13.5, 3.0, 13.5), world(beam), 0)
     assert story_ceiling(mask, (13.5, 3.0, 13.5)) is None
+
+
+def test_an_open_door_does_not_join_two_rooms():
+    """A sala ao lado, pela porta aberta, é outro cômodo: a parede entre as duas fica com a sala do jogador."""
+    from src.world.room_reveal import INTERIOR, compute_room, extract_window, window_origin
+
+    def two_rooms(b):
+        box(b, 4, 10)                                    # sala A: x 4..10
+        box(b, 10, 10)                                   # sala B: x 10..16, parede comum em x = 10
+        b[10, 3:5, 13] = BlockType.AIR                   # o vão da porta (aberta)
+    position = (13.5, 3.0, 13.5)
+    origin = window_origin(position)
+    solid, roof = extract_window(origin, world(two_rooms))
+    ox, oy, oz = origin
+    doors = np.zeros_like(solid)
+    doors[10 - ox, 3 - oy:5 - oy, 13 - oz] = True
+    joined = compute_room(solid, roof, origin, position)
+    apart = compute_room(solid, roof, origin, position, doors=doors)
+    assert joined.data[7 - ox, 3 - oy, 13 - oz] == INTERIOR       # sem saber da porta, as duas viram uma
+    assert apart.data[7 - ox, 3 - oy, 13 - oz] != INTERIOR
+    assert apart.data[13 - ox, 3 - oy, 13 - oz] == INTERIOR
+    in_door = compute_room(solid, roof, origin, (10.5, 3.0, 13.5), doors=doors)
+    assert in_door.active                                         # parado na porta, ainda está num cômodo

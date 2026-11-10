@@ -111,12 +111,23 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         cut = occupied & ~interior & ~furniture & covers & ~toward_camera
     if story is not None:
         near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < story.radius ** 2  # com o pontilhado
-        front = (xs - story.center[0]) * flat[0] + (zs - story.center[1]) * flat[1] < 0.6
-        cut |= occupied & (ys >= story.cut_y) & near & (front | covers)
+        cut |= occupied & (ys >= story.cut_y) & near & (~_behind_room(interior, room.origin, story, flat) | covers)
     if sight is not None:
         low = furniture & (ys < sight.feet_y + 1)        # móvel no chão fica; o piso de cima, na frente, sai
         cut |= occupied & ~low & covers & _in_corridor(occupied.shape, room.origin, sight)
-    return cut & ~_door_cells(window, room.origin)
+    return cut & ~window.doors if window.doors is not None else cut
+
+
+def _behind_room(interior: np.ndarray, origin, story: StoryCut, flat) -> np.ndarray:
+    """Para cada célula: andando na horizontal em direção à câmera, passa por cima do chão do cômodo (o espaço na
+    altura dos pés). É o fundo do cômodo — a parede do fundo fica inteira, até o topo. ``behindRoom`` no shader."""
+    layer = story.feet_y - origin[1]
+    if not 0 <= layer < interior.shape[1]:
+        return np.zeros(interior.shape, dtype=bool)
+    floor = np.zeros_like(interior)
+    floor[:, :, :] = interior[:, layer:layer + 1, :]
+    toward = (-float(flat[0]), 0.0, -float(flat[1]))
+    return _reaches(floor, toward, CAMERA_STEPS)
 
 
 def _in_corridor(shape, origin, sight: SightCut) -> np.ndarray:
@@ -131,22 +142,6 @@ def _in_corridor(shape, origin, sight: SightCut) -> np.ndarray:
     radius = sight.radius * (0.75 + 0.25 * np.clip((t - 0.9) / 3.0, 0.0, 1.0))
     ys = np.arange(shape[1])[None, :, None] + origin[1]
     return (t >= 0.85) & (off < radius) & (ys >= sight.feet_y)  # a borda pontilhada inteira
-
-
-def _door_cells(window, origin) -> np.ndarray:
-    """As células da janela ocupadas por portas das construções (o shader nunca as esconde)."""
-    from src.world.doors import is_door
-
-    doors = np.zeros(window.owner.shape, dtype=bool)
-    for index, placed in enumerate(window.structures):
-        cells = np.argwhere(window.owner == index)
-        if len(cells) == 0:
-            continue
-        local = cells + np.asarray(origin) - np.asarray(placed.origin)
-        names = placed.schematic.grid[local[:, 1], local[:, 2], local[:, 0]]
-        marks = np.fromiter((is_door(name) for name in names), dtype=bool, count=len(names))
-        doors[tuple(cells[marks].T)] = True
-    return doors
 
 
 def hidden_cells(occupied: np.ndarray, interior: np.ndarray, view_dir) -> np.ndarray:

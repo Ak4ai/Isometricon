@@ -81,6 +81,7 @@ class WindowCells:
     structures: list        # as construções, na ordem dos índices de ``owner``
     occupied: np.ndarray    # bool: há algo desenhado na célula (um sólido, ou um enfeite como tocha e tapete)
     culls: np.ndarray       # bool: cubo inteiro e opaco, o único que esconde a face do vizinho
+    doors: Optional[np.ndarray] = None  # bool: portas das construções (abertas ou não): cada cômodo termina nelas
 
 
 def extract_window(
@@ -146,7 +147,23 @@ def extract_window_cells(
         occupied[sel] |= shown
         culls[sel] |= cube
         owner[sel][shown] = index
-    return WindowCells(solid, roof, blocks, owner, structures, occupied, culls)
+    return WindowCells(solid, roof, blocks, owner, structures, occupied, culls, _door_cells(owner, structures, origin))
+
+
+def _door_cells(owner: np.ndarray, structures, origin) -> np.ndarray:
+    """As células da janela ocupadas por portas das construções."""
+    from src.world.doors import is_door
+
+    doors = np.zeros(owner.shape, dtype=bool)
+    for index, placed in enumerate(structures):
+        cells = np.argwhere(owner == index)
+        if len(cells) == 0:
+            continue
+        local = cells + np.asarray(origin) - np.asarray(placed.origin)
+        names = placed.schematic.grid[local[:, 1], local[:, 2], local[:, 0]]
+        marks = np.fromiter((is_door(name) for name in names), dtype=bool, count=len(names))
+        doors[tuple(cells[marks].T)] = True
+    return doors
 
 
 def _covered(roof: np.ndarray) -> np.ndarray:
@@ -163,8 +180,12 @@ def compute_room(
     origin: Tuple[int, int, int],
     position,
     was_active: bool = False,
+    doors: Optional[np.ndarray] = None,
 ) -> RoomMask:
-    """Calcula a máscara do espaço em que o jogador (posição dos pés) está."""
+    """Calcula a máscara do espaço em que o jogador (posição dos pés) está.
+
+    ``doors``: as portas fecham o cômodo mesmo abertas (a sala ao lado, pela porta aberta, é outro cômodo e a
+    parede entre as duas fica); só a porta em que o jogador está parado não conta."""
     mask = np.zeros(WINDOW, dtype=np.uint8)
     outside = RoomMask(origin, mask, False, 0, 1.0)
 
@@ -177,6 +198,10 @@ def compute_room(
     seed = tuple(cell)
     if solid[seed]:
         return outside
+    if doors is not None and doors.any():
+        doors = doors.copy()
+        doors[seed[0], :, seed[2]] = False
+        solid = solid | doors
 
     covered = _covered(roof)
     air = ~solid
@@ -354,7 +379,8 @@ class RoomRevealTracker:
             return self.mask  # só andou: espera o intervalo mínimo
         origin = window_origin(position)
         window = extract_window_cells(origin, chunks, structures)
-        self.mask = compute_room(window.solid, window.roof, origin, position, was_active=self.active)
+        self.mask = compute_room(window.solid, window.roof, origin, position, was_active=self.active,
+                                 doors=window.doors)
         self.mask.window = window
         self._key, self._age = key, 0.0
         self.version += 1

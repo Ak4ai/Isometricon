@@ -356,13 +356,26 @@ bool facesCamera(vec3 c)
 // Casa de bonecas: acima do teto do andar some o que tapa o cômodo. As paredes do fundo ficam de pé, inteiras, e o
 // teto e o andar de cima sobre o cômodo somem. Não depende de onde o personagem está dentro do cômodo: chegar perto
 // de uma parede do fundo não a corta (ela só some quando o cômodo atrás dela passa a ser o seu).
+// O bloco está no fundo do cômodo: andando na horizontal em direção à câmera, passa por cima do chão do cômodo (o
+// espaço na altura dos pés). Não depende da altura: a parede do fundo é fundo até o topo.
+bool behindRoom(vec3 c)
+{
+    vec2 toward = -normalize(u_StoryView.xz);
+    vec2 q = c.xz + toward * 0.9;
+    for (int i = 0; i < 24; i++)
+    {
+        if (roomCell(vec3(q.x, u_SightFeetY + 0.5, q.y)) > 0.9)
+            return true;
+        q += toward * 0.5;
+    }
+    return false;
+}
+
 bool storyCovers(vec3 cell)
 {
     vec3 c = cell + 0.5;
-    // a metade da frente (do lado da câmera), medida do CENTRO do cômodo (com cômodo, ele não muda enquanto o
-    // personagem anda dentro dele: chegar perto de uma parede do fundo não a corta), some inteira
-    vec2 f = normalize(u_StoryView.xz);
-    if (dot(c.xz - u_StoryCenter, f) < 0.5)
+    // o que não está no fundo do cômodo (a frente, os lados de fora) some inteiro
+    if (u_RoomActive <= 0.001 || !behindRoom(c))
         return true;
     // atrás do centro, só o que tapa o cômodo (o teto e o andar de cima sobre ele); as paredes do fundo ficam
     return u_RoomActive > 0.001 && coversRoom(c);
