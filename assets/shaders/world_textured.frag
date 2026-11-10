@@ -124,24 +124,39 @@ vec3 snapToTexel(vec3 worldPos, vec3 worldNormal)
                 n.z > 0.5 ? worldPos.z : snapped.z);            // no eixo da normal o ponto fica na própria face
 }
 
-// Fração da luz do sol que chega ao ponto (1 = sol inteiro). O sol tem tamanho: um cone fixo de raios, todos saindo do
-// ponto preso ao texel. A sombra escurece em degraus iguais (um por raio bloqueado), cada degrau em quadradinhos da
-// grade da textura: escura junto ao bloco e clareando aos poucos para fora, sem ruído.
-float sunVisibility(vec3 snappedPos, vec3 worldNormal, vec3 sunDir)
+// Ruído de gradiente intercalado: um valor estável 0..1 por pixel da tela, para girar o cone da sombra borrada.
+float interleavedNoise(vec2 pixel)
 {
-    const int RAYS = 8;
-    const float SPREAD = 0.10;                                 // abertura do cone (≈6°): a largura da transição
-    vec3 origin = snappedPos + worldNormal * 0.04;
+    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
+}
+
+// Fração de um cone de raios que chega ao sol: ``rays`` raios espalhados num disco de raio ``spread``.
+float sunCone(vec3 origin, vec3 sunDir, int rays, float spread, float spin)
+{
     vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(sunDir, t1);
-    float lit = traceSun(origin, sunDir);                      // o raio do centro
-    for (int k = 0; k < RAYS - 1; k++)
+    float lit = 0.0;
+    for (int k = 0; k < rays; k++)
     {
-        float r = sqrt((float(k) + 1.0) / float(RAYS - 1)) * SPREAD;
-        float a = float(k) * 2.3999632;                        // ângulo áureo: espalha os raios no disco
+        float r = sqrt((float(k) + 0.5) / float(rays)) * spread;
+        float a = float(k) * 2.3999632 + spin;                 // ângulo áureo: espalha os raios no disco
         lit += traceSun(origin, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
     }
-    return lit / float(RAYS);
+    return lit / float(rays);
+}
+
+// Fração da luz do sol que chega ao ponto (1 = sol inteiro). A nitidez muda ao longo da sombra:
+// - a sombra nítida sai do ponto preso ao texel, em degraus de pixel;
+// - a borrada sai do ponto exato, com mais raios, cone mais largo e girado por pixel (sem degraus);
+// onde a sombra é escura (junto ao bloco) vale a nítida, onde é clara (longe dele) vale a borrada, e no meio as duas
+// se misturam aos poucos: nítido, meio nítido, meio borrado, borrado.
+float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
+{
+    float sharp = sunCone(snappedPos + worldNormal * 0.04, sunDir, 6, 0.08, 0.0);
+    float soft = sunCone(exactPos + worldNormal * 0.04, sunDir, 12, 0.15,
+                         interleavedNoise(gl_FragCoord.xy) * 6.2831853);
+    float blur = smoothstep(0.1, 0.9, soft);                   // 0 no escuro (nítido) .. 1 no claro (borrado)
+    return mix(sharp, soft, blur);
 }
 
 // Brilho da face: topo 1.0, faces em Z 0.82, faces em X 0.64, fundo 0.5 (como no Minecraft), contínuo na normal.
@@ -300,12 +315,13 @@ void main()
         if (u_ShadowStrength > 0.001)
         {
             vec3 worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
-            vec3 worldPos = snapToTexel((u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz, worldNormal);
+            vec3 exactPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
+            vec3 worldPos = snapToTexel(exactPos, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
             if (dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
             {
                 vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
-                sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld);
+                sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld);
             }
         }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
