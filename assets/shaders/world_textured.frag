@@ -124,29 +124,24 @@ vec3 snapToTexel(vec3 worldPos, vec3 worldNormal)
                 n.z > 0.5 ? worldPos.z : snapped.z);            // no eixo da normal o ponto fica na própria face
 }
 
-// Fração da luz do sol que chega ao ponto (1 = sol inteiro), em duas camadas:
-// - o núcleo: um raio só, saindo do ponto preso ao texel. É a sombra escura, dura e quadrada, junto ao bloco;
-// - o halo: um cone largo de raios saindo do ponto exato. É uma sombra mais clara que se espalha em volta do núcleo
-//   e fica mais larga e mais suave quanto mais longe do bloco que a projeta (como a penumbra de uma sombra real).
-float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
+// Fração da luz do sol que chega ao ponto (1 = sol inteiro). O sol tem tamanho: um cone fixo de raios, todos saindo do
+// ponto preso ao texel. A sombra escurece em degraus iguais (um por raio bloqueado), cada degrau em quadradinhos da
+// grade da textura: escura junto ao bloco e clareando aos poucos para fora, sem ruído.
+float sunVisibility(vec3 snappedPos, vec3 worldNormal, vec3 sunDir)
 {
-    float core = traceSun(snappedPos + worldNormal * 0.04, sunDir);
-
-    const int RAYS = 12;
-    const float SPREAD = 0.16;                                 // abertura do cone do halo (≈9°)
-    const float HALO = 0.55;                                   // quanto o halo escurece no máximo (o núcleo vai a 1)
-    vec3 origin = exactPos + worldNormal * 0.04;
+    const int RAYS = 8;
+    const float SPREAD = 0.10;                                 // abertura do cone (≈6°): a largura da transição
+    vec3 origin = snappedPos + worldNormal * 0.04;
     vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(sunDir, t1);
-    float lit = 0.0;
-    for (int k = 0; k < RAYS; k++)
+    float lit = traceSun(origin, sunDir);                      // o raio do centro
+    for (int k = 0; k < RAYS - 1; k++)
     {
-        float r = sqrt((float(k) + 0.5) / float(RAYS)) * SPREAD;
+        float r = sqrt((float(k) + 1.0) / float(RAYS - 1)) * SPREAD;
         float a = float(k) * 2.3999632;                        // ângulo áureo: espalha os raios no disco
         lit += traceSun(origin, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
     }
-    float halo = 1.0 - HALO * (1.0 - lit / float(RAYS));
-    return min(core, halo);
+    return lit / float(RAYS);
 }
 
 // Brilho da face: topo 1.0, faces em Z 0.82, faces em X 0.64, fundo 0.5 (como no Minecraft), contínuo na normal.
@@ -305,13 +300,12 @@ void main()
         if (u_ShadowStrength > 0.001)
         {
             vec3 worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
-            vec3 exactPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
-            vec3 worldPos = snapToTexel(exactPos, worldNormal);
+            vec3 worldPos = snapToTexel((u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
             if (dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
             {
                 vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
-                sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld);
+                sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld);
             }
         }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
