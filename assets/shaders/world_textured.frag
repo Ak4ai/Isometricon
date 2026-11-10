@@ -41,6 +41,34 @@ uniform float u_CutawayFade;    // Atenuação vertical das camadas superiores
 uniform bool u_WaterMode;       // Token está dentro de água
 uniform int u_CutawayPass;      // 0 = opaco; 1 = transparentes acima
 
+// Revelação do espaço do jogador (cômodo, caverna): ver src/world/room_reveal.py.
+uniform float u_RoomActive;     // 0 = desligado; 0..1 = intensidade do efeito
+uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 128 casca de sólido ao redor, 0 fora
+uniform vec3 u_RoomOrigin;      // célula do mundo do canto (0,0,0) da máscara
+uniform vec3 u_RoomSize;        // tamanho da máscara em células
+uniform vec3 u_ViewDir;         // para onde a câmera olha, em coordenadas do mundo
+uniform mat4 u_RoomInvModel;    // do espaço desenhado (girado pelo modelo) de volta ao mundo
+uniform float u_RoomExterior;   // brilho do que fica fora do espaço (0 preto, 1 normal)
+
+// Valor da máscara na célula que contém o ponto do mundo; -1 fora da janela.
+float roomCell(vec3 worldPos)
+{
+    vec3 c = floor(worldPos - u_RoomOrigin);
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_RoomSize)))
+        return -1.0;
+    return texelFetch(u_RoomMask, ivec3(c), 0).r;
+}
+
+// Limiar de dither 4x4 (0..1) do pixel: a entrada e a saída do efeito aparecem como pontilhado.
+float roomDither()
+{
+    int x = int(mod(gl_FragCoord.x, 4.0));
+    int y = int(mod(gl_FragCoord.y, 4.0));
+    const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0,
+                                      3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    return (bayer[y * 4 + x] + 0.5) / 16.0;
+}
+
 float hash3(vec3 p)
 {
     p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
@@ -66,6 +94,30 @@ void main()
     // Descartar fragmentos 100% transparentes (ex: folhas/vidro quando houver).
     if (texColor.a < 0.1) {
         discard;
+    }
+
+    // Espaço do jogador: o que está fora é escurecido, e o que tapa a vista dele (teto, parede
+    // da frente, terra por cima) some. Um fragmento tapa se, seguindo o raio da câmera para dentro
+    // da cena, ele chega ao interior do espaço.
+    float roomFactor = 1.0;
+    if (u_RoomActive > 0.001)
+    {
+        vec3 worldPos = (u_RoomInvModel * vec4(v_FragPos, 1.0)).xyz;
+        vec3 worldNormal = normalize(mat3(u_RoomInvModel) * v_Normal);
+        // a célula do bloco que está sendo desenhado (um pouco para dentro da face)
+        float here = roomCell(worldPos - worldNormal * 0.05);
+        if (here <= 0.9 && u_RoomActive > roomDither())
+        {
+            vec3 q = worldPos + u_ViewDir * 0.1;
+            for (int i = 0; i < 64; i++)
+            {
+                if (roomCell(q) > 0.9)
+                    discard;
+                q += u_ViewDir * 0.5;
+            }
+        }
+        float inside = here >= 0.4 ? 1.0 : 0.0;
+        roomFactor = mix(1.0, mix(u_RoomExterior, 1.0, inside), u_RoomActive);
     }
 
     bool above_player = v_FragPos.y > u_PlayerY + 0.05;
@@ -160,6 +212,6 @@ void main()
         lighting = mix(lighting, lighting * vec3(0.72, 0.88, 1.12), 0.65);
     }
 
-    vec3 result = lighting * albedo;
+    vec3 result = lighting * albedo * roomFactor;
     FragColor = vec4(result, texColor.a * u_Alpha);
 }

@@ -427,6 +427,11 @@ def main() -> None:
         voxel_provider = VoxelGridProvider(
             block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
         )
+        # Revela só o espaço fechado do jogador (cômodo, caverna) e escurece o resto
+        from src.rendering.room_reveal import RoomRevealRenderer
+        from src.world.room_reveal import RoomRevealTracker
+        room_tracker = RoomRevealTracker()
+        room_renderer = RoomRevealRenderer()
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -469,6 +474,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
+        room_tracker = room_renderer = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -479,6 +485,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
+        room_tracker = room_renderer = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -495,6 +502,7 @@ def main() -> None:
         turntable_state=turntable_state,
     )
     skin_command_handler.schematic_tool = schematic_tool
+    skin_command_handler.room_reveal = room_renderer
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
         create_gl=True,
@@ -643,6 +651,7 @@ def main() -> None:
         player_token._collision_controller = None
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         schematic_tool.clear()  # as construções pertencem ao mundo anterior
+        room_tracker.reset()
         voxel_provider = VoxelGridProvider(
             block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
         )
@@ -703,6 +712,7 @@ def main() -> None:
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
             world_manager.delete()
             schematic_tool.clear()  # o relevo muda: as construções não fazem mais sentido onde estavam
+            room_tracker.reset()
             world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True)
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
@@ -1181,9 +1191,14 @@ def main() -> None:
                 shader.set_vec3("u_AmbientColor", 0.35, 0.35, 0.35)
                 gl.glClearColor(0.08, 0.10, 0.13, 1.0)
         elif terrain_demo:
+            # Espaço fechado do jogador: a máscara e a suavização do efeito
+            chunk_revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
+            room_tracker.update(dt, player_token.position, loaded_chunks, chunk_revision,
+                                schematic_tool.layer.structures)
+            room_renderer.update(dt, room_tracker)
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
-            if voxel_provider is not None:
+            if voxel_provider is not None and not room_renderer.visible:
                 underground_mode = (
                     player_token.position[1]
                     < float(
@@ -1205,6 +1220,7 @@ def main() -> None:
             gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
             shader.set_int("u_TextureAtlas", 0)
             view_projection = projection @ view
+            room_renderer.apply(shader, model, view)
             world_manager.render(shader, model, view_projection)
 
             # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
@@ -1224,6 +1240,7 @@ def main() -> None:
 
             # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma
             schematic_tool.draw(shader, model, window.time)
+            room_renderer.disable(shader)
 
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
             grid_renderer.render(projection, view, model)
@@ -1335,6 +1352,8 @@ def main() -> None:
     chat_console.delete()
     if schematic_tool is not None:
         schematic_tool.delete()
+    if room_renderer is not None:
+        room_renderer.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

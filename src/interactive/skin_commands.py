@@ -178,6 +178,7 @@ class SkinCommandHandler:
         self.turntable_state = turntable_state
         self.chat_console = None
         self.schematic_tool = None  # SchematicTool do terreno (/schem); None fora dele
+        self.room_reveal = None  # RoomRevealRenderer do terreno (/revelar); None fora dele
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
@@ -279,6 +280,32 @@ class SkinCommandHandler:
         else:
             self.turntable_state["active"] = not self.turntable_state["active"]
         return True, f"[Girar] Rotação automática {'ligada' if self.turntable_state['active'] else 'desligada'}.", CYAN
+
+    # ------------------------------------------------------------------ /revelar
+    def reveal(self, args: List[str]) -> Result:
+        """/revelar [on|off|escuro <0-1>]: revela só o espaço fechado do jogador (cômodo, caverna)."""
+        renderer = self.room_reveal
+        if renderer is None:
+            return False, "[Revelar] Só funciona no terreno (--terrain).", RED
+        word = args[0].lower() if args else ""
+        if word in ("escuro", "dark", "brilho"):
+            try:
+                value = float(args[1].replace(",", ".")) if len(args) > 1 else None
+            except ValueError:
+                value = None
+            if value is None or not 0.0 <= value <= 1.0:
+                return False, "[Revelar] Use /revelar escuro <0 a 1> (0 preto, 1 sem escurecer).", RED
+            renderer.exterior = value
+            return True, f"[Revelar] Brilho do que fica fora: {value:g}.", CYAN
+        if word in ("on", "ligar", "sim"):
+            renderer.enabled = True
+        elif word in ("off", "desligar", "nao", "não"):
+            renderer.enabled = False
+        elif word:
+            return False, "[Revelar] Use /revelar [on|off|escuro <0 a 1>].", RED
+        else:
+            renderer.enabled = not renderer.enabled
+        return True, f"[Revelar] {'ligado' if renderer.enabled else 'desligado'}.", CYAN
 
     # ------------------------------------------------------------------ /schem
     def schem(self, args: List[str]) -> Result:
@@ -1246,6 +1273,8 @@ ROOT_COMMANDS: List[Command] = [
     Command(("skin",), "/skin <comando>", "muda o personagem", SkinCommandHandler.skin, None),
     Command(("ajuda", "help", "?"), "/ajuda [comando]", "lista os comandos", SkinCommandHandler.help, None),
     Command(("girar", "spin"), "/girar [on|off]", "rotação automática no visualizador", SkinCommandHandler.spin, ["on", "off"]),
+    Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>]",
+            "revela só o espaço fechado em que o jogador está", SkinCommandHandler.reveal, ["on", "off", "escuro"]),
     Command(("schem", "schematic", "estrutura"), "/schem <load|list|place|cancel|remove|clear|info>",
             "coloca construções (.schem) no terreno", SkinCommandHandler.schem, None),
 ]
@@ -1280,6 +1309,7 @@ def _schematic_names() -> List[str]:
 
 COMMAND_TREE: Dict[str, Any] = {
     "skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"],
+    "revelar": ["on", "off", "escuro"],
     "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},
 }
 
