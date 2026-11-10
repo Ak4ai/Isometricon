@@ -86,12 +86,6 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
     return clamp(occ / 3.2, 0.0, 1.0);
 }
 
-// Ruído de gradiente intercalado: um valor estável 0..1 por pixel, para girar o cone de raios sem formar padrão.
-float interleavedNoise(vec2 pixel)
-{
-    return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
-}
-
 // Um raio exato pelos voxels (Amanatides-Woo): 1 se o sol chega, 0 se um bloco sólido está no caminho.
 float traceSun(vec3 worldPos, vec3 dir)
 {
@@ -118,16 +112,28 @@ float traceSun(vec3 worldPos, vec3 dir)
     return 1.0;
 }
 
-// Fração da luz do sol que chega ao ponto (1 = sol inteiro). O sol tem tamanho: um cone de raios, girado por pixel,
-// dá a penumbra suave (nítida junto ao bloco, macia longe dele) como numa sombra com filtragem.
-float sunVisibility(vec3 worldPos, vec3 worldNormal, vec3 sunDir)
+// Sombras "em pixel", como nos shader packs de Minecraft: o ponto da face é levado ao centro do seu texel (16 por
+// bloco), nos dois eixos da face. A sombra, borda e penumbra, passa a andar em quadradinhos da mesma grade da textura.
+const float SHADOW_TEXELS = 16.0;
+vec3 snapToTexel(vec3 worldPos, vec3 worldNormal)
 {
-    const int RAYS = 8;
-    const float SOFTNESS = 0.085;                              // abertura do cone (≈5°)
+    vec3 snapped = (floor(worldPos * SHADOW_TEXELS) + 0.5) / SHADOW_TEXELS;
+    vec3 n = abs(worldNormal);
+    return vec3(n.x > 0.5 ? worldPos.x : snapped.x,
+                n.y > 0.5 ? worldPos.y : snapped.y,
+                n.z > 0.5 ? worldPos.z : snapped.z);            // no eixo da normal o ponto fica na própria face
+}
+
+// Fração da luz do sol que chega ao ponto (1 = sol inteiro). O sol tem tamanho: um cone fixo de poucos raios dá uma
+// penumbra curta em poucos tons, e com o ponto preso ao texel ela sai em quadradinhos, sem ruído.
+float sunVisibility(vec3 worldPos, vec3 worldNormal, vec3 sunDir, float noise)
+{
+    const int RAYS = 4;
+    const float SOFTNESS = 0.05;                               // abertura do cone (≈3°): penumbra curta
     vec3 origin = worldPos + worldNormal * 0.04;
     vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(sunDir, t1);
-    float spin = interleavedNoise(gl_FragCoord.xy) * 6.2831853;
+    float spin = noise * 6.2831853;
     float visible = 0.0;
     for (int k = 0; k < RAYS; k++)
     {
@@ -294,13 +300,13 @@ void main()
         float contact = 0.0;
         if (u_ShadowStrength > 0.001)
         {
-            vec3 worldPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
             vec3 worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
+            vec3 worldPos = snapToTexel((u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
             if (dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
             {
                 vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
-                sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld);
+                sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld, 0.0);
             }
         }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
