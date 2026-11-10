@@ -105,10 +105,14 @@ void main()
         vec3 worldPos = (u_RoomInvModel * vec4(v_FragPos, 1.0)).xyz;
         vec3 worldNormal = normalize(mat3(u_RoomInvModel) * v_Normal);
         // a célula do bloco que está sendo desenhado (um pouco para dentro da face)
-        float here = roomCell(worldPos - worldNormal * 0.05);
+        vec3 blockCell = floor(worldPos - worldNormal * 0.05);
+        float here = roomCell(blockCell + 0.5);
         if (here <= 0.9 && u_RoomActive > roomDither())
         {
-            vec3 q = worldPos + u_ViewDir * 0.1;
+            // O raio parte do CENTRO do bloco, e não do pixel: a decisão é a mesma para todas as faces
+            // do bloco. Partindo do pixel, uma parede fina com mais espaço atrás era cortada em escada
+            // no meio da face (uns pixels acertavam o espaço atrás, outros não).
+            vec3 q = blockCell + 0.5 + u_ViewDir * 0.9;
             for (int i = 0; i < 64; i++)
             {
                 if (roomCell(q) > 0.9)
