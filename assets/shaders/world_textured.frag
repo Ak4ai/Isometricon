@@ -8,7 +8,7 @@
 
 in vec3 v_FragPos;
 in vec3 v_Normal;
-in vec2 v_TexCoord;
+centroid in vec2 v_TexCoord;
 in vec3 v_Color;
 in vec3 v_BindPos;
 

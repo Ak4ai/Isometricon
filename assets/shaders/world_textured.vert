@@ -20,7 +20,7 @@ uniform mat4 u_Bones[24];
 
 out vec3 v_FragPos;
 out vec3 v_Normal;
-out vec2 v_TexCoord;
+centroid out vec2 v_TexCoord;  // centroid: com MSAA, a borda do bloco não lê o ladrilho vizinho do atlas
 out vec3 v_Color;
 out vec3 v_BindPos;        // where the vertex is on the unposed body (patterns that stay on the skin)
 
