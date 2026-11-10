@@ -102,11 +102,7 @@ vec3 worldLighting(vec3 n, vec3 l, float worldY, float sunVis)
     vec3 tint = mix(cool, warm, smoothstep(0.05, 0.6, sun));
     // quanto mais fundo o terreno, mais escuro: numa vista sem perspectiva a altura é a pista de profundidade
     float altitude = mix(0.74, 1.0, smoothstep(1.0, 14.0, worldY));
-    // curvas de nível: cada nível de altura das superfícies de cima ganha um tom um pouco diferente (a sequência 2,1,0,1
-    // faz dois níveis vizinhos nunca terem o mesmo tom), para ler degraus de um bloco, que na isométrica se alinham
-    float level = abs(mod(floor(worldY + 0.5), 4.0) - 2.0);
-    float band = 1.0 + (level - 1.0) * 0.045 * smoothstep(0.6, 0.95, n.y);
-    return vec3(0.96) * shade * tint * altitude * band;
+    return vec3(0.96) * shade * tint * altitude;
 }
 
 // Revelação do espaço do jogador (cômodo, caverna): ver src/world/room_reveal.py.

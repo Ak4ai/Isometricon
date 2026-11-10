@@ -16,7 +16,6 @@ from src.world import Chunk3D
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SURFACE_EPSILON = 0.002
-MIN_CONTOUR_DROP = 2  # só desníveis de 2 blocos ou mais ganham contorno
 CONTOUR_WIDTH = 0.035  # espessura, em blocos, da fita de contorno do relevo
 _LOCAL_Y = np.arange(Chunk3D.SIZE, dtype=np.int32)[None, :, None]
 _SURFACE_LUT = np.zeros(256, dtype=bool)
@@ -123,8 +122,8 @@ def _relief_segments(
     for (x, z), height in heights.items():
         for dx, dz in ((1, 0), (0, 1)):
             other = heights.get((x + dx, z + dz))
-            if other is None or abs(other - height) < MIN_CONTOUR_DROP:
-                continue  # degraus de um bloco se alinham na isométrica: quem os separa é o tom de cada nível
+            if other is None or other == height:
+                continue
             y = float(max(height, other) + 1) + float(epsilon)
             higher_is_this = height > other
             if dx:  # vizinha a leste: o degrau está no plano x + 1, ao longo de z
