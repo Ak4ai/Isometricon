@@ -60,6 +60,32 @@ float shadowCell(vec3 worldPos)
     return texelFetch(u_ShadowMask, ivec3(c), 0).r;
 }
 
+// Sombra de contato: o chão escurece junto ao pé de qualquer parede, de qualquer lado e sem depender do sol. É o que
+// deixa ler uma descida cujo degrau está de costas para a câmera (o topo de cima e o de baixo teriam o mesmo verde).
+// Olha, em volta do ponto, as células logo acima do chão: quanto mais perto e mais numerosas, mais escuro.
+float contactOcclusion(vec3 worldPos, vec3 worldNormal)
+{
+    if (worldNormal.y < 0.6) return 0.0;                         // só no chão (topos de bloco)
+    vec3 base = worldPos + vec3(0.0, 0.5, 0.0);                  // meio da célula logo acima do chão
+    float occ = 0.0;
+    for (int i = 0; i < 8; i++)
+    {
+        float a = 0.785398 * float(i);
+        vec2 dir = vec2(cos(a), sin(a));
+        float axis = (i % 2 == 0) ? 1.0 : 0.7;                   // as diagonais pesam menos
+        for (int k = 0; k < 4; k++)
+        {
+            float t = 0.3 + 0.55 * float(k);
+            if (shadowCell(base + vec3(dir.x, 0.0, dir.y) * t) > 0.5)
+            {
+                occ += axis * (1.0 - 0.22 * float(k));           // a primeira parede achada basta
+                break;
+            }
+        }
+    }
+    return clamp(occ / 3.2, 0.0, 1.0);
+}
+
 // Fração da luz do sol que chega ao ponto (1 = sol inteiro). Três raios um pouco inclinados dão uma borda macia.
 float sunVisibility(vec3 worldPos, vec3 worldNormal, vec3 sunDir)
 {
@@ -229,14 +255,19 @@ void main()
     vec3 lighting = (u_AmbientColor + diffuse) * underside_shadow;
     if (u_WorldStyle) {
         float sunVis = 1.0;
-        if (u_ShadowStrength > 0.001 && dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
+        float contact = 0.0;
+        if (u_ShadowStrength > 0.001)
         {
             vec3 worldPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
             vec3 worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
-            vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
-            sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld);
+            contact = contactOcclusion(worldPos, worldNormal);
+            if (dot(norm, lightDir) > 0.02)  // a face de costas para o sol já é sombra
+            {
+                vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
+                sunVis = sunVisibility(worldPos, worldNormal, sunDirWorld);
+            }
         }
-        lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis);
+        lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
     }
 
     if (u_UndergroundMode) {
