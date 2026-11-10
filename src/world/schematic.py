@@ -118,6 +118,10 @@ class Schematic:
         self._occupied_mask: Optional[np.ndarray] = None
         self._full_cube_mask: Optional[np.ndarray] = None
 
+    def invalidate_masks(self) -> None:
+        """Esquece as máscaras calculadas (depois de trocar blocos da grade, como abrir uma porta)."""
+        self._solid_mask = self._occupied_mask = self._full_cube_mask = None
+
     def get_block(self, x: int, y: int, z: int) -> str:
         """Retorna o nome do bloco na coordenada local da estrutura."""
         if 0 <= x < self.width and 0 <= y < self.height and 0 <= z < self.length:

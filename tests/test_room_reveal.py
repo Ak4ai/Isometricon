@@ -90,17 +90,41 @@ def test_tree_leaves_do_not_make_a_room():
     assert not room_at(chunks, (13.5, 3.0, 13.5)).active
 
 
-def test_hysteresis_keeps_a_room_a_little_longer():
-    """Uma sala com abertura entre os dois limiares só é "dentro" se já estava."""
+def test_a_room_with_two_open_sides_is_still_a_room_by_its_roof():
+    """Duas paredes quase inteiras abertas: aberta ao céu demais, mas o teto cobre tudo e há parede (Isocraft)."""
     def room_with_big_window(b):
         # duas paredes quase inteiras abertas (5 de largura x 4 de altura cada)
         box(b, 10, 10, doors=[(0, dy, z) for dy in range(4) for z in range(1, 6)]
             + [(x, dy, 0) for dy in range(4) for x in range(1, 6)])
     chunks = world(room_with_big_window)
-    entering = room_at(chunks, (13.5, 3.0, 13.5), was_active=False)
-    staying = room_at(chunks, (13.5, 3.0, 13.5), was_active=True)
-    assert 0.20 <= entering.exposure < 0.35
+    room = room_at(chunks, (13.5, 3.0, 13.5))
+    assert 0.20 <= room.exposure < 0.35                     # pela abertura ao céu não seria
+    assert room.roof_coverage >= 0.8 and room.wall_coverage >= 0.1875
+    assert room.active
+
+
+def test_hysteresis_keeps_a_room_a_little_longer():
+    """Entre os dois limiares (de abertura ao céu e de teto) só é "dentro" se já estava."""
+    def half_roof(b):
+        b[6:12, 7, 6:21] = BlockType.STONE                 # teto de y = 7 cobrindo só um lado do jogador
+        b[6, 3:7, 6:21] = BlockType.STONE                  # e uma parede atrás
+    chunks = world(half_roof)
+    entering = room_at(chunks, (11.5, 3.0, 13.5), was_active=False)
+    staying = room_at(chunks, (11.5, 3.0, 13.5), was_active=True)
+    assert 0.45 <= entering.roof_coverage < 0.8 and entering.exposure >= 0.2
     assert not entering.active and staying.active
+
+
+def test_under_a_deck_held_by_pillars_is_a_room():
+    """Debaixo de um deck largo apoiado em pilares (como o da casa medieval): lados abertos, mas é "dentro"."""
+    def deck(b):
+        b[10:18, 6, 10:18] = BlockType.WOOD
+        for x, z in ((10, 10), (10, 17), (17, 10), (17, 17), (12, 12), (15, 15)):
+            b[x, 3:6, z] = BlockType.WOOD
+    chunks = world(deck)
+    room = room_at(chunks, (13.5, 3.0, 13.5))
+    assert room.exposure > 0.35 and room.active          # aberto ao céu de todos os lados, mas coberto
+    assert not room_at(world(lambda b: None), (13.5, 3.0, 13.5)).active
 
 
 def test_player_standing_inside_the_floor_block_is_lifted_to_the_air():

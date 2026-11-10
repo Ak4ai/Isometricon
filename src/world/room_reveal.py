@@ -5,7 +5,10 @@ Sem OpenGL. A cada recálculo:
 1. copia para uma janela de 48x32x48 células o que é sólido (chunks do terreno e construções);
 2. marca as células com "teto" (algo estrutural acima delas) e separa o ar coberto do ar aberto ao céu;
 3. inunda o ar coberto a partir do jogador (o fluxo para onde o céu começa, que é o lado de fora);
-4. decide se é um espaço fechado de verdade: um alpendre ou uma marquise abrem para o céu demais;
+4. decide se é um espaço fechado de verdade: pouco aberto ao céu (um cômodo com paredes), ou com teto baixo
+   cobrindo quase tudo em volta do jogador, mesmo de lados abertos (debaixo de um deck, de um alpendre fundo).
+   É o critério do Isocraft (``StructuralRoomClassifier``): a "sala de frente aberta" entra com 80% de teto e
+   só sai abaixo de 45%; um beiral estreito ou uma marquise não chegam lá;
 5. devolve uma máscara: 255 no espaço do jogador, 128 na casca de 1 bloco de sólido ao redor, 0 no resto.
 
 O shader usa a máscara para escurecer o que está fora e remover o que tapa a vista do espaço.
@@ -25,6 +28,13 @@ BELOW_PLAYER = 10              # células da janela abaixo do pé do jogador
 MIN_SPACE_CELLS = 6            # um vão menor que isso não é cômodo
 ENTER_EXPOSURE = 0.20          # fração do espaço aberta ao céu: abaixo disso passa a ser "dentro"
 RETAIN_EXPOSURE = 0.35         # e só deixa de ser "dentro" acima disto (histerese)
+ROOF_RADIUS = 4                # raio (células, no plano) em volta do jogador onde se mede a cobertura do teto
+ROOF_REACH = 8                 # o teto conta até tantas células acima da cabeça
+ENTER_ROOF_COVERAGE = 0.80     # com tanto teto em volta é "dentro", mesmo com os lados abertos (Isocraft)
+RETAIN_ROOF_COVERAGE = 0.45    # e deixa de ser abaixo disto
+MIN_WALL_COVERAGE = 0.1875     # e precisa de alguma parede em volta: uma laje solta (marquise) não é cômodo
+WALL_RAYS = 16                 # raios horizontais que procuram parede em volta do jogador
+WALL_REACH = 8                 # até onde cada raio procura
 INTERIOR = 255
 SHELL = 128
 
@@ -45,6 +55,8 @@ class RoomMask:
     active: bool                   # o jogador está num espaço fechado
     cells: int                     # células de ar do espaço do jogador
     exposure: float                # fração delas aberta ao céu
+    roof_coverage: float = 0.0     # fração das colunas em volta do jogador com teto baixo (ou parede)
+    wall_coverage: float = 0.0     # fração dos raios horizontais que batem numa parede
     window: Optional["WindowCells"] = None  # o que há em cada célula (preenchido pelo rastreador)
 
 
@@ -176,14 +188,62 @@ def compute_room(
     leaks = space & ndimage.binary_dilation(sky_air, structure=_FACE_STRUCTURE)
     exposure = float(leaks.sum()) / max(cells, 1)
 
+    coverage = roof_coverage(solid, roof, seed)
+    walls = wall_coverage(solid, seed)
     limit = RETAIN_EXPOSURE if was_active else ENTER_EXPOSURE
-    active = cells >= MIN_SPACE_CELLS and exposure < limit
+    roof_limit = RETAIN_ROOF_COVERAGE if was_active else ENTER_ROOF_COVERAGE
+    open_front = coverage >= roof_limit and walls >= MIN_WALL_COVERAGE
+    active = cells >= MIN_SPACE_CELLS and (exposure < limit or open_front)
 
     if active:
         shell = ndimage.binary_dilation(space, structure=_FACE_STRUCTURE) & solid
         mask[shell] = SHELL
         mask[space] = INTERIOR
-    return RoomMask(origin, mask, active, cells, exposure)
+    return RoomMask(origin, mask, active, cells, exposure, coverage, walls)
+
+
+def wall_coverage(solid: np.ndarray, seed) -> float:
+    """Fração de ``WALL_RAYS`` raios horizontais, saindo dos pés, que batem num sólido (na altura dos pés ou da
+    cabeça) em até ``WALL_REACH`` células: paredes, pilares, um tronco, o barranco."""
+    x0, y0, z0 = seed
+    head = min(y0 + 1, WINDOW[1] - 1)
+    hits = 0
+    for i in range(WALL_RAYS):
+        angle = 2.0 * np.pi * i / WALL_RAYS
+        dx, dz = float(np.cos(angle)), float(np.sin(angle))
+        for step in range(1, 2 * WALL_REACH + 1):
+            t = step * 0.5
+            x, z = int(np.floor(x0 + 0.5 + dx * t)), int(np.floor(z0 + 0.5 + dz * t))
+            if not (0 <= x < WINDOW[0] and 0 <= z < WINDOW[2]):
+                break
+            if solid[x, y0, z] or solid[x, head, z]:
+                hits += 1
+                break
+    return hits / WALL_RAYS
+
+
+def roof_coverage(solid: np.ndarray, roof: np.ndarray, seed) -> float:
+    """Fração das colunas num disco de ``ROOF_RADIUS`` em volta de ``seed`` (o ar dos pés) cobertas.
+
+    Uma coluna está coberta se tem teto acima da cabeça, até ``ROOF_REACH`` células, ou se é parede (sólido na
+    altura dos pés ou da cabeça). A folhagem não é teto.
+    """
+    x0, y0, z0 = seed
+    head = y0 + 1
+    top = min(WINDOW[1], head + 1 + ROOF_REACH)
+    covered = total = 0
+    for dx in range(-ROOF_RADIUS, ROOF_RADIUS + 1):
+        for dz in range(-ROOF_RADIUS, ROOF_RADIUS + 1):
+            if dx * dx + dz * dz > ROOF_RADIUS * ROOF_RADIUS:
+                continue
+            x, z = x0 + dx, z0 + dz
+            if not (0 <= x < WINDOW[0] and 0 <= z < WINDOW[2]):
+                continue
+            total += 1
+            wall = solid[x, y0, z] or (head < WINDOW[1] and solid[x, head, z])
+            if wall or roof[x, head + 1:top, z].any():
+                covered += 1
+    return covered / max(total, 1)
 
 
 class RoomRevealTracker:
@@ -209,7 +269,7 @@ class RoomRevealTracker:
         """Devolve a máscara atual, recalculando se o jogador ou o mundo mudou."""
         structures = list(structures)
         cell = tuple(int(np.floor(float(v))) for v in position)
-        key = (cell, world_revision, tuple((id(s), s.origin) for s in structures))
+        key = (cell, world_revision, tuple((id(s), s.origin, getattr(s, "revision", 0)) for s in structures))
         self._age += dt
         if self.mask is not None and key == self._key:
             return self.mask

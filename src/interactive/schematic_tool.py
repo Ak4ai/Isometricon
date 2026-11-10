@@ -45,6 +45,45 @@ def snap_axis(vector) -> Tuple[int, int]:
     return (0, 1 if z >= 0 else -1)
 
 
+class StructureMeshes:
+    """As malhas de uma construção: o corpo, que não muda, e as portas à parte, refeitas ao abrir ou fechar."""
+
+    def __init__(self, schematic: Schematic, uv_lookup) -> None:
+        from src.rendering.mesh import TexturedMesh
+        from src.world.doors import is_door
+
+        self.schematic = schematic
+        self.uv_lookup = uv_lookup
+        doors = np.vectorize(is_door, otypes=[bool])(schematic.grid) if schematic.grid.size else None
+        self.door_cells = doors if doors is not None and doors.any() else None
+        body = None if self.door_cells is None else ~self.door_cells
+        self.main = TexturedMesh(*StructureMesher.build_arrays(schematic, uv_lookup, center=False, cells=body))
+        self.doors = None
+        self.rebuild_doors()
+
+    def rebuild_doors(self) -> None:
+        from src.rendering.mesh import TexturedMesh
+        if self.door_cells is None:
+            return
+        vertices, indices = StructureMesher.build_arrays(self.schematic, self.uv_lookup, center=False,
+                                                         cells=self.door_cells)
+        if self.doors is None:
+            self.doors = TexturedMesh(vertices, indices)
+        else:
+            self.doors.update_buffers(vertices, indices)
+
+    def draw(self) -> None:
+        self.main.draw()
+        if self.doors is not None:
+            self.doors.draw()
+
+    def delete(self) -> None:
+        for mesh in (self.main, self.doors):
+            if mesh is not None:
+                mesh.delete()
+        self.main = self.doors = None
+
+
 class SchematicTool:
     """Carrega, posiciona e fixa construções no mundo."""
 
@@ -170,6 +209,30 @@ class SchematicTool:
             lines.append(f"{i}. {s.name} em x={s.origin[0]} y={s.origin[1]} z={s.origin[2]}")
         return lines
 
+    # ------------------------------------------------------------------ portas
+    def door_near(self, position):
+        """A porta de uma construção fixada ao alcance de ``position`` (pés do jogador), ou ``None``."""
+        from src.world.doors import find_door
+        return find_door(self.layer.structures, position)
+
+    def toggle_door(self, door, player_cells=()) -> bool:
+        """Abre ou fecha a porta e refaz a malha da construção. Não fecha em cima do jogador.
+
+        Devolve True se a porta mudou.
+        """
+        from src.world.doors import toggle_door
+        if door.is_open and set(door.cells()) & set(player_cells):
+            return False  # fechar prenderia o personagem dentro da porta
+        toggle_door(door)
+        placed = door.structure
+        if hasattr(placed.mesh, "rebuild_doors"):
+            placed.mesh.rebuild_doors()       # só a malha pequena das portas (a casa inteira leva quase 1 s)
+        elif placed.mesh is not None and hasattr(placed.mesh, "delete"):
+            old = placed.mesh
+            placed.mesh = self._mesh_factory(placed.schematic)
+            old.delete()
+        return True
+
     # ------------------------------------------------------------------ teclado
     def handle_key(self, key: int, action: int, mods: int) -> bool:
         """Consome as teclas da prévia (setas, Enter, Esc) enquanto ela existe."""
@@ -215,10 +278,7 @@ class SchematicTool:
         return self._atlas
 
     def _build_mesh(self, schematic: Schematic):
-        from src.rendering.mesh import TexturedMesh
-        atlas = self._ensure_atlas()
-        vertices, indices = StructureMesher.build_arrays(schematic, atlas.get_uv, center=False)
-        return TexturedMesh(vertices, indices)
+        return StructureMeshes(schematic, self._ensure_atlas().get_uv)
 
     @staticmethod
     def _delete_mesh(mesh) -> None:

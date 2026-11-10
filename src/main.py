@@ -438,6 +438,9 @@ def main() -> None:
         shadow_renderer = SunShadowRenderer()
         room_tracker = RoomRevealTracker()
         room_renderer = RoomRevealRenderer(terrain_atlas=atlas, structure_atlas=lambda: schematic_tool.atlas_if_ready())
+        # A tecla E ao lado do personagem quando há uma porta ao alcance
+        from src.interactive.interact_prompt import InteractPrompt
+        interact_prompt = InteractPrompt()
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -481,6 +484,7 @@ def main() -> None:
         world_manager = None
         schematic_tool = None
         room_tracker = room_renderer = shadow_renderer = None
+        interact_prompt = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -492,6 +496,7 @@ def main() -> None:
         world_manager = None
         schematic_tool = None
         room_tracker = room_renderer = None
+        interact_prompt = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -721,6 +726,16 @@ def main() -> None:
             menus.go('pause')
             return True
         key = menus.preferences.canonical(key)
+        if terrain_demo and key == glfw.KEY_E and not character_editor.is_open:
+            door = schematic_tool.door_near(player_token.position)
+            if door is not None:
+                # perto de uma porta o E abre/fecha (e não gira a câmera)
+                if action == glfw.PRESS:
+                    px, py, pz = (float(v) for v in player_token.position)
+                    body = {(int(np.floor(px + dx)), int(np.floor(py + dy)), int(np.floor(pz + dz)))
+                            for dx in (-0.3, 0.3) for dz in (-0.3, 0.3) for dy in (0.05, 1.0, 1.75)}
+                    schematic_tool.toggle_door(door, player_cells=body)
+                return True
         keys_pressed[key] = (action != glfw.RELEASE)
 
         if terrain_demo and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
@@ -931,6 +946,13 @@ def main() -> None:
     # passo por quadro a partir do décimo, pelos mesmos caminhos do mouse de verdade (conferências).
     mouse_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--mouse=")), "")
     mouse_steps = [step.split(",") for step in mouse_script.split(";") if step.strip()]
+    # --keys="150:E;200:Q": teclas apertadas (e soltas) num quadro, pelos mesmos caminhos do teclado (conferências)
+    key_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--keys=")), "")
+    key_steps = {}
+    for step in key_script.split(";"):
+        frame_text, _, key_name = step.strip().partition(":")
+        if frame_text.isdigit() and hasattr(glfw, "KEY_" + key_name.strip().upper()):
+            key_steps.setdefault(int(frame_text), []).append(getattr(glfw, "KEY_" + key_name.strip().upper()))
     while not window.should_close():
         dt = window.update_delta_time()
         if menus.active:
@@ -1097,6 +1119,9 @@ def main() -> None:
         # Processar eventos de I/O
         # --------------------------------------------------------------
         window.poll_events()
+        for scripted_key in key_steps.pop(frame_index, ()):
+            window._on_key(window._window, scripted_key, 0, glfw.PRESS, 0)
+            window._on_key(window._window, scripted_key, 0, glfw.RELEASE, 0)
         if mouse_steps and frame_index >= 10:  # onde os eventos do mouse de verdade chegam
             step = mouse_steps.pop(0)
             at = (float(step[0]), float(step[1]))
@@ -1335,6 +1360,13 @@ def main() -> None:
             if coordinate_overlay is not None:
                 coordinate_overlay.render(window.width, window.height, player_token.position)
                 shader.use()
+
+            # 7. A tecla E ao lado do personagem, se há uma porta ao alcance
+            near_door = None if character_editor.is_open else schematic_tool.door_near(player_token.position)
+            interact_prompt.update(dt, near_door is not None,
+                                   "" if near_door is None else ("Fechar" if near_door.is_open else "Abrir"))
+            interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
+            shader.use()
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
@@ -1408,6 +1440,7 @@ def main() -> None:
         highlight_renderer.delete()
         if coordinate_overlay is not None:
             coordinate_overlay.delete()
+        interact_prompt.delete()
         grid_renderer.delete()
     elif char_demo:
         if character_model is not None:

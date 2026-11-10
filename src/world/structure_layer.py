@@ -26,10 +26,21 @@ class PlacedStructure:
     mesh: object = None  # malha para desenhar (TexturedMesh), quando já existe
     _solid: np.ndarray = field(init=False, repr=False)
 
+    revision: int = field(init=False, default=0)  # sobe quando um bloco muda (porta aberta ou fechada)
+
     def __post_init__(self) -> None:
+        self._load_masks()
+
+    def _load_masks(self) -> None:
         self._solid = self.schematic.solid_mask          # indexados [y, z, x]
         self._occupied = self.schematic.occupied_mask
         self._culls = self.schematic.full_cube_mask
+
+    def refresh(self) -> None:
+        """Relê as máscaras depois de a grade mudar; a colisão e os cômodos passam a ver o bloco novo."""
+        self.schematic.invalidate_masks()
+        self._load_masks()
+        self.revision += 1
 
     def bounds(self) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
         """Células (mínima, máxima) ocupadas pela caixa da construção, inclusive."""

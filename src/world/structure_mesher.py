@@ -4,7 +4,7 @@ A geração dos vértices é feita só com NumPy (sem OpenGL); `build_mesh` cria
 `TexturedMesh` na hora de enviar à GPU.
 """
 
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -45,6 +45,7 @@ class StructureMesher:
         schematic: Schematic,
         uv_lookup: UvLookup,
         center: bool = True,
+        cells: Optional[np.ndarray] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Gera (vértices float32, índices uint32) com as faces expostas ao ar.
 
@@ -52,6 +53,8 @@ class StructureMesher:
             schematic: Estrutura carregada.
             uv_lookup: Função (nome do bloco, face) -> (u0, v0, u1, v1) no atlas.
             center: Se True, centraliza a estrutura em torno da origem (0, 0, 0).
+            cells: máscara [y, z, x] das células a desenhar (None = todas); o descarte de faces continua
+                vendo a construção inteira, então as partes desenhadas à parte se encaixam sem buracos.
         """
         w, h, l = schematic.width, schematic.height, schematic.length
         # Os centros dos blocos vão de 0 a dim-1: o meio deles está em (dim-1)/2
@@ -60,6 +63,8 @@ class StructureMesher:
         # Só um cubo inteiro esconde a face do vizinho (uma laje ou uma cerca ao lado não esconde).
         # A máscara ganha uma borda de ar: tudo que está fora da estrutura é ar.
         occupied = schematic.occupied_mask
+        if cells is not None:
+            occupied = occupied & cells
         padded = np.zeros((h + 2, l + 2, w + 2), dtype=bool)
         padded[1:-1, 1:-1, 1:-1] = schematic.full_cube_mask
         shapes = {}

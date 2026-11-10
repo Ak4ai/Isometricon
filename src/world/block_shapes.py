@@ -328,9 +328,11 @@ _DECORATION_NAMES = ("chain", "ladder", "candle", "flower_pot")
 
 def collides(block_name: str) -> bool:
     """O personagem não atravessa o bloco (tochas, tapetes, placas, botões, velas, vasos... não barram)."""
-    base, _ = parse_block(block_name)
+    base, props = parse_block(block_name)
     if base.startswith("potted_") or base in _DECORATION_NAMES or base.endswith(_DECORATION_SUFFIXES):
         return False
+    if base.endswith("_door") and not base.endswith("trapdoor") and props.get("open") == "true":
+        return False  # a porta aberta deixa passar (a colisão é por célula inteira)
     return True
 
 
