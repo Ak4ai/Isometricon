@@ -382,6 +382,8 @@ def main() -> None:
         terrain_demo, char_demo = True, False
     menus.go('game')
     menus.result = None
+    if "--no-vsync" in sys.argv:  # medir o custo real do quadro, sem esperar a tela
+        menus.preferences.data['vsync'] = False
     window.set_vsync(menus.preferences.data['vsync'])
 
     active_seed = {
@@ -1381,9 +1383,11 @@ def main() -> None:
 
             # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma. Usam outro atlas, em que a
             # região da água do terreno pode ser outra textura: nada delas é tratado como água.
+            mark("underground_pass")
             shader.set_int("u_WaterPass", 0)
             schematic_tool.draw(shader, model, window.time)
             room_renderer.draw_structure_caps(shader, model)
+            mark("structures_draw")
 
             # 2c. A água, translúcida, sobre tudo o que já está na tela (sem escrever profundidade)
             gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -1395,6 +1399,7 @@ def main() -> None:
             gl.glDepthMask(gl.GL_FALSE)
             world_manager.render(shader, model, view_projection)
             gl.glDepthMask(gl.GL_TRUE)
+            mark("water_pass")
             gl.glDisable(gl.GL_BLEND)
             shader.set_int("u_WaterPass", 0)
             shader.set_float("u_SightActive", 0.0)
@@ -1404,6 +1409,7 @@ def main() -> None:
 
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
             grid_renderer.render(projection, view, model)
+            mark("grid_draw")
 
             # 4. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
@@ -1443,10 +1449,12 @@ def main() -> None:
             shader.set_mat4("u_View", view)
             base_model = model @ player_token.get_model_matrix()
             shader.set_mat4("u_Model", base_model)
+            mark("highlight")
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
             shader.set_int("u_TextureAtlas", 0)
             player_token.draw(shader=shader, base_model=base_model)
+            mark("player_draw")
 
             if coordinate_overlay is not None:
                 coordinate_overlay.render(window.width, window.height, player_token.position)
@@ -1481,6 +1489,7 @@ def main() -> None:
         # --------------------------------------------------------------
         # Renderizar interface 2D do Console de Chat (HUD estilo Minecraft)
         # --------------------------------------------------------------
+        mark("hud_prompt")
         character_editor.render(window.width, window.height)
         chat_console.render(window.width, window.height)
 

@@ -35,6 +35,7 @@ class SunShadowRenderer:
         self.texture_id = 0
         self._uploaded = None  # as células da janela que estão na GPU
         self._origin = (0, 0, 0)
+        self._top = WINDOW[1]
 
     def update(self, tracker: RoomRevealTracker) -> None:
         """Envia a janela de blocos sólidos para a GPU quando o rastreador calculou uma nova."""
@@ -44,7 +45,10 @@ class SunShadowRenderer:
         self._ensure_texture()
         sx, sy, sz = WINDOW
         # a janela é [x, y, z]; a textura 3D quer (profundidade z, altura y, largura x)
-        data = np.ascontiguousarray(mask_values(mask.window).transpose(2, 1, 0))
+        values = mask_values(mask.window)
+        filled = np.flatnonzero(values.any(axis=(0, 2)))
+        self._top = int(filled.max()) if filled.size else -1   # o raio do sol que sobe acima disso já está livre
+        data = np.ascontiguousarray(values.transpose(2, 1, 0))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
@@ -86,6 +90,7 @@ class SunShadowRenderer:
         shader.set_mat4("u_ShadowInvModel", inverse_model)
         shader.set_vec3("u_ShadowOrigin", float(self._origin[0]), float(self._origin[1]), float(self._origin[2]))
         shader.set_vec3("u_ShadowSize", float(WINDOW[0]), float(WINDOW[1]), float(WINDOW[2]))
+        shader.set_float("u_ShadowTop", float(self._top))
         shader.set_float("u_ShadowStrength", self.strength)
 
     @staticmethod

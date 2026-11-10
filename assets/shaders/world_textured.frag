@@ -51,6 +51,7 @@ uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
 uniform mat4 u_ShadowInvModel;   // do espaço desenhado (girado pelo modelo) de volta ao mundo
 uniform float u_ShadowStrength;  // 0 sem sombra
+uniform float u_ShadowTop;       // y (na janela) do bloco mais alto: acima dele, subindo, nada tapa o sol
 
 float shadowCell(vec3 worldPos)
 {
@@ -106,6 +107,8 @@ float traceSun(vec3 worldPos, vec3 dir)
     {
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
             return light;                                     // saiu da janela (para cima ou para longe): sol livre
+        if (stepDir.y > 0 && float(cell.y) > u_ShadowTop)
+            return light;                                     // subindo e acima de tudo o que há: sol livre
         float value = texelFetch(u_ShadowMask, cell, 0).r;
         if (value > 0.75)
             return 0.0;
@@ -217,6 +220,33 @@ float sunCone(vec3 origin, vec3 sunDir, int rays, float spread, float spin)
     return lit / float(rays);
 }
 
+// O cone borrado (12 raios, 0.15) em duas etapas: 4 raios espalhados pelo disco primeiro; se os 4 chegam ao sol o
+// ponto está no sol pleno e para aí (é a maior parte do chão aberto); senão os outros 8 completam a mesma média de 12.
+float softSun(vec3 origin, vec3 sunDir, float spin)
+{
+    vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(sunDir, t1);
+    float first = 0.0;
+    for (int k = 0; k < 12; k += 3)
+    {
+        float r = sqrt((float(k) + 0.5) / 12.0) * 0.15;
+        float a = float(k) * 2.3999632 + spin;
+        first += traceSun(origin, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+    }
+    if (first >= 3.999)
+        return 1.0;
+    float rest = 0.0;
+    for (int k = 0; k < 12; k++)
+    {
+        if (k % 3 == 0)
+            continue;
+        float r = sqrt((float(k) + 0.5) / 12.0) * 0.15;
+        float a = float(k) * 2.3999632 + spin;
+        rest += traceSun(origin, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+    }
+    return (first + rest) / 12.0;
+}
+
 // Fração da luz do sol que chega ao ponto (1 = sol inteiro). A nitidez muda ao longo da sombra:
 // - a sombra nítida sai do ponto preso ao texel, em degraus de pixel;
 // - a borrada sai do ponto exato, com mais raios, cone mais largo e girado por pixel (sem degraus);
@@ -224,10 +254,11 @@ float sunCone(vec3 origin, vec3 sunDir, int rays, float spread, float spin)
 // se misturam aos poucos: nítido, meio nítido, meio borrado, borrado.
 float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
 {
-    float sharp = sunCone(snappedPos + worldNormal * 0.04, sunDir, 6, 0.08, 0.0);
-    float soft = sunCone(exactPos + worldNormal * 0.04, sunDir, 12, 0.15,
-                         interleavedNoise(gl_FragCoord.xy) * 6.2831853);
+    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(gl_FragCoord.xy) * 6.2831853);
     float blur = smoothstep(0.1, 0.9, soft);                   // 0 no escuro (nítido) .. 1 no claro (borrado)
+    if (blur >= 1.0)
+        return soft;                                           // só a borrada conta: os 6 raios da nítida sobram
+    float sharp = sunCone(snappedPos + worldNormal * 0.04, sunDir, 6, 0.08, 0.0);
     return mix(sharp, soft, blur);
 }
 

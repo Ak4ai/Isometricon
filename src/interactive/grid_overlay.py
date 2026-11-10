@@ -358,7 +358,7 @@ class GridOverlayRenderer:
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glDepthMask(gl.GL_FALSE)
         gl.glLineWidth(1.0)
-        culling = gl.glIsEnabled(gl.GL_CULL_FACE)
+        culling = True  # o mundo desenha com descarte de faces ligado (glIsEnabled fazia o driver esperar a GPU)
         if contour:  # as fitas são triângulos: sem descarte de faces, quem olha de qualquer lado vê
             gl.glDisable(gl.GL_CULL_FACE)
         gl.glBindVertexArray(self.vao)
