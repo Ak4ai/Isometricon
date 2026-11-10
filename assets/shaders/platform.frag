@@ -14,12 +14,14 @@ uniform vec2  u_Cursor;
 uniform float u_CursorOn;
 uniform vec4  u_CursorColor;
 uniform float u_GridOn;
+uniform float u_GridSpacing;
 uniform float u_Time;
 
 float grid_line(vec2 p)
 {
-    vec2 width = fwidth(p) * 1.8 + vec2(1e-4);
-    vec2 distance_to_line = abs(fract(p - 0.5) - 0.5) / width;
+    vec2 scaled = p / max(u_GridSpacing, 1.0);
+    vec2 width = fwidth(scaled) * 1.8 + vec2(1e-4);
+    vec2 distance_to_line = abs(fract(scaled - 0.5) - 0.5) / width;
     return 1.0 - min(min(distance_to_line.x, distance_to_line.y), 1.0);
 }
 

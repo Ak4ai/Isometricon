@@ -43,7 +43,7 @@ class PlatformRenderer:
 
     def render(self, projection: np.ndarray, view: np.ndarray, model: np.ndarray,
                size: tuple[int, int], cursor: tuple[int, int] | None, time: float,
-               show_grid: bool = True) -> None:
+               show_grid: bool = True, grid_spacing: int = 1) -> None:
         width, depth = float(size[0]), float(size[1])
         platform_model = model @ mat4_translate(0.0, -0.01, 0.0) @ mat4_scale(width, 1.0, depth)
         gl.glEnable(gl.GL_BLEND)
@@ -66,6 +66,7 @@ class PlatformRenderer:
             self.shader.set_vec2("u_Cursor", float(cursor[0]), float(cursor[1]))
             self.shader.set_float("u_CursorOn", 1.0)
         self.shader.set_float("u_GridOn", 1.0 if show_grid else 0.0)
+        self.shader.set_float("u_GridSpacing", float(max(1, int(grid_spacing))))
         self.shader.set_float("u_Time", float(time))
         gl.glBindVertexArray(self.vao)
         gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, None)

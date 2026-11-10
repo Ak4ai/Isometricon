@@ -218,12 +218,17 @@ mapa. Há uma casa de exemplo em `assets/objects/casa_exemplo.json`:
 ```bash
 python src/main.py --map-editor
 python src/main.py --map=assets/objects/casa_exemplo.json
+python src/main.py --terrain --map=saves/mapa.json   # joga o mapa salvo
 ```
 
-Controles principais: `Tab` troca a ferramenta, `C`/`X` escolhem cor/textura,
-clique esquerdo aplica, `R` gira o objeto carimbado, `F2` exporta, `F3` carrega
-objeto, `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume e
-`Ctrl+Z`/`Ctrl+Y` desfazem/refazem. Detalhes em [`docs/EDITOR.md`](docs/EDITOR.md).
+Controles principais: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
+`C`/`X` escolhem cor/textura, `H` digita cor hexadecimal, `-`/`=` mudam o pincel,
+`[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
+selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
+`F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso
+base, `F4` abre a biblioteca e `Ctrl+Z`/`Ctrl+Y` desfazem/refazem. O painel tem
+botões clicáveis para as ferramentas e ações principais. Detalhes em
+[`docs/EDITOR.md`](docs/EDITOR.md).
 
 ### 🕹️ Controles
 

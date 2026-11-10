@@ -277,17 +277,17 @@ def main() -> None:
 
     shader = Shader(shader_vert, shader_frag)
     argv = sys.argv[1:]
-    editor_mode = "--map-editor" in argv or "--editor-mapa" in argv
+    explicit_editor = "--map-editor" in argv or "--editor-mapa" in argv
+    terrain_requested = "--terrain" in argv
     map_path = None
     for arg in argv:
         if arg.startswith("--map-editor=") or arg.startswith("--editor-mapa="):
-            editor_mode = True
+            explicit_editor = True
             map_path = arg.split("=", 1)[1]
         elif arg.startswith(("--map=", "--mapa=")):
-            editor_mode = True
             map_path = arg.split("=", 1)[1]
-    terrain_demo = ("--terrain" in argv) and not editor_mode
-    char_demo = ("--char" in argv or "--character" in argv) and not editor_mode
+    terrain_demo = terrain_requested
+    char_demo = "--char" in argv or "--character" in argv
 
     screenshot_path = None
     max_frames = None
@@ -337,7 +337,6 @@ def main() -> None:
                 pass
         elif arg in ("--map", "--mapa") and i + 1 < len(argv):
             map_path = argv[i + 1]
-            editor_mode = True
         elif arg in ("--open-chat", "--chat"):
             open_chat = True
         elif arg in ("--chat-text",) and i + 1 < len(sys.argv[1:]):
@@ -347,9 +346,13 @@ def main() -> None:
             chat_text = arg.split("=", 1)[1]
             open_chat = True
 
+    editor_mode = explicit_editor or (map_path is not None and not terrain_requested)
     if editor_mode:
         terrain_demo = False
         char_demo = False
+    else:
+        terrain_demo = terrain_requested
+        char_demo = ("--char" in argv or "--character" in argv) and not terrain_demo
 
     active_seed = {
         "value": custom_seed if custom_seed is not None else random.randint(1, 999_999)
@@ -361,6 +364,7 @@ def main() -> None:
     if saved_character is not None:
         print("[Skin] Personagem salvo carregado (use --novo para começar do padrão).")
 
+    map_world = None
     if terrain_demo:
         print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
         atlas = TextureAtlas()
@@ -380,9 +384,21 @@ def main() -> None:
             # finished character instead (it was taken with the loading notice up and no character yet).
             avatar = CharacterModel(create_mesh=True, async_loading=screenshot_path is None, **worn)
         player_token = PlayerToken(start_x=0.5, start_z=0.5, speed=5.0, avatar=avatar)
-        player_token.position[1] = float(start_surface_y) + 1.0
-        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-        voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
+        if map_path is not None:
+            from src.editor.map_world import MapWorld
+            try:
+                map_world = MapWorld(map_path, create_gl=True)
+                spawn = map_world.spawn_position()
+                player_token.position[:] = spawn
+                voxel_provider = VoxelGridProvider(block_lookup=map_world.get_block_at)
+                print(f"[Map] Mapa carregado para jogar: {os.path.basename(map_path)} ({map_world.project.voxel_count} voxels).")
+            except Exception as exc:
+                print(f"[Map] Falha ao carregar mapa: {exc}")
+                map_world = None
+        if map_world is None:
+            player_token.position[1] = float(start_surface_y) + 1.0
+            world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+            voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -519,7 +535,14 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 4. Inicializar câmera isométrica
     # ------------------------------------------------------------------
-    if terrain_demo:
+    if map_world is not None:
+        cam_target = vec3(
+            float(player_token.position[0]),
+            max(float(map_world.size[1]) * 0.5, float(player_token.position[1]) * 0.5),
+            float(player_token.position[2]),
+        )
+        cam_ortho = max(map_world.size) * 1.15
+    elif terrain_demo:
         cam_target = vec3(0.5, float(start_surface_y) + 1.0, 0.5)
         cam_ortho = 4.5
     elif char_demo:
@@ -594,7 +617,7 @@ def main() -> None:
 
         keys_pressed[key] = (action != glfw.RELEASE)
 
-        if terrain_demo and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
+        if terrain_demo and map_world is None and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
             new_seed = random.randint(1, 999_999)
             active_seed["value"] = new_seed
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
@@ -724,6 +747,8 @@ def main() -> None:
     )
 
     def handle_char(codepoint: int) -> None:
+        if map_editor is not None and not chat_console.is_open and map_editor.handle_char(codepoint):
+            return
         if not character_editor.handle_char(codepoint):
             chat_console.handle_char(codepoint)
 
@@ -854,23 +879,26 @@ def main() -> None:
         elif terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
             movement_forward, movement_right = camera.get_movement_directions()
-            player_token.update(
-                dt,
-                keys_pressed,
-                movement_forward,
-                movement_right,
-                world_manager.get_height,
-            )
+            if map_world is not None:
+                player_token.update(dt, keys_pressed, movement_forward, movement_right, map_world)
+            else:
+                player_token.update(
+                    dt,
+                    keys_pressed,
+                    movement_forward,
+                    movement_right,
+                    world_manager.get_height,
+                )
 
-            # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
-            world_manager.update(player_token.position[0], player_token.position[2])
-            grid_revision = world_manager.get_loaded_chunk_revision()
-            if (
-                not world_manager.has_pending_streaming_work()
-                and grid_renderer.should_sync(grid_revision)
-            ):
-                revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
-                grid_renderer.sync_chunks(loaded_chunks, revision)
+                # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
+                world_manager.update(player_token.position[0], player_token.position[2])
+                grid_revision = world_manager.get_loaded_chunk_revision()
+                if (
+                    not world_manager.has_pending_streaming_work()
+                    and grid_renderer.should_sync(grid_revision)
+                ):
+                    revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
+                    grid_renderer.sync_chunks(loaded_chunks, revision)
 
             # 3. Câmera acompanha o personagem fora do gesto de pan.
             if not pan_state["active"]:
@@ -913,6 +941,8 @@ def main() -> None:
 
             if map_editor is not None:
                 mode_badge = "🗺️ Editor de mapa | "
+            elif map_world is not None:
+                mode_badge = "Mapa carregado | "
             elif terrain_demo:
                 mode_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | "
             elif char_demo:
@@ -1050,14 +1080,16 @@ def main() -> None:
             shader.set_vec3("u_LightColor", 0.95, 0.95, 0.95)
             shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.40)
             mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
-            map_editor.update_cursor(mouse_x, mouse_y, window.width, window.height, view, projection, model)
+            map_editor.update_cursor(mouse_x, mouse_y, window.width, window.height, view, projection, model,
+                                     mouse_window=window.get_cursor_pos())
             map_editor.process_click()
+            map_editor.update_drag()
             map_editor.render(shader, projection, view, model, window.time,
                               window.width, window.height)
         elif terrain_demo:
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
-            if voxel_provider is not None:
+            if map_world is None and voxel_provider is not None:
                 underground_mode = (
                     player_token.position[1]
                     < float(
@@ -1074,30 +1106,34 @@ def main() -> None:
             shader.set_bool("u_WaterMode", player_token.in_water)
             shader.set_int("u_CutawayPass", 0)
 
-            # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
-            gl.glActiveTexture(gl.GL_TEXTURE0)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
-            shader.set_int("u_TextureAtlas", 0)
-            view_projection = projection @ view
-            world_manager.render(shader, model, view_projection)
-
-            # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
-            if underground_mode:
-                gl.glEnable(gl.GL_BLEND)
-                gl.glDepthFunc(gl.GL_ALWAYS)
-                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-                gl.glDepthMask(gl.GL_FALSE)
-                shader.set_int("u_CutawayPass", 1)
+            if map_world is not None:
+                # Mapa estático do editor: volume base + construções, com o mesmo shader.
+                map_world.render(shader, model)
+            else:
+                # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
+                gl.glActiveTexture(gl.GL_TEXTURE0)
+                gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
+                shader.set_int("u_TextureAtlas", 0)
+                view_projection = projection @ view
                 world_manager.render(shader, model, view_projection)
-                gl.glDepthMask(gl.GL_TRUE)
-                gl.glDepthFunc(gl.GL_LESS)
-                gl.glDisable(gl.GL_BLEND)
-                shader.set_int("u_CutawayPass", 0)
 
-            gl.glEnable(gl.GL_CULL_FACE)
+                # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
+                if underground_mode:
+                    gl.glEnable(gl.GL_BLEND)
+                    gl.glDepthFunc(gl.GL_ALWAYS)
+                    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                    gl.glDepthMask(gl.GL_FALSE)
+                    shader.set_int("u_CutawayPass", 1)
+                    world_manager.render(shader, model, view_projection)
+                    gl.glDepthMask(gl.GL_TRUE)
+                    gl.glDepthFunc(gl.GL_LESS)
+                    gl.glDisable(gl.GL_BLEND)
+                    shader.set_int("u_CutawayPass", 0)
 
-            # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
-            grid_renderer.render(projection, view, model)
+                gl.glEnable(gl.GL_CULL_FACE)
+
+                # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
+                grid_renderer.render(projection, view, model)
 
             # 4. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
@@ -1201,6 +1237,8 @@ def main() -> None:
     chat_console.delete()
     if map_editor is not None:
         map_editor.delete()
+    if map_world is not None:
+        map_world.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

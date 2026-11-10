@@ -4,10 +4,10 @@ Modo de autoria do Isometricon: constrói um mapa/objeto voxel em uma plataforma
 renderizada por shader e permite exportar o objeto e carimbá-lo em outro mapa.
 É um modo **aditivo**: não altera `--terrain`, `--char` nem o editor de personagem.
 
-> **Estado:** MVP implementado na branch `feat/voxel-editor`. Cobre a base dos
-> requisitos `FR-035` a `FR-042`, `FR-044`, `FR-045`, `FR-046`, `FR-048` e parte
-> de `FR-043`/`FR-047`. `.vox` (`FR-049`) e geração procedural (`FR-050`) ainda
-> não estão implementados.
+> **Estado:** implementação na branch `feat/voxel-editor`. Cobre `FR-035` a
+> `FR-048` (com biblioteca textual sem miniaturas e base plana em vez de terreno
+> procedural). `.vox` (`FR-049`) e geração procedural (`FR-050`) continuam fora
+> do escopo.
 
 ## ▶️ Como abrir
 
@@ -15,9 +15,12 @@ renderizada por shader e permite exportar o objeto e carimbá-lo em outro mapa.
 # editor vazio (16×16×16)
 python src/main.py --map-editor
 
-# abre um mapa/objeto existente
+# abre um mapa/objeto existente no editor
 python src/main.py --map=assets/objects/casa_exemplo.json
 python src/main.py --map-editor=assets/objects/casa_exemplo.json
+
+# joga um mapa salvo no mundo isométrico (com colisão do token)
+python src/main.py --terrain --map=saves/mapa.json
 ```
 
 O modo também funciona com `--frames`/`--screenshot`, útil para capturas:
@@ -32,16 +35,25 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 | Ação | Controle |
 |---|---|
 | Aplicar ferramenta | Clique esquerdo |
-| Trocar ferramenta (construir → apagar → pintar → carimbar) | `Tab` / `Shift+Tab` |
+| Trocar ferramenta (construir → apagar → pintar → carimbar → selecionar) | `Tab` / `Shift+Tab` |
 | Próxima cor / anterior | `C` / `Shift+C` |
+| Cor hexadecimal livre | `H`, digite 6 dígitos, `Enter` |
 | Próxima textura / anterior | `X` / `Shift+X` |
-| Girar objeto carimbado | `R` |
+| Pincel (1 a 8) | `-` / `=` |
+| Espaçamento da grade | `[` / `]` |
+| Girar objeto carimbado ou selecionado | `R` |
 | Ligar/desligar grade da plataforma | `G` |
 | Aumentar / diminuir o volume | `F7` / `F6` |
+| Criar piso base plano | `F8` |
 | Exportar objeto atual | `F2` |
 | Carregar próximo objeto da biblioteca | `F3` |
+| Abrir/fechar a lista da biblioteca | `F4` |
 | Salvar mapa | `F5` |
 | Carregar mapa | `F9` |
+| Mover objeto selecionado | setas; `PageUp`/`PageDown` no Y |
+| Duplicar / excluir objeto | `Ctrl+D` / `Delete` |
+| Biblioteca: escolher / carimbar | `↑`/`↓` / `Enter` |
+| Biblioteca: duplicar / excluir arquivo | `D` / `Delete` (duas vezes) |
 | Desfazer / refazer | `Ctrl+Z` / `Ctrl+Y` |
 | Rotacionar câmera | `Q` / `E` |
 | Zoom | Scroll |
@@ -60,9 +72,12 @@ apagar, aponte diretamente para o voxel.
 3. **Exportar** com `F2`: grava `saves/objeto.json`.
 4. **Carimbar** com `F3`: carrega o próximo JSON de `assets/objects/` (ou o
    exportado), ativa a ferramenta de carimbo, e `R` gira em 90°.
-5. **Colocar** no mapa com clique esquerdo. O objeto é mesclado ao volume do mapa,
-   preservando cor e textura de cada voxel.
-6. **Salvar** o mapa com `F5`; reabrir com `F9` ou `--map=...`.
+5. **Colocar** no mapa com clique esquerdo. Cada carimbo vira uma **construção
+   independente** (não é achatado na base).
+6. **Selecionar** com `Tab` até `Selecionar`, clicar no objeto: setas movem,
+   `R` gira, `Ctrl+D` duplica e `Delete` exclui. A base embaixo é preservada.
+7. **Salvar** o mapa com `F5`; reabrir com `F9`, `--map=...` ou jogar com
+   `--terrain --map=...`.
 
 Há um exemplo em [`assets/objects/casa_exemplo.json`](../assets/objects/casa_exemplo.json)
 (204 voxels, 5 materiais): telhado em três camadas, paredes de tijolo, janelas e
@@ -91,14 +106,29 @@ JSON versionado, com identificador de formato:
 - Mapas e objetos usam o mesmo formato; `kind` distingue os dois.
 - Texturas são nomes de tiles do atlas do editor (`src/editor/material_atlas.py`).
 
+## 🧱 Objetos independentes e base
+
+A partir desta versão o carimbo **não é mais achatado** na base: ele vira um
+`PlacedObject` com posição e rotação próprias. A tecla `F8` cria um piso base
+plano; excluir uma construção revela a base que estava embaixo. O mapa salvo
+guarda `base` + `objects`, e `--terrain --map=...` reconstrói os dois com
+colisão do token.
+
+O painel do editor tem botões clicáveis para ferramentas, salvar/carregar,
+exportar, biblioteca, undo/redo, grade e base. A lista da biblioteca (`F4`) ainda
+não gera miniaturas voxel; mostra nome e seleção por teclado.
+
 ## 🏗️ Arquitetura
 
 | Arquivo | Papel |
 |---|---|
 | `src/editor/voxel_object.py` | grade, paleta de materiais, rotação, colagem, JSON |
+| `src/editor/map_project.py` | volume base + `PlacedObject` (posição/rotação), JSON do mapa |
+| `src/editor/map_world.py` | mapa estático jogável (`--terrain --map`), colisão |
 | `src/editor/material_atlas.py` | atlas 4×4 de texturas de bloco e UVs |
 | `src/editor/object_mesher.py` | malha com face culling, cor e textura por voxel |
 | `src/editor/platform.py` | plataforma em um draw, com shader próprio |
+| `src/editor/selection.py` | caixa delimitadora do objeto selecionado |
 | `src/editor/map_editor.py` | ferramentas, picking, histórico, arquivos, render |
 | `src/editor/editor_hud.py` | painel 2D (PIL + `HudQuad`) |
 | `assets/shaders/platform.vert/.frag` | superfície, grade, borda e célula do cursor |
@@ -112,9 +142,9 @@ tabuleiro gira com `Q/E`.
 ## 🧪 Testes
 
 ```bash
-pytest -q tests/test_editor_voxel_object.py \
-         tests/test_editor_mesher.py \
-         tests/test_editor_map_editor.py
+pytest -q tests/test_editor_voxel_object.py tests/test_editor_mesher.py \
+         tests/test_editor_map_editor.py tests/test_editor_map_project.py \
+         tests/test_editor_map_world.py
 ```
 
 Cobrem: paleta e materiais, get/set, redimensionamento, rotação, colagem,
@@ -124,11 +154,13 @@ atalhos).
 
 ## ⚠️ Limites do MVP
 
-- Um volume de mapa por vez; não há lista de objetos independentes para
-  selecionar/mover depois de carimbados.
-- O carimbo é mesclado ao mapa (não há entidade “instância” com transformação
-  persistida).
-- Não há colisão do token com o mapa no modo terreno ainda.
-- Não há `.vox`, geração procedural, miniaturas de objetos nem edição por face.
-- A biblioteca lê `assets/objects/*.json` e o `saves/objeto.json` exportado.
+- A biblioteca tem lista textual (`F4`) com escolher/carimbar/duplicar/excluir,
+  mas ainda não gera miniaturas voxel, categorias, busca nem importação por
+  caminho digitado.
+- Não há `.vox` nem geração procedural.
+- O objeto colocado é transformado como um todo; não há edição de voxels dentro
+  dele depois de carimbado (edite, exporte e carimbe de novo).
+- O piso base é plano (`F8`); ainda não há terreno procedural como base do mapa.
+- A base e os objetos colidem no `--terrain --map`, mas não há grid tático sobre
+  o mapa carregado.
 - O teto de materiais é 512 por objeto; o volume máximo é 64³.
