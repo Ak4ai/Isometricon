@@ -1281,12 +1281,12 @@ def main() -> None:
             # o corredor da câmera: o que tapa o personagem some (ver sightCarved no shader)
             feet = [float(v) for v in player_token.position]
             sight_target = model @ np.array([feet[0], feet[1] + 1.1, feet[2], 1.0])
-            shader.set_float("u_SightActive", 1.0)
+            shader.set_float("u_SightActive", 1.0)  # num cômodo, só corta o que tapa o cômodo (ver o shader)
             shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
             shader.set_float("u_SightFeetY", float(np.floor(feet[1] + 0.05)))
             shader.set_float("u_SightRadius", 2.6)
             # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
-            from src.world.room_reveal import story_ceiling
+            from src.world.room_reveal import story_ceiling, story_center
             ceiling = story_ceiling(room_tracker.mask, player_token.position)
             if ceiling is not None:
                 story_state["cut_y"] = ceiling
@@ -1296,7 +1296,13 @@ def main() -> None:
                 story_state["level"] = story_target
             shader.set_float("u_StoryActive", story_state["level"])
             shader.set_float("u_StoryCutY", float(story_state["cut_y"]))
-            shader.set_vec2("u_StoryCenter", feet[0], feet[2])
+            center_key = (room_tracker.version, story_state["cut_y"], int(np.floor(feet[1] + 0.05)))
+            if story_state.get("center_key") != center_key:
+                story_state["center_key"] = center_key
+                story_state["center"] = story_center(room_tracker.mask, int(np.floor(feet[1] + 0.05)),
+                                                     int(story_state["cut_y"]))
+            center = story_state["center"] or (feet[0], feet[2])  # fora de cômodo, o próprio personagem
+            shader.set_vec2("u_StoryCenter", float(center[0]), float(center[1]))
             shader.set_float("u_StoryRadius", 24.0)
             story_view = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (-np.asarray(view, dtype=np.float64)[2, :3])
             story_view /= max(float(np.linalg.norm(story_view)), 1e-9)

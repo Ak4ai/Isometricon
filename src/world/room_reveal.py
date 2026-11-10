@@ -9,7 +9,8 @@ Sem OpenGL. A cada recálculo:
    cobrindo quase tudo em volta do jogador, mesmo de lados abertos (debaixo de um deck, de um alpendre fundo).
    É o critério do Isocraft (``StructuralRoomClassifier``): a "sala de frente aberta" entra com 80% de teto e
    só sai abaixo de 45%; um beiral estreito ou uma marquise não chegam lá;
-5. devolve uma máscara: 255 no espaço do jogador, 128 na casca de 1 bloco de sólido ao redor, 0 no resto.
+5. devolve uma máscara: 255 no espaço do jogador, 128 na casca de 1 bloco de sólido ao redor (pelas faces), 64 no
+   sólido que encosta só pela quina (cantos, a parede atrás de um piso), 0 no resto.
 
 O shader usa a máscara para escurecer o que está fora e remover o que tapa a vista do espaço.
 """
@@ -37,6 +38,7 @@ WALL_RAYS = 16                 # raios horizontais que procuram parede em volta 
 WALL_REACH = 8                 # até onde cada raio procura
 INTERIOR = 255
 SHELL = 128
+EDGE = 64                      # sólido que só encosta no espaço pela quina: iluminado como o cômodo
 
 # Blocos que não contam como teto (a copa de uma árvore não faz um cômodo)
 _NOT_ROOF = (int(BlockType.LEAVES),)
@@ -44,6 +46,7 @@ _OPAQUE = tuple(int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STON
 _PASSABLE = (int(BlockType.AIR), int(BlockType.WATER))
 
 _FACE_STRUCTURE = ndimage.generate_binary_structure(3, 1)  # vizinhança de 6 faces
+_FULL_STRUCTURE = ndimage.generate_binary_structure(3, 3)  # as 26 vizinhas (faces, arestas e quinas)
 
 
 @dataclass
@@ -196,6 +199,10 @@ def compute_room(
     active = cells >= MIN_SPACE_CELLS and (exposure < limit or open_front)
 
     if active:
+        # a borda: o sólido que encosta no espaço também pela quina (o canto da parede, a parede atrás do piso de
+        # um mezanino ou na altura do teto). Só ilumina como o cômodo; o corte continua vendo a casca de faces.
+        edge = ndimage.binary_dilation(space, structure=_FULL_STRUCTURE) & solid
+        mask[edge] = EDGE
         shell = ndimage.binary_dilation(space, structure=_FACE_STRUCTURE) & solid
         mask[shell] = SHELL
         mask[space] = INTERIOR
@@ -246,7 +253,7 @@ def roof_coverage(solid: np.ndarray, roof: np.ndarray, seed) -> float:
     return covered / max(total, 1)
 
 
-CEILING_RADIUS = 2      # colunas em volta do jogador onde se procura o teto do andar
+CEILING_RADIUS = 3      # colunas em volta do jogador onde se procura o teto do andar
 CEILING_REACH = 10      # o teto do andar conta até tantas células acima da cabeça
 STORY_MIN_COVERAGE = 0.45  # só há "andar" com teto em boa parte da volta (um galho ou uma viga não fazem andar)
 
@@ -254,7 +261,8 @@ STORY_MIN_COVERAGE = 0.45  # só há "andar" com teto em boa parte da volta (um 
 def story_ceiling(mask: RoomMask, position) -> Optional[int]:
     """A célula y (mundo) do teto do andar do jogador: o separador de cima do Isocraft (``StoryBand``).
 
-    É o teto mais baixo acima da cabeça entre as colunas perto do jogador. Tudo dali para cima, em volta dele,
+    É o teto mais alto acima da cabeça entre as colunas perto do jogador (um mezanino junto à parede não baixa o
+    corte do cômodo inteiro). Tudo dali para cima, em volta dele,
     pode sumir para mostrar o andar. ``None`` ao ar livre, ou se o teto é pouco (menos que
     ``STORY_MIN_COVERAGE`` das colunas em volta) ou alto demais.
     """
@@ -277,9 +285,25 @@ def story_ceiling(mask: RoomMask, position) -> Optional[int]:
             if not (0 <= x < WINDOW[0] and 0 <= z < WINDOW[2]):
                 continue
             hits = np.flatnonzero(roof[x, first:top, z])
-            if hits.size and (best is None or hits[0] < best):
+            if hits.size and (best is None or hits[0] > best):
                 best = int(hits[0])
     return None if best is None else oy + first + best
+
+
+def story_center(mask: RoomMask, feet_y: int, cut_y: int):
+    """O centro (x, z, no mundo) do cômodo no andar do jogador: a média das células do espaço entre os pés e o
+    teto. É a referência de "frente" e "fundo" do corte, e não muda enquanto o jogador anda dentro do cômodo.
+    ``None`` se não há espaço."""
+    if mask is None or not mask.active:
+        return None
+    ox, oy, oz = mask.origin
+    lo, hi = max(0, feet_y - oy), min(WINDOW[1], cut_y - oy)
+    if hi <= lo:
+        return None
+    cells = np.argwhere(mask.data[:, lo:hi, :] == INTERIOR)
+    if len(cells) == 0:
+        return None
+    return float(cells[:, 0].mean()) + ox + 0.5, float(cells[:, 2].mean()) + oz + 0.5
 
 
 class RoomRevealTracker:

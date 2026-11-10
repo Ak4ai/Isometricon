@@ -261,7 +261,7 @@ vec3 worldLighting(vec3 n, vec3 l, float worldY, float sunVis)
 
 // Revelação do espaço do jogador (cômodo, caverna): ver src/world/room_reveal.py.
 uniform float u_RoomActive;     // 0 = desligado; 0..1 = intensidade do efeito
-uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 128 casca de sólido ao redor, 0 fora
+uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 128 casca de sólido ao redor, 64 borda pela quina, 0 fora
 uniform vec3 u_RoomOrigin;      // célula do mundo do canto (0,0,0) da máscara
 uniform vec3 u_RoomSize;        // tamanho da máscara em células
 uniform vec3 u_ViewDir;         // para onde a câmera olha, em coordenadas do mundo
@@ -323,33 +323,54 @@ uniform vec2 u_StoryCenter;      // x, z (mundo) do personagem
 uniform float u_StoryRadius;     // raio do círculo cortado, em blocos
 uniform vec3 u_StoryView;        // para onde a câmera olha, no mundo
 
-// Casa de bonecas: acima do teto do andar, a metade da frente (do lado da câmera) some inteira, e a de trás só
-// some se tapa o andar (o raio da câmera, seguindo dela para dentro da cena, cai no espaço do personagem). Assim
-// as paredes do fundo ficam de pé, inteiras, e o teto e o andar de cima sobre o cômodo somem.
-bool storyCovers(vec3 cell)
+// O bloco tapa o cômodo: seguindo o raio da câmera dele para dentro da cena, cai no espaço do cômodo (só o andar
+// do personagem conta, com o corte do andar ligado: o andar de cima, ligado pela escada, não faz sumir o fundo).
+bool coversRoom(vec3 c)
 {
-    vec3 c = cell + 0.5;
-    vec2 f = normalize(u_StoryView.xz);
-    float behind = dot(c.xz - u_StoryCenter, f);       // > 0: atrás do personagem, longe da câmera
-    if (behind < 0.5)
-        return true;
-    if (u_RoomActive <= 0.001)
-        return false;
     vec3 q = c + u_StoryView * 0.9;
     for (int i = 0; i < 64; i++)
     {
-        if (q.y < u_SightFeetY)
+        if (u_StoryActive > 0.001 && q.y < u_SightFeetY)
             break;                                      // já passou do chão do andar
-        if (q.y < u_StoryCutY && roomCell(q) > 0.9)
+        if (roomCell(q) > 0.9 && (u_StoryActive <= 0.001 || q.y < u_StoryCutY))
             return true;
         q += u_StoryView * 0.5;
     }
     return false;
 }
 
+// O bloco está na borda do cômodo virada para a câmera (parede da frente, teto): entre ele e a câmera não há espaço
+// do cômodo. Um pilar ou um móvel no meio do cômodo tem o cômodo dos dois lados, e fica.
+bool facesCamera(vec3 c)
+{
+    vec3 q = c - u_StoryView * 0.9;
+    for (int i = 0; i < 24; i++)
+    {
+        if (roomCell(q) > 0.9)
+            return false;
+        q -= u_StoryView * 0.5;
+    }
+    return true;
+}
+
+// Casa de bonecas: acima do teto do andar some o que tapa o cômodo. As paredes do fundo ficam de pé, inteiras, e o
+// teto e o andar de cima sobre o cômodo somem. Não depende de onde o personagem está dentro do cômodo: chegar perto
+// de uma parede do fundo não a corta (ela só some quando o cômodo atrás dela passa a ser o seu).
+bool storyCovers(vec3 cell)
+{
+    vec3 c = cell + 0.5;
+    if (u_RoomActive <= 0.001)
+    {
+        // sem cômodo para consultar: some a metade da frente (do lado da câmera)
+        vec2 f = normalize(u_StoryView.xz);
+        return dot(c.xz - u_StoryCenter, f) < 0.5;
+    }
+    return coversRoom(c);
+}
+
 bool sightCarved()
 {
-    if (u_SightActive <= 0.001)
+    if (u_SightActive <= 0.001 && u_StoryActive <= 0.001)
         return false;
     vec3 worldPos = (u_SightInvModel * vec4(v_FragPos, 1.0)).xyz;
     vec3 worldNormal = normalize(mat3(u_SightInvModel) * v_Normal);
@@ -361,8 +382,10 @@ bool sightCarved()
         if ((1.0 - keep) * u_StoryActive > roomDither())
             return true;
     }
-    if (cell.y < u_SightFeetY)
+    if (u_SightActive <= 0.001 || cell.y < u_SightFeetY)
         return false;
+    if (u_RoomActive > 0.001 && !coversRoom(cell + 0.5))
+        return false;                                   // num cômodo, o corredor nunca corta uma parede do fundo
     vec3 center = (u_SightModel * vec4(cell + 0.5, 1.0)).xyz;
     vec3 line = u_CameraPos - u_SightTarget;
     float len = length(line);
@@ -401,26 +424,16 @@ void main()
         // a célula do bloco que está sendo desenhado (um pouco para dentro da face)
         vec3 blockCell = floor(worldPos - worldNormal * 0.05);
         float here = roomCell(blockCell + 0.5);
-        // na casa de bonecas (corte do andar ligado), o que fica atrás do personagem e abaixo do teto fica de pé:
-        // um mezanino, um pilar ou um móvel do fundo nunca tapam o personagem (só o chão atrás deles)
-        bool backOfStory = u_StoryActive > 0.001 && blockCell.y < u_StoryCutY
-                        && dot(blockCell.xz + 0.5 - u_StoryCenter, normalize(u_StoryView.xz)) > 0.5;
-        if (here <= 0.9 && !backOfStory && u_RoomActive > roomDither())
+        // some só a borda do cômodo virada para a câmera (parede da frente, teto) que tapa o cômodo; o fundo, um
+        // pilar ou um mezanino ficam. A decisão parte do CENTRO do bloco, e não do pixel: é a mesma para todas as
+        // faces dele (partindo do pixel, uma parede fina era cortada em escada no meio da face).
+        if (here <= 0.9 && u_RoomActive > roomDither())
         {
-            // O raio parte do CENTRO do bloco, e não do pixel: a decisão é a mesma para todas as faces
-            // do bloco. Partindo do pixel, uma parede fina com mais espaço atrás era cortada em escada
-            // no meio da face (uns pixels acertavam o espaço atrás, outros não).
-            vec3 q = blockCell + 0.5 + u_ViewDir * 0.9;
-            for (int i = 0; i < 64; i++)
-            {
-                // com o corte do andar ligado, só conta o espaço do andar do personagem (abaixo do teto): o andar
-                // de cima, ligado pela escada, não faz sumir as paredes do fundo
-                if (roomCell(q) > 0.9 && (u_StoryActive <= 0.001 || q.y < u_StoryCutY))
-                    discard;
-                q += u_ViewDir * 0.5;
-            }
+            vec3 c = blockCell + 0.5;
+            if (coversRoom(c) && facesCamera(c))
+                discard;
         }
-        float inside = here >= 0.4 ? 1.0 : 0.0;
+        float inside = here >= 0.2 ? 1.0 : 0.0;   // o espaço, a casca e a borda pela quina (64)
         roomFactor = mix(1.0, mix(u_RoomExterior, 1.0, inside), u_RoomActive);
     }
 
