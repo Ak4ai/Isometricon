@@ -305,6 +305,53 @@ float valueNoise(vec3 p)
                    mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
 
+// Corredor da câmera (como o CameraCorridor do Isocraft): o que fica entre a câmera e o personagem, num cilindro
+// em volta dessa linha, some com uma borda pontilhada. Só corta do nível dos pés para cima (o chão em que se pisa
+// fica) e só o que está mais perto da câmera que o personagem. A decisão é por bloco (centro da célula), para o
+// corte sair em degraus de bloco, como o resto do mundo.
+uniform float u_SightActive;     // 0 desligado; 0..1 intensidade
+uniform vec3 u_SightTarget;      // peito do personagem, no espaço desenhado
+uniform float u_SightFeetY;      // célula y dos pés, no mundo
+uniform float u_SightRadius;     // raio do cilindro, em blocos
+uniform mat4 u_SightModel;       // mundo -> espaço desenhado
+uniform mat4 u_SightInvModel;    // espaço desenhado -> mundo
+// Corte do andar (o StoryBand do Isocraft): debaixo de um teto, do teto para cima some tudo num círculo em volta do
+// personagem, para ver o andar em que ele está sem os andares, o telhado e as vigas de cima.
+uniform float u_StoryActive;     // 0 desligado; 0..1 intensidade (entra e sai com fade)
+uniform float u_StoryCutY;       // célula y (mundo) do teto do andar: dela para cima, corta
+uniform vec2 u_StoryCenter;      // x, z (mundo) do personagem
+uniform float u_StoryRadius;     // raio do círculo cortado, em blocos
+
+bool sightCarved()
+{
+    if (u_SightActive <= 0.001)
+        return false;
+    vec3 worldPos = (u_SightInvModel * vec4(v_FragPos, 1.0)).xyz;
+    vec3 worldNormal = normalize(mat3(u_SightInvModel) * v_Normal);
+    vec3 cell = floor(worldPos - worldNormal * 0.05);
+    if (u_StoryActive > 0.001 && cell.y >= u_StoryCutY)
+    {
+        float d = length(cell.xz + 0.5 - u_StoryCenter);
+        float keep = smoothstep(u_StoryRadius - 3.0, u_StoryRadius, d);
+        if ((1.0 - keep) * u_StoryActive > roomDither())
+            return true;
+    }
+    if (cell.y < u_SightFeetY)
+        return false;
+    vec3 center = (u_SightModel * vec4(cell + 0.5, 1.0)).xyz;
+    vec3 line = u_CameraPos - u_SightTarget;
+    float len = length(line);
+    vec3 dir = line / max(len, 1e-4);
+    float t = dot(center - u_SightTarget, dir);        // 0 no personagem, len na câmera
+    if (t < 0.9)
+        return false;                                   // atrás do personagem, ou colado nele: fica
+    float off = length(center - u_SightTarget - dir * t);
+    // o cilindro abre um pouco perto do personagem (o corpo inteiro aparece) e fica constante depois
+    float radius = u_SightRadius * mix(0.75, 1.0, clamp((t - 0.9) / 3.0, 0.0, 1.0));
+    float keep = smoothstep(radius - 0.5, radius, off);  // 0 no meio do corredor, 1 fora (borda curta)
+    return (1.0 - keep) * u_SightActive > roomDither();
+}
+
 void main()
 {
     vec4 texColor = texture(u_TextureAtlas, v_TexCoord);
@@ -345,6 +392,9 @@ void main()
         float inside = here >= 0.4 ? 1.0 : 0.0;
         roomFactor = mix(1.0, mix(u_RoomExterior, 1.0, inside), u_RoomActive);
     }
+
+    if (sightCarved())
+        discard;
 
     bool above_player = v_FragPos.y > u_PlayerY + 0.05;
 

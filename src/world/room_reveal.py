@@ -246,6 +246,42 @@ def roof_coverage(solid: np.ndarray, roof: np.ndarray, seed) -> float:
     return covered / max(total, 1)
 
 
+CEILING_RADIUS = 2      # colunas em volta do jogador onde se procura o teto do andar
+CEILING_REACH = 10      # o teto do andar conta até tantas células acima da cabeça
+STORY_MIN_COVERAGE = 0.45  # só há "andar" com teto em boa parte da volta (um galho ou uma viga não fazem andar)
+
+
+def story_ceiling(mask: RoomMask, position) -> Optional[int]:
+    """A célula y (mundo) do teto do andar do jogador: o separador de cima do Isocraft (``StoryBand``).
+
+    É o teto mais baixo acima da cabeça entre as colunas perto do jogador. Tudo dali para cima, em volta dele,
+    pode sumir para mostrar o andar. ``None`` ao ar livre, ou se o teto é pouco (menos que
+    ``STORY_MIN_COVERAGE`` das colunas em volta) ou alto demais.
+    """
+    if mask is None or mask.window is None or mask.roof_coverage < STORY_MIN_COVERAGE:
+        return None
+    roof = mask.window.roof
+    solid = mask.window.solid
+    ox, oy, oz = mask.origin
+    x0, y0, z0 = (int(np.floor(float(v))) - o for v, o in zip(position, mask.origin))
+    if not (0 <= x0 < WINDOW[0] and 0 <= z0 < WINDOW[2] and 0 <= y0 < WINDOW[1]):
+        return None
+    while y0 < WINDOW[1] - 1 and solid[x0, y0, z0]:
+        y0 += 1  # o pé dentro do piso
+    first = y0 + 2  # acima da cabeça
+    top = min(WINDOW[1], first + CEILING_REACH)
+    best = None
+    for dx in range(-CEILING_RADIUS, CEILING_RADIUS + 1):
+        for dz in range(-CEILING_RADIUS, CEILING_RADIUS + 1):
+            x, z = x0 + dx, z0 + dz
+            if not (0 <= x < WINDOW[0] and 0 <= z < WINDOW[2]):
+                continue
+            hits = np.flatnonzero(roof[x, first:top, z])
+            if hits.size and (best is None or hits[0] < best):
+                best = int(hits[0])
+    return None if best is None else oy + first + best
+
+
 class RoomRevealTracker:
     """Recalcula a máscara quando preciso (o jogador mudou de célula, ou o mundo mudou)."""
 

@@ -302,3 +302,26 @@ def test_view_direction_is_returned_to_world_space(renderer, monkeypatch):
 
     renderer.disable(shader)
     assert shader.values["u_RoomActive"] == 0.0
+
+
+def test_the_story_ceiling_is_the_lowest_roof_over_the_head():
+    """Corte do andar (StoryBand do Isocraft): o teto do andar é o separador de cima; ao ar livre não há corte."""
+    from src.world.room_reveal import RoomRevealTracker, story_ceiling
+
+    def two_storeys(b):
+        box(b, 10, 10)                                  # térreo: teto em y = 7
+        b[10:17, 11, 10:17] = BlockType.STONE           # e um telhado mais alto, em y = 11
+    tracker = RoomRevealTracker()
+    mask = tracker.update(0.0, (13.5, 3.0, 13.5), world(two_storeys), 0)
+    assert story_ceiling(mask, (13.5, 3.0, 13.5)) == 7
+    outside = RoomRevealTracker().update(0.0, (13.5, 3.0, 13.5), world(lambda b: None), 0)
+    assert story_ceiling(outside, (13.5, 3.0, 13.5)) is None
+
+
+def test_a_lone_beam_overhead_is_not_a_story():
+    from src.world.room_reveal import RoomRevealTracker, story_ceiling
+
+    def beam(b):
+        b[5:25, 6, 13] = BlockType.WOOD                 # uma viga só, passando por cima
+    mask = RoomRevealTracker().update(0.0, (13.5, 3.0, 13.5), world(beam), 0)
+    assert story_ceiling(mask, (13.5, 3.0, 13.5)) is None

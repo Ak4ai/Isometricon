@@ -413,6 +413,9 @@ def main() -> None:
         player_token.position[1] = float(start_surface_y) + 1.0
         if selected_world and selected_world.get('position'):
             player_token.position[:] = selected_world['position']
+        pos_arg = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--pos=")), "")
+        if pos_arg:  # --pos=x,y,z: começa nesse ponto (conferências)
+            player_token.position[:] = [float(v) for v in pos_arg.split(",")]
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
         # Construções (.schem) colocadas com /schem: aparecem por cima do terreno e têm colisão
         from src.interactive.schematic_tool import SchematicTool
@@ -441,6 +444,7 @@ def main() -> None:
         # A tecla E ao lado do personagem quando há uma porta ao alcance
         from src.interactive.interact_prompt import InteractPrompt
         interact_prompt = InteractPrompt()
+        story_state = {"level": 0.0, "cut_y": 1_000_000}  # corte do andar de cima (suavizado)
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -1271,6 +1275,28 @@ def main() -> None:
             shader.set_float("u_Time", float(window.time))
             shader.set_vec3("u_CameraPos", *(float(v) for v in camera._camera_position()))
             shader.set_int("u_WaterPass", 1)
+            # o corredor da câmera: o que tapa o personagem some (ver sightCarved no shader)
+            feet = [float(v) for v in player_token.position]
+            sight_target = model @ np.array([feet[0], feet[1] + 1.1, feet[2], 1.0])
+            shader.set_float("u_SightActive", 1.0)
+            shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
+            shader.set_float("u_SightFeetY", float(np.floor(feet[1] + 0.05)))
+            shader.set_float("u_SightRadius", 2.6)
+            # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
+            from src.world.room_reveal import story_ceiling
+            ceiling = story_ceiling(room_tracker.mask, player_token.position)
+            if ceiling is not None:
+                story_state["cut_y"] = ceiling
+            story_target = 1.0 if ceiling is not None and room_renderer.enabled else 0.0
+            story_state["level"] += (story_target - story_state["level"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
+            if abs(story_target - story_state["level"]) < 0.01:
+                story_state["level"] = story_target
+            shader.set_float("u_StoryActive", story_state["level"])
+            shader.set_float("u_StoryCutY", float(story_state["cut_y"]))
+            shader.set_vec2("u_StoryCenter", feet[0], feet[2])
+            shader.set_float("u_StoryRadius", 24.0)
+            shader.set_mat4("u_SightModel", np.asarray(model, dtype=np.float32))
+            shader.set_mat4("u_SightInvModel", np.linalg.inv(np.asarray(model, dtype=np.float64)).astype(np.float32))
             world_manager.render(shader, model, view_projection)
             room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
 
@@ -1307,6 +1333,7 @@ def main() -> None:
             gl.glDepthMask(gl.GL_TRUE)
             gl.glDisable(gl.GL_BLEND)
             shader.set_int("u_WaterPass", 0)
+            shader.set_float("u_SightActive", 0.0)
             room_renderer.disable(shader)
             shadow_renderer.disable(shader)
             shader.set_bool("u_WorldStyle", False)
