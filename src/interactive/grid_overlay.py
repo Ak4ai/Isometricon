@@ -16,7 +16,7 @@ from src.world import Chunk3D
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SURFACE_EPSILON = 0.002
-CONTOUR_WIDTH = 0.07  # espessura, em blocos, da fita de contorno do relevo
+CONTOUR_WIDTH = 0.035  # espessura, em blocos, da fita de contorno do relevo
 _LOCAL_Y = np.arange(Chunk3D.SIZE, dtype=np.int32)[None, :, None]
 _SURFACE_LUT = np.zeros(256, dtype=bool)
 _SURFACE_LUT[[int(block) for block in TACTICAL_SURFACE_BLOCKS]] = True
@@ -263,8 +263,8 @@ class GridOverlayRenderer:
     def __init__(
         self,
         *,
-        color: tuple[float, float, float, float] = (0.06, 0.08, 0.11, 0.72),
-        contour_color: tuple[float, float, float, float] = (0.04, 0.06, 0.09, 0.62),
+        color: tuple[float, float, float, float] = (0.06, 0.08, 0.11, 0.45),
+        contour_color: tuple[float, float, float, float] = (0.04, 0.06, 0.09, 0.5),
     ) -> None:
         self.shader = Shader(
             os.path.join(PROJECT_ROOT, "assets", "shaders", "grid.vert"),
