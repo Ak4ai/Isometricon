@@ -884,9 +884,9 @@ def main() -> None:
     else:
         shader.set_vec3(
             "u_LightDir",
-            0.5,
+            0.9,
             1.0,
-            0.7,
+            -0.6,
         )
 
         shader.set_vec3(
