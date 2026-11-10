@@ -177,6 +177,7 @@ class SkinCommandHandler:
         self.character_model = character_model
         self.turntable_state = turntable_state
         self.chat_console = None
+        self.schematic_tool = None  # SchematicTool do terreno (/schem); None fora dele
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
@@ -278,6 +279,35 @@ class SkinCommandHandler:
         else:
             self.turntable_state["active"] = not self.turntable_state["active"]
         return True, f"[Girar] Rotação automática {'ligada' if self.turntable_state['active'] else 'desligada'}.", CYAN
+
+    # ------------------------------------------------------------------ /schem
+    def schem(self, args: List[str]) -> Result:
+        """Construções (.schem) no terreno: /schem load <nome|caminho> [x y z], list, place, cancel, remove, clear."""
+        tool = self.schematic_tool
+        if tool is None:
+            return False, "[Schem] Só funciona no terreno (--terrain).", RED
+        sub = SCHEM_ALIASES.get(args[0].lower()) if args else None
+        if sub is None:
+            return True, "Uso: /schem load <nome|caminho> [x y z] | list | place | cancel | remove | clear | info", GOLD
+        rest = args[1:]
+        if sub == "list":
+            names = tool.names()
+            return True, "[Schem] " + (", ".join(names) if names else "nenhuma em assets/schematics."), CYAN
+        if sub == "load":
+            origin = None
+            if len(rest) > 3 and all(re.fullmatch(r"-?\d+", w) for w in rest[-3:]):
+                origin = tuple(int(w) for w in rest[-3:])
+                rest = rest[:-3]
+            if not rest:
+                return False, "[Schem] Diga qual: /schem load <nome|caminho> [x y z]. /schem list mostra as disponíveis.", RED
+            ok, message = tool.load(" ".join(rest), origin)
+            return ok, "[Schem] " + message, GREEN if ok else RED
+        if sub == "info":
+            lines = tool.describe()
+            return True, "[Schem] " + ("\n".join(lines) if lines else "nada colocado."), CYAN
+        action = {"place": tool.confirm, "cancel": tool.cancel, "remove": tool.remove_last, "clear": tool.clear}[sub]
+        ok, message = action()
+        return ok, "[Schem] " + message, GREEN if ok else RED
 
     # ------------------------------------------------------------------ aparência
     def body(self, args: List[str]) -> Result:
@@ -1216,7 +1246,20 @@ ROOT_COMMANDS: List[Command] = [
     Command(("skin",), "/skin <comando>", "muda o personagem", SkinCommandHandler.skin, None),
     Command(("ajuda", "help", "?"), "/ajuda [comando]", "lista os comandos", SkinCommandHandler.help, None),
     Command(("girar", "spin"), "/girar [on|off]", "rotação automática no visualizador", SkinCommandHandler.spin, ["on", "off"]),
+    Command(("schem", "schematic", "estrutura"), "/schem <load|list|place|cancel|remove|clear|info>",
+            "coloca construções (.schem) no terreno", SkinCommandHandler.schem, None),
 ]
+
+# Subcomandos do /schem (português e inglês) -> nome principal
+SCHEM_ALIASES = {
+    "load": "load", "carregar": "load", "abrir": "load",
+    "list": "list", "listar": "list", "lista": "list",
+    "place": "place", "confirmar": "place", "fixar": "place", "ok": "place",
+    "cancel": "cancel", "cancelar": "cancel",
+    "remove": "remove", "remover": "remove", "desfazer": "remove",
+    "clear": "clear", "limpar": "clear",
+    "info": "info",
+}
 
 
 def find_command(commands: List[Command], name: str) -> Optional[Command]:
@@ -1229,7 +1272,16 @@ def _tree(commands: List[Command]) -> Dict[str, Any]:
 
 
 # Árvore do autocompletar: só os nomes principais (os apelidos continuam aceitos ao executar).
-COMMAND_TREE: Dict[str, Any] = {"skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"]}
+def _schematic_names() -> List[str]:
+    """Nomes das construções de assets/schematics, para o autocompletar do /schem load."""
+    from src.interactive.schematic_tool import SchematicTool
+    return SchematicTool().names()
+
+
+COMMAND_TREE: Dict[str, Any] = {
+    "skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"],
+    "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},
+}
 
 
 def expects_args(word: str) -> bool:

@@ -29,8 +29,8 @@ def run(handler, line):
     return handler.execute(line, run_async=False)
 
 
-def test_only_skin_help_and_spin_are_root_commands():
-    assert sorted(COMMAND_TREE) == ["ajuda", "girar", "skin"]
+def test_only_skin_help_spin_and_schem_are_root_commands():
+    assert sorted(COMMAND_TREE) == ["ajuda", "girar", "schem", "skin"]
     handler = SkinCommandHandler(character_model=None)
     for old in ("/top sweater", "/eyes blue", "/import 9240757332", "/cabelo rosa", "/manga largura 1.1", "/cintura alta"):
         ok, msg, _ = run(handler, old)
@@ -171,9 +171,11 @@ def test_autocomplete_follows_the_command_table():
     import glfw
     chat = ChatConsole(create_gl=False)
     chat.open("/")
-    assert chat.suggestions == ["/ajuda", "/girar", "/skin"]
+    assert chat.suggestions == ["/ajuda", "/girar", "/schem", "/skin"]
     chat.handle_char(ord("s"))
-    assert chat.suggestions == ["/skin"] and chat.ghost_text == "kin "
+    assert chat.suggestions == ["/schem", "/skin"]
+    chat.handle_char(ord("k"))
+    assert chat.suggestions == ["/skin"] and chat.ghost_text == "in "
     chat.handle_key(glfw.KEY_TAB, glfw.PRESS, 0)
     assert chat.input_text == "/skin "
     assert {"olhos", "boca", "cabelo", "vestir", "top", "calca", "tirar"} <= set(chat.suggestions)

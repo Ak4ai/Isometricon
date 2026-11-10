@@ -410,7 +410,23 @@ def main() -> None:
         if selected_world and selected_world.get('position'):
             player_token.position[:] = selected_world['position']
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-        voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
+        # Construções (.schem) colocadas com /schem: aparecem por cima do terreno e têm colisão
+        from src.interactive.schematic_tool import SchematicTool
+
+        def schematic_view_axes():
+            try:
+                return camera.get_movement_directions()
+            except NameError:  # um --cmd de abertura roda antes de a câmera existir
+                return vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0)
+
+        schematic_tool = SchematicTool(
+            ground_height=lambda x, z: world_manager.get_height(x, z),
+            player_position=lambda: tuple(player_token.position),
+            view_axes=schematic_view_axes,
+        )
+        voxel_provider = VoxelGridProvider(
+            block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
+        )
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -452,6 +468,7 @@ def main() -> None:
         turntable_state = {"active": auto_spin, "yaw": custom_yaw if custom_yaw is not None else 0.0}
         atlas = None
         world_manager = None
+        schematic_tool = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -461,6 +478,7 @@ def main() -> None:
     else:
         atlas = None
         world_manager = None
+        schematic_tool = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -476,11 +494,15 @@ def main() -> None:
         character_model=character_model,
         turntable_state=turntable_state,
     )
+    skin_command_handler.schematic_tool = schematic_tool
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
         create_gl=True,
         glfw_window=window._window,
     )
+    if schematic_tool is not None:
+        # Enter/Esc na prévia respondem no chat, como o resto dos comandos
+        schematic_tool.notify = lambda text: chat_console.add_message("[Schem] " + text, (85, 255, 85))
     if initial_cmd:
         for single_cmd in initial_cmd.split(";"):
             single_cmd = single_cmd.strip()
@@ -620,7 +642,10 @@ def main() -> None:
         player_token.vertical_velocity = 0.0
         player_token._collision_controller = None
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-        voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
+        schematic_tool.clear()  # as construções pertencem ao mundo anterior
+        voxel_provider = VoxelGridProvider(
+            block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
+        )
         camera.target[:] = player_token.position
         picking_state.update(click_pending=False, hover_hit=None, clicked_hit=None)
         # Invalida o cache de revisão da grade ao substituir o WorldManager.
@@ -658,6 +683,10 @@ def main() -> None:
         if character_editor.handle_key(key, action, mods):
             return True
 
+        if schematic_tool is not None and schematic_tool.handle_key(key, action, mods):
+            keys_pressed.clear()
+            return True
+
         if key == glfw.KEY_ESCAPE and action == glfw.PRESS:
             keys_pressed.clear()
             pan_state['active'] = False
@@ -673,6 +702,7 @@ def main() -> None:
             active_seed["value"] = new_seed
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
             world_manager.delete()
+            schematic_tool.clear()  # o relevo muda: as construções não fazem mais sentido onde estavam
             world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True)
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
@@ -1192,6 +1222,9 @@ def main() -> None:
 
             gl.glEnable(gl.GL_CULL_FACE)
 
+            # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma
+            schematic_tool.draw(shader, model, window.time)
+
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
             grid_renderer.render(projection, view, model)
 
@@ -1300,6 +1333,8 @@ def main() -> None:
     gl.glDeleteTextures(1, [current_texture["id"]])
     gl.glDeleteTextures(1, [token_tex_id])
     chat_console.delete()
+    if schematic_tool is not None:
+        schematic_tool.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()
