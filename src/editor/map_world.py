@@ -62,14 +62,18 @@ class MapWorld:
         top = self.get_top_solid_block(x, z)
         return float(x) + 0.5, float(top) + 1.0, float(z) + 0.5
 
-    def render(self, shader, model: np.ndarray) -> None:
+    def render(self, shader, model: np.ndarray, cutaway: bool = False,
+               player_y: float = 0.0) -> None:
         if not self.create_gl:
             return
         shader.use()
         shader.set_mat4("u_Model", model)
         shader.set_bool("u_Skinned", False)
-        shader.set_bool("u_UndergroundMode", False)
+        shader.set_bool("u_UndergroundMode", cutaway)
         shader.set_bool("u_WaterMode", False)
+        shader.set_float("u_PlayerY", float(player_y))
+        shader.set_float("u_CutawayAlpha", 0.38)
+        shader.set_float("u_CutawayFade", 0.45)
         shader.set_int("u_CutawayPass", 0)
         shader.set_float("u_Vitiligo", 0.0)
         shader.set_int("u_Underwear", 0)
@@ -83,6 +87,24 @@ class MapWorld:
             if mesh is not None:
                 shader.set_mat4("u_Model", model @ mat4_translate(*placed.position))
                 mesh.draw()
+        if cutaway:
+            gl.glEnable(gl.GL_BLEND)
+            gl.glDepthFunc(gl.GL_ALWAYS)
+            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            gl.glDepthMask(gl.GL_FALSE)
+            shader.set_int("u_CutawayPass", 1)
+            shader.set_mat4("u_Model", model)
+            if self.mesh is not None:
+                self.mesh.draw()
+            for placed, mesh in self.object_meshes:
+                if mesh is not None:
+                    shader.set_mat4("u_Model", model @ mat4_translate(*placed.position))
+                    mesh.draw()
+            gl.glDepthMask(gl.GL_TRUE)
+            gl.glDepthFunc(gl.GL_LESS)
+            gl.glDisable(gl.GL_BLEND)
+            shader.set_int("u_CutawayPass", 0)
+            shader.set_bool("u_UndergroundMode", False)
 
     def delete(self) -> None:
         if self.mesh is not None:

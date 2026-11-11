@@ -161,3 +161,13 @@ def test_example_house_door_is_walkable_from_outside_to_interior():
                 seen.add(nxt)
                 queue.append(nxt)
     assert goal in seen
+
+
+def test_token_inside_object_requests_cutaway(tmp_path):
+    editor = WorldObjectEditor(1, _terrain, _height, create_gl=False,
+                               store_path=str(tmp_path / "mundo_1.json"))
+    editor.store.add(_house(), (0, 0, 0), 0, "casa")
+    editor.token_position = (0.5, 1.5, 0.5)
+    assert editor._token_inside_object()
+    editor.token_position = (0.5, 7.5, 0.5)  # em cima do telhado
+    assert not editor._token_inside_object()

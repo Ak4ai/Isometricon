@@ -230,7 +230,9 @@ python src/main.py --terrain --object=assets/objects/casa_exemplo.json
 Dentro do `--terrain`: `P` ou o botão **Colocar** do HUD ativa a colocação,
 `F3` troca o objeto, `R` gira, `Esc` cancela, clique esquerdo confirma no topo de
 um bloco, `V` ou o botão **Selecionar** seleciona, e `Delete` remove. Os objetos são salvos por seed em
-`saves/mundos/mundo_<seed>.json` e recarregados ao abrir a mesma seed.
+`saves/mundos/mundo_<seed>.json` e recarregados ao abrir a mesma seed. Ao entrar
+em uma casa, as paredes/teto acima dos pés do token ficam translúcidos para o
+personagem continuar visível.
 
 Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
 `C`/`X` escolhem cor/textura, `H` digita cor hexadecimal, `-`/`=` mudam o pincel,

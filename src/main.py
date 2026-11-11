@@ -1119,7 +1119,15 @@ def main() -> None:
                 )
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
-            if map_world is None and voxel_provider is not None:
+            if map_world is not None:
+                underground_mode = (
+                    player_token.position[1]
+                    < float(map_world.get_top_solid_block(
+                        int(np.floor(float(player_token.position[0]))),
+                        int(np.floor(float(player_token.position[2]))),
+                    )) + 0.25
+                )
+            elif voxel_provider is not None:
                 underground_mode = (
                     player_token.position[1]
                     < float(
@@ -1138,7 +1146,8 @@ def main() -> None:
 
             if map_world is not None:
                 # Mapa estático do editor: volume base + construções, com o mesmo shader.
-                map_world.render(shader, model)
+                map_world.render(shader, model, cutaway=underground_mode,
+                                 player_y=float(player_token.position[1]))
             else:
                 # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
                 gl.glActiveTexture(gl.GL_TEXTURE0)
