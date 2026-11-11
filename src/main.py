@@ -1493,7 +1493,7 @@ def main() -> None:
             )
 
             # 5. Destaca o primeiro voxel sob o cursor na cor do cursor (cinza: um bloco; dourado: uma porta)
-            from src.interactive.context_cursor import classify
+            from src.interactive.context_cursor import block_name_at, classify, highlight_box
             hover_hit = picking_state["hover_hit"]
             cursor_mode = classify(hover_hit, picking_state["door"])
             if hover_hit is not None:
@@ -1507,6 +1507,8 @@ def main() -> None:
                     hz,
                     time=window.time,
                     base_color=tuple(c / 255.0 for c in cursor_mode.color[:3]),
+                    box=highlight_box(block_name_at(schematic_tool.layer.structures, voxel_provider,
+                                                    hover_hit.block)),
                 )
 
             # 6. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight

@@ -478,6 +478,41 @@ def face_toward(yaw: float, position, target, dt: float) -> float:
     return yaw + diff * (1.0 - 0.5 ** (max(dt, 0.0) / AIM_HALF_LIFE))
 
 
+def block_name_at(structures, provider, cell) -> Optional[str]:
+    """O nome (do Minecraft) do bloco na célula: o da construção que a ocupa, senão o do terreno com forma."""
+    x, y, z = (int(v) for v in cell)
+    for placed in structures:
+        schematic = placed.schematic
+        ox, oy, oz = placed.origin
+        lx, ly, lz = x - ox, y - oy, z - oz
+        if 0 <= lx < schematic.width and 0 <= ly < schematic.height and 0 <= lz < schematic.length:
+            name = str(schematic.grid[ly, lz, lx])
+            if name != "minecraft:air":
+                return name
+    if provider is not None:
+        from src.world.block import SHAPED_BLOCK_NAMES
+        return SHAPED_BLOCK_NAMES.get(provider.get_block_at(x, y, z))
+    return None
+
+
+def highlight_box(name: Optional[str]):
+    """A caixa que envolve a forma do bloco, em blocos dentro da célula ((x0, y0, z0), (x1, y1, z1)); ``None``
+    para um cubo inteiro. O contorno do cursor segue a forma (um alçapão fino não ganha um cubo vazio em cima)."""
+    if not name:
+        return None
+    from src.world.block_shapes import Quad, shape_for
+    parts = shape_for(name)
+    if not parts:
+        return None
+    points = []
+    for part in parts:
+        points.extend(part.corners if isinstance(part, Quad) else (part.lo, part.hi))
+    corners = np.asarray(points, dtype=np.float64) / 16.0
+    lo, hi = np.clip(corners.min(axis=0), 0.0, 1.0), np.clip(corners.max(axis=0), 0.0, 1.0)
+    hi = np.maximum(hi, lo + 1.0 / 16.0)  # um plano (escada de mão, trilho) ganha a espessura de um pixel
+    return tuple(float(v) for v in lo), tuple(float(v) for v in hi)
+
+
 def door_in_reach(door, feet) -> bool:
     """A porta sob o cursor está perto o bastante de quem está em ``feet`` para abrir com a mão."""
     if door is None:

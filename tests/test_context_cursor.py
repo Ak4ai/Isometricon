@@ -132,3 +132,30 @@ def test_the_visible_surface_skips_what_the_room_cut_hides():
     assert hit.distance == pytest.approx(9.0, abs=1e-6)
     assert raycast_visible(ray, Lookup(), SKY, raycast_voxels) is None
     assert raycast_visible(ray, Lookup(), None, raycast_voxels).block == (0, 5, 0)
+
+
+def test_the_outline_follows_the_shape_of_the_block():
+    """Um alçapão fino ganha um contorno fino (não um cubo vazio em cima dele); um cubo, o cubo inteiro."""
+    from src.interactive.context_cursor import highlight_box
+    lo, hi = highlight_box("minecraft:dark_oak_trapdoor[facing=north,half=bottom,open=false]")
+    assert lo == (0.0, 0.0, 0.0) and hi[0] == 1.0 and hi[2] == 1.0 and hi[1] == pytest.approx(3 / 16)
+    lo, hi = highlight_box("minecraft:oak_slab[type=top]")
+    assert lo[1] == 0.5 and hi[1] == 1.0
+    assert highlight_box("minecraft:stone") is None and highlight_box(None) is None
+    lo, hi = highlight_box("minecraft:ladder[facing=north]")   # um plano ganha um pixel de espessura
+    assert min(h - l for l, h in zip(lo, hi)) == pytest.approx(1 / 16)
+
+
+def test_the_block_name_comes_from_the_structure_or_the_shaped_terrain():
+    from src.interactive.context_cursor import block_name_at
+    from src.world.block import SHAPED_BLOCK_NAMES, BlockType
+    layer, placed = wall_with_door()
+    assert "door" in block_name_at(layer.structures, None, (12, 3, 10))
+    shaped = next(iter(SHAPED_BLOCK_NAMES))
+
+    class Terrain:
+        def get_block_at(self, x, y, z):
+            return shaped if (x, y, z) == (0, 0, 0) else BlockType.STONE
+
+    assert block_name_at([], Terrain(), (0, 0, 0)) == SHAPED_BLOCK_NAMES[shaped]
+    assert block_name_at([], Terrain(), (1, 0, 0)) is None

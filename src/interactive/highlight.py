@@ -101,6 +101,7 @@ class BlockHighlightRenderer:
         block_z: int,
         time: float = 0.0,
         base_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        box=None,
     ) -> None:
         """Renderiza o destaque reluzente no bloco com pulsação suave em branco."""
         # Pulso harmônico de brilho: oscila entre 0.40 e 0.85
@@ -113,6 +114,10 @@ class BlockHighlightRenderer:
         self.shader.set_mat4("u_Projection", projection_matrix)
         self.shader.set_mat4("u_Model", model_matrix)
         self.shader.set_vec3("u_BlockPosition", float(block_x), float(block_y), float(block_z))
+        # ``box``: ((x0, y0, z0), (x1, y1, z1)) da forma dentro da célula; sem ele, o cubo inteiro
+        lo, hi = box if box is not None else ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
+        self.shader.set_vec3("u_BoxMin", *lo)
+        self.shader.set_vec3("u_BoxSize", *(b - a for a, b in zip(lo, hi)))
 
         # Configura blending aditivo/translúcido
         gl.glEnable(gl.GL_BLEND)
