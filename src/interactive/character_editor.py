@@ -267,6 +267,7 @@ class CharacterEditor:
         self._pictured: set = set()
         self.is_open = False
         self.active = 0
+        self.walk_preview = False  # W liga e desliga o andar do personagem na tela
         self.scroll = 0
         self.hover: Optional[Tuple[str, Any]] = None
         self.message = ""
@@ -666,7 +667,7 @@ class CharacterEditor:
     def open(self) -> None:
         self.refresh_catalog()
         self.is_open = True
-        self.message = "Arraste para girar e inclinar a vista. Esc fecha."
+        self.message = "Arraste para girar e inclinar a vista. W liga o andar. Esc fecha."
         self._was_spinning = True
         self.turntable["active"] = True
         self.dirty = True
@@ -676,6 +677,7 @@ class CharacterEditor:
         if self.is_open and self.autosave and self.model is not None and hasattr(self.handler, "save"):
             self.handler.save()
         self.is_open = False
+        self.walk_preview = False
         self._dragging = False
         self.hover = None
         self._stroke = None
@@ -1054,7 +1056,7 @@ class CharacterEditor:
             self.choose(Option(text, f"/skin vestir {text}"))
 
     def handle_key(self, key: int, action: int, mods: int = 0) -> bool:
-        """Esc fecha; Espaço liga ou desliga o giro. Com o campo de adicionar item em uso, o
+        """Esc fecha; Espaço liga ou desliga o giro; W, o andar. Com o campo de adicionar item em uso, o
         teclado é dele: Enter envia, Esc desiste, Ctrl+V cola."""
         if not self.is_open:
             return False
@@ -1077,6 +1079,10 @@ class CharacterEditor:
             return False
         if key == 256:  # GLFW_KEY_ESCAPE
             self.close()
+            return True
+        if key == 87:   # GLFW_KEY_W: liga ou desliga a animação de andar na tela
+            self.walk_preview = not self.walk_preview
+            self.dirty = True
             return True
         if key == 32:   # GLFW_KEY_SPACE
             self.turntable["active"] = self._was_spinning = not self.turntable.get("active")

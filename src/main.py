@@ -1126,12 +1126,12 @@ def main() -> None:
             if editor_animator is not None:
                 editor_animator.arms_out = character_editor.arms_raised  # braços a 90 graus, no ajuste fino
             if terrain_demo and editor_animator is not None:
-                editor_animator.walking = False
+                editor_animator.walking = character_editor.walk_preview  # W liga o andar na tela
                 editor_animator.update(dt)
             elif char_demo:
                 character_animator.update(dt)
             if terrain_demo and player_token.custom_model is not None:
-                player_token.custom_model.update(dt, 0.0)  # o modelo .glb parado, de frente, na tela de criação
+                player_token.custom_model.update(dt, player_token.speed if character_editor.walk_preview else 0.0)  # W anda
             # Nas seções do rosto a câmera vai para o rosto: na altura da cabeça, de perto, na
             # horizontal e com o personagem parado de frente para ela. Ao sair, volta ao que era.
             if character_editor.focus != editor_camera.get("focus", "body"):

@@ -362,3 +362,13 @@ def test_wearing_a_garment_with_a_known_defect_says_so():
     ok, message, colour = handler._worn("[Calça] Saia.", "18135693306")
     assert ok and "Defeito conhecido" in message and colour == GOLD
     assert handler._worn("[Top] Suéter.", "9240757332") == (True, "[Top] Suéter.", GREEN)
+
+
+def test_w_toggles_the_walk_preview_and_closing_turns_it_off():
+    editor, _ = make_editor()
+    assert not editor.walk_preview
+    assert editor.handle_key(87, 1) and editor.walk_preview
+    assert editor.handle_key(87, 1) and not editor.walk_preview
+    editor.handle_key(87, 1)
+    editor.close()
+    assert not editor.walk_preview
