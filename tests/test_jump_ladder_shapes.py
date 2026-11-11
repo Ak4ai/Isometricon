@@ -309,3 +309,27 @@ def test_place_block_picks_the_ladder_facing_from_the_wall():
     assert manager.place_block(6, 14, 6, BlockType.LADDER_NORTH) is BlockType.LADDER_EAST  # parede a oeste
     assert manager.place_block(5, 14, 6, BlockType.TORCH) is None          # ocupado
     assert chunk.get_block(5, 14, 5) is BlockType.LADDER_NORTH
+
+
+def test_lantern_faces_use_the_model_sheet_regions():
+    from src.world.block_shapes import FACE_INDEX, box_face_quad
+
+    body, neck, *handle = shape_for("minecraft:lantern[hanging=false]")
+    rect = (0.0, 0.0, 1.0, 1.0)
+    side = box_face_quad(body, FACE_INDEX["north"], np.zeros(3, dtype=np.float32), rect)
+    assert side[:, 6].min() == pytest.approx(0.0) and side[:, 6].max() == pytest.approx(6 / 16)
+    assert side[:, 7].min() == pytest.approx(2 / 16) and side[:, 7].max() == pytest.approx(9 / 16)
+    top = box_face_quad(body, FACE_INDEX["top"], np.zeros(3, dtype=np.float32), rect)
+    assert top[:, 7].min() == pytest.approx(9 / 16) and top[:, 7].max() == pytest.approx(15 / 16)
+    neck_side = box_face_quad(neck, FACE_INDEX["east"], np.zeros(3, dtype=np.float32), rect)
+    assert neck_side[:, 6].min() == pytest.approx(1 / 16) and neck_side[:, 7].max() == pytest.approx(2 / 16)
+    assert len(handle) == 2 and all(isinstance(q, Quad) for q in handle)
+    # pendurada, sobe um pixel inteiro
+    hanging = shape_for("minecraft:lantern[hanging=true]")
+    assert hanging[0].lo[1] == 1.0 and hanging[0].face_uv == body.face_uv
+
+
+def test_sea_lantern_and_jack_o_lantern_stay_full_cubes():
+    for name in ("minecraft:sea_lantern", "minecraft:jack_o_lantern[facing=north]"):
+        assert shape_for(name) is None and collides(name)
+    assert shape_for("minecraft:soul_lantern[hanging=false]") is not None and not collides("minecraft:soul_lantern")

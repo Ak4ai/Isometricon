@@ -37,11 +37,15 @@ class Box:
     """Uma caixa da forma, em unidades de 1/16 de bloco dentro da célula.
 
     ``texture`` troca a textura do bloco por outra, pelo nome (ex.: a metade de cima de uma porta).
+    ``face_uv`` tira a UV de uma região fixa da textura, em pixels (x0, y0, x1, y1) de 0 a 16, por face ("top",
+    "bottom" ou "side"), em vez de recortar pela posição da caixa: as texturas que são folhas de modelo (a
+    lanterna) têm cada peça num canto da imagem.
     """
 
     lo: Vec
     hi: Vec
     texture: Optional[str] = None
+    face_uv: Optional[Tuple[Tuple[str, Tuple[float, float, float, float]], ...]] = None
 
     def covers_face(self, face: int) -> bool:
         """A face encosta no limite da célula e a preenche por inteiro (então pode ser descartada)."""
@@ -84,6 +88,15 @@ class Quad:
 
     def covers_face(self, face: int) -> bool:
         return False  # um plano nunca fecha a face da célula: não esconde o vizinho nem ganha tampa
+
+    @property
+    def lo(self) -> Vec:
+        """O canto mínimo da caixa que contém o plano (como ``Box.lo``)."""
+        return tuple(min(c[a] for c in self.corners) for a in range(3))
+
+    @property
+    def hi(self) -> Vec:
+        return tuple(max(c[a] for c in self.corners) for a in range(3))
 
 
 def _quad_turn(quad: Quad, turns: int) -> Quad:
@@ -134,12 +147,13 @@ def _turn(box: Box, turns: int) -> Box:
         nx0, nx1 = 16.0 - z1, 16.0 - z0
         nz0, nz1 = x0, x1
         lo, hi = (nx0, lo[1], nz0), (nx1, hi[1], nz1)
-    return Box(lo, hi, box.texture)
+    return Box(lo, hi, box.texture, box.face_uv)
 
 
 def _flip(box: Box) -> Box:
     """Espelha a caixa no eixo y (de baixo para cima)."""
-    return Box((box.lo[0], 16.0 - box.hi[1], box.lo[2]), (box.hi[0], 16.0 - box.lo[1], box.hi[2]), box.texture)
+    return Box((box.lo[0], 16.0 - box.hi[1], box.lo[2]), (box.hi[0], 16.0 - box.lo[1], box.hi[2]), box.texture,
+               box.face_uv)
 
 
 TURNS_FROM_EAST = {"east": 0, "south": 1, "west": 2, "north": 3}
@@ -280,9 +294,23 @@ def _wall_torch(props) -> List[Box]:
     return [_turn(standing, towards.get(props.get("facing", "south"), 0))]
 
 
-def _lantern(props) -> List[Box]:
+# A textura da lanterna é uma folha de modelo (como no jogo): o corpo de lado em (0,2)-(6,9), o topo e o fundo em
+# (0,9)-(6,15), o pescoço de lado em (1,0)-(5,2) e a alça (um arco de 3x3) em (11,1)-(14,4).
+_LANTERN_BODY_UV = (("side", (0.0, 2.0, 6.0, 9.0)), ("top", (0.0, 9.0, 6.0, 15.0)), ("bottom", (0.0, 9.0, 6.0, 15.0)))
+_LANTERN_NECK_UV = (("side", (1.0, 0.0, 5.0, 2.0)), ("top", (1.0, 10.0, 5.0, 14.0)), ("bottom", (1.0, 10.0, 5.0, 14.0)))
+_LANTERN_HANDLE_UV = ((11 / 16, 4 / 16), (14 / 16, 4 / 16), (14 / 16, 1 / 16), (11 / 16, 1 / 16))
+
+
+def _lantern(props) -> List:
     lift = 1 if props.get("hanging", "false") == "true" else 0
-    return [_box(5, lift, 5, 11, 7 + lift, 11), _box(6, 7 + lift, 6, 10, 9 + lift, 10)]
+    body = Box((5.0, lift, 5.0), (11.0, 7.0 + lift, 11.0), None, _LANTERN_BODY_UV)
+    neck = Box((6.0, 7.0 + lift, 6.0), (10.0, 9.0 + lift, 10.0), None, _LANTERN_NECK_UV)
+    # a alça: dois arcos em X por cima do pescoço
+    y0, y1 = 9.0 + lift, 12.0 + lift
+    a, b = 8.0 - 1.06, 8.0 + 1.06       # 3 pixels de largura na diagonal
+    handle = [Quad(((a, y0, a), (b, y0, b), (b, y1, b), (a, y1, a)), None, _LANTERN_HANDLE_UV),
+              Quad(((a, y0, b), (b, y0, a), (b, y1, a), (a, y1, b)), None, _LANTERN_HANDLE_UV)]
+    return [body, neck, *handle]
 
 
 def _chain(props) -> List[Box]:
@@ -480,6 +508,9 @@ def _sea_pickle(props) -> List[Box]:
     return [_box(x, 0, z, x + 4, 6, z + 4) for x, z in spots]
 
 
+# Blocos inteiros com "lantern" no nome (não são a lanterna pequena)
+_FULL_LANTERNS = ("sea_lantern", "jack_o_lantern")
+
 # (teste do nome, construtor). A ordem importa: os mais específicos primeiro.
 _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
     (is_cross_plant, _plant),
@@ -502,7 +533,7 @@ _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
     (lambda b: b.endswith("_pressure_plate"), _pressure_plate),
     (lambda b: b.endswith("wall_torch"), _wall_torch),
     (lambda b: b.endswith("torch"), _torch),
-    (lambda b: b.endswith("lantern"), _lantern),
+    (lambda b: b.endswith("lantern") and b not in _FULL_LANTERNS, _lantern),
     (lambda b: b == "chain", _chain),
     (lambda b: b == "candle" or (b.endswith("_candle") and not b.endswith("_candle_cake")), _candle),
     (lambda b: b.endswith("_carpet"), _carpet),
@@ -546,6 +577,8 @@ def collides(block_name: str) -> bool:
     """O personagem não atravessa o bloco (tochas, tapetes, placas, botões, velas, vasos, plantas, trilhos e fogo
     não barram)."""
     base, props = parse_block(block_name)
+    if base in _FULL_LANTERNS:
+        return True
     if base.startswith("potted_") or base in _DECORATION_NAMES or base.endswith(_DECORATION_SUFFIXES):
         return False
     if is_cross_plant(base):
@@ -584,10 +617,17 @@ def box_face_quad(box: Box, face: int, cell_corner: np.ndarray, rect: Tuple[floa
     """
     _, normal, key, corners = FACES[face]
     u0, v0, u1, v1 = rect
+    points = [tuple(box.hi[a] if corner[a] > 0 else box.lo[a] for a in range(3)) for corner in corners]
+    uvs = [_uv(key, point) for point in points]
+    region = dict(box.face_uv).get(key if key in ("top", "bottom") else "side") if box.face_uv else None
+    if region is not None:
+        # a face inteira cobre a região da folha (em pixels), no mesmo sentido do recorte normal
+        us, vs = [u for u, _ in uvs], [v for _, v in uvs]
+        span_u, span_v = (max(us) - min(us)) or 1.0, (max(vs) - min(vs)) or 1.0
+        x0, y0, x1, y1 = (c / 16.0 for c in region)
+        uvs = [(x0 + (u - min(us)) / span_u * (x1 - x0), y0 + (v - min(vs)) / span_v * (y1 - y0)) for u, v in uvs]
     quad = np.empty((4, 11), dtype=np.float32)
-    for i, corner in enumerate(corners):
-        point = tuple(box.hi[a] if corner[a] > 0 else box.lo[a] for a in range(3))
-        u, v = _uv(key, point)
+    for i, (point, (u, v)) in enumerate(zip(points, uvs)):
         quad[i, :3] = cell_corner + np.array(point, dtype=np.float32) / 16.0
         quad[i, 3:6] = normal
         quad[i, 6] = u0 + u * (u1 - u0)
