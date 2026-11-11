@@ -128,3 +128,15 @@ def test_select_and_rotate_placed_object(tmp_path):
     assert editor.selected is not None
     assert editor.rotate_selected()
     assert editor.selected.rotation == 1
+
+
+def test_hud_actions_toggle_modes(tmp_path):
+    editor = WorldObjectEditor(1, _terrain, _height, create_gl=False,
+                               store_path=str(tmp_path / "mundo_1.json"))
+    editor._hud_action("place")
+    assert editor.mode == editor.PLACE
+    assert editor.stamp is not None
+    editor._hud_action("select")
+    assert editor.mode == editor.SELECT
+    editor._hud_action("cancel")
+    assert editor.mode == editor.OFF

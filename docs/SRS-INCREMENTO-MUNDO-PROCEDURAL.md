@@ -55,7 +55,7 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | ID | Requisito | Prioridade | Verificação |
 |---|---|---|---|
 | **FR-051** | O sistema deve oferecer dois destinos para um objeto voxel: salvar como mapa independente e disponibilizar o objeto para colocação no mundo procedural. | Essencial | Teste, demonstração |
-| **FR-052** | No modo `--terrain`, o sistema deve permitir ativar o modo de colocação e escolher um objeto da biblioteca. | Essencial | Teste, demonstração |
+| **FR-052** | No modo `--terrain`, o sistema deve permitir ativar o modo de colocação por `P` ou por botão no HUD e escolher um objeto da biblioteca. | Essencial | Teste, demonstração |
 | **FR-053** | O sistema deve exibir uma prévia do objeto acompanhando o cursor e indicar se a posição é válida ou inválida. | Essencial | Teste, demonstração |
 | **FR-054** | O sistema deve encaixar o objeto na grade e na face superior do terreno, rejeitando posições sobre água, dentro de outro objeto ou sobre o token. | Essencial | Teste, demonstração |
 | **FR-055** | O sistema deve permitir rotacionar o objeto em passos de 90° e cancelar a colocação sem alterar o mundo. | Essencial | Teste, demonstração |
@@ -112,7 +112,8 @@ Funcionalidade: Colocar objeto no mundo procedural
    mover célula a célula fica para um próximo incremento.
 6. A colocação é limitada a superfícies atingidas pelo raycast em chunks
    carregados.
-7. O modo é ativado por **`P` no teclado**, com HUD dedicado.
+7. O modo é ativado por **`P` no teclado ou pelo botão “Colocar” no HUD**;
+   o HUD também expõe Selecionar, Objeto, Girar, Remover e Sair.
 
 ---
 

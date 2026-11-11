@@ -120,9 +120,9 @@ python src/main.py --terrain --map=saves/mapa.json
 python src/main.py --terrain --object=assets/objects/casa_exemplo.json
 ```
 
-No mundo procedural: `P` ativa/desativa a colocação, `F3` troca o objeto, `R`
-gira, `Esc` cancela, clique esquerdo coloca no topo do bloco, `V` seleciona e
-`Delete` remove. A persistência é por seed:
+No mundo procedural: `P` ou o botão **Colocar** do HUD ativa/desativa a
+colocação, `F3` troca o objeto, `R` gira, `Esc` cancela, clique esquerdo coloca
+no topo do bloco, `V` ou o botão **Selecionar** seleciona e `Delete` remove. A persistência é por seed:
 `saves/mundos/mundo_<seed>.json`. Se o arquivo estiver corrompido, o mundo abre
 sem objetos e mostra o aviso no HUD.
 

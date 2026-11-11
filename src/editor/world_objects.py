@@ -33,7 +33,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 WORLD_FORMAT = "isometricon-world-objects"
 WORLD_VERSION = 1
 PANEL_WIDTH = 440
-PANEL_HEIGHT = 158
+PANEL_HEIGHT = 202
 _FONT_CANDIDATES = (
     "consola.ttf", "consolas.ttf", "C:/Windows/Fonts/consola.ttf",
     "segoeui.ttf", "arial.ttf",
@@ -218,11 +218,21 @@ class WorldObjectRenderer:
 
 
 class WorldObjectHud:
+    ACTIONS = (
+        ("place", "Colocar"),
+        ("select", "Selecionar"),
+        ("object", "Objeto"),
+        ("rotate", "Girar"),
+        ("remove", "Remover"),
+        ("cancel", "Sair"),
+    )
+
     def __init__(self) -> None:
         self.quad: HudQuad | None = HudQuad()
         self._key: tuple | None = None
         self._image: Image.Image | None = None
         self._dirty = False
+        self._buttons: dict[str, tuple[int, int, int, int]] = {}
 
     def _font(self, size: int) -> Any:
         for candidate in _FONT_CANDIDATES:
@@ -232,9 +242,10 @@ class WorldObjectHud:
                 continue
         return ImageFont.load_default()
 
-    def set_state(self, title: str, lines: Iterable[tuple[str, tuple[int, int, int]]]) -> None:
+    def set_state(self, title: str, lines: Iterable[tuple[str, tuple[int, int, int]]],
+                  active_mode: str = "off") -> None:
         rows = tuple(lines)
-        key = (title, rows)
+        key = (title, rows, active_mode)
         if key == self._key:
             return
         self._key = key
@@ -247,8 +258,30 @@ class WorldObjectHud:
         for text, colour in rows:
             draw.text((14, y), text, font=self._font(13), fill=(*colour, 255))
             y += 18
+        self._buttons = {}
+        for index, (action, label) in enumerate(self.ACTIONS):
+            box = (12 + index * 70, 158, 12 + index * 70 + 66, 188)
+            self._buttons[action] = box
+            active = action == active_mode
+            draw.rounded_rectangle(box, radius=5,
+                                   fill=(196, 150, 45, 255) if active else (32, 41, 54, 255),
+                                   outline=(240, 205, 120, 255) if active else (80, 95, 115, 255),
+                                   width=1)
+            colour = (20, 24, 30, 255) if active else (210, 218, 228, 255)
+            try:
+                width = draw.textbbox((0, 0), label, font=self._font(10))[2]
+            except Exception:
+                width = len(label) * 6
+            draw.text((box[0] + (box[2] - box[0] - width) / 2, box[1] + 6),
+                      label, font=self._font(10), fill=colour)
         self._image = image
         self._dirty = True
+
+    def hit(self, x: float, y: float) -> str | None:
+        for action, (x0, y0, x1, y1) in self._buttons.items():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return action
+        return None
 
     def render(self, window_width: int, window_height: int) -> None:
         if self._image is None or self.quad is None:
@@ -261,6 +294,12 @@ class WorldObjectHud:
     def contains(self, x: float, y: float, window_width: int) -> bool:
         x0 = window_width - PANEL_WIDTH - 16
         return x0 <= x <= x0 + PANEL_WIDTH and 16 <= y <= 16 + PANEL_HEIGHT
+
+    def hit_window(self, x: float, y: float, window_width: int) -> str | None:
+        x0 = window_width - PANEL_WIDTH - 16
+        if not self.contains(x, y, window_width):
+            return None
+        return self.hit(x - x0, y - 16)
 
     def delete(self) -> None:
         if self.quad is not None:
@@ -536,22 +575,51 @@ class WorldObjectEditor:
     # ------------------------------------------------------------------
     # Entrada
     # ------------------------------------------------------------------
+    def toggle_place(self) -> bool:
+        if self.mode == self.PLACE:
+            self.mode = self.OFF
+            self.status = "Modo de colocação desligado."
+        else:
+            if self.stamp is None:
+                return self._load_next_library()
+            self.mode = self.PLACE
+            self.status = f"Colocando {self.stamp_name}."
+        self.valid = False
+        self._update_hud()
+        return True
+
+    def _hud_action(self, action: str | None) -> None:
+        if action is None:
+            return
+        if action == "place":
+            self.toggle_place()
+        elif action == "select":
+            self.mode = self.SELECT
+            self.selected_index = None
+            self.status = "Clique em um objeto para selecionar."
+        elif action == "object":
+            self._load_next_library()
+        elif action == "rotate":
+            if self.mode == self.PLACE:
+                self.rotation = (self.rotation + 1) % 4
+                self._preview_dirty = True
+                self.status = f"Rotação: {self.rotation * 90}°."
+            else:
+                self.rotate_selected()
+        elif action == "remove":
+            self.remove_selected()
+        elif action == "cancel":
+            self.mode = self.OFF
+            self.selected_index = None
+            self.valid = False
+            self.status = "Objetos: modo desligado."
+        self._update_hud()
+
     def handle_key(self, key: int, action: int, mods: int) -> bool:
         if action not in (glfw.PRESS, glfw.REPEAT):
             return False
         if key == glfw.KEY_P:
-            if self.mode == self.PLACE:
-                self.mode = self.OFF
-                self.status = "Modo de colocação desligado."
-            else:
-                if self.stamp is None:
-                    self._load_next_library()
-                else:
-                    self.mode = self.PLACE
-                    self.status = f"Colocando {self.stamp_name}."
-            self.valid = False
-            self._update_hud()
-            return True
+            return self.toggle_place()
         if key == glfw.KEY_V:
             self.mode = self.SELECT
             self.selected_index = None
@@ -590,6 +658,10 @@ class WorldObjectEditor:
         if self.mode == self.OFF:
             return False
         if self.last_mouse_window is not None and self.hud is not None:
+            action = self.hud.hit_window(self.last_mouse_window[0], self.last_mouse_window[1], self._window_width)
+            if action is not None:
+                self._hud_action(action)
+                return True
             if self.hud.contains(self.last_mouse_window[0], self.last_mouse_window[1], self._window_width):
                 return True
         if self.mode == self.PLACE:
@@ -617,7 +689,7 @@ class WorldObjectEditor:
             (self.status, (245, 210, 120)),
             ("P colocar  V selecionar  F3 objeto  R girar  Esc sair  Del remover", (150, 160, 175)),
         ]
-        self.hud.set_state("OBJETOS NO MUNDO — ISOMETRICON", lines)
+        self.hud.set_state("OBJETOS NO MUNDO — ISOMETRICON", lines, active_mode=self.mode)
 
     def _draw_alpha(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray,
                     mesh: TexturedMesh, origin, alpha: float) -> None:
@@ -641,7 +713,7 @@ class WorldObjectEditor:
         if self.renderer is not None:
             self.renderer.render(shader, model)
         if self.mode == self.PLACE and self.valid and self.cursor is not None and self.preview_mesh is not None:
-            self._draw_alpha(shader, projection, view, model, self.preview_mesh, self.cursor, 0.55)
+            self._draw_alpha(shader, projection, view, model, self.preview_mesh, self.cursor, 0.30)
         selected = self.selected
         if selected is not None and self.selection_box is not None:
             bounds = selected.bounds()
