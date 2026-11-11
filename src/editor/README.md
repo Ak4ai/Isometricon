@@ -9,6 +9,7 @@ shader; os voxels formam uma malha iluminada e texturizada comum, usando o mesmo
 | `voxel_object.py` | Grade de voxels, paleta de materiais (cor + textura), rotação, colagem e JSON. |
 | `map_project.py` | Volume base + objetos colocados (posição/rotação) e JSON do mapa. |
 | `map_world.py` | Mapa estático jogável com colisão (`--terrain --map`). |
+| `world_objects.py` | Objetos independentes no mundo procedural, persistência por seed e HUD de colocação. |
 | `material_atlas.py` | Atlas 4×4 de tiles 16×16 e consulta de UV por textura. |
 | `object_mesher.py` | Malha com face culling e cor/UV por voxel. |
 | `platform.py` | Plataforma: superfície, grade, borda e cursor em um único draw. |

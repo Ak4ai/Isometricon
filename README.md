@@ -221,14 +221,26 @@ python src/main.py --map=assets/objects/casa_exemplo.json
 python src/main.py --terrain --map=saves/mapa.json   # joga o mapa salvo
 ```
 
-Controles principais: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
+O mesmo objeto também pode ser colocado **dentro do mundo procedural infinito**:
+
+```bash
+python src/main.py --terrain --object=assets/objects/casa_exemplo.json
+```
+
+Dentro do `--terrain`: `P` ativa a colocação, `F3` troca o objeto, `R` gira,
+`Esc` cancela, clique esquerdo confirma no topo de um bloco, `V` seleciona e
+`Delete` remove. Os objetos são salvos por seed em
+`saves/mundos/mundo_<seed>.json` e recarregados ao abrir a mesma seed.
+
+Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
 `C`/`X` escolhem cor/textura, `H` digita cor hexadecimal, `-`/`=` mudam o pincel,
 `[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
 selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso
 base, `F4` abre a biblioteca e `Ctrl+Z`/`Ctrl+Y` desfazem/refazem. O painel tem
 botões clicáveis para as ferramentas e ações principais. Detalhes em
-[`docs/EDITOR.md`](docs/EDITOR.md).
+[`docs/EDITOR.md`](docs/EDITOR.md) e
+[`docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md).
 
 ### 🕹️ Controles
 

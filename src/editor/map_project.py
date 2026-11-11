@@ -34,6 +34,7 @@ class PlacedObject:
     position: tuple[int, int, int] = (0, 0, 0)
     rotation: int = 0
     name: str = ""
+    source: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.object, VoxelObject):
@@ -80,7 +81,7 @@ class PlacedObject:
         return local is not None and self.object.get(*local) >= 0
 
     def copy(self) -> "PlacedObject":
-        return PlacedObject(self.object.copy(), self.position, self.rotation, self.name)
+        return PlacedObject(self.object.copy(), self.position, self.rotation, self.name, self.source)
 
     def to_dict(self) -> dict:
         return {
@@ -88,6 +89,7 @@ class PlacedObject:
             "position": list(self.position),
             "rotation": self.rotation,
             "name": self.name,
+            "source": self.source,
         }
 
     @classmethod
@@ -95,7 +97,7 @@ class PlacedObject:
         if not isinstance(data, dict) or "object" not in data:
             raise ValueError("Objeto colocado inválido.")
         return cls(VoxelObject.from_dict(data["object"]), _position(data.get("position", (0, 0, 0))),
-                   int(data.get("rotation", 0)), str(data.get("name", "")))
+                   int(data.get("rotation", 0)), str(data.get("name", "")), str(data.get("source", "")))
 
 
 class MapProject:

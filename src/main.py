@@ -280,12 +280,15 @@ def main() -> None:
     explicit_editor = "--map-editor" in argv or "--editor-mapa" in argv
     terrain_requested = "--terrain" in argv
     map_path = None
+    world_object_path = None
     for arg in argv:
         if arg.startswith("--map-editor=") or arg.startswith("--editor-mapa="):
             explicit_editor = True
             map_path = arg.split("=", 1)[1]
         elif arg.startswith(("--map=", "--mapa=")):
             map_path = arg.split("=", 1)[1]
+        elif arg.startswith(("--object=", "--objeto=")):
+            world_object_path = arg.split("=", 1)[1]
     terrain_demo = terrain_requested
     char_demo = "--char" in argv or "--character" in argv
 
@@ -337,6 +340,8 @@ def main() -> None:
                 pass
         elif arg in ("--map", "--mapa") and i + 1 < len(argv):
             map_path = argv[i + 1]
+        elif arg in ("--object", "--objeto") and i + 1 < len(argv):
+            world_object_path = argv[i + 1]
         elif arg in ("--open-chat", "--chat"):
             open_chat = True
         elif arg in ("--chat-text",) and i + 1 < len(sys.argv[1:]):
@@ -365,6 +370,7 @@ def main() -> None:
         print("[Skin] Personagem salvo carregado (use --novo para começar do padrão).")
 
     map_world = None
+    world_objects = None
     if terrain_demo:
         print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
         atlas = TextureAtlas()
@@ -398,7 +404,14 @@ def main() -> None:
         if map_world is None:
             player_token.position[1] = float(start_surface_y) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-            voxel_provider = VoxelGridProvider(block_lookup=world_manager.neighbor_at)
+            from src.editor.world_objects import WorldObjectEditor
+            world_objects = WorldObjectEditor(
+                active_seed["value"], world_manager.neighbor_at, world_manager.get_height, create_gl=True,
+            )
+            if world_object_path:
+                if not world_objects.load_object(world_object_path):
+                    print(f"[Objetos] {world_objects.status}")
+            voxel_provider = VoxelGridProvider(block_lookup=world_objects.provider.get_block_at)
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -602,6 +615,10 @@ def main() -> None:
             if map_editor.handle_key(key, action, mods):
                 return True
 
+        if world_objects is not None and not chat_console.is_open and not character_editor.is_open:
+            if world_objects.handle_key(key, action, mods):
+                return True
+
         # Intercepta eventos de teclado para o console de chat estilo Minecraft
         try:
             if character_editor.typing and character_editor.handle_key(key, action, mods):
@@ -627,6 +644,8 @@ def main() -> None:
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+            if world_objects is not None:
+                world_objects.switch_seed(new_seed)
 
         if char_demo:
             if key == glfw.KEY_SPACE and action == glfw.PRESS:
@@ -683,6 +702,10 @@ def main() -> None:
 
         if map_editor is not None:
             if map_editor.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
+                return
+
+        if world_objects is not None:
+            if world_objects.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
                 return
 
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
@@ -887,7 +910,8 @@ def main() -> None:
                     keys_pressed,
                     movement_forward,
                     movement_right,
-                    world_manager.get_height,
+                    world_objects.token_provider if world_objects is not None and world_objects.token_provider is not None
+                    else world_manager.get_height,
                 )
 
                 # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
@@ -1087,6 +1111,12 @@ def main() -> None:
             map_editor.render(shader, projection, view, model, window.time,
                               window.width, window.height)
         elif terrain_demo:
+            if world_objects is not None:
+                cursor_x, cursor_y = window.get_cursor_pos_framebuffer()
+                world_objects.update_cursor(
+                    cursor_x, cursor_y, window.width, window.height, view, projection, model,
+                    token_position=player_token.position, mouse_window=window.get_cursor_pos(),
+                )
             # Configuração do modo subterrâneo (cutaway) e água
             underground_mode = False
             if map_world is None and voxel_provider is not None:
@@ -1135,6 +1165,10 @@ def main() -> None:
                 # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
                 grid_renderer.render(projection, view, model)
 
+            if world_objects is not None:
+                world_objects.update()
+                world_objects.render(shader, projection, view, model)
+
             # 4. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
             highlight_renderer.render(
@@ -1181,6 +1215,8 @@ def main() -> None:
             if coordinate_overlay is not None:
                 coordinate_overlay.render(window.width, window.height, player_token.position)
                 shader.use()
+            if world_objects is not None:
+                world_objects.render_hud(window.width, window.height)
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
@@ -1239,6 +1275,8 @@ def main() -> None:
         map_editor.delete()
     if map_world is not None:
         map_world.delete()
+    if world_objects is not None:
+        world_objects.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

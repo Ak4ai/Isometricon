@@ -15,6 +15,7 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 | [🔗 **Contrato de Integração**](INTEGRATION_SPEC.md) | Interfaces `VoxelGridProvider`, Raycasting 3D e Matrizes de Câmera. | Equipe A & Equipe B |
 | [🎨 **Guia de Shaders GLSL**](SHADERS.md) | Shaders GLSL 330 core, modelo de iluminação Lambertiana e Destaques. | Equipe A & Equipe B |
 | [🗺️ **Editor de Mapa/Objetos**](EDITOR.md) | Plataforma em shader, voxels com cor/textura, exportar/carimbar objetos e salvar mapa. | Equipe & Avaliação |
+| [🌍 **Mundo Procedural + Objetos**](SRS-INCREMENTO-MUNDO-PROCEDURAL.md) | Requisitos dos dois destinos: mapa independente e construções no `--terrain` infinito. | Equipe & Avaliação |
 | [📖 **Wiki do Projeto**](wiki/Home.md) | Roupas do Roblox, animação, bateria de robustez, comandos do chat e histórico de experimentos. | Equipe B |
 
 </div>

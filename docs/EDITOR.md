@@ -106,6 +106,29 @@ JSON versionado, com identificador de formato:
 - Mapas e objetos usam o mesmo formato; `kind` distingue os dois.
 - Texturas são nomes de tiles do atlas do editor (`src/editor/material_atlas.py`).
 
+## 🌍 Dois destinos: mapa independente ou mundo procedural
+
+O mesmo objeto pode ser usado de duas formas:
+
+```bash
+# A) mapa independente finito
+python src/main.py --map-editor
+# F5 salva saves/mapa.json
+python src/main.py --terrain --map=saves/mapa.json
+
+# B) dentro do mundo procedural infinito
+python src/main.py --terrain --object=assets/objects/casa_exemplo.json
+```
+
+No mundo procedural: `P` ativa/desativa a colocação, `F3` troca o objeto, `R`
+gira, `Esc` cancela, clique esquerdo coloca no topo do bloco, `V` seleciona e
+`Delete` remove. A persistência é por seed:
+`saves/mundos/mundo_<seed>.json`. Se o arquivo estiver corrompido, o mundo abre
+sem objetos e mostra o aviso no HUD.
+
+Detalhes de requisitos em
+[`SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](SRS-INCREMENTO-MUNDO-PROCEDURAL.md).
+
 ## 🧱 Objetos independentes e base
 
 A partir desta versão o carimbo **não é mais achatado** na base: ele vira um
@@ -144,7 +167,7 @@ tabuleiro gira com `Q/E`.
 ```bash
 pytest -q tests/test_editor_voxel_object.py tests/test_editor_mesher.py \
          tests/test_editor_map_editor.py tests/test_editor_map_project.py \
-         tests/test_editor_map_world.py
+         tests/test_editor_map_world.py tests/test_editor_world_objects.py
 ```
 
 Cobrem: paleta e materiais, get/set, redimensionamento, rotação, colagem,
