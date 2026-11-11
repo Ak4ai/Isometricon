@@ -97,6 +97,34 @@ def test_a_skirt_is_not_split_between_the_legs(body):
 
 
 
+def test_cloth_weights_are_kept_and_given_back_unchanged(monkeypatch):
+    """A second bind with the same garment and body takes the weights from the cache, equal to computing them."""
+    import src.clothing.character_animation as animation
+    from src.clothing.skeleton import Skeleton
+
+    animator = CharacterAnimator.__new__(CharacterAnimator)
+    animator.skeleton = skeleton = Skeleton.load("female")
+    hip = skeleton.heads[skeleton.index("UpperLeg_L")]
+    angle = np.arange(12) * 2 * np.pi / 12
+    points = np.array([[0.25 * np.cos(a), hip[1] - 0.1 * k, hip[2] + 0.25 * np.sin(a)] for k in range(4) for a in angle])
+    faces = np.array([[k * 12 + i, k * 12 + (i + 1) % 12, (k + 1) * 12 + i] for k in range(3) for i in range(12)])
+    bones = np.where(points[:, 0] > 0, skeleton.index("UpperLeg_L"), skeleton.index("UpperLeg_R"))
+    animation._BIND_CACHE.clear()
+    first = animator._cloth_weights(points, faces, bones, bones)
+    first[1][:] = 0.0  # what a caller does to its copy does not reach the cache
+
+    def recomputed(*args):
+        raise AssertionError("the weights were computed again")
+
+    monkeypatch.setattr(animator, "_garment_weights", recomputed)
+    again = animator._cloth_weights(points, faces, bones, bones)
+    monkeypatch.undo()
+    animation._BIND_CACHE.clear()
+    fresh = animator._cloth_weights(points, faces, bones, bones)
+    np.testing.assert_array_equal(again[0], fresh[0])
+    np.testing.assert_array_equal(again[1], fresh[1])
+
+
 @pytest.mark.parametrize('body', ['female', 'male'])
 def test_arms_swing_less_only_when_the_clothes_tear(body):
     skin_mesh = MemoryMesh([[-.02, 1.1, .2], [.02, 1.1, .2], [0, 1.14, .2]])

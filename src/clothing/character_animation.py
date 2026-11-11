@@ -13,7 +13,10 @@ back to the GPU; animation never removes skin triangles.
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import threading
+from collections import OrderedDict
 
 import numpy as np
 
@@ -73,7 +76,59 @@ STRIDE_EASE = 10.0
 WALK_SPEED = 11.0
 
 
+# The heavy parts of binding a model (the body cage, the bones and weights of the clothes, the arm
+# swing they allow) depend only on what they are given: their results are kept here by the content of
+# their inputs. The character's background build binds the new model once on its thread
+# (``warm_bind``), so the bind on the main thread, when the model is swapped in, finds them ready.
+_BIND_CACHE: "OrderedDict[tuple, object]" = OrderedDict()
+_BIND_CACHE_SIZE = 256
+_BIND_LOCK = threading.Lock()
+
+
+def _digest(*values) -> str:
+    """A key for the content of arrays and plain values."""
+    h = hashlib.blake2b(digest_size=16)
+    for value in values:
+        if isinstance(value, np.ndarray):
+            array = np.ascontiguousarray(value)
+            h.update(f"{array.dtype.str}{array.shape}".encode())
+            h.update(array.data)
+        else:
+            h.update(repr(value).encode())
+        h.update(b"|")
+    return h.hexdigest()
+
+
+def _copy(value):
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    if isinstance(value, tuple):
+        return tuple(_copy(v) for v in value)
+    return value
+
+
+def _cached(key, compute):
+    """``compute()``, or what it gave last time for ``key`` (a copy: callers may change what they get)."""
+    with _BIND_LOCK:
+        if key in _BIND_CACHE:
+            _BIND_CACHE.move_to_end(key)
+            return _copy(_BIND_CACHE[key])
+    value = compute()
+    with _BIND_LOCK:
+        _BIND_CACHE[key] = _copy(value)
+        while len(_BIND_CACHE) > _BIND_CACHE_SIZE:
+            _BIND_CACHE.popitem(last=False)
+    return value
+
+
 def _nearest(points, targets, chunk=2048):
+    """Index of the nearest target for each point (kept by content: binding asks the same often)."""
+    points = np.ascontiguousarray(points, dtype=np.float32)
+    targets = np.ascontiguousarray(targets, dtype=np.float32)
+    return _cached(("nearest", _digest(points, targets)), lambda: _nearest_search(points, targets, chunk))
+
+
+def _nearest_search(points, targets, chunk=2048):
     """Index of the nearest target for each point. Render buffers repeat every vertex once
     per face corner, so the search runs on the distinct positions only."""
     points = np.ascontiguousarray(points, dtype=np.float32)
@@ -169,6 +224,9 @@ class CharacterAnimator:
         self._bound_rows = []
 
     def _body_cage(self):
+        return _cached(("cage", self.model.body, tuple(self.skeleton.names)), self._load_body_cage)
+
+    def _load_body_cage(self):
         from .character_model import MODELS_DIR
         from .hsr import engine_to_body_mesh
         from .wear_engine import BODY_CAGES, load_r15_cages
@@ -181,6 +239,13 @@ class CharacterAnimator:
         return np.vstack(points), np.concatenate(bones)
 
     def _rest_arm_angle(self, cage_points, cage_bones, cloth_points=None, sleeve_radius=0.0):
+        """See ``_find_rest_arm_angle``; kept by content."""
+        key = ("rest_arm", self._skeleton_key(),
+               _digest(cage_points, cage_bones, None if cloth_points is None else np.asarray(cloth_points),
+                       float(sleeve_radius)))
+        return _cached(key, lambda: self._find_rest_arm_angle(cage_points, cage_bones, cloth_points, sleeve_radius))
+
+    def _find_rest_arm_angle(self, cage_points, cage_bones, cloth_points=None, sleeve_radius=0.0):
         """Rest angle of the arms that keeps the hands off this body's hips, and off the clothes
         the arms do not carry (a wide coat, a ball gown). The arm is as thick as what it wears
         (``sleeve_radius``): a wide sleeve must clear the hips too."""
@@ -210,6 +275,14 @@ class CharacterAnimator:
         from .wear_engine import body_parts_path
         if not part.source_obj or not os.path.exists(body_parts_path(part.source_obj)):
             return None
+        stamp = tuple(os.path.getmtime(path) if os.path.exists(path) else None
+                      for path in (part.source_obj, body_parts_path(part.source_obj)))
+        cage_points, cage_bones = self._cage_binding
+        key = ("fitted", self._skeleton_key(), part.source_obj, stamp, _digest(rows[:, :3], cage_points, cage_bones))
+        return _cached(key, lambda: self._find_fitted_bones(part, rows))
+
+    def _find_fitted_bones(self, part, rows):
+        from .wear_engine import body_parts_path
         names = np.load(body_parts_path(part.source_obj))
         with open(part.source_obj, encoding="utf-8", errors="ignore") as fp:
             verts = np.array([[float(x) for x in line.split()[1:4]] for line in fp if line.startswith("v ")])
@@ -336,6 +409,13 @@ class CharacterAnimator:
                  for part, rows, indices, weights in self._bindings if part.source_obj is not None]
         if not cloth:
             return 1.0
+        rest = sorted((name, np.asarray(matrix, dtype=np.float64)) for name, matrix in self.rest.items())
+        key = ("swing", self._skeleton_key(), bool(self.arms_out),
+               _digest(*[a for item in cloth for a in item], *[v for item in rest for v in item]))
+        return _cached(key, lambda: self._find_arm_swing(cloth))
+
+    def _find_arm_swing(self, cloth):
+        """The search of ``_arm_swing``, over ``cloth``: (rows, indices, weights, faces) per garment."""
 
         def torn(amount):
             self.arm_swing = amount
@@ -510,6 +590,12 @@ class CharacterAnimator:
         return carried
 
     def _cloth_weights(self, points, faces, bones, nearest):
+        """(indices, weights) of a garment's vertices (see ``_garment_weights``), kept by content."""
+        key = ("cloth", self._skeleton_key(),
+               _digest(np.asarray(points), np.asarray(faces), np.asarray(bones), np.asarray(nearest)))
+        return _cached(key, lambda: self._garment_weights(points, faces, bones, nearest))
+
+    def _garment_weights(self, points, faces, bones, nearest):
         """(indices, weights) of a garment's vertices, smooth over the garment's own mesh.
 
         The cage part each cloth vertex was fitted on is a noisy label near the armpit and
@@ -645,6 +731,17 @@ class CharacterAnimator:
 
     def _key(self):
         return tuple(id(p.mesh) for p in self.model.parts)
+
+    def _skeleton_key(self) -> str:
+        """The content of the skeleton the bind works with (the body's bones where they rest)."""
+        skeleton = self.skeleton
+        return _digest(tuple(skeleton.names), np.asarray(skeleton.heads, dtype=np.float64),
+                       np.asarray(skeleton.tails, dtype=np.float64))
+
+    def warm_bind(self) -> None:
+        """Bind once off the main thread (the model just built, its meshes not on the GPU yet), so the
+        bind of the animator that shows it finds its heavy parts done."""
+        self._bind()
 
     def sync(self) -> None:
         """Pose again, now, a model whose meshes changed since the last update (the skin cut again

@@ -2129,6 +2129,11 @@ class CharacterModel:
             _DEFERRED_TEXTURES.images = {}
             try:
                 builder._build()
+                try:  # bind it here once: the bind on the main thread, when it is swapped in, finds the work done
+                    from .character_animation import CharacterAnimator
+                    CharacterAnimator(builder).warm_bind()
+                except Exception as exc:  # only a head start: the main thread binds it anyway
+                    print(f"[CharacterModel] Pré-cálculo da animação falhou: {exc}")
                 self._worker_result = (builder, _DEFERRED_TEXTURES.images, None)
             except Exception as exc:  # the old model stays on screen
                 self._worker_result = (None, {}, exc)
