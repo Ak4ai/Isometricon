@@ -228,8 +228,9 @@ python src/main.py --terrain --object=assets/objects/casa_exemplo.json
 ```
 
 Dentro do `--terrain`: `P` ou o botão **Colocar** do HUD ativa a colocação,
-`F3` troca o objeto, `R` gira, `Esc` cancela, clique esquerdo confirma no topo de
-um bloco, `V` ou o botão **Selecionar** seleciona, e `Delete` remove. Os objetos são salvos por seed em
+`F3` troca o objeto, `N` escolhe o nome, `R` gira, `Esc` cancela, clique esquerdo
+confirma no topo de um bloco, `V` ou o botão **Selecionar** seleciona, e
+`Delete` remove. Os objetos são salvos por seed em
 `saves/mundos/mundo_<seed>.json` e recarregados ao abrir a mesma seed. Ao entrar
 em uma casa, as paredes/teto acima dos pés do token ficam translúcidos para o
 personagem continuar visível.
@@ -239,7 +240,8 @@ Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/
 `[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
 selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso
-base, `F4` abre a biblioteca e `Ctrl+Z`/`Ctrl+Y` desfazem/refazem. O painel tem
+base, `F4` abre a biblioteca, `N` nomeia o objeto e `Ctrl+Z`/`Ctrl+Y`
+desfazem/refazem. O `F2` grava `saves/objetos/<nome>.json`. O painel tem
 botões clicáveis para as ferramentas e ações principais. Detalhes em
 [`docs/EDITOR.md`](docs/EDITOR.md) e
 [`docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md).

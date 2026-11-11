@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from src.rendering.hud_quad import HudQuad
 
 PANEL_WIDTH = 470
-PANEL_HEIGHT = 292
+PANEL_HEIGHT = 310
 TOOLS = (
     ("build", "Construir"), ("erase", "Apagar"), ("paint", "Pintar"),
     ("stamp", "Carimbar"), ("select", "Selecionar"),
@@ -85,21 +85,21 @@ class EditorHud:
 
         self._buttons = {}
         for index, (key_id, label) in enumerate(TOOLS):
-            box = (14 + index * 88, 162, 14 + index * 88 + 82, 190)
+            box = (14 + index * 88, 180, 14 + index * 88 + 82, 208)
             self._buttons[key_id] = box
             self._button(draw, box, label, key_id == active_tool, button_font)
         for index, (key_id, label) in enumerate(ACTIONS):
-            box = (14 + index * 55, 198, 14 + index * 55 + 51, 224)
+            box = (14 + index * 55, 216, 14 + index * 55 + 51, 242)
             self._buttons[key_id] = box
             self._button(draw, box, label, False, button_font)
 
-        draw.text((16, PANEL_HEIGHT - 50),
+        draw.text((16, PANEL_HEIGHT - 60),
                   "F2 exportar  F3 objeto  F5 salvar  F9 carregar  Ctrl+Z desfazer",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, PANEL_HEIGHT - 34),
+        draw.text((16, PANEL_HEIGHT - 40),
                   "Botão esq: aplicar   R: girar   Tab: ferramenta   C: cor   X: textura",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, PANEL_HEIGHT - 18),
+        draw.text((16, PANEL_HEIGHT - 20),
                   "H: cor hexadecimal  -/=: pincel  [/]: grade  F8: base  Delete: excluir",
                   font=small_font, fill=(150, 160, 175, 255))
         self._image = image

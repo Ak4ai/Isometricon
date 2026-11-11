@@ -23,6 +23,7 @@ from src.editor.editor_hud import PANEL_HEIGHT, PANEL_WIDTH, EditorHud
 from src.editor.map_project import MapProject, PlacedObject
 from src.editor.material_atlas import MaterialAtlas
 from src.editor.object_mesher import ObjectMeshData, build_mesh_data
+from src.editor.object_names import EXPORT_OBJECTS, object_library_paths, slugify
 from src.editor.platform import PlatformRenderer
 from src.editor.selection import SelectionBoxRenderer
 from src.editor.voxel_object import MAX_DIM, VoxelMaterial, VoxelObject
@@ -83,7 +84,8 @@ class MapEditor:
         self.create_gl = bool(create_gl)
         self.camera = camera
         self.save_path = os.path.abspath(map_path or os.path.join(PROJECT_ROOT, "saves", "mapa.json"))
-        self.export_path = os.path.join(PROJECT_ROOT, "saves", "objeto.json")
+        self.export_dir = EXPORT_OBJECTS
+        self.export_path = os.path.join(EXPORT_OBJECTS, "objeto.json")
         self.library_dir = os.path.abspath(library_dir or os.path.join(PROJECT_ROOT, "assets", "objects"))
         self.project = MapProject(VoxelObject((16, 16, 16), "mapa", "map"), name="mapa")
         self._sync_aliases()
@@ -100,6 +102,10 @@ class MapEditor:
         self.cursor_preview_mesh: TexturedMesh | None = None
         self.cursor_preview_data: ObjectMeshData = self.mesh_data
         self.tool = "build"
+        self.object_name = "objeto"
+        self.name_mode = False
+        self.name_buffer = ""
+        self.name_replace = False
         self.colour_index = 0
         self.custom_colour: tuple[int, int, int] | None = None
         self.texture_index = 0
@@ -575,6 +581,17 @@ class MapEditor:
         self._update_hud()
 
     def handle_char(self, codepoint: int) -> bool:
+        if self.name_mode:
+            character = chr(codepoint)
+            if character.isprintable() and character not in "/\\" and len(self.name_buffer) < 40:
+                if self.name_replace:
+                    self.name_buffer = character
+                    self.name_replace = False
+                else:
+                    self.name_buffer += character
+                self.status = f"Nome: {self.name_buffer}"
+                return True
+            return False
         if not self.hex_mode:
             return False
         character = chr(codepoint)
@@ -583,6 +600,18 @@ class MapEditor:
             self.status = f"Hexadecimal: #{self.hex_buffer}"
             return True
         return False
+
+    def _apply_name(self) -> bool:
+        name = self.name_buffer.strip() or "objeto"
+        self.object_name = name
+        if self.selected is not None:
+            self.selected.name = name
+        self.name_mode = False
+        self.name_replace = False
+        self.name_buffer = ""
+        self.status = f"Nome do objeto: {name}."
+        self._update_hud()
+        return True
 
     def _apply_hex(self) -> bool:
         if len(self.hex_buffer) != 6:
@@ -641,6 +670,23 @@ class MapEditor:
             if key in (glfw.KEY_DELETE, glfw.KEY_BACKSPACE):
                 self._library_delete()
                 return True
+        if self.name_mode:
+            if key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER):
+                self._apply_name()
+                return True
+            if key == glfw.KEY_ESCAPE:
+                self.name_mode = False
+                self.name_buffer = ""
+                self.status = "Nomeação cancelada."
+                return True
+            if key == glfw.KEY_BACKSPACE:
+                if self.name_replace:
+                    self.name_buffer = ""
+                    self.name_replace = False
+                elif self.name_buffer:
+                    self.name_buffer = self.name_buffer[:-1]
+                return True
+            return True
         if control and key == glfw.KEY_Z:
             self.undo()
             return True
@@ -649,6 +695,12 @@ class MapEditor:
             return True
         if control and key == glfw.KEY_D:
             return self._duplicate_selected()
+        if key == glfw.KEY_N and not control:
+            self.name_mode = True
+            self.name_replace = True
+            self.name_buffer = (self.selected.name if self.selected is not None else self.object_name)
+            self.status = "Digite o nome do objeto e Enter."
+            return True
         if key == glfw.KEY_H and not control:
             self.hex_mode = True
             self.hex_buffer = ""
@@ -748,9 +800,11 @@ class MapEditor:
                 obj.name = self.selected.name
             else:
                 obj = self.map.copy()
-                obj.name = "objeto"
+                obj.name = self.object_name
             obj.kind = "object"
-            path = obj.save(self.export_path)
+            name = obj.name.strip() or "objeto"
+            path = obj.save(os.path.join(self.export_dir, f"{slugify(name)}.json"))
+            self.export_path = path
             self.status = f"Objeto exportado: {os.path.basename(path)}."
             return path
         except Exception as exc:
@@ -796,6 +850,9 @@ class MapEditor:
 
     def _library_paths(self) -> list[str]:
         paths = sorted(str(path) for path in Path(self.library_dir).glob("*.json"))
+        for path in object_library_paths():
+            if path not in paths:
+                paths.append(path)
         if os.path.exists(self.export_path) and self.export_path not in paths:
             paths.append(self.export_path)
         return paths
@@ -920,17 +977,21 @@ class MapEditor:
             entries.append(("↑/↓ escolhe  Enter carimba  D duplica  Del exclui  F4 fecha", (245, 210, 120)))
             self.hud.set_state("BIBLIOTECA DE OBJETOS", entries, swatch=self.colour, active_tool=self.tool)
             return
+        display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
             (f"Ferramenta: {TOOL_LABELS[self.tool]} [Tab]  Pincel: {self.brush_size} [-/+]", (225, 230, 238)),
             (f"Cor: {self.colour_name} [C]  Textura: {self.texture} [X]", (200, 210, 220)),
             (f"Grid: {self.grid_size[0]}x{self.grid_size[1]}x{self.grid_size[2]} [F6/F7] passo {self.grid_spacing} [/] max 64", (200, 210, 220)),
             (f"Objetos: {len(self.objects)}  Selecionado: {selected}", (200, 210, 220)),
+            (f"Nome do objeto: {display_name} [N]", (200, 210, 220)),
             (f"Cursor: {cursor}  Voxels: {self.project.voxel_count}", (200, 210, 220)),
             (self.status, (245, 210, 120)),
         ]
-        if self.tool == "stamp" and self.stamp is not None and self.stamp_valid is False:
+        if self.name_mode:
+            lines[-1] = (f"Nome: {self.name_buffer}_  (Enter aplica, Esc cancela)", (245, 210, 120))
+        elif self.tool == "stamp" and self.stamp is not None and self.stamp_valid is False:
             lines[-1] = ("Carimbo fora da grade — escolha outra célula.", (245, 120, 100))
-        if self.hex_mode:
+        elif self.hex_mode:
             lines[-1] = (f"Hexadecimal: #{self.hex_buffer}_  (Enter aplica, Esc cancela)", (245, 210, 120))
         self.hud.set_state("EDITOR DE MAPA — ISOMETRICON", lines, swatch=self.colour, active_tool=self.tool)
 

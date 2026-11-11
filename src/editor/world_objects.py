@@ -22,6 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 from src.editor.map_project import PlacedObject
 from src.editor.material_atlas import MaterialAtlas
 from src.editor.object_mesher import ObjectMeshData, build_mesh_data
+from src.editor.object_names import object_library_paths
 from src.editor.selection import SelectionBoxRenderer
 from src.editor.voxel_object import VoxelObject
 from src.interaction import raycast_voxels, screen_to_world_ray
@@ -35,7 +36,7 @@ WORLD_FORMAT = "isometricon-world-objects"
 WORLD_VERSION = 1
 CLICK_COOLDOWN = 0.25
 PANEL_WIDTH = 440
-PANEL_HEIGHT = 202
+PANEL_HEIGHT = 220
 _FONT_CANDIDATES = (
     "consola.ttf", "consolas.ttf", "C:/Windows/Fonts/consola.ttf",
     "segoeui.ttf", "arial.ttf",
@@ -281,7 +282,7 @@ class WorldObjectHud:
             y += 18
         self._buttons = {}
         for index, (action, label) in enumerate(self.ACTIONS):
-            box = (12 + index * 70, 158, 12 + index * 70 + 66, 188)
+            box = (12 + index * 70, 176, 12 + index * 70 + 66, 206)
             self._buttons[action] = box
             active = action == active_mode
             draw.rounded_rectangle(box, radius=5,
@@ -361,6 +362,10 @@ class WorldObjectEditor:
         self.stamp: VoxelObject | None = None
         self.stamp_name = ""
         self.source = ""
+        self.placement_name = ""
+        self.name_mode = False
+        self.name_buffer = ""
+        self.name_replace = False
         self.rotation = 0
         self.mode = self.OFF
         self.cursor: tuple[int, int, int] | None = None
@@ -454,6 +459,9 @@ class WorldObjectEditor:
     # ------------------------------------------------------------------
     def _library_paths(self) -> list[str]:
         paths = sorted(str(path) for path in Path(self.library_dir).glob("*.json"))
+        for path in object_library_paths():
+            if path not in paths:
+                paths.append(path)
         if os.path.exists(self.export_path) and self.export_path not in paths:
             paths.append(self.export_path)
         return paths
@@ -561,7 +569,7 @@ class WorldObjectEditor:
         if not self.valid:
             self.status = "Posição inválida: aponte para o topo de um bloco."
             return False
-        name = Path(self.stamp_name).stem or self.stamp.name
+        name = self.placement_name.strip() or Path(self.stamp_name).stem or self.stamp.name
         self.store.add(self.stamp, self.cursor, self.rotation, name, self.source)
         self.selected_index = len(self.store.objects) - 1
         self.save()
@@ -600,6 +608,34 @@ class WorldObjectEditor:
     # ------------------------------------------------------------------
     # Entrada
     # ------------------------------------------------------------------
+    def _apply_name(self) -> bool:
+        name = self.name_buffer.strip() or "objeto"
+        self.name_mode = False
+        self.name_replace = False
+        self.name_buffer = ""
+        if self.mode == self.SELECT and self.selected is not None:
+            self.selected.name = name
+            self.save()
+        else:
+            self.placement_name = name
+        self.status = f"Nome do objeto: {name}."
+        self._update_hud()
+        return True
+
+    def handle_char(self, codepoint: int) -> bool:
+        if not self.name_mode:
+            return False
+        character = chr(codepoint)
+        if character.isprintable() and character not in "/\\" and len(self.name_buffer) < 40:
+            if self.name_replace:
+                self.name_buffer = character
+                self.name_replace = False
+            else:
+                self.name_buffer += character
+            self.status = f"Nome: {self.name_buffer}"
+            return True
+        return False
+
     def toggle_place(self) -> bool:
         if self.mode == self.PLACE:
             self.mode = self.OFF
@@ -643,6 +679,31 @@ class WorldObjectEditor:
     def handle_key(self, key: int, action: int, mods: int) -> bool:
         if action not in (glfw.PRESS, glfw.REPEAT):
             return False
+        if self.name_mode:
+            if key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER):
+                return self._apply_name()
+            if key == glfw.KEY_ESCAPE:
+                self.name_mode = False
+                self.name_replace = False
+                self.name_buffer = ""
+                self.status = "Nomeação cancelada."
+                return True
+            if key == glfw.KEY_BACKSPACE:
+                if self.name_replace:
+                    self.name_buffer = ""
+                    self.name_replace = False
+                elif self.name_buffer:
+                    self.name_buffer = self.name_buffer[:-1]
+                self.status = f"Nome: {self.name_buffer}"
+                return True
+            return True
+        if key == glfw.KEY_N:
+            self.name_mode = True
+            self.name_replace = True
+            self.name_buffer = (self.selected.name if self.mode == self.SELECT and self.selected is not None
+                                else (self.placement_name or Path(self.stamp_name).stem or ""))
+            self.status = "Digite o nome do objeto e Enter."
+            return True
         if key == glfw.KEY_P:
             return self.toggle_place()
         if key == glfw.KEY_V:
@@ -710,14 +771,19 @@ class WorldObjectEditor:
         selected = self.selected.name if self.selected is not None else "nenhum"
         cursor = "—" if self.cursor is None else f"({self.cursor[0]}, {self.cursor[1]}, {self.cursor[2]})"
         validity = "—" if self.mode == self.OFF else ("válida" if self.valid else "inválida")
+        display_name = (self.selected.name if self.mode == self.SELECT and self.selected is not None
+                        else (self.placement_name or (Path(self.stamp_name).stem if self.stamp_name else "nenhum")))
         lines = [
             (f"Modo: {self.mode_label}   Objeto: {self.stamp_name or 'nenhum'}", (220, 226, 235)),
             (f"Objetos: {len(self.store.objects)}   Selecionado: {selected}", (200, 210, 220)),
             (f"Cursor: {cursor}   Posição: {validity}", (200, 210, 220)),
+            (f"Nome: {display_name} [N]", (200, 210, 220)),
             (f"Seed: {self.seed}", (170, 180, 195)),
             (self.status, (245, 210, 120)),
-            ("P colocar  V selecionar  F3 objeto  R girar  Esc sair  Del remover", (150, 160, 175)),
+            ("P/V modo  F3 objeto  R girar  N nome  Esc sair  Del remover", (150, 160, 175)),
         ]
+        if self.name_mode:
+            lines[-1] = (f"Nome: {self.name_buffer}_  (Enter aplica, Esc cancela)", (245, 210, 120))
         self.hud.set_state("OBJETOS NO MUNDO — ISOMETRICON", lines, active_mode=self.mode)
 
     def _token_inside_object(self) -> bool:

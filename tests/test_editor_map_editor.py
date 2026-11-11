@@ -6,6 +6,7 @@ from src.editor.voxel_object import VoxelObject
 
 def _editor(tmp_path):
     editor = MapEditor(create_gl=False, map_path=str(tmp_path / "mapa.json"))
+    editor.export_dir = str(tmp_path)
     editor.export_path = str(tmp_path / "objeto.json")
     return editor
 
@@ -151,3 +152,17 @@ def test_library_panel_choose_duplicate_delete(tmp_path):
     assert editor.handle_key(glfw.KEY_ENTER, glfw.PRESS, 0)
     assert editor.stamp is not None
     assert not editor.library_open
+
+
+def test_name_object_and_export_with_slug(tmp_path):
+    editor = _editor(tmp_path)
+    assert editor.handle_key(glfw.KEY_N, glfw.PRESS, 0)
+    for character in "Casa do João":
+        assert editor.handle_char(ord(character))
+    assert editor.handle_key(glfw.KEY_ENTER, glfw.PRESS, 0)
+    assert editor.object_name == "Casa do João"
+    path = editor.export_object()
+    assert path is not None
+    assert path.endswith("casa_do_joao.json")
+    loaded = VoxelObject.load(path)
+    assert loaded.name == "Casa do João"

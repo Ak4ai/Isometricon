@@ -171,3 +171,19 @@ def test_token_inside_object_requests_cutaway(tmp_path):
     assert editor._token_inside_object()
     editor.token_position = (0.5, 7.5, 0.5)  # em cima do telhado
     assert not editor._token_inside_object()
+
+
+def test_world_placement_name(tmp_path):
+    editor = WorldObjectEditor(1, _terrain, _height, create_gl=False,
+                               store_path=str(tmp_path / "mundo_1.json"))
+    editor.stamp = _house()
+    editor.stamp_name = "casa_exemplo.json"
+    editor.mode = editor.PLACE
+    assert editor.handle_key(__import__("glfw").KEY_N, __import__("glfw").PRESS, 0)
+    for character in "Casa da Praia":
+        assert editor.handle_char(ord(character))
+    assert editor.handle_key(__import__("glfw").KEY_ENTER, __import__("glfw").PRESS, 0)
+    editor.cursor = (0, 1, 0)
+    editor.valid = True
+    assert editor.place_current()
+    assert editor.store.objects[0].name == "Casa da Praia"

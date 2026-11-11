@@ -772,6 +772,9 @@ def main() -> None:
     def handle_char(codepoint: int) -> None:
         if map_editor is not None and not chat_console.is_open and map_editor.handle_char(codepoint):
             return
+        if (world_objects is not None and not chat_console.is_open and not character_editor.is_open
+                and world_objects.handle_char(codepoint)):
+            return
         if not character_editor.handle_char(codepoint):
             chat_console.handle_char(codepoint)
 

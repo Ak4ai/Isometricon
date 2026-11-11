@@ -65,6 +65,7 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-059** | O sistema deve permitir selecionar e remover um objeto colocado no mundo procedural. | Desejável | Teste, demonstração |
 | **FR-060** | O sistema deve renderizar os objetos com o mesmo shader iluminado/texturizado do terreno, independentemente do streaming dos chunks. | Essencial | Inspeção, teste |
 | **FR-061** | Quando o token estiver dentro de um objeto ou de um mapa carregado, o sistema deve tornar translúcidas as partes acima dos pés do token, mantendo o personagem visível. | Desejável | Demonstração, teste |
+| **FR-062** | O sistema deve permitir nomear o objeto antes/depois da criação e usar esse nome no arquivo exportado, preservando acentos no nome interno e gerando um nome de arquivo seguro. | Desejável | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -136,6 +137,7 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-059 | FR-047 | seleção/remoção no `WorldObjectEditor` |
 | FR-060 | FR-010, FR-011, FR-007 | `WorldObjectRenderer` |
 | FR-061 | FR-011, FR-058 | `WorldObjectRenderer`, `MapWorld.render` |
+| FR-062 | FR-041, FR-043 | `MapEditor` (`N`), `WorldObjectEditor` (`N`), `object_names.py` |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `WorldObjectHud` |
 | DR-008 | FR-041 | JSON `isometricon-world-objects` |

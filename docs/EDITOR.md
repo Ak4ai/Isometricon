@@ -45,7 +45,8 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 | Ligar/desligar grade da plataforma | `G` |
 | Aumentar / diminuir o volume | `F7` / `F6` |
 | Criar piso base plano | `F8` |
-| Exportar objeto atual | `F2` |
+| Nomear objeto | `N`, digitar, `Enter` |
+| Exportar objeto atual | `F2` → `saves/objetos/<nome>.json` |
 | Carregar próximo objeto da biblioteca | `F3` |
 | Abrir/fechar a lista da biblioteca | `F4` |
 | Salvar mapa | `F5` |
@@ -69,9 +70,11 @@ apagar, aponte diretamente para o voxel.
 1. **Criar** o objeto/mapa no volume padrão (16×16×16). `F7`/`F6` mudam o volume.
 2. **Material**: escolha cor (`C`) e textura (`X`); a combinação é o material do
    voxel. Cada voxel guarda seu próprio índice de material.
-3. **Exportar** com `F2`: grava `saves/objeto.json`.
-4. **Carimbar** com `F3`: carrega o próximo JSON de `assets/objects/` (ou o
-   exportado), ativa a ferramenta de carimbo, e `R` gira em 90°.
+3. **Nomear** com `N`: o nome interno fica no JSON e vira o nome do arquivo
+   (sem acentos/espaços). **Exportar** com `F2`: grava
+   `saves/objetos/<nome>.json`.
+4. **Carimbar** com `F3`: carrega o próximo JSON de `assets/objects/` ou de
+   `saves/objetos/`, ativa a ferramenta de carimbo, e `R` gira em 90°.
 5. **Colocar** no mapa com clique esquerdo. Cada carimbo vira uma **construção
    independente** (não é achatado na base).
 6. **Selecionar** com `Tab` até `Selecionar`, clicar no objeto: setas movem,
@@ -122,8 +125,9 @@ python src/main.py --terrain --object=assets/objects/casa_exemplo.json
 ```
 
 No mundo procedural: `P` ou o botão **Colocar** do HUD ativa/desativa a
-colocação, `F3` troca o objeto, `R` gira, `Esc` cancela, clique esquerdo coloca
-no topo do bloco, `V` ou o botão **Selecionar** seleciona e `Delete` remove.
+colocação, `F3` troca o objeto, `N` escolhe o nome da próxima colocação,
+`R` gira, `Esc` cancela, clique esquerdo coloca no topo do bloco, `V` ou o botão
+**Selecionar** seleciona e `Delete` remove.
 Ao entrar em uma casa, o cutaway deixa telhado/paredes acima dos pés do token
 translúcidos, mantendo o personagem visível — o mesmo comportamento do modo
 subterrâneo. A persistência é por seed:
