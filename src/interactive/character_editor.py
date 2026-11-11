@@ -536,8 +536,11 @@ class CharacterEditor:
             return [Group("Aparências prontas", [Option(n.replace("_", " ").capitalize(), f"/skin preset {n}") for n in PRESETS]),
                     Group("Recomeçar", [Option("Padrão", "/skin reset"), Option("Tirar roupas", "/skin tirar tudo")])]
 
+        def custom_mode() -> bool:
+            return bool(getattr(self.handler, "custom_mode", False))
+
         def custom_model() -> List[Group]:
-            """Um modelo .glb no lugar do personagem montado (/skin modelo)."""
+            """A primeira aba: personagem montado ou um modelo .glb personalizado (/skin modelo)."""
             from src.clothing import custom_model_store as store
             from src.clothing.procedural import PROFILE_NAMES
             handler = self.handler
@@ -546,25 +549,41 @@ class CharacterEditor:
                 current = getattr(handler, "model_choice", None)
                 return None if current is None else current.get(key)
 
+            groups = [Group("Que corpo usar", [
+                Option("Personagem", "/skin modelo off", selected=lambda m: not custom_mode()),
+                Option("Personalizado", "/skin modelo modo", selected=lambda m: custom_mode())])]
+            if not custom_mode():
+                return groups
             names = store.list_models(getattr(handler, "custom_model_dir", None) or store.MODELS_DIR)
-            models = [Option("Personagem montado", "/skin modelo off",
-                             selected=lambda m: getattr(handler, "model_choice", None) is None)]
+            models = [Option("Importar modelo (.glb)...", "/skin modelo importar")]
             models += [Option(n, f"/skin modelo {n}", selected=lambda m, n=n: choice("arquivo") == n) for n in names]
-            groups = [Group("Corpo (novo .glb: /skin modelo <caminho>)", models)]
-            if getattr(handler, "model_choice", None) is not None:
-                groups.append(Group("Como anda", [Option("Automático", "/skin modelo perfil auto",
-                                                         selected=lambda m: choice("perfil") is None)] +
-                                    [Option(p.capitalize(), f"/skin modelo perfil {p}",
-                                            selected=lambda m, p=p: choice("perfil") == p) for p in PROFILE_NAMES + ("clipes",)]))
-                groups.append(Group("Altura (m)", [Option(f"{h:g}", f"/skin modelo altura {h}",
-                                                          selected=lambda m, h=h: abs((choice("altura") or 0) - h) < 1e-6)
-                                                   for h in (0.6, 1.0, 1.5, 1.8, 2.2, 3.0)]))
-                groups.append(Group("Gira o modelo (se ele olha para o lado errado)", [
-                    Option(f"{n * 90}°", f"/skin modelo giro {n}", selected=lambda m, n=n: choice("giro") == n)
-                    for n in range(4)]))
+            groups.append(Group("Modelo", models))
+            if getattr(handler, "model_choice", None) is None:
+                return groups
+            groups.append(Group("Como anda", [Option("Automático", "/skin modelo perfil auto",
+                                                     selected=lambda m: choice("perfil") is None)] +
+                                [Option(p.capitalize(), f"/skin modelo perfil {p}",
+                                        selected=lambda m, p=p: choice("perfil") == p) for p in PROFILE_NAMES + ("clipes",)]))
+            groups.append(Group("Altura (m)", [Option(f"{h:g}", f"/skin modelo altura {h}",
+                                                      selected=lambda m, h=h: abs((choice("altura") or 0) - h) < 1e-6)
+                                               for h in (0.6, 1.0, 1.5, 1.8, 2.2, 3.0)]))
+            groups.append(Group("Gira o modelo (se ele olha para o lado errado)", [
+                Option(f"{n * 90}°", f"/skin modelo giro {n}", selected=lambda m, n=n: choice("giro") == n)
+                for n in range(4)]))
+            groups.append(Group("Papéis dos ossos (pernas, braços...)", [
+                Option("Gravar para editar", "/skin modelo papeis salvar"),
+                Option("Voltar ao automático", "/skin modelo papeis off")]))
             return groups
 
-        return [
+        def unless_custom(groups: Callable[[], List[Group]]) -> Callable[[], List[Group]]:
+            """O corpo montado não se ajusta enquanto um modelo personalizado está em uso."""
+            def wrapped() -> List[Group]:
+                if custom_mode():
+                    return [Group("O modelo personalizado está em uso: volte a 'Personagem' na aba Modelo para vestir.", [])]
+                return groups()
+            return wrapped
+
+        sections = [
             Section("Corpo", body),
             Section("Ajustes", shape),
             Section("Olhos", eyes),
@@ -583,8 +602,8 @@ class CharacterEditor:
             Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
             Section(FINE_SECTION, fine),
             Section("Prontos", looks),
-            Section("Modelo", custom_model),
         ]
+        return [Section("Modelo", custom_model)] + [Section(s.title, unless_custom(s.groups)) for s in sections]
 
     @property
     def focus(self) -> str:

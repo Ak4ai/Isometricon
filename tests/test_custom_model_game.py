@@ -154,16 +154,34 @@ def test_set_custom_model_returns_the_previous_one(game, glb):
     assert game.player_token.custom_model is None
 
 
-def test_editor_has_a_model_section(game, glb):
+def test_the_first_tab_chooses_between_the_dressed_character_and_a_custom_model(game, glb):
     from src.interactive.character_editor import CharacterEditor
     editor = CharacterEditor(game, {"active": False, "yaw": 0.0, "pitch": 0.0}, create_gl=False)
-    section = next(s for s in editor.sections if s.title == "Modelo")
-    groups = section.groups() if callable(section.groups) else section.groups
-    assert [o.label for o in groups[0].options] == ["Personagem montado"]
+    assert editor.sections[0].title == "Modelo"
+    labels = lambda s: [o.label for g in s.groups() for o in g.options]
+    tab = editor.sections[0]
+    assert labels(tab) == ["Personagem", "Personalizado"]
+    run(game, "/skin modelo modo")                         # personalizado, ainda sem modelo: pede para importar
+    assert game.custom_mode and game.model_choice is None
+    assert labels(tab) == ["Personagem", "Personalizado", "Importar modelo (.glb)..."]
+    game.pick_file = lambda: glb
+    assert run(game, "/skin modelo importar")[0]
+    shown = labels(tab)
+    assert "Meu_Monstro" in shown and "Bipede" in shown and "Gravar para editar" in shown and "1.8" in shown
+    body = next(s for s in editor.sections if s.title == "Corpo")
+    assert labels(body) == []                              # o corpo montado fica de lado enquanto o modelo está em uso
+    assert "personalizado" in body.groups()[0].title
+    run(game, "/skin modelo off")
+    assert not game.custom_mode and labels(tab) == ["Personagem", "Personalizado"] and labels(body)
+
+
+def test_import_cancelled_and_personalizado_remembers_the_last_model(game, glb):
+    game.pick_file = lambda: None
+    assert "Nenhum" in run(game, "/skin modelo importar")[1]
     run(game, f"/skin modelo {glb}")
-    groups = section.groups() if callable(section.groups) else section.groups
-    labels = [o.label for o in groups[0].options]
-    assert "Meu_Monstro" in labels and len(groups) == 4
+    run(game, "/skin modelo off")
+    ok, text, _ = run(game, "/skin modelo modo")           # volta ao modelo que já estava guardado
+    assert ok and game.player_token.custom_model is not None and game.custom_mode
 
 
 # ---------------------------------------------------------------------------- fase 3: clipes e papéis

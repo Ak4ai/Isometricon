@@ -203,6 +203,8 @@ class SkinCommandHandler:
         self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
         self.save_model_choice = True  # uma execução automática (--frames) deixa a escolha gravada em paz
         self.model_gl = True  # False nos testes, sem contexto OpenGL
+        self.want_custom = False  # a aba Modelo está em "Personalizado", ainda que nenhum modelo tenha sido escolhido
+        self.pick_file: Callable[[], Optional[str]] = _pick_model_file  # a janela de escolher o .glb (trocada nos testes)
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
@@ -308,7 +310,7 @@ class SkinCommandHandler:
     # ------------------------------------------------------------------ /skin modelo
     def _model_usage(self) -> str:
         return ("Uso: /skin modelo <nome|caminho.glb> | lista | off | perfil <bipede|quadrupede|rastejante|flutuante|clipes|auto> "
-                "| altura <metros> | giro <0-3> | papeis <salvar|off|arquivo>")
+                "| altura <metros> | giro <0-3> | papeis <salvar|off|arquivo> | importar")
 
     def apply_custom_model(self, choice: Dict[str, Any]) -> Result:
         """Constrói o modelo da ``choice`` (ver custom_model_store) e o põe no token. Roda na thread principal."""
@@ -347,7 +349,13 @@ class SkinCommandHandler:
         warnings = f" ({len(model.warnings)} avisos de leitura)" if model.warnings else ""
         return True, f"[Modelo] '{model.name}' em uso: {model.triangles} triângulos, {model.height:g} m.{note}{warnings}", GREEN
 
+    @property
+    def custom_mode(self) -> bool:
+        """O corpo é um modelo personalizado (ou a tela de criação está nessa escolha, esperando o modelo)."""
+        return self.model_choice is not None or self.want_custom
+
     def clear_custom_model(self) -> None:
+        self.want_custom = False
         token = self.player_token
         if token is not None:
             previous = token.set_custom_model(None)
@@ -427,6 +435,24 @@ class SkinCommandHandler:
             if self.save_model_choice:
                 store.clear_choice(self.model_choice_path or store.CHOICE_PATH)
             return True, "[Modelo] Voltou ao personagem montado.", CYAN
+        if word in ("modo", "personalizado"):
+            self.want_custom = True
+            if self.model_choice is None:   # volta ao último modelo guardado, se há algum
+                names = sorted(store.list_models(directory),
+                               key=lambda n: os.path.getmtime(store.path_of(n, directory)), reverse=True)
+                if names:
+                    choice = dict(store.DEFAULT_CHOICE)
+                    choice.update(arquivo=names[0])
+                    result = self.apply_custom_model(choice)
+                    if result[0]:
+                        self._save_model_choice()
+                    return result
+            return True, "[Modelo] Personalizado: importe um .glb ou escolha um dos guardados.", CYAN
+        if word in ("importar", "import"):
+            path = self.pick_file()
+            if not path:
+                return True, "[Modelo] Nenhum arquivo escolhido.", GOLD
+            return self.custom_model([path])
         if word in ("papeis", "papéis", "roles"):
             return self._model_roles(args[1:])
         if word in ("perfil", "altura", "giro"):
@@ -464,6 +490,7 @@ class SkinCommandHandler:
         choice.update(arquivo=name)
         result = self.apply_custom_model(choice)
         if result[0]:
+            self.want_custom = True
             self._save_model_choice()
         return result
 
@@ -1582,10 +1609,27 @@ SCHEM_ALIASES = {
 }
 
 
+def _pick_model_file() -> Optional[str]:
+    """Abre a janela do sistema para escolher um .glb; ``None`` se cancelou ou se ela não existe."""
+    try:
+        import tkinter
+        from tkinter import filedialog
+    except ImportError:
+        return None
+    root = tkinter.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        path = filedialog.askopenfilename(title="Escolha o modelo (.glb)", filetypes=[("Modelo glTF", "*.glb")])
+    finally:
+        root.destroy()
+    return path or None
+
+
 def _model_options() -> List[str]:
     """Autocompletar do /skin modelo: os modelos guardados e os subcomandos."""
     from src.clothing import custom_model_store as store
-    return store.list_models() + ["lista", "off", "perfil", "altura", "giro", "papeis"]
+    return store.list_models() + ["lista", "off", "importar", "perfil", "altura", "giro", "papeis"]
 
 
 def find_command(commands: List[Command], name: str) -> Optional[Command]:
