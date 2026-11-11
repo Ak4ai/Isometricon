@@ -12,10 +12,6 @@ from typing import Optional
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
-# Ao ar livre, o corredor da câmera só corta o bloco cujo topo passa da linha de visão do peito (altura da linha
-# acima do peito, em blocos; 0 = o próprio peito); "off" corta tudo o que está no cilindro, como antes. ISOMETRICON_SIGHT_HEAD troca o valor.
-SIGHT_HEAD_LINE = float({"off": "-99"}.get(os.environ.get("ISOMETRICON_SIGHT_HEAD", "0.0"), os.environ.get("ISOMETRICON_SIGHT_HEAD", "0.0")))
-
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr and hasattr(sys.stderr, "reconfigure"):
@@ -469,7 +465,7 @@ def main() -> None:
         context_cursor = ContextCursor()
         from src.interactive.context_cursor import DepthProbe
         depth_probe = DepthProbe()  # o que aparece sob o mouse: o cursor não para nos blocos que o corte escondeu
-        story_state = {"level": 0.0, "cut_y": 1_000_000}  # corte do andar de cima (suavizado)
+        story_state = {"level": 0.0, "cut_y": 1_000_000, "sight": 1.0}  # corte do andar de cima e corredor (suavizados)
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
         grid_renderer = GridOverlayRenderer()
@@ -1411,14 +1407,23 @@ def main() -> None:
                 story_state["ground_y"] = floor_y
             feet[1] = float(story_state["ground_y"])
             sight_target = model @ np.array([feet[0], feet[1] + 1.1, feet[2], 1.0])
-            shader.set_float("u_SightActive", 1.0)  # num cômodo, só corta o que tapa o cômodo (ver o shader)
+            # Ao ar livre o corredor só liga quando algo bloqueia a vista do peito ou da cabeça (se só as pernas ficam
+            # atrás de um degrau, não abre buraco); ligado, corta o cilindro inteiro, dos pés para cima, e os pés
+            # aparecem. Num cômodo fica sempre ligado (só corta o que tapa o cômodo: ver o shader).
+            from src.world.sight import sight_needed
+            sight_world_dir = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (
+                np.array(camera._camera_position(), dtype=np.float64) - sight_target[:3])
+            window_cells = room_tracker.mask.window if room_tracker.mask is not None else None
+            outdoors_target = 1.0 if (
+                room_renderer.level > 0.001 or window_cells is None
+                or sight_needed(window_cells.solid, room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
+            story_state["sight"] += (outdoors_target - story_state["sight"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
+            if abs(outdoors_target - story_state["sight"]) < 0.01:
+                story_state["sight"] = outdoors_target
+            shader.set_float("u_SightActive", story_state["sight"])
             shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
             shader.set_float("u_SightFeetY", float(np.floor(feet[1] + 0.05)))
             shader.set_float("u_SightRadius", 2.6)
-            # ao ar livre, o corredor só corta o bloco que tapa a cabeça (0 volta ao corte de antes); o ajuste fica em
-            # ISOMETRICON_SIGHT_HEAD para comparar
-            shader.set_float("u_SightHeadLine", SIGHT_HEAD_LINE)
-            shader.set_float("u_SightHeadSlack", 0.25)
             # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
             from src.world.room_reveal import story_ceiling, story_center
             ceiling = story_ceiling(room_tracker.mask, feet)

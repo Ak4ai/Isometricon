@@ -344,8 +344,6 @@ uniform float u_SightActive;     // 0 desligado; 0..1 intensidade
 uniform vec3 u_SightTarget;      // peito do personagem, no espaço desenhado
 uniform float u_SightFeetY;      // célula y dos pés, no mundo
 uniform float u_SightRadius;     // raio do cilindro, em blocos
-uniform float u_SightHeadLine;   // ao ar livre: altura da linha de visão acima do alvo (peito); -99 corta tudo no cilindro
-uniform float u_SightHeadSlack;  // folga, em blocos, abaixo da linha da cabeça
 uniform mat4 u_SightModel;       // mundo -> espaço desenhado
 uniform mat4 u_SightInvModel;    // espaço desenhado -> mundo
 // Corte do andar (o StoryBand do Isocraft): debaixo de um teto, do teto para cima some tudo num círculo em volta do
@@ -452,15 +450,6 @@ bool sightCarved()
     float t = dot(center - u_SightTarget, dir);        // 0 no personagem, len na câmera
     if (t < 0.9)
         return false;                                   // atrás do personagem, ou colado nele: fica
-    // Ao ar livre só corta o bloco que tapa a cabeça: se o topo dele fica abaixo da linha de visão da cabeça naquele
-    // ponto, a cabeça (e o corpo, acima dele) aparece por cima, e abrir o buraco só mostraria o vazio por dentro.
-    // Dentro de cômodos nada muda (o corredor já corta só o que cobre o cômodo).
-    if (u_RoomActive <= 0.001 && u_SightHeadLine > -50.0)
-    {
-        float headLineY = u_SightTarget.y + u_SightHeadLine + dir.y * t;
-        if (center.y + 0.5 < headLineY - u_SightHeadSlack)
-            return false;
-    }
     float off = length(center - u_SightTarget - dir * t);
     // o cilindro abre um pouco perto do personagem (o corpo inteiro aparece) e fica constante depois
     float radius = u_SightRadius * mix(0.75, 1.0, clamp((t - 0.9) / 3.0, 0.0, 1.0));
