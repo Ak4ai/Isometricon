@@ -1020,6 +1020,7 @@ class CharacterEditor:
             return
         _, feedback, _ = self.handler.execute(option.command)
         self.message = feedback.split("\n")[0] if feedback else ""
+        self._groups = None   # o comando pode ter mudado o que a aba oferece (um modelo importado, por exemplo)
         self.dirty = True
 
     def handle_cursor(self, x: float, y: float) -> None:

@@ -284,3 +284,18 @@ def test_repair_option_is_remembered_and_toggles(game, glb):
     run(game, "/skin modelo reparar")
     assert game.model_choice["reparar"] is True
     assert not run(SkinCommandHandler(), "/skin modelo reparar")[0]
+
+
+def test_the_model_tab_shows_the_new_options_right_after_a_click_with_no_tab_change(game, glb):
+    from src.interactive.character_editor import CharacterEditor
+    editor = CharacterEditor(game, {"active": False, "yaw": 0.0, "pitch": 0.0}, create_gl=False)
+    editor.open()
+    editor.layout(1280, 720)
+    labels = lambda: [o.label for g in editor.groups() for o in g.options]
+    editor.choose(next(o for g in editor.groups() for o in g.options if o.label == "Personalizado"))
+    assert "Importar modelo (.glb)..." in labels()                  # sem trocar de aba
+    game.pick_file = lambda: glb
+    editor.choose(next(o for g in editor.groups() for o in g.options if o.label.startswith("Importar")))
+    assert "Meu_Monstro" in labels() and "Altura (m)" not in labels() and "Bipede" in labels()
+    editor.choose(next(o for g in editor.groups() for o in g.options if o.label == "Personagem"))
+    assert labels() == ["Personagem", "Personalizado"]
