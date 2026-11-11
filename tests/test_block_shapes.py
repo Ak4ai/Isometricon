@@ -296,3 +296,16 @@ def test_cap_for_a_carpet_on_a_hidden_cube():
 
 def test_no_cap_for_a_fence_post_beside_a_hidden_cube():
     assert caps_count({(0, 0, 0): "minecraft:oak_fence", (1, 0, 0): "minecraft:stone"}, [(1, 0, 0)]) == 0
+
+
+def test_entity_blocks_get_a_shape_and_a_block_texture():
+    """Baú, faixa e cama são entidades no jogo (sem textura de bloco): ganham forma e uma textura que lembra."""
+    chest = boxes("minecraft:chest[facing=north,type=single,waterlogged=false]")[0]
+    assert (chest.lo, chest.hi) == ((1, 0, 1), (15, 14, 15)) and chest.texture == "oak_planks"
+    # o baú duplo se estende para o lado do parceiro: facing=south, a metade left vai até x = 16
+    assert boxes("minecraft:chest[facing=south,type=left]")[0].hi[0] == 16.0
+    assert boxes("minecraft:chest[facing=south,type=right]")[0].lo[0] == 0.0
+    assert boxes("minecraft:ender_chest[facing=south]")[0].texture == "obsidian"
+    banner = boxes("minecraft:white_wall_banner[facing=west]")[0]
+    assert banner.texture == "white_wool" and banner.hi[0] - banner.lo[0] <= 1.0  # uma placa fina, no lado leste
+    assert not collides("minecraft:white_wall_banner[facing=west]") and collides("minecraft:chest[facing=north]")

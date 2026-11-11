@@ -511,6 +511,31 @@ def _sea_pickle(props) -> List[Box]:
 # Blocos inteiros com "lantern" no nome (não são a lanterna pequena)
 _FULL_LANTERNS = ("sea_lantern", "jack_o_lantern")
 
+# Baús, faixas e camas são desenhados pelo jogo como entidades (a textura fica em ``textures/entity``, que o Bare
+# Bones de blocos não traz): ganham a forma e uma textura de bloco que lembra, a madeira do baú e a lã da cor.
+TURNS_FROM_SOUTH = {"south": 0, "west": 1, "north": 2, "east": 3}
+
+
+def _chest(base: str, props) -> List[Box]:
+    texture = "obsidian" if base == "ender_chest" else "oak_planks"
+    kind = props.get("type", "single")
+    lo_x, hi_x = 1.0, 15.0  # com facing=south: o baú duplo se estende para o lado do parceiro
+    if kind == "left":
+        hi_x = 16.0
+    elif kind == "right":
+        lo_x = 0.0
+    box = _box(lo_x, 0, 1, hi_x, 14, 15, texture)
+    return [_turn(box, TURNS_FROM_SOUTH.get(props.get("facing", "south"), 0))]
+
+
+def _banner(base: str, props) -> List[Box]:
+    texture = base.split("_")[0] + "_wool"
+    if base.endswith("_wall_banner"):
+        plate = _box(1, 0, 15, 15, 16, 16, texture)  # com facing=north fica no lado sul
+        return [_turn(plate, TURNS_FROM_NORTH.get(props.get("facing", "north"), 0))]
+    return [_box(1, 0, 7.5, 15, 16, 8.5, texture)]
+
+
 # (teste do nome, construtor). A ordem importa: os mais específicos primeiro.
 _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
     (is_cross_plant, _plant),
@@ -527,6 +552,8 @@ _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
     (lambda b: b.endswith("_fence_gate"), _fence_gate),
     (lambda b: b.endswith("_fence"), _fence),
     (lambda b: b.endswith("_wall_sign"), _wall_sign),
+    (lambda b: b in ("chest", "trapped_chest", "ender_chest"), _chest),
+    (lambda b: b.endswith("_banner"), _banner),
     (lambda b: b.endswith("_wall") and not b.endswith(("_wall_sign", "_wall_torch")), _wall),
     (lambda b: b == "iron_bars" or b.endswith("_pane"), _bars),
     (lambda b: b.endswith("_button"), _button),
@@ -550,7 +577,7 @@ _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
 _PREFER_MODELS = ("_wall_sign",)
 
 # Os construtores que recebem também o nome do bloco
-_NEEDS_NAME = (_plant, _rail, _vine, _campfire, _flat_cover, _carpet, _pressure_plate)
+_NEEDS_NAME = (_plant, _rail, _vine, _campfire, _flat_cover, _carpet, _pressure_plate, _chest, _banner)
 
 
 @lru_cache(maxsize=4096)
@@ -589,7 +616,9 @@ def _shape_from_models(block_name: str) -> Optional[Tuple]:
     boxes = models.boxes(block_name)
     if not boxes:
         return None
-    return tuple(Box(lo, hi) for lo, hi in boxes)
+    base, _ = parse_block(block_name)
+    texture = base[: -len("_bed")] + "_wool" if base.endswith("_bed") else None  # a cama é textura de entidade
+    return tuple(Box(lo, hi, texture) for lo, hi in boxes)
 
 
 def is_full_cube(block_name: str) -> bool:
@@ -598,7 +627,7 @@ def is_full_cube(block_name: str) -> bool:
 
 # Blocos que enfeitam o espaço sem barrar quem passa (nem selar um cômodo)
 _DECORATION_SUFFIXES = ("_button", "_pressure_plate", "_wall_sign", "_sign", "_carpet", "torch", "lantern", "_candle",
-                        "_rail")
+                        "_rail", "_banner")
 _DECORATION_NAMES = ("chain", "ladder", "candle", "flower_pot", "rail", "vine", "glow_lichen", "lily_pad",
                      "pink_petals", "wildflowers", "leaf_litter", "tripwire", "end_rod", "sea_pickle")
 
