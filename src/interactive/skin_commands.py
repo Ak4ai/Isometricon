@@ -346,6 +346,10 @@ class SkinCommandHandler:
                 note = f" Sem animação: {exc}"
         else:
             note = " Sem esqueleto: fica parado, na pose do arquivo."
+        if model.animator is not None and choice.get("reparar", True):
+            cut = model.repair_stretch()
+            if cut:
+                note += f" Cortei {cut} triângulos que esticavam ao andar."
         previous = token.set_custom_model(model)
         if previous is not None:
             previous.delete()
@@ -492,6 +496,18 @@ class SkinCommandHandler:
             if not path:
                 return True, "[Modelo] Nenhum arquivo escolhido.", GOLD
             return self.custom_model([path])
+        if word in ("reparar", "repair"):
+            if self.model_choice is None:
+                return False, "[Modelo] Escolha um modelo antes: /skin modelo <nome>.", RED
+            value = args[1].lower() if len(args) > 1 else ""
+            current = bool(self.model_choice.get("reparar", True))
+            wanted = True if value in ("on", "ligar") else False if value in ("off", "desligar") else not current
+            choice = dict(self.model_choice)
+            choice["reparar"] = wanted
+            result = self.apply_custom_model(choice)
+            if result[0]:
+                self._save_model_choice()
+            return result
         if word in ("ossos", "bones"):
             value = args[1].lower() if len(args) > 1 else ""
             self.bone_view = True if value in ("on", "ligar") else False if value in ("off", "desligar") else not self.bone_view
@@ -1679,7 +1695,7 @@ def _pick_model_file() -> Optional[str]:
 def _model_options() -> List[str]:
     """Autocompletar do /skin modelo: os modelos guardados e os subcomandos."""
     from src.clothing import custom_model_store as store
-    return store.list_models() + ["lista", "off", "importar", "perfil", "altura", "giro", "papeis", "ossos", "osso"]
+    return store.list_models() + ["lista", "off", "importar", "perfil", "altura", "giro", "papeis", "ossos", "osso", "reparar"]
 
 
 def find_command(commands: List[Command], name: str) -> Optional[Command]:

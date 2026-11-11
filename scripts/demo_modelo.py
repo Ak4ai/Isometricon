@@ -48,6 +48,7 @@ def main() -> None:
     parser.add_argument("--perfil", choices=PROFILE_NAMES + ("clipes",), default=None, help="perfil de movimento (padrão: o sugerido)")
     parser.add_argument("--papeis", default=None, help="arquivo JSON com os papéis dos ossos (padrão: detecção automática)")
     parser.add_argument("--salvar-papeis", default=None, help="grava no arquivo os papéis usados, para editar")
+    parser.add_argument("--sem-reparo", action="store_true", help="nao corta os triangulos que esticam ao andar")
     parser.add_argument("--tempo", type=float, default=None, help="com --capture, avança a animação até este segundo")
     args = parser.parse_args()
 
@@ -86,6 +87,10 @@ def main() -> None:
         if args.salvar_papeis and roles is not None:
             roles.save(model.rig, args.salvar_papeis)
             print("Papéis gravados em", args.salvar_papeis)
+    if animate and model.animator is not None and not args.sem_reparo:
+        cut = model.repair_stretch()
+        if cut:
+            print(f"Cortei {cut} triangulos que esticavam ao andar.")
     speed = args.andar if args.andar is not None else 0.0
 
     shader = Shader(os.path.join(PROJECT_ROOT, "assets", "shaders", "world_textured.vert"),

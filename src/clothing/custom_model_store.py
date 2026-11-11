@@ -18,7 +18,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 MODELS_DIR = os.path.join(PROJECT_ROOT, "saves", "modelos")
 CHOICE_PATH = os.path.join(PROJECT_ROOT, "saves", "modelo.json")
 VERSION = 1
-DEFAULT_CHOICE: Dict[str, Any] = {"arquivo": None, "altura": 1.8, "giro": 0, "perfil": None}
+DEFAULT_CHOICE: Dict[str, Any] = {"arquivo": None, "altura": 1.8, "giro": 0, "perfil": None, "reparar": True}
 MIN_HEIGHT, MAX_HEIGHT = 0.3, 6.0
 
 
@@ -89,6 +89,7 @@ def load_choice(path: str = CHOICE_PATH) -> Optional[Dict[str, Any]]:
         return None
     perfil = data.get("perfil")
     choice["perfil"] = perfil if isinstance(perfil, str) else None
+    choice["reparar"] = bool(data.get("reparar", True))
     return choice
 
 

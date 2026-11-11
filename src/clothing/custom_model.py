@@ -88,6 +88,30 @@ class CustomModel:
         self.roles = roles
         return roles
 
+    def repair_stretch(self, enabled: bool = True) -> int:
+        """Tira da malha os triângulos que esticam ao andar (partes coladas pelo gerador do modelo).
+
+        Devolve quantos triângulos saíram. Precisa de animação ligada; com ``enabled=False`` devolve a malha inteira.
+        """
+        from .mesh_repair import sample_poses, stretched_triangles, without
+        if not hasattr(self, "_whole"):
+            self._whole = [s.indices for s in self.model.submeshes]
+        for s, whole in zip(self.model.submeshes, self._whole):
+            s.indices = whole
+        removed = 0
+        if enabled and self.animator is not None:
+            poses = sample_poses(self.animator)
+            for s in self.model.submeshes:
+                if s.joints is None:
+                    continue
+                bad = stretched_triangles(s, poses, self.height)
+                if bad.any():
+                    removed += int(bad.sum())
+                    s.indices = without(s, bad)
+        if self.parts:
+            self.upload()   # a malha na GPU acompanha os índices
+        return removed
+
     @property
     def clips_available(self) -> bool:
         return bool(self.model.clips) and self.model.rest_pose is not None

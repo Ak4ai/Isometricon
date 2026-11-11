@@ -572,6 +572,8 @@ class CharacterEditor:
             groups.append(Group("Altura (m)", [Option(f"{h:g}", f"/skin modelo altura {h}",
                                                       selected=lambda m, h=h: abs((choice("altura") or 0) - h) < 1e-6)
                                                for h in (0.6, 1.0, 1.5, 1.8, 2.2, 3.0)]))
+            groups.append(Group("Malha", [Option("Cortar o que estica ao andar", "/skin modelo reparar", check=True,
+                                                 selected=lambda m: bool(choice("reparar") is not False))]))
             groups.append(Group("Gira o modelo (se ele olha para o lado errado)", [
                 Option(f"{n * 90}°", f"/skin modelo giro {n}", selected=lambda m, n=n: choice("giro") == n)
                 for n in range(4)]))

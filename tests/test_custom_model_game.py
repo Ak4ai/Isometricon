@@ -56,7 +56,7 @@ def test_choice_round_trip_and_bad_files(tmp_path):
     path = str(tmp_path / "modelo.json")
     assert store.load_choice(path) is None
     store.save_choice({"arquivo": "x", "altura": 99, "giro": 5, "perfil": "quadrupede"}, path)
-    assert store.load_choice(path) == {"arquivo": "x", "altura": store.MAX_HEIGHT, "giro": 1, "perfil": "quadrupede"}
+    assert store.load_choice(path) == {"arquivo": "x", "altura": store.MAX_HEIGHT, "giro": 1, "perfil": "quadrupede", "reparar": True}
     (tmp_path / "ruim.json").write_text("{nao é json", encoding="utf-8")
     assert store.load_choice(str(tmp_path / "ruim.json")) is None
     store.clear_choice(path)
@@ -273,3 +273,14 @@ def test_the_editor_draws_and_picks_bones_on_the_model_tab(game, glb):
     editor.active = 1                                     # outra aba: os ossos não pegam o clique
     run(game, "/skin modelo ossos on")
     assert editor.bone_under(700, 400) is None
+
+
+def test_repair_option_is_remembered_and_toggles(game, glb):
+    run(game, f"/skin modelo {glb}")
+    assert game.model_choice["reparar"] is True
+    ok, _, _ = run(game, "/skin modelo reparar off")
+    assert ok and game.model_choice["reparar"] is False
+    assert store.load_choice(game.model_choice_path)["reparar"] is False
+    run(game, "/skin modelo reparar")
+    assert game.model_choice["reparar"] is True
+    assert not run(SkinCommandHandler(), "/skin modelo reparar")[0]
