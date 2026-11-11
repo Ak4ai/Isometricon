@@ -98,6 +98,24 @@ def find_door(structures: Iterable, position, reach: float = REACH) -> Optional[
     return best
 
 
+def door_at(structures: Iterable, cell) -> Optional[DoorRef]:
+    """A porta que ocupa a célula ``cell`` (mundo), pela metade de baixo, ou ``None`` (o bloco sob o cursor)."""
+    x, y, z = (int(v) for v in cell)
+    for placed in structures:
+        schematic = placed.schematic
+        ox, oy, oz = placed.origin
+        lx, ly, lz = x - ox, y - oy, z - oz
+        if not (0 <= lx < schematic.width and 0 <= ly < schematic.height and 0 <= lz < schematic.length):
+            continue
+        name = schematic.grid[ly, lz, lx]
+        if not is_door(name):
+            continue
+        if parse_block(name)[1].get("half", "lower") == "upper" and ly > 0 and is_door(schematic.grid[ly - 1, lz, lx]):
+            ly -= 1
+        return DoorRef(placed, (lx, ly, lz))
+    return None
+
+
 def toggle_door(door: DoorRef) -> bool:
     """Abre a porta fechada ou fecha a aberta (as duas metades). Devolve o estado novo (True = aberta)."""
     opened = not door.is_open

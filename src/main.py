@@ -460,6 +460,11 @@ def main() -> None:
         # A tecla E ao lado do personagem quando há uma porta ao alcance
         from src.interactive.interact_prompt import InteractPrompt
         interact_prompt = InteractPrompt()
+        # O cursor de contexto (no lugar da seta do sistema) e a mira do personagem, como no Isocraft
+        from src.interactive.context_cursor import ContextCursor
+        context_cursor = ContextCursor()
+        from src.interactive.context_cursor import DepthProbe
+        depth_probe = DepthProbe()  # o que aparece sob o mouse: o cursor não para nos blocos que o corte escondeu
         story_state = {"level": 0.0, "cut_y": 1_000_000}  # corte do andar de cima (suavizado)
         highlight_renderer = BlockHighlightRenderer()
         coordinate_overlay = CoordinateOverlayRenderer()
@@ -505,6 +510,7 @@ def main() -> None:
         schematic_tool = None
         room_tracker = room_renderer = shadow_renderer = None
         interact_prompt = None
+        context_cursor = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -517,6 +523,7 @@ def main() -> None:
         schematic_tool = None
         room_tracker = room_renderer = None
         interact_prompt = None
+        context_cursor = None
         player_token = None
         voxel_provider = None
         highlight_renderer = None
@@ -649,7 +656,34 @@ def main() -> None:
         "click_pending": False,
         "hover_hit": None,
         "clicked_hit": None,
+        "aim": None,          # para onde o cursor aponta (mundo): o personagem vira para lá
+        "door": None,         # a porta sob o cursor
+        "door_in_reach": False,
     }
+    # a seta do sistema escondida (o cursor de contexto no lugar) e quando o mouse se mexeu por último: parado
+    # por alguns segundos, o cursor some e o jogo segue só no teclado (o personagem vira para onde anda)
+    cursor_state = {"hidden": False, "last_used": -1e9}
+
+    def mouse_used() -> None:
+        cursor_state["last_used"] = window.time
+
+    def cursor_idle() -> float:
+        """Segundos desde que o mouse (ou o touchpad) foi usado."""
+        return window.time - cursor_state["last_used"]
+
+    def cursor_in_use() -> bool:
+        from src.interactive.context_cursor import CURSOR_IDLE
+        return cursor_idle() < CURSOR_IDLE
+
+    def hovered_door_in_reach():
+        """A porta sob o cursor, se está ao alcance da mão do personagem (ou None)."""
+        return picking_state["door"] if picking_state["door_in_reach"] else None
+
+    def toggle_door_for_player(door) -> None:
+        px, py, pz = (float(v) for v in player_token.position)
+        body = {(int(np.floor(px + dx)), int(np.floor(py + dy)), int(np.floor(pz + dz)))
+                for dx in (-0.3, 0.3) for dz in (-0.3, 0.3) for dy in (0.05, 1.0, 1.75)}
+        schematic_tool.toggle_door(door, player_cells=body)
 
     # ------------------------------------------------------------------
     # 5. Callbacks de entrada
@@ -748,14 +782,12 @@ def main() -> None:
             return True
         key = menus.preferences.canonical(key)
         if terrain_demo and key == glfw.KEY_E and not character_editor.is_open:
-            door = schematic_tool.door_near(player_token.position)
+            # a porta sob o cursor, se ao alcance; senão a mais perto do personagem
+            door = hovered_door_in_reach() or schematic_tool.door_near(player_token.position)
             if door is not None:
                 # perto de uma porta o E abre/fecha (e não gira a câmera)
                 if action == glfw.PRESS:
-                    px, py, pz = (float(v) for v in player_token.position)
-                    body = {(int(np.floor(px + dx)), int(np.floor(py + dy)), int(np.floor(pz + dz)))
-                            for dx in (-0.3, 0.3) for dz in (-0.3, 0.3) for dy in (0.05, 1.0, 1.75)}
-                    schematic_tool.toggle_door(door, player_cells=body)
+                    toggle_door_for_player(door)
                 return True
         keys_pressed[key] = (action != glfw.RELEASE)
 
@@ -818,6 +850,7 @@ def main() -> None:
     ) -> None:
         """Controla o início e fim do pan com o botão central."""
         del mods
+        mouse_used()
         if menus.active:
             if button == glfw.MOUSE_BUTTON_LEFT:
                 menus.mouse_button(*window.get_cursor_pos_framebuffer(), action)
@@ -848,6 +881,10 @@ def main() -> None:
                 pan_state["last_y"] = y
             elif terrain_demo and not character_editor.is_open and button == glfw.MOUSE_BUTTON_LEFT:
                 picking_state["click_pending"] = True
+            elif terrain_demo and not character_editor.is_open and button == glfw.MOUSE_BUTTON_RIGHT:
+                door = hovered_door_in_reach()  # o botão direito usa o que está sob o cursor (a porta)
+                if door is not None:
+                    toggle_door_for_player(door)
 
         elif action == glfw.RELEASE:
             if button in (glfw.MOUSE_BUTTON_MIDDLE, glfw.MOUSE_BUTTON_LEFT):
@@ -858,6 +895,7 @@ def main() -> None:
         y: float,
     ) -> None:
         """Move o ponto focal enquanto o botão central estiver pressionado."""
+        mouse_used()
         if menus.active:
             menus.hover(*window.get_cursor_pos_framebuffer())
             return
@@ -886,6 +924,7 @@ def main() -> None:
     # Registrar callbacks na janela.
     def handle_scroll(x_offset: float, y_offset: float) -> None:
         """A roda do mouse rola a grade da tela de criação; fora dela, é o zoom da câmera."""
+        mouse_used()
         if menus.active:
             return
         if character_editor.handle_scroll(window.get_cursor_pos()[0], y_offset):
@@ -1096,6 +1135,7 @@ def main() -> None:
         elif terrain_demo:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
             movement_forward, movement_right = camera.get_movement_directions()
+            facing_before = player_token.yaw
             player_token.update(
                 dt,
                 keys_pressed,
@@ -1103,6 +1143,10 @@ def main() -> None:
                 movement_right,
                 voxel_provider,
             )
+            if picking_state["aim"] is not None:
+                # com o cursor na cena, o personagem olha para ele (andando ou parado), não para onde anda
+                from src.interactive.context_cursor import face_toward
+                player_token.yaw = face_toward(facing_before, player_token.position, picking_state["aim"], dt)
 
             # 2. Atualização contínua de streaming de chunks ao redor do jogador (Mapa Infinito)
             world_manager.update(player_token.position[0], player_token.position[2])
@@ -1210,7 +1254,10 @@ def main() -> None:
 
         # O hover fica suspenso durante o drag para não disputar o gesto de pan.
         # Como os eventos são processados acima, ele retorna no frame do release.
-        if terrain_demo and not editing and not pan_state["active"]:
+        picking_state.update(aim=None, door=None, door_in_reach=False)
+        if not cursor_in_use():
+            picking_state["hover_hit"] = None
+        if terrain_demo and not editing and not pan_state["active"] and cursor_in_use():
             mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
             mouse_ray = screen_to_world_ray(
                 mouse_x,
@@ -1221,10 +1268,14 @@ def main() -> None:
                 projection,
                 model,
             )
-            picking_state["hover_hit"] = raycast_voxels(
-                mouse_ray,
-                voxel_provider,
-            )
+            from src.interactive.context_cursor import raycast_visible
+            picking_state["hover_hit"] = raycast_visible(mouse_ray, voxel_provider, depth_probe.surface, raycast_voxels)
+            from src.interactive.context_cursor import aim_point, door_in_reach
+            from src.world.doors import door_at
+            hit = picking_state["hover_hit"]
+            hovered_door = None if hit is None else door_at(schematic_tool.layer.structures, hit.block)
+            picking_state.update(aim=aim_point(hit, mouse_ray, float(player_token.position[1])), door=hovered_door,
+                                 door_in_reach=door_in_reach(hovered_door, player_token.position))
             if picking_state["click_pending"]:
                 picking_state["clicked_hit"] = picking_state["hover_hit"]
                 clicked_hit = picking_state["clicked_hit"]
@@ -1397,6 +1448,13 @@ def main() -> None:
             shader.set_int("u_WaterPass", 0)
             schematic_tool.draw(shader, model, window.time)
             room_renderer.draw_structure_caps(shader, model)
+            if cursor_state["hidden"] and not pan_state["active"] and cursor_in_use():
+                # a profundidade do que está sob o mouse (terreno e construções, já cortados): o hover do próximo
+                # quadro começa nela
+                depth_probe.read(window.get_cursor_pos_framebuffer(), window.width, window.height,
+                                 projection @ view @ model)
+            else:
+                depth_probe.clear()
             mark("structures_draw")
 
             # 2c. A água, translúcida, sobre tudo o que já está na tela (sem escrever profundidade)
@@ -1434,8 +1492,10 @@ def main() -> None:
                 base_color=(1.0, 1.0, 1.0),
             )
 
-            # 5. Destaca em amarelo o primeiro voxel sob o cursor.
+            # 5. Destaca o primeiro voxel sob o cursor na cor do cursor (cinza: um bloco; dourado: uma porta)
+            from src.interactive.context_cursor import classify
             hover_hit = picking_state["hover_hit"]
+            cursor_mode = classify(hover_hit, picking_state["door"])
             if hover_hit is not None:
                 hx, hy, hz = hover_hit.block
                 highlight_renderer.render(
@@ -1446,7 +1506,7 @@ def main() -> None:
                     hy,
                     hz,
                     time=window.time,
-                    base_color=(1.0, 0.72, 0.18),
+                    base_color=tuple(c / 255.0 for c in cursor_mode.color[:3]),
                 )
 
             # 6. Renderiza a miniatura 3D do personagem SOBRE o bloco e o highlight
@@ -1471,10 +1531,12 @@ def main() -> None:
                 shader.use()
 
             # 7. A tecla E ao lado do personagem, se há uma porta ao alcance
+            # (com uma porta ao alcance sob o cursor, o rótulo vai em cima dela, no cursor de contexto)
             near_door = None if character_editor.is_open else schematic_tool.door_near(player_token.position)
-            interact_prompt.update(dt, near_door is not None,
+            interact_prompt.update(dt, near_door is not None and hovered_door_in_reach() is None,
                                    "" if near_door is None else ("Fechar" if near_door.is_open else "Abrir"))
             interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
+            context_cursor.update(dt, cursor_mode)
             shader.use()
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
@@ -1502,6 +1564,25 @@ def main() -> None:
         mark("hud_prompt")
         character_editor.render(window.width, window.height)
         chat_console.render(window.width, window.height)
+        if context_cursor is not None:
+            # No terreno, jogando, a seta do sistema dá lugar ao cursor de contexto
+            playing = not (menus.active or chat_console.is_open or character_editor.is_open or pan_state["active"])
+            if playing != cursor_state["hidden"]:
+                glfw.set_input_mode(window._window, glfw.CURSOR, glfw.CURSOR_HIDDEN if playing else glfw.CURSOR_NORMAL)
+                cursor_state["hidden"] = playing
+            if playing:
+                from src.interactive.context_cursor import PROMPT_HEIGHT
+                from src.interactive.interact_prompt import project
+                door = hovered_door_in_reach()
+                prompt_at, verb = None, ""
+                if door is not None:
+                    wx, wy, wz = door.world
+                    prompt_at = project((wx + 0.5, wy + 1.0 + PROMPT_HEIGHT, wz + 0.5), projection @ view @ model,
+                                        window.width, window.height)
+                    verb = "Fechar" if door.is_open else "Abrir"
+                from src.interactive.context_cursor import cursor_opacity
+                context_cursor.render(window.get_cursor_pos_framebuffer(), window.width, window.height,
+                                      prompt_at, "E", verb, opacity=cursor_opacity(cursor_idle()))
 
         # --------------------------------------------------------------
         # Captura de screenshot e limite de frames (para testes e automação)
@@ -1563,6 +1644,8 @@ def main() -> None:
         if coordinate_overlay is not None:
             coordinate_overlay.delete()
         interact_prompt.delete()
+        context_cursor.delete()
+        depth_probe.delete()
         grid_renderer.delete()
     elif char_demo:
         if character_model is not None:
