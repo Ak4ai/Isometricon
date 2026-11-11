@@ -203,6 +203,10 @@ class SkinCommandHandler:
         self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
         self.save_model_choice = True  # uma execução automática (--frames) deixa a escolha gravada em paz
         self.model_gl = True  # False nos testes, sem contexto OpenGL
+        self.bone_view = True  # a tela de criação desenha os ossos do modelo, na cor do papel de cada um
+        self.bone_brush = "perna"  # o papel que um clique num osso dá a ele
+        self._labels = None
+        self._labels_model = None
         self.want_custom = False  # a aba Modelo está em "Personalizado", ainda que nenhum modelo tenha sido escolhido
         self.pick_file: Callable[[], Optional[str]] = _pick_model_file  # a janela de escolher o .glb (trocada nos testes)
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
@@ -371,6 +375,41 @@ class SkinCommandHandler:
             except OSError as exc:
                 print(f"[Modelo] Não consegui gravar a escolha: {exc}")
 
+    def bone_labels(self) -> Optional[List[str]]:
+        """Um rótulo de papel por osso do modelo em uso (None sem modelo ou sem esqueleto)."""
+        from src.clothing.procedural import auto_roles
+        from src.clothing.role_editor import labels_from_roles
+        model = self.player_token.custom_model if self.player_token is not None else None
+        if model is None or model.rig is None:
+            return None
+        if self._labels_model is not model:
+            self._labels = labels_from_roles(model.rig, model.roles or auto_roles(model.rig, model.height))
+            self._labels_model = model
+        return self._labels
+
+    def set_bone_role(self, bone: int, label: str) -> Result:
+        """Dá o papel ``label`` ao osso ``bone``, refaz os papéis, grava o arquivo e já anima com eles."""
+        from src.clothing import custom_model_store as store
+        from src.clothing.procedural import auto_roles
+        from src.clothing.role_editor import LABELS, TITLES, roles_from_labels
+        labels = self.bone_labels()
+        model = self.player_token.custom_model if labels is not None else None
+        if model is None or label not in LABELS or not 0 <= bone < len(labels):
+            return False, "[Modelo] Sem esqueleto para ajustar.", RED
+        labels[bone] = label
+        roles = roles_from_labels(model.rig, labels, model.roles or auto_roles(model.rig, model.height))
+        directory = self.custom_model_dir or store.MODELS_DIR
+        try:
+            os.makedirs(directory, exist_ok=True)
+            roles.save(model.rig, store.roles_path(self.model_choice["arquivo"], directory))
+        except OSError as exc:
+            return False, f"[Modelo] Não consegui gravar os papéis: {exc}", RED
+        if self.model_choice.get("perfil") == "clipes":   # papéis ajustados só valem para a animação procedural
+            self.model_choice["perfil"] = None
+            self._save_model_choice()
+        model.animate(roles, self.model_choice.get("perfil"))
+        return True, f"[Modelo] {model.rig.names[bone]}: {TITLES[label].lower()}.", CYAN
+
     def _model_roles(self, args: List[str]) -> Result:
         """/skin modelo papeis <salvar|off|arquivo.json>: os papéis dos ossos (pernas, braços...) do modelo em uso."""
         import shutil
@@ -453,6 +492,17 @@ class SkinCommandHandler:
             if not path:
                 return True, "[Modelo] Nenhum arquivo escolhido.", GOLD
             return self.custom_model([path])
+        if word in ("ossos", "bones"):
+            value = args[1].lower() if len(args) > 1 else ""
+            self.bone_view = True if value in ("on", "ligar") else False if value in ("off", "desligar") else not self.bone_view
+            return True, f"[Modelo] Ossos {'à mostra' if self.bone_view else 'escondidos'}.", CYAN
+        if word in ("osso", "bone"):
+            from src.clothing.role_editor import LABELS
+            value = args[1].lower().replace("ç", "c").replace("ã", "a") if len(args) > 1 else ""
+            if value not in LABELS:
+                return False, f"[Modelo] Use /skin modelo osso <{'|'.join(LABELS)}>.", RED
+            self.bone_brush = value
+            return True, f"[Modelo] Clique nos ossos para marcá-los como {value}.", CYAN
         if word in ("papeis", "papéis", "roles"):
             return self._model_roles(args[1:])
         if word in ("perfil", "altura", "giro"):
@@ -1629,7 +1679,7 @@ def _pick_model_file() -> Optional[str]:
 def _model_options() -> List[str]:
     """Autocompletar do /skin modelo: os modelos guardados e os subcomandos."""
     from src.clothing import custom_model_store as store
-    return store.list_models() + ["lista", "off", "importar", "perfil", "altura", "giro", "papeis"]
+    return store.list_models() + ["lista", "off", "importar", "perfil", "altura", "giro", "papeis", "ossos", "osso"]
 
 
 def find_command(commands: List[Command], name: str) -> Optional[Command]:

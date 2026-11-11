@@ -1350,6 +1350,18 @@ def main() -> None:
             gl.glViewport(0, 0, fb_w, fb_h)
             # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
             character_editor.picker = character_editor.overlay = None
+            character_editor.bones_view = None
+            shown_custom = player_token.custom_model if terrain_demo else None
+            if shown_custom is not None and shown_custom.rig is not None:
+                # os ossos do modelo personalizado na tela, para a aba Modelo mostrar e deixar clicar
+                from src.clothing import role_editor
+                bone_points = role_editor.posed_positions(
+                    shown_custom.rig, shown_custom.animator.matrices if shown_custom.animator is not None else None)
+                bone_xy, bone_depth = role_editor.screen_positions(
+                    bone_points, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])), view, projection,
+                    (scene_x, 0, scene_right, window.height))
+                character_editor.bones_view = {"xy": bone_xy, "depth": bone_depth, "parents": shown_custom.rig.parents,
+                                               "names": shown_custom.rig.names}
             skin_cage = getattr(character_model, "hsr_cage", None)
             if character_editor.brushing and skin_cage is not None:
                 from src.interactive import skin_brush

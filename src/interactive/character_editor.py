@@ -267,6 +267,10 @@ class CharacterEditor:
         self._pictured: set = set()
         self.is_open = False
         self.active = 0
+        self.bones_view: Optional[dict] = None  # os ossos do modelo na tela (a cena põe a cada quadro): xy, depth, parents
+        self.bone_hover: Optional[int] = None
+        self._bones_quad = None
+        self._bones_key: Any = None
         self.walk_preview = False  # W liga e desliga o andar do personagem na tela
         self.scroll = 0
         self.hover: Optional[Tuple[str, Any]] = None
@@ -571,9 +575,13 @@ class CharacterEditor:
             groups.append(Group("Gira o modelo (se ele olha para o lado errado)", [
                 Option(f"{n * 90}°", f"/skin modelo giro {n}", selected=lambda m, n=n: choice("giro") == n)
                 for n in range(4)]))
-            groups.append(Group("Papéis dos ossos (pernas, braços...)", [
-                Option("Gravar para editar", "/skin modelo papeis salvar"),
-                Option("Voltar ao automático", "/skin modelo papeis off")]))
+            if handler.bone_labels() is not None:
+                from src.clothing.role_editor import LABELS, TITLES
+                groups.append(Group("Ossos na tela: clique num osso para dar o papel", [
+                    Option("Mostrar os ossos", "/skin modelo ossos", check=True, selected=lambda m: handler.bone_view)] +
+                    [Option(TITLES[l], f"/skin modelo osso {l}", selected=lambda m, l=l: handler.bone_brush == l)
+                     for l in LABELS] +
+                    [Option("Voltar ao automático", "/skin modelo papeis off")]))
             return groups
 
         def unless_custom(groups: Callable[[], List[Group]]) -> Callable[[], List[Group]]:
@@ -677,6 +685,7 @@ class CharacterEditor:
         if self.is_open and self.autosave and self.model is not None and hasattr(self.handler, "save"):
             self.handler.save()
         self.is_open = False
+        self.bones_view = self.bone_hover = None
         self.walk_preview = False
         self._dragging = False
         self.hover = None
@@ -849,6 +858,11 @@ class CharacterEditor:
                 self.typing, self.dirty = False, True
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
+            bone = self.bone_under(x, y)
+            if bone is not None:   # um osso do modelo: o clique dá a ele o papel escolhido
+                _, self.message, _ = self.handler.set_bone_role(bone, self.handler.bone_brush)
+                self.dirty = True
+                return True
             if self.brushing:
                 # Ctrl paints the opposite, as in Blender: showing with the brush that hides, and back.
                 opposite = {"esconder": "mostrar", "mostrar": "esconder"}
@@ -1010,6 +1024,7 @@ class CharacterEditor:
         if not self.is_open:
             return
         self.cursor = (x, y)
+        self.bone_hover = self.bone_under(x, y)
         if self._stroke is not None:
             self._paint(x, y)
             return
@@ -1263,6 +1278,7 @@ class CharacterEditor:
             self.dirty = False
         self._quad.draw(0, 0, width, height)
         self._draw_brush(width, height)
+        self._draw_bones(width, height)
         self._draw_history(width, height)
 
     def history_image(self, width: int, height: int) -> Any:
@@ -1317,6 +1333,38 @@ class CharacterEditor:
             self._history_key = key
         self._history_quad.draw(rects["desfazer"][0], rects["desfazer"][1], width, height)
 
+    @property
+    def bones_active(self) -> bool:
+        """Os ossos do modelo estão na tela e um clique neles muda o papel: aba Modelo, modelo com esqueleto."""
+        return (self.is_open and self.bones_view is not None and getattr(self.handler, "bone_view", False)
+                and self.sections[self.active].title == "Modelo")
+
+    def _draw_bones(self, width: int, height: int) -> None:
+        """Os ossos do modelo sobre ele, na cor do papel de cada um (aba Modelo)."""
+        if not self.bones_active:
+            return
+        from src.clothing import role_editor
+        from src.rendering.hud_quad import HudQuad
+        labels = self.handler.bone_labels()
+        if labels is None:
+            return
+        view = self.bones_view
+        x0, y0, x1, y1 = self.scene_rect(width, height)
+        key = (x0, y0, x1, y1, np.round(view["xy"]).astype(np.int32).tobytes(), tuple(labels), self.bone_hover)
+        if self._bones_quad is None:
+            self._bones_quad = HudQuad()
+        if key != self._bones_key:
+            self._bones_quad.set_image(role_editor.overlay_image(
+                (x1 - x0, y1 - y0), (x0, y0), view["xy"], view["parents"], labels, self.bone_hover, view["names"]))
+            self._bones_key = key
+        self._bones_quad.draw(x0, y0, width, height)
+
+    def bone_under(self, x: float, y: float) -> Optional[int]:
+        if not self.bones_active or self.over_panel(x):
+            return None
+        from src.clothing import role_editor
+        return role_editor.bone_at(self.bones_view["xy"], self.bones_view["depth"], x, y)
+
     def _draw_brush(self, width: int, height: int) -> None:
         """Os pontos da cage sobre o personagem (o que cada um é) e o cursor do pincel."""
         if not self.brushing or self.overlay is None:
@@ -1341,7 +1389,7 @@ class CharacterEditor:
             self._ring_quad.draw(self.cursor[0] - half, self.cursor[1] - half, width, height)
 
     def delete(self) -> None:
-        for name in ("_overlay_quad", "_ring_quad", "_history_quad", "_legend_quad"):
+        for name in ("_overlay_quad", "_ring_quad", "_history_quad", "_legend_quad", "_bones_quad"):
             if getattr(self, name) is not None:
                 getattr(self, name).delete()
                 setattr(self, name, None)

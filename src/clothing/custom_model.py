@@ -42,6 +42,7 @@ class CustomModel:
         self.parts: List[_Part] = []
         self._white: int = 0
         self.animator = None   # ProceduralAnimator ou ClipAnimator
+        self.roles: Optional[Roles] = None   # os papéis dos ossos usados pela animação procedural (None: clipes)
         if create_gl:
             self.upload()
 
@@ -80,9 +81,11 @@ class CustomModel:
         if wants_clips and self.clips_available:
             walk, idle = pick_clips([c.name for c in self.model.clips])
             self.animator = ClipAnimator(self.rig, self.model.rest_pose, self.model.clips, walk, idle)
+            self.roles = None
             return None
         roles = roles or auto_roles(self.rig, self.height)
         self.animator = ProceduralAnimator(self.rig, roles, self.height, None if profile == "clipes" else profile)
+        self.roles = roles
         return roles
 
     @property

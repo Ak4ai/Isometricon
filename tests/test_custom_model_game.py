@@ -167,7 +167,7 @@ def test_the_first_tab_chooses_between_the_dressed_character_and_a_custom_model(
     game.pick_file = lambda: glb
     assert run(game, "/skin modelo importar")[0]
     shown = labels(tab)
-    assert "Meu_Monstro" in shown and "Bipede" in shown and "Gravar para editar" in shown and "1.8" in shown
+    assert "Meu_Monstro" in shown and "Bipede" in shown and "Mostrar os ossos" in shown and "1.8" in shown
     body = next(s for s in editor.sections if s.title == "Corpo")
     assert labels(body) == []                              # o corpo montado fica de lado enquanto o modelo está em uso
     assert "personalizado" in body.groups()[0].title
@@ -222,3 +222,54 @@ def test_a_broken_roles_file_is_refused(game, glb, tmp_path):
     ok, _, _ = run(game, f"/skin modelo papeis {bad}")
     assert not ok
     assert not os.path.exists(store.roles_path("Meu_Monstro", game.custom_model_dir))
+
+
+# ---------------------------------------------------------------------------- papéis visuais (clicar no osso)
+def test_a_bone_click_changes_its_role_saves_the_file_and_animates_with_it(game, glb):
+    run(game, f"/skin modelo {glb}")
+    labels = game.bone_labels()
+    assert labels is not None and len(labels) == len(game.player_token.custom_model.rig)
+    assert run(game, "/skin modelo osso cauda")[0] and game.bone_brush == "cauda"
+    assert not run(game, "/skin modelo osso asa")[0]
+    ok, text, _ = game.set_bone_role(2, "cauda")
+    assert ok and "cauda" in text and game.bone_labels()[2] == "cauda"
+    assert game.player_token.custom_model.roles is not None and 2 in game.player_token.custom_model.roles.tail
+    assert os.path.isfile(store.roles_path("Meu_Monstro", game.custom_model_dir))
+    assert not game.set_bone_role(99, "perna")[0] and not game.set_bone_role(1, "asa")[0]
+
+
+def test_editing_roles_leaves_the_clips_for_the_procedural_animation(game, tmp_path):
+    from tests.test_clips import animated_glb
+    path = tmp_path / "Animado.glb"
+    path.write_bytes(animated_glb())
+    run(game, f"/skin modelo {path}")
+    assert game.player_token.custom_model.animator.profile == "clipes"
+    game.set_bone_role(1, "coluna")
+    assert game.player_token.custom_model.animator.profile != "clipes"
+    assert store.load_choice(game.model_choice_path)["perfil"] is None
+
+
+def test_the_editor_draws_and_picks_bones_on_the_model_tab(game, glb):
+    import numpy as np
+    from src.interactive.character_editor import CharacterEditor
+    run(game, f"/skin modelo {glb}")
+    editor = CharacterEditor(game, {"active": False, "yaw": 0.0, "pitch": 0.0}, create_gl=False)
+    editor.open()
+    editor.layout(1280, 720)
+    editor.active = 0
+    rig = game.player_token.custom_model.rig
+    editor.bones_view = {"xy": np.array([[700.0, 200.0 + 100 * i] for i in range(len(rig))]),
+                         "depth": np.zeros(len(rig)), "parents": rig.parents, "names": rig.names}
+    labels = [o.label for g in editor.groups() for o in g.options]
+    assert "Mostrar os ossos" in labels and "Cauda" in labels and "Voltar ao automático" in labels
+    assert editor.bone_under(702, 302) == 1 and editor.bone_under(900, 300) is None
+    editor.handle_cursor(700, 200)
+    assert editor.bone_hover == 0
+    run(game, "/skin modelo osso coluna")
+    assert editor.handle_mouse_button(700, 400, 0, 1) is True
+    assert game.bone_labels()[2] == "coluna"
+    run(game, "/skin modelo ossos off")
+    assert editor.bone_under(700, 400) is None
+    editor.active = 1                                     # outra aba: os ossos não pegam o clique
+    run(game, "/skin modelo ossos on")
+    assert editor.bone_under(700, 400) is None
