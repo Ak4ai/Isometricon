@@ -349,12 +349,15 @@ def story_center(mask: RoomMask, feet_y: int, cut_y: int):
     return float(cells[:, 0].mean()) + ox + 0.5, float(cells[:, 2].mean()) + oz + 0.5
 
 
-def _same_window(old: Optional["WindowCells"], new: "WindowCells", origin, old_origin) -> bool:
-    """As duas janelas têm o mesmo de tudo o que a máscara e as tampas usam."""
+def _same_window(old: Optional["WindowCells"], new: "WindowCells", origin, old_origin,
+                 blocks: bool = True) -> bool:
+    """As duas janelas têm o mesmo de tudo o que a máscara e as tampas usam (com ``blocks=False``, sem olhar o tipo
+    de cada bloco: a água que corre muda só isso, e a máscara não depende dela)."""
     if old is None or tuple(origin) != tuple(old_origin):
         return False
     return (np.array_equal(old.solid, new.solid) and np.array_equal(old.roof, new.roof)
-            and np.array_equal(old.occupied, new.occupied) and np.array_equal(old.blocks, new.blocks)
+            and np.array_equal(old.occupied, new.occupied)
+            and (not blocks or np.array_equal(old.blocks, new.blocks))
             and np.array_equal(old.owner, new.owner)
             and (old.doors is None) == (new.doors is None)
             and (old.doors is None or np.array_equal(old.doors, new.doors)))
@@ -375,6 +378,21 @@ class RoomRevealTracker:
     def active(self) -> bool:
         return self.mask is not None and self.mask.active
 
+    REUSE_MARGIN = (8, 3, 8)  # quanto o jogador pode se afastar do ponto de origem da janela sem refazê-la (sobram 16)
+
+    def _same_room(self, cell) -> bool:
+        """A célula nova está no espaço do cômodo ativo, e perto do meio da janela atual."""
+        mask = self.mask
+        if not mask.active:
+            return False
+        local = [c - o for c, o in zip(cell, mask.origin)]
+        if not all(0 <= v < size for v, size in zip(local, WINDOW)):
+            return False
+        home = (WINDOW[0] // 2, BELOW_PLAYER, WINDOW[2] // 2)  # onde fica o pé de quem abriu a janela
+        if any(abs(v - h) > m for v, h, m in zip(local, home, self.REUSE_MARGIN)):
+            return False
+        return bool(mask.data[local[0], local[1], local[2]] == INTERIOR)
+
     def reset(self) -> None:
         self.mask, self._key = None, None
         self.version += 1
@@ -387,13 +405,26 @@ class RoomRevealTracker:
         self._age += dt
         if self.mask is not None and key == self._key:
             return self.mask
+        if self.mask is not None and key[2] == self._key[2] and self._same_room(cell):
+            # andou dentro do mesmo cômodo: o espaço é o mesmo (a inundação de qualquer célula dele dá o mesmo
+            # resultado). Se o mundo mudou (a água correndo longe), confere a janela atual antes de aproveitar.
+            if key[1] == self._key[1]:
+                self._key = key
+                return self.mask
+            fresh = extract_window_cells(self.mask.origin, chunks, structures)
+            if _same_window(self.mask.window, fresh, self.mask.origin, self.mask.origin, blocks=False):
+                # só a água mudou: o cômodo e as tampas ficam; a janela nova vai para as sombras (a água tinge o sol)
+                self.mask.window = fresh
+                self._key = key
+                return self.mask
         if self.mask is not None and self._age < self.MIN_INTERVAL and key[1:] == self._key[1:]:
             return self.mask  # só andou: espera o intervalo mínimo
         origin = window_origin(position)
         window = extract_window_cells(origin, chunks, structures)
         if self.mask is not None and key[0] == self._key[0] and _same_window(self.mask.window, window, origin,
-                                                                              self.mask.origin):
-            # o mundo mudou longe (a água corre, um chunk chegou): o cômodo é o mesmo, nada a refazer
+                                                                              self.mask.origin, blocks=False):
+            # o mundo mudou longe ou só a água correu: o cômodo é o mesmo; a janela nova vai para as sombras
+            self.mask.window = window
             self._key, self._age = key, 0.0
             return self.mask
         self.mask = compute_room(window.solid, window.roof, origin, position, was_active=self.active,

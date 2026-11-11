@@ -39,10 +39,11 @@ class StoryCut:
 
 @dataclass
 class SightCut:
-    """O corredor da câmera, no mundo: peito do personagem, olho da câmera, raio e célula y dos pés."""
+    """O corredor da câmera, no mundo: peito do personagem, olho da câmera, raio e célula y dos pés. Sem ``target``
+    (``None``) vale o corredor em qualquer ponto do cômodo: as tampas não dependem de onde o jogador está."""
 
-    target: Tuple[float, float, float]
-    camera: Tuple[float, float, float]
+    target: Optional[Tuple[float, float, float]]
+    camera: Optional[Tuple[float, float, float]]
     radius: float
     feet_y: int
 
@@ -124,7 +125,10 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
     if sight is not None:
         # a fileira dos pés (a borda da parede, os móveis no chão) fica; o piso de cima, na frente, sai
         candidates = occupied & (ys > sight.feet_y) & covers
-        cut |= _in_corridor(occupied.shape, room.origin, sight, candidates)
+        if sight.target is None:
+            cut |= candidates      # sem alvo: tudo o que o corredor pode cortar em algum ponto do cômodo
+        else:
+            cut |= _in_corridor(occupied.shape, room.origin, sight, candidates)
     return cut & ~window.doors if window.doors is not None else cut
 
 

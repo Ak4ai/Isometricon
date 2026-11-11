@@ -179,9 +179,12 @@ def test_tracker_recomputes_only_when_something_changed():
     changed = world(lambda b: (box(b, 10, 10), b.__setitem__((12, 3, 12), BlockType.STONE)))
     tracker.update(0.016, (13.5, 3.0, 13.5), changed, 3)     # o mundo mudou dentro da janela
     assert tracker.version == version + 1
-    tracker.update(1.0, (14.5, 3.0, 13.5), changed, 3)       # o jogador andou e já passou o intervalo
-    assert tracker.version == version + 2
+    tracker.update(1.0, (14.5, 3.0, 13.5), changed, 3)       # andou dentro do mesmo cômodo: o espaço é o mesmo
+    assert tracker.version == version + 1
     assert tracker.active
+    tracker.update(1.0, (20.5, 3.0, 13.5), changed, 3)       # saiu do cômodo: recalcula
+    assert tracker.version == version + 2
+    assert not tracker.active
 
 
 def test_tracker_waits_a_little_between_walking_recomputes():
