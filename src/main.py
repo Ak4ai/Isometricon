@@ -12,6 +12,10 @@ from typing import Optional
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 
+# Ao ar livre, o corredor da câmera só corta o bloco cujo topo passa da linha de visão do peito (altura da linha
+# acima do peito, em blocos; 0 = o próprio peito); "off" corta tudo o que está no cilindro, como antes. ISOMETRICON_SIGHT_HEAD troca o valor.
+SIGHT_HEAD_LINE = float({"off": "-99"}.get(os.environ.get("ISOMETRICON_SIGHT_HEAD", "0.0"), os.environ.get("ISOMETRICON_SIGHT_HEAD", "0.0")))
+
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if sys.stderr and hasattr(sys.stderr, "reconfigure"):
@@ -1411,6 +1415,10 @@ def main() -> None:
             shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
             shader.set_float("u_SightFeetY", float(np.floor(feet[1] + 0.05)))
             shader.set_float("u_SightRadius", 2.6)
+            # ao ar livre, o corredor só corta o bloco que tapa a cabeça (0 volta ao corte de antes); o ajuste fica em
+            # ISOMETRICON_SIGHT_HEAD para comparar
+            shader.set_float("u_SightHeadLine", SIGHT_HEAD_LINE)
+            shader.set_float("u_SightHeadSlack", 0.25)
             # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
             from src.world.room_reveal import story_ceiling, story_center
             ceiling = story_ceiling(room_tracker.mask, feet)
