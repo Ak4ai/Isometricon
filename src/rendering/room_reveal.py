@@ -24,12 +24,15 @@ FADE_HALF_LIFE = 0.12  # segundos para o efeito andar metade do caminho
 class RoomRevealRenderer:
     """Mantém a textura da máscara na GPU e os uniforms do efeito."""
 
-    def __init__(self, exterior: float = 0.12, terrain_atlas=None, structure_atlas=None) -> None:
+    def __init__(self, exterior: float = 0.12, terrain_atlas=None, structure_atlas=None,
+                 background: bool = False) -> None:
         """
         Args:
             exterior: brilho do que fica fora do espaço (0 preto, 1 normal).
             terrain_atlas: TextureAtlas do terreno, de onde saem as UVs das tampas.
             structure_atlas: função que devolve o SchematicAtlas (ou None), para as tampas das construções.
+            background: monta as tampas numa thread à parte; a máscara nova só vai à GPU junto com as tampas
+                dela (sem quadros de parede aberta sem tampa).
         """
         self.terrain_atlas = terrain_atlas
         self.structure_atlas = structure_atlas or (lambda: None)
@@ -47,6 +50,12 @@ class RoomRevealRenderer:
         self.center = None  # (x, z) do centro do cômodo (u_StoryCenter), referência de frente e fundo
         self.caps_ms = 0.0  # quanto levou a última reconstrução das tampas
         self._uploaded = None
+        self._wanted: Optional[RoomMask] = None  # a máscara mais nova do rastreador (vai para _shown com as tampas)
+        self._executor = None
+        self._job = None
+        if background:
+            from concurrent.futures import ThreadPoolExecutor
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="room-caps")
 
     # ------------------------------------------------------------------ estado
     def update(self, dt: float, tracker: RoomRevealTracker) -> None:
@@ -54,13 +63,15 @@ class RoomRevealRenderer:
         mask = tracker.mask
         wants = self.enabled and mask is not None and mask.active
         if wants:
-            self._shown = mask
+            self._wanted = mask
+            if self._shown is None or self.terrain_atlas is None:
+                self._shown = mask  # entrando (o efeito começa apagado) ou sem tampas: vai já
         target = 1.0 if wants else 0.0
         self.level += (target - self.level) * (1.0 - 0.5 ** (max(dt, 0.0) / FADE_HALF_LIFE))
         if abs(target - self.level) < 0.002:
             self.level = target
         if self.level == 0.0 and not wants:
-            self._shown = None
+            self._shown = self._wanted = None
         if self._shown is not None and self._uploaded is not self._shown:
             self._upload(self._shown)
 
@@ -105,9 +116,8 @@ class RoomRevealRenderer:
         forward_render = -np.asarray(view, dtype=np.float64)[2, :3]  # para onde a câmera olha
         view_dir = inverse_model[:3, :3] @ forward_render
         view_dir /= max(float(np.linalg.norm(view_dir)), 1e-9)
+        self._update_caps(view_dir)  # pode trocar a máscara mostrada (junto com as tampas dela)
         ox, oy, oz = self._shown.origin
-
-        self._update_caps(view_dir)
         gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -121,31 +131,58 @@ class RoomRevealRenderer:
 
     # ------------------------------------------------------------------ tampas
     def _update_caps(self, view_dir: np.ndarray) -> None:
-        """Refaz as tampas quando a máscara ou a direção da câmera mudou."""
+        """Refaz as tampas quando a máscara, a direção da câmera ou os cortes mudaram.
+
+        Em segundo plano, um cálculo por vez: ao terminar, as tampas (e a máscara para a qual foram feitas) entram
+        no quadro; se algo mudou nesse meio-tempo, o próximo quadro pede outro."""
+        if self.terrain_atlas is None:
+            return
+        if self._job is not None:
+            if not self._job.done():
+                return
+            job, self._job = self._job, None
+            self._adopt_caps(*job.result())
+        target = self._wanted if self._wanted is not None else self._shown
         story = self.story
         sight = self.sight
-        key = (id(self._shown), tuple(np.round(view_dir, 3)),
+        key = (id(target), tuple(np.round(view_dir, 3)),
                None if story is None else (story.cut_y, story.feet_y, tuple(np.round(story.center, 1))),
                None if sight is None else sight.feet_y,
                None if self.center is None else tuple(np.round(self.center, 1)))
-        if key == self._caps_key or self.terrain_atlas is None:
+        if key == self._caps_key:
             return
-        self._caps_key = key
-        import time
-        started = time.perf_counter()
         if sight is not None:
             # as tampas cobrem o corredor em qualquer ponto do cômodo: não se refazem a cada passo do jogador (o
             # shader descarta as que caem em blocos que o corredor não cortou, e as outras ficam dentro do vizinho)
             sight = type(sight)(None, None, sight.radius, sight.feet_y)
+        args = (key, target, np.array(view_dir), story, sight, self.center)
+        if self._executor is not None:
+            self._job = self._executor.submit(self._build_caps, *args)
+            return
+        self._adopt_caps(*self._build_caps(*args))
+
+    def _build_caps(self, key, mask: RoomMask, view_dir, story, sight, center):
+        """Monta as tampas (só numpy; pode rodar fora da thread do GL)."""
+        import time
+        started = time.perf_counter()
 
         def structure_uv(block: str, face: str):
             atlas = self.structure_atlas()
             return atlas.get_uv(block, face) if atlas is not None else (0.0, 0.0, 1.0, 1.0)
 
-        caps = build_caps(self._shown, view_dir, self.terrain_atlas, structure_uv, story, sight, self.center)
+        caps = build_caps(mask, view_dir, self.terrain_atlas, structure_uv, story, sight, center)
+        return key, mask, caps, (time.perf_counter() - started) * 1000.0
+
+    def _adopt_caps(self, key, mask: RoomMask, caps, elapsed_ms: float) -> None:
+        if mask is not self._shown:
+            if self._shown is None:
+                return  # o efeito já apagou: as tampas são de um cômodo que saiu de cena
+            self._shown = mask
+            self._upload(mask)
         self._terrain_caps = self._store(self._terrain_caps, caps.terrain)
         self._structure_caps = self._store(self._structure_caps, caps.structures)
-        self.caps_ms = (time.perf_counter() - started) * 1000.0
+        self._caps_key = key
+        self.caps_ms = elapsed_ms
 
     @staticmethod
     def _store(mesh: Optional[TexturedMesh], data) -> Optional[TexturedMesh]:
@@ -180,6 +217,10 @@ class RoomRevealRenderer:
         shader.set_float("u_RoomActive", 0.0)
 
     def delete(self) -> None:
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
+        self._job = None
         for mesh in (self._terrain_caps, self._structure_caps):
             if mesh is not None:
                 mesh.delete()
@@ -187,4 +228,4 @@ class RoomRevealRenderer:
         if self.texture_id:
             gl.glDeleteTextures(1, [self.texture_id])
             self.texture_id = 0
-        self._shown = self._uploaded = None
+        self._shown = self._uploaded = self._wanted = None

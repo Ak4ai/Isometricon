@@ -4,6 +4,7 @@ import math
 import os
 import random
 import sys
+import gc
 import time
 from typing import Optional
 
@@ -453,8 +454,9 @@ def main() -> None:
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
-        room_tracker = RoomRevealTracker()
-        room_renderer = RoomRevealRenderer(terrain_atlas=atlas, structure_atlas=lambda: schematic_tool.atlas_if_ready())
+        room_tracker = RoomRevealTracker(background=True)
+        room_renderer = RoomRevealRenderer(terrain_atlas=atlas, structure_atlas=lambda: schematic_tool.atlas_if_ready(),
+                                           background=True)
         # A tecla E ao lado do personagem quando há uma porta ao alcance
         from src.interactive.interact_prompt import InteractPrompt
         interact_prompt = InteractPrompt()
@@ -988,6 +990,13 @@ def main() -> None:
     def mark(name):
         if frametimes_path:
             frame_marks.append((name, time.perf_counter()))
+    # O que a inicialização deixou (módulos, atlas, roupas) vive até o fim: congelado, sai da varredura da
+    # geração 2 do coletor, que passava por tudo isso a cada poucos segundos (15-17 ms de quadro parado).
+    # O que sobrevive a uma varredura completa também é congelado: a próxima passa só pelo que é novo. A contagem
+    # de referências segue liberando tudo; só um ciclo entre objetos congelados ficaria sem coletar.
+    gc.collect()
+    gc.freeze()
+    gc.callbacks.append(lambda phase, info: gc.freeze() if phase == "stop" and info["generation"] == 2 else None)
     while not window.should_close():
         dt = window.update_delta_time()
         if frametimes_path:
@@ -1538,6 +1547,8 @@ def main() -> None:
     chat_console.delete()
     if schematic_tool is not None:
         schematic_tool.delete()
+    if room_tracker is not None:
+        room_tracker.close()
     if room_renderer is not None:
         room_renderer.delete()
     if shadow_renderer is not None:

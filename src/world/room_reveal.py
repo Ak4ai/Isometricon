@@ -368,11 +368,21 @@ class RoomRevealTracker:
 
     MIN_INTERVAL = 0.25  # segundos entre recálculos do mesmo estado
 
-    def __init__(self) -> None:
+    def __init__(self, background: bool = False) -> None:
+        """
+        Args:
+            background: calcula o cômodo numa thread à parte; até ficar pronto, ``update`` devolve a máscara
+                anterior (o quadro não para os 10-25 ms do cálculo).
+        """
         self.mask: Optional[RoomMask] = None
         self.version = 0  # sobe a cada máscara nova (o renderizador reenvia à GPU)
         self._key = None
         self._age = 0.0
+        self._executor = None
+        self._job = None
+        if background:
+            from concurrent.futures import ThreadPoolExecutor
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="room-reveal")
 
     @property
     def active(self) -> bool:
@@ -380,10 +390,10 @@ class RoomRevealTracker:
 
     REUSE_MARGIN = (8, 3, 8)  # quanto o jogador pode se afastar do ponto de origem da janela sem refazê-la (sobram 16)
 
-    def _same_room(self, cell) -> bool:
+    def _same_room(self, cell, mask: Optional[RoomMask] = None) -> bool:
         """A célula nova está no espaço do cômodo ativo, e perto do meio da janela atual."""
-        mask = self.mask
-        if not mask.active:
+        mask = self.mask if mask is None else mask
+        if mask is None or not mask.active:
             return False
         local = [c - o for c, o in zip(cell, mask.origin)]
         if not all(0 <= v < size for v, size in zip(local, WINDOW)):
@@ -395,6 +405,7 @@ class RoomRevealTracker:
 
     def reset(self) -> None:
         self.mask, self._key = None, None
+        self._job = None  # o resultado de um cálculo em andamento é de antes do reset: fica de fora
         self.version += 1
 
     def update(self, dt: float, position, chunks, world_revision: int, structures=()) -> RoomMask:
@@ -403,33 +414,58 @@ class RoomRevealTracker:
         cell = tuple(int(np.floor(float(v))) for v in position)
         key = (cell, world_revision, tuple((id(s), s.origin, getattr(s, "revision", 0)) for s in structures))
         self._age += dt
+        if self._job is not None:
+            if not self._job.done():
+                return self.mask
+            job, self._job = self._job, None
+            self._adopt(job.result())
         if self.mask is not None and key == self._key:
             return self.mask
-        if self.mask is not None and key[2] == self._key[2] and self._same_room(cell):
+        if (self.mask is not None and key[2] == self._key[2] and key[1] == self._key[1]
+                and self._same_room(cell)):
             # andou dentro do mesmo cômodo: o espaço é o mesmo (a inundação de qualquer célula dele dá o mesmo
-            # resultado). Se o mundo mudou (a água correndo longe), confere a janela atual antes de aproveitar.
-            if key[1] == self._key[1]:
-                self._key = key
-                return self.mask
-            fresh = extract_window_cells(self.mask.origin, chunks, structures)
-            if _same_window(self.mask.window, fresh, self.mask.origin, self.mask.origin, blocks=False):
-                # só a água mudou: o cômodo e as tampas ficam; a janela nova vai para as sombras (a água tinge o sol)
-                self.mask.window = fresh
-                self._key = key
-                return self.mask
+            # resultado)
+            self._key = key
+            return self.mask
         if self.mask is not None and self._age < self.MIN_INTERVAL and key[1:] == self._key[1:]:
             return self.mask  # só andou: espera o intervalo mínimo
+        args = (key, cell, tuple(float(v) for v in position), chunks, structures, self.mask, self._key)
+        if self._executor is not None:
+            self._job = self._executor.submit(self._compute, *args)
+            return self.mask
+        self._adopt(self._compute(*args))
+        return self.mask
+
+    def _compute(self, key, cell, position, chunks, structures, previous: Optional[RoomMask], previous_key):
+        """O trabalho pesado (ler a janela do mundo e inundar o cômodo); não mexe no estado do rastreador."""
+        if previous is not None and key[2] == previous_key[2] and self._same_room(cell, previous):
+            # andou dentro do mesmo cômodo e o mundo mudou (a água correndo longe): confere a janela atual
+            fresh = extract_window_cells(previous.origin, chunks, structures)
+            if _same_window(previous.window, fresh, previous.origin, previous.origin, blocks=False):
+                return "window", key, previous, fresh  # só a água mudou: a janela nova vai para as sombras
         origin = window_origin(position)
         window = extract_window_cells(origin, chunks, structures)
-        if self.mask is not None and key[0] == self._key[0] and _same_window(self.mask.window, window, origin,
-                                                                              self.mask.origin, blocks=False):
-            # o mundo mudou longe ou só a água correu: o cômodo é o mesmo; a janela nova vai para as sombras
-            self.mask.window = window
-            self._key, self._age = key, 0.0
-            return self.mask
-        self.mask = compute_room(window.solid, window.roof, origin, position, was_active=self.active,
-                                 doors=window.doors)
-        self.mask.window = window
+        if previous is not None and key[0] == previous_key[0] and _same_window(previous.window, window, origin,
+                                                                                previous.origin, blocks=False):
+            return "window", key, previous, window  # o mundo mudou longe ou só a água correu: o cômodo é o mesmo
+        mask = compute_room(window.solid, window.roof, origin, position,
+                            was_active=previous is not None and previous.active, doors=window.doors)
+        mask.window = window
+        return "mask", key, mask, window
+
+    def _adopt(self, result) -> None:
+        kind, key, mask, window = result
+        if kind == "window":
+            if mask is not self.mask:
+                return  # a máscara mudou enquanto a janela era lida (um reset): o resultado é velho
+            mask.window = window
+        else:
+            self.mask = mask
+            self.version += 1
         self._key, self._age = key, 0.0
-        self.version += 1
-        return self.mask
+
+    def close(self) -> None:
+        """Encerra a thread do cálculo em segundo plano (se houver)."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
