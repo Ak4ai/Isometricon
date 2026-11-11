@@ -476,6 +476,16 @@ class MapEditor:
     # ------------------------------------------------------------------
     # Mouse / teclado
     # ------------------------------------------------------------------
+    def select_colour(self, index: int) -> bool:
+        if not 0 <= int(index) < len(PALETTE):
+            return False
+        self.colour_index = int(index)
+        self.custom_colour = None
+        self._cursor_preview_dirty = True
+        self.status = f"Cor: {PALETTE[self.colour_index][0]}."
+        self._update_hud()
+        return True
+
     def fill_base(self) -> bool:
         """Cria um piso base no nível y=0 para o mapa atual."""
         cells = [(x, z) for x in range(self.project.size[0]) for z in range(self.project.size[2])
@@ -497,7 +507,13 @@ class MapEditor:
             if self.last_mouse_window is not None:
                 x, y = self.last_mouse_window
                 if 12 <= x <= 12 + PANEL_WIDTH and 12 <= y <= 12 + PANEL_HEIGHT:
-                    self._hud_action(self.hud.hit(x - 12, y - 12) if self.hud is not None else None)
+                    local_x, local_y = x - 12, y - 12
+                    if self.hud is not None:
+                        colour = self.hud.hit_colour(local_x, local_y)
+                        if colour is not None:
+                            self.select_colour(colour)
+                            return True
+                    self._hud_action(self.hud.hit(local_x, local_y) if self.hud is not None else None)
                     return True
             now = time.monotonic()
             if now - self._last_click_time < CLICK_COOLDOWN:
@@ -975,7 +991,9 @@ class MapEditor:
             if not entries:
                 entries = [("(biblioteca vazia)", (200, 210, 220))]
             entries.append(("↑/↓ escolhe  Enter carimba  D duplica  Del exclui  F4 fecha", (245, 210, 120)))
-            self.hud.set_state("BIBLIOTECA DE OBJETOS", entries, swatch=self.colour, active_tool=self.tool)
+            self.hud.set_state("BIBLIOTECA DE OBJETOS", entries, swatch=self.colour,
+                               active_tool=self.tool, palette=PALETTE,
+                               colour_index=self.colour_index, custom_colour=self.custom_colour)
             return
         display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
@@ -993,7 +1011,9 @@ class MapEditor:
             lines[-1] = ("Carimbo fora da grade — escolha outra célula.", (245, 120, 100))
         elif self.hex_mode:
             lines[-1] = (f"Hexadecimal: #{self.hex_buffer}_  (Enter aplica, Esc cancela)", (245, 210, 120))
-        self.hud.set_state("EDITOR DE MAPA — ISOMETRICON", lines, swatch=self.colour, active_tool=self.tool)
+        self.hud.set_state("EDITOR DE MAPA — ISOMETRICON", lines, swatch=self.colour,
+                           active_tool=self.tool, palette=PALETTE,
+                           colour_index=self.colour_index, custom_colour=self.custom_colour)
 
     def _common_shader(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray) -> None:
         shader.use()

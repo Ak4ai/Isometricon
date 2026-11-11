@@ -36,6 +36,7 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 |---|---|
 | Aplicar ferramenta | Clique esquerdo |
 | Trocar ferramenta (construir → apagar → pintar → carimbar → selecionar) | `Tab` / `Shift+Tab` |
+| Escolher cor na paleta | clique no quadradinho |
 | Próxima cor / anterior | `C` / `Shift+C` |
 | Cor hexadecimal livre | `H`, digite 6 dígitos, `Enter` |
 | Próxima textura / anterior | `X` / `Shift+X` |
@@ -68,8 +69,9 @@ apagar, aponte diretamente para o voxel.
 ## 🔁 Fluxo de trabalho
 
 1. **Criar** o objeto/mapa no volume padrão (16×16×16). `F7`/`F6` mudam o volume.
-2. **Material**: escolha cor (`C`) e textura (`X`); a combinação é o material do
-   voxel. Cada voxel guarda seu próprio índice de material.
+2. **Material**: escolha a cor clicando na paleta (ou `C`/`H`) e a textura com
+   `X`; a combinação é o material do voxel. Cada voxel guarda seu próprio índice
+   de material. A paleta tem 16 cores e mostra o quadrado atual no topo.
 3. **Nomear** com `N`: o nome interno fica no JSON e vira o nome do arquivo
    (sem acentos/espaços). **Exportar** com `F2`: grava
    `saves/objetos/<nome>.json`.

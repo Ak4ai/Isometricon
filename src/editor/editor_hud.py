@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from src.rendering.hud_quad import HudQuad
 
 PANEL_WIDTH = 470
-PANEL_HEIGHT = 310
+PANEL_HEIGHT = 390
 TOOLS = (
     ("build", "Construir"), ("erase", "Apagar"), ("paint", "Pintar"),
     ("stamp", "Carimbar"), ("select", "Selecionar"),
@@ -37,6 +37,7 @@ class EditorHud:
         self._image: Image.Image | None = None
         self._dirty = False
         self._buttons: dict[str, tuple[int, int, int, int]] = {}
+        self._colour_boxes: dict[int, tuple[int, int, int, int]] = {}
 
     def _font(self, size: int) -> Any:
         for candidate in _FONT_CANDIDATES:
@@ -60,9 +61,13 @@ class EditorHud:
 
     def set_state(self, title: str, lines: Iterable[tuple[str, tuple[int, int, int]]],
                   swatch: tuple[int, int, int] | None = None,
-                  active_tool: str = "build") -> None:
+                  active_tool: str = "build",
+                  palette: Iterable[tuple[str, tuple[int, int, int]]] = (),
+                  colour_index: int = 0,
+                  custom_colour: tuple[int, int, int] | None = None) -> None:
         rows = tuple(lines)
-        key = (title, rows, swatch, active_tool)
+        palette = tuple(palette)
+        key = (title, rows, swatch, active_tool, palette, colour_index, custom_colour)
         if key == self._key:
             return
         self._key = key
@@ -93,13 +98,29 @@ class EditorHud:
             self._buttons[key_id] = box
             self._button(draw, box, label, False, button_font)
 
-        draw.text((16, PANEL_HEIGHT - 60),
+        self._colour_boxes = {}
+        if palette:
+            draw.text((16, 252), "Paleta de cores  [C]  clique em um quadradinho", font=small_font,
+                      fill=(180, 190, 205, 255))
+            current = custom_colour if custom_colour is not None else palette[colour_index][1]
+            draw.rounded_rectangle((PANEL_WIDTH - 62, 248, PANEL_WIDTH - 18, 270), radius=4,
+                                   fill=(*current, 255), outline=(255, 255, 255, 220), width=1)
+            for index, (name, colour) in enumerate(palette):
+                column, row = index % 8, index // 8
+                box = (16 + column * 52, 270 + row * 30, 16 + column * 52 + 48, 270 + row * 30 + 26)
+                self._colour_boxes[index] = box
+                active = custom_colour is None and index == colour_index
+                draw.rounded_rectangle(box, radius=4, fill=(*colour, 255),
+                                       outline=(255, 235, 160, 255) if active else (35, 42, 54, 255),
+                                       width=3 if active else 1)
+
+        draw.text((16, PANEL_HEIGHT - 50),
                   "F2 exportar  F3 objeto  F5 salvar  F9 carregar  Ctrl+Z desfazer",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, PANEL_HEIGHT - 40),
+        draw.text((16, PANEL_HEIGHT - 34),
                   "Botão esq: aplicar   R: girar   Tab: ferramenta   C: cor   X: textura",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, PANEL_HEIGHT - 20),
+        draw.text((16, PANEL_HEIGHT - 18),
                   "H: cor hexadecimal  -/=: pincel  [/]: grade  F8: base  Delete: excluir",
                   font=small_font, fill=(150, 160, 175, 255))
         self._image = image
@@ -110,6 +131,12 @@ class EditorHud:
         for key, (x0, y0, x1, y1) in self._buttons.items():
             if x0 <= x <= x1 and y0 <= y <= y1:
                 return key
+        return None
+
+    def hit_colour(self, x: float, y: float) -> int | None:
+        for index, (x0, y0, x1, y1) in self._colour_boxes.items():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return index
         return None
 
     def render(self, window_width: int, window_height: int) -> None:

@@ -236,7 +236,8 @@ em uma casa, as paredes/teto acima dos pés do token ficam translúcidos para o
 personagem continuar visível.
 
 Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
-`C`/`X` escolhem cor/textura, `H` digita cor hexadecimal, `-`/`=` mudam o pincel,
+a paleta clicável ou `C` escolhe a cor, `X` escolhe a textura, `H` digita cor
+hexadecimal, `-`/`=` mudam o pincel,
 `[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
 selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso

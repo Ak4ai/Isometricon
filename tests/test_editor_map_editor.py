@@ -166,3 +166,12 @@ def test_name_object_and_export_with_slug(tmp_path):
     assert path.endswith("casa_do_joao.json")
     loaded = VoxelObject.load(path)
     assert loaded.name == "Casa do João"
+
+
+def test_palette_selection_sets_colour(tmp_path):
+    editor = _editor(tmp_path)
+    editor.custom_colour = (1, 2, 3)
+    assert editor.select_colour(3)
+    assert editor.colour_index == 3
+    assert editor.custom_colour is None
+    assert editor.colour == (205, 55, 55)
