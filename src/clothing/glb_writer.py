@@ -70,7 +70,7 @@ class GlbBuilder:
         return len(self.materials) - 1
 
     def add_mesh(self, positions, indices, normals=None, uvs=None, colors=None, material: Optional[int] = None,
-                 name: str = "malha", index_type: int = _USHORT) -> int:
+                 name: str = "malha", index_type: int = _USHORT, joints=None, weights=None) -> int:
         attributes = {"POSITION": self._accessor(positions, _FLOAT, "VEC3", _ARRAY_BUFFER, bounds=True)}
         if normals is not None:
             attributes["NORMAL"] = self._accessor(normals, _FLOAT, "VEC3", _ARRAY_BUFFER)
@@ -78,6 +78,9 @@ class GlbBuilder:
             attributes["TEXCOORD_0"] = self._accessor(uvs, _FLOAT, "VEC2", _ARRAY_BUFFER)
         if colors is not None:
             attributes["COLOR_0"] = self._accessor(colors, _FLOAT, "VEC3", _ARRAY_BUFFER)
+        if joints is not None and weights is not None:
+            attributes["JOINTS_0"] = self._accessor(joints, _USHORT, "VEC4", _ARRAY_BUFFER)
+            attributes["WEIGHTS_0"] = self._accessor(weights, _FLOAT, "VEC4", _ARRAY_BUFFER)
         primitive = {"attributes": attributes}
         if indices is not None:
             primitive["indices"] = self._accessor(np.asarray(indices).reshape(-1), index_type, "SCALAR",
@@ -106,6 +109,15 @@ class GlbBuilder:
             node["children"] = [int(c) for c in children]
         self.nodes.append(node)
         return len(self.nodes) - 1
+
+    def add_skin(self, joint_nodes: Sequence[int], inverse_bind=None) -> int:
+        """Um esqueleto com os nós ``joint_nodes``; ``inverse_bind`` (J, 4, 4) em linhas, como no numpy."""
+        skin = {"joints": [int(j) for j in joint_nodes]}
+        if inverse_bind is not None:
+            columns = np.asarray(inverse_bind, dtype=np.float32).transpose(0, 2, 1).reshape(len(joint_nodes), 16)
+            skin["inverseBindMatrices"] = self._accessor(columns, _FLOAT, "MAT4")
+        self.skins.append(skin)
+        return len(self.skins) - 1
 
     # ---- arquivo
     def document(self, scene_nodes: Sequence[int]) -> dict:

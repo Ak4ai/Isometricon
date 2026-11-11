@@ -13,6 +13,7 @@ from typing import List, Optional
 import numpy as np
 
 from .glb import GlbModel, ModelError, Submesh, load_model, parse_model
+from .procedural import ProceduralAnimator, Roles, auto_roles
 
 DEFAULT_HEIGHT = 1.8   # altura, em metros, a que o modelo é normalizado (o jogo usa metros)
 
@@ -39,6 +40,7 @@ class CustomModel:
         self.model = model.normalize(self.height, yaw_turns)
         self.parts: List[_Part] = []
         self._white: int = 0
+        self.animator: Optional[ProceduralAnimator] = None
         if create_gl:
             self.upload()
 
@@ -57,6 +59,25 @@ class CustomModel:
     def triangles(self) -> int:
         return self.model.triangles
 
+    @property
+    def rig(self):
+        """O esqueleto do modelo (já na escala e no sentido do jogo), ou ``None`` se ele não tem."""
+        return self.model.rig
+
+    # ------------------------------------------------------------------ animação
+    def animate(self, roles: Optional[Roles] = None, profile: Optional[str] = None) -> Roles:
+        """Liga a animação procedural. Sem ``roles`` os papéis são achados pela forma do esqueleto."""
+        if self.rig is None:
+            raise ModelError("Este modelo não tem esqueleto: não dá para animar os ossos.")
+        roles = roles or auto_roles(self.rig, self.height)
+        self.animator = ProceduralAnimator(self.rig, roles, self.height, profile)
+        return roles
+
+    def update(self, dt: float, speed: float = 0.0) -> None:
+        """Avança a animação ``dt`` segundos, com o modelo andando a ``speed`` m/s."""
+        if self.animator is not None:
+            self.animator.update(dt, speed)
+
     def bounds(self):
         return self.model.bounds()
 
@@ -71,8 +92,10 @@ class CustomModel:
             vertices = sub.vertices.copy()
             vertices[:, 8:11] *= np.asarray(sub.color[:3], dtype=np.float32)   # o fator de cor do material
             texture = self._texture(sub.image) if sub.image is not None else self._white
-            self.parts.append(_Part(sub.name, TexturedMesh(vertices, sub.indices), texture, float(sub.color[3]),
-                                    sub.alpha_mode == "BLEND"))
+            mesh = TexturedMesh(vertices, sub.indices)
+            if sub.joints is not None:
+                mesh.set_skin(sub.joints.astype(np.float32), sub.weights)   # a malha fica na pose de montagem
+            self.parts.append(_Part(sub.name, mesh, texture, float(sub.color[3]), sub.alpha_mode == "BLEND"))
 
     def _texture(self, image) -> int:
         import OpenGL.GL as gl
@@ -97,7 +120,10 @@ class CustomModel:
         import OpenGL.GL as gl
 
         gl.glDisable(gl.GL_CULL_FACE)  # os modelos de fora nem sempre têm o sentido das faces que o jogo espera
-        shader.set_bool("u_Skinned", False)
+        posed = self.animator is not None
+        shader.set_bool("u_Skinned", posed)
+        if posed:
+            shader.set_mat4_array("u_Bones", self.animator.matrices)
         shader.set_mat4("u_Model", np.asarray(base_model, dtype=np.float32))
         shader.set_int("u_TextureAtlas", 0)
         gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -111,6 +137,7 @@ class CustomModel:
             if part.blend:
                 gl.glDisable(gl.GL_BLEND)
         shader.set_float("u_Alpha", 1.0)
+        shader.set_bool("u_Skinned", False)
 
     def delete(self) -> None:
         import OpenGL.GL as gl

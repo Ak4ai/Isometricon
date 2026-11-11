@@ -19,6 +19,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .rig import MAX_BONES, Rig
+
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TRIANGLES = 300_000
 MAX_TEXTURE_SIDE = 4096
@@ -47,6 +49,8 @@ class Submesh:
     color: Tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)   # fator de cor do material
     double_sided: bool = False
     alpha_mode: str = "OPAQUE"
+    joints: Optional[np.ndarray] = None   # (N, 4) osso de cada influência, no índice do ``Rig`` (só com esqueleto)
+    weights: Optional[np.ndarray] = None  # (N, 4) peso de cada influência, somando 1
 
     @property
     def triangles(self) -> int:
@@ -58,9 +62,11 @@ class GlbModel:
     """O modelo lido: as partes e quem mais o arquivo trouxe (para as fases seguintes)."""
 
     submeshes: List[Submesh] = field(default_factory=list)
-    skins: int = 0              # quantos esqueletos o arquivo tem (ainda não usados)
+    skins: int = 0              # quantos esqueletos o arquivo tem
     animations: List[str] = field(default_factory=list)   # nomes dos clipes (ainda não usados)
     warnings: List[str] = field(default_factory=list)
+    rig: Optional[Rig] = None   # o esqueleto da malha (o primeiro do arquivo que tem pesos), na mesma posição da malha
+    transform: np.ndarray = field(default_factory=lambda: np.identity(4))   # o que ``normalize`` fez com o modelo
 
     @property
     def triangles(self) -> int:
@@ -78,11 +84,15 @@ class GlbModel:
         """
         if not self.submeshes:
             return self
+        total = np.identity(4)
         for _ in range(yaw_turns % 4):
             for s in self.submeshes:
                 v = s.vertices
                 v[:, [0, 2]] = np.stack([v[:, 2], -v[:, 0]], axis=1)        # gira 90° em y
                 v[:, [3, 5]] = np.stack([v[:, 5], -v[:, 3]], axis=1)
+            turn = np.identity(4)
+            turn[:3, :3] = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]]
+            total = turn @ total
         low, high = self.bounds()
         size = float(high[1] - low[1])
         if size <= 1e-9:
@@ -91,6 +101,13 @@ class GlbModel:
         centre = np.array([(low[0] + high[0]) / 2.0, low[1], (low[2] + high[2]) / 2.0])
         for s in self.submeshes:
             s.vertices[:, :3] = (s.vertices[:, :3] - centre) * scale
+        move = np.identity(4)
+        move[:3, :3] *= scale
+        move[:3, 3] = -centre * scale
+        total = move @ total
+        self.transform = total @ self.transform
+        if self.rig is not None:       # o esqueleto acompanha o modelo
+            self.rig = self.rig.transformed(total)
         return self
 
 
@@ -154,6 +171,9 @@ class _Reader:
         self.model = GlbModel()
         self._buffers: Dict[int, bytes] = {}
         self._images: Dict[int, object] = {}
+        self._parent_node: Dict[int, int] = {}
+        self._world_cache: Dict[int, np.ndarray] = {}
+        self._rig_skin: Optional[int] = None     # o skin cujo esqueleto vai para o modelo
 
     # ---- dados
     def _buffer(self, index: int) -> bytes:
@@ -247,6 +267,9 @@ class _Reader:
         doc = self.doc
         self.model.skins = len(doc.get("skins", []))
         self.model.animations = [a.get("name", f"animação {i}") for i, a in enumerate(doc.get("animations", []))]
+        for index, node in enumerate(doc.get("nodes", [])):
+            for child in node.get("children", []):
+                self._parent_node[int(child)] = index
         scenes = doc.get("scenes", [])
         roots = scenes[int(doc.get("scene", 0))].get("nodes", []) if scenes else []
         if not roots:
@@ -256,6 +279,8 @@ class _Reader:
             self._node(int(root), np.identity(4), seen)
         if not self.model.submeshes:
             raise ModelError("O modelo não tem nenhuma malha de triângulos.")
+        if self._rig_skin is not None:
+            self.model.rig = self._build_rig(self._rig_skin)
         if self.model.triangles > MAX_TRIANGLES:
             raise ModelError(f"O modelo tem {self.model.triangles} triângulos; o limite é {MAX_TRIANGLES}.")
         return self.model
@@ -272,11 +297,12 @@ class _Reader:
         if "mesh" in node:
             # um nó com esqueleto ignora a própria transformação: os vértices já estão no espaço dos ossos
             matrix = np.identity(4) if "skin" in node else world
-            self._mesh(int(node["mesh"]), matrix, node.get("name") or f"malha {node['mesh']}")
+            self._mesh(int(node["mesh"]), matrix, node.get("name") or f"malha {node['mesh']}",
+                       int(node["skin"]) if "skin" in node else None)
         for child in node.get("children", []):
             self._node(int(child), world, seen)
 
-    def _mesh(self, index: int, matrix: np.ndarray, name: str) -> None:
+    def _mesh(self, index: int, matrix: np.ndarray, name: str, skin: Optional[int] = None) -> None:
         try:
             mesh = self.doc["meshes"][index]
         except (KeyError, IndexError, TypeError) as error:
@@ -312,6 +338,18 @@ class _Reader:
             if "COLOR_0" in attributes:
                 colour = np.clip(self.accessor(int(attributes["COLOR_0"]))[:, :3].astype(np.float64), 0.0, 1.0)
 
+            joints = weights = None
+            if skin is not None and "JOINTS_0" in attributes and "WEIGHTS_0" in attributes:
+                if self._rig_skin is None:
+                    self._rig_skin = skin
+                if skin == self._rig_skin:
+                    joints = self.accessor(int(attributes["JOINTS_0"])).astype(np.int64)
+                    weights = np.maximum(self.accessor(int(attributes["WEIGHTS_0"])).astype(np.float64), 0.0)
+                    total = weights.sum(axis=1, keepdims=True)
+                    weights = np.where(total > 1e-9, weights / np.maximum(total, 1e-9), np.array([1.0, 0.0, 0.0, 0.0]))
+                else:
+                    self.model.warnings.append("O modelo tem mais de um esqueleto; só o primeiro é usado.")
+
             material = self._material(primitive.get("material"))
             vertices = np.empty((count, FLOATS_PER_VERTEX), dtype=np.float32)
             vertices[:, :3] = positions @ matrix[:3, :3].T + matrix[:3, 3]
@@ -320,7 +358,55 @@ class _Reader:
             vertices[:, 6:8] = uv[:, :2]
             vertices[:, 8:11] = colour
             self.model.submeshes.append(Submesh(
-                name=f"{name}.{number}", vertices=vertices, indices=indices.astype(np.uint32), **material))
+                name=f"{name}.{number}", vertices=vertices, indices=indices.astype(np.uint32),
+                joints=None if joints is None else joints.astype(np.uint16),
+                weights=None if weights is None else weights.astype(np.float32), **material))
+
+    def _world_of(self, node: int) -> np.ndarray:
+        """A matriz de mundo de um nó (também dos que não estão na cena)."""
+        if node not in self._world_cache:
+            parent = self._parent_node.get(node)
+            local = _local_matrix(self.doc["nodes"][node])
+            self._world_cache[node] = local if parent is None else self._world_of(parent) @ local
+        return self._world_cache[node]
+
+    def _build_rig(self, skin_index: int) -> Rig:
+        try:
+            skin = self.doc["skins"][skin_index]
+            joint_nodes = [int(j) for j in skin["joints"]]
+        except (KeyError, IndexError, TypeError) as error:
+            raise ModelError("O esqueleto do modelo está incompleto.") from error
+        count = len(joint_nodes)
+        if count == 0:
+            raise ModelError("O esqueleto do modelo não tem ossos.")
+        if count > MAX_BONES:
+            raise ModelError(f"O esqueleto tem {count} ossos; o limite é {MAX_BONES}.")
+        for submesh in self.model.submeshes:
+            if submesh.joints is not None and int(submesh.joints.max(initial=0)) >= count:
+                raise ModelError("Um vértice usa um osso que não está no esqueleto.")
+        index_of = {node: i for i, node in enumerate(joint_nodes)}
+        parents = np.full(count, -1, dtype=np.int64)
+        for i, node in enumerate(joint_nodes):
+            ancestor = self._parent_node.get(node)
+            while ancestor is not None and ancestor not in index_of:
+                ancestor = self._parent_node.get(ancestor)
+            if ancestor is not None:
+                parents[i] = index_of[ancestor]
+        world = np.array([self._world_of(node) for node in joint_nodes])
+        local = np.array([world[i] if parents[i] < 0 else np.linalg.inv(world[parents[i]]) @ world[i]
+                          for i in range(count)])
+        if "inverseBindMatrices" in skin:
+            matrices = self.accessor(int(skin["inverseBindMatrices"])).astype(np.float64)
+            if len(matrices) < count:
+                raise ModelError("O esqueleto tem menos matrizes de montagem que ossos.")
+            inverse_bind = np.array([m.reshape(4, 4).T for m in matrices[:count]])   # o glTF guarda por colunas
+        else:
+            inverse_bind = np.array([np.linalg.inv(w) for w in world])
+        names = [self.doc["nodes"][node].get("name") or f"osso {i}" for i, node in enumerate(joint_nodes)]
+        try:
+            return Rig(names, parents, local, inverse_bind)
+        except ValueError as error:
+            raise ModelError(str(error)) from error
 
     def _material(self, index) -> dict:
         info = {"image": None, "color": (1.0, 1.0, 1.0, 1.0), "double_sided": False, "alpha_mode": "OPAQUE"}

@@ -22,6 +22,7 @@ from PIL import Image
 
 from src.clothing.custom_model import DEFAULT_HEIGHT, CustomModel, ModelError
 from src.clothing.glb_writer import sample_humanoid
+from src.clothing.procedural import PROFILE_NAMES, Roles, RolesError
 from src.core.window import Window
 from src.math import mat4_look_at, mat4_ortho, mat4_rotate_y, vec3
 from src.rendering import Shader
@@ -42,6 +43,12 @@ def main() -> None:
     parser.add_argument("--frames", type=int, default=None)
     parser.add_argument("--capture", default=None)
     parser.add_argument("--yaw", type=float, default=None, help="com --capture, o giro em graus")
+    parser.add_argument("--andar", type=float, nargs="?", const=3.0, default=None, metavar="VELOCIDADE",
+                        help="anima o modelo andando (m/s; sem valor, 3). Precisa de esqueleto")
+    parser.add_argument("--perfil", choices=PROFILE_NAMES, default=None, help="perfil de movimento (padrão: o sugerido)")
+    parser.add_argument("--papeis", default=None, help="arquivo JSON com os papéis dos ossos (padrão: detecção automática)")
+    parser.add_argument("--salvar-papeis", default=None, help="grava no arquivo os papéis usados, para editar")
+    parser.add_argument("--tempo", type=float, default=None, help="com --capture, avança a animação até este segundo")
     args = parser.parse_args()
 
     window = Window(width=1000, height=700, title="Isometricon - Modelo personalizado", vsync=True)
@@ -62,6 +69,21 @@ def main() -> None:
           f"{high[0] - low[0]:.2f} x {high[1] - low[1]:.2f} x {high[2] - low[2]:.2f} m")
     for warning in model.warnings:
         print("Aviso:", warning)
+    animate = args.andar is not None or args.papeis or args.perfil or args.salvar_papeis
+    if animate:
+        try:
+            roles = Roles.load(model.rig, args.papeis) if args.papeis and model.rig is not None else None
+            roles = model.animate(roles, args.perfil)
+        except (ModelError, RolesError) as error:
+            print(f"Não consegui animar: {error}")
+            window.close()
+            sys.exit(1)
+        print(f"Animação: perfil '{model.animator.profile}', {len(roles.legs)} pernas, {len(roles.arms)} braços, "
+              f"cabeça de {len(roles.head)} ossos, coluna de {len(roles.spine)}.")
+        if args.salvar_papeis:
+            roles.save(model.rig, args.salvar_papeis)
+            print("Papéis gravados em", args.salvar_papeis)
+    speed = args.andar if args.andar is not None else 0.0
 
     shader = Shader(os.path.join(PROJECT_ROOT, "assets", "shaders", "world_textured.vert"),
                     os.path.join(PROJECT_ROOT, "assets", "shaders", "world_textured.frag"))
@@ -74,8 +96,15 @@ def main() -> None:
     centre = vec3(0.0, args.altura / 2.0, 0.0)
     frame = 0
     while not window.should_close():
-        window.update_delta_time()
+        dt = window.update_delta_time()
         window.poll_events()
+        if animate:
+            if args.capture and args.tempo is not None:   # captura reprodutível: passos de tempo fixos
+                step = 1.0 / 60.0
+                while model.animator.time + step <= args.tempo:
+                    model.update(step, speed)
+            else:
+                model.update(dt, speed)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
         aspect = window.get_aspect_ratio()
         projection = mat4_ortho(-size * aspect, size * aspect, -size, size, 0.1, 50.0)
