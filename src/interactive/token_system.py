@@ -491,6 +491,7 @@ class PlayerToken:
         self.position = np.array([start_x, 10.0, start_z], dtype=np.float32)
         self.avatar = avatar
         self.animator = None
+        self.custom_model: Any = None  # um CustomModel (.glb) no lugar do corpo montado; None usa o corpo de sempre
         if avatar is not None:
             from src.clothing.character_animation import CharacterAnimator
             self.animator = CharacterAnimator(avatar, walking=False)
@@ -655,6 +656,8 @@ class PlayerToken:
             self.animator.climbing = self.ladder_grip is not None
             self.animator.climb_time = self.climb_time
             self.animator.update(dt, walk_time=self.walk_time)
+        if self.custom_model is not None:
+            self.custom_model.update(dt, self.speed if self.is_moving else 0.0)
         # Atualiza a animação procedural modular.
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
@@ -791,6 +794,10 @@ class PlayerToken:
     def draw(self, shader: Any = None, base_model: Optional[np.ndarray] = None) -> None:
         """Desenha a miniatura (modular se disponível, ou malha única)."""
         import OpenGL.GL as gl
+        if self.custom_model is not None and shader is not None:
+            self.custom_model.draw(shader, base_model if base_model is not None else self.get_model_matrix())
+            gl.glEnable(gl.GL_CULL_FACE)
+            return
         if self.avatar is not None and shader is not None:
             self.avatar.draw(shader, base_model if base_model is not None else self.get_model_matrix())
             return
@@ -802,8 +809,19 @@ class PlayerToken:
             self.mesh.draw()
         gl.glEnable(gl.GL_CULL_FACE)
 
+    def set_custom_model(self, model: Any) -> Any:
+        """Põe ``model`` (CustomModel) como o corpo do token, ou volta ao corpo montado com ``None``.
+
+        Devolve o modelo anterior, que quem chamou apaga (``delete``) se não vai mais usá-lo.
+        """
+        previous, self.custom_model = self.custom_model, model
+        return previous
+
     def delete(self) -> None:
         """Libera os buffers OpenGL."""
+        if self.custom_model is not None:
+            self.custom_model.delete()
+            self.custom_model = None
         if self.avatar is not None:
             self.avatar.delete()
             self.avatar = None

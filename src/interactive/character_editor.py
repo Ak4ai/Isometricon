@@ -536,6 +536,34 @@ class CharacterEditor:
             return [Group("Aparências prontas", [Option(n.replace("_", " ").capitalize(), f"/skin preset {n}") for n in PRESETS]),
                     Group("Recomeçar", [Option("Padrão", "/skin reset"), Option("Tirar roupas", "/skin tirar tudo")])]
 
+        def custom_model() -> List[Group]:
+            """Um modelo .glb no lugar do personagem montado (/skin modelo)."""
+            from src.clothing import custom_model_store as store
+            from src.clothing.procedural import PROFILE_NAMES
+            handler = self.handler
+
+            def choice(key: str):
+                current = getattr(handler, "model_choice", None)
+                return None if current is None else current.get(key)
+
+            names = store.list_models(getattr(handler, "custom_model_dir", None) or store.MODELS_DIR)
+            models = [Option("Personagem montado", "/skin modelo off",
+                             selected=lambda m: getattr(handler, "model_choice", None) is None)]
+            models += [Option(n, f"/skin modelo {n}", selected=lambda m, n=n: choice("arquivo") == n) for n in names]
+            groups = [Group("Corpo (novo .glb: /skin modelo <caminho>)", models)]
+            if getattr(handler, "model_choice", None) is not None:
+                groups.append(Group("Como anda", [Option("Automático", "/skin modelo perfil auto",
+                                                         selected=lambda m: choice("perfil") is None)] +
+                                    [Option(p.capitalize(), f"/skin modelo perfil {p}",
+                                            selected=lambda m, p=p: choice("perfil") == p) for p in PROFILE_NAMES]))
+                groups.append(Group("Altura (m)", [Option(f"{h:g}", f"/skin modelo altura {h}",
+                                                          selected=lambda m, h=h: abs((choice("altura") or 0) - h) < 1e-6)
+                                                   for h in (0.6, 1.0, 1.5, 1.8, 2.2, 3.0)]))
+                groups.append(Group("Gira o modelo (se ele olha para o lado errado)", [
+                    Option(f"{n * 90}°", f"/skin modelo giro {n}", selected=lambda m, n=n: choice("giro") == n)
+                    for n in range(4)]))
+            return groups
+
         return [
             Section("Corpo", body),
             Section("Ajustes", shape),
@@ -555,6 +583,7 @@ class CharacterEditor:
             Section("Sapatos", lambda: [Group("Calçados", self._garments("shoes", "sapato", "shoes_id"))]),
             Section(FINE_SECTION, fine),
             Section("Prontos", looks),
+            Section("Modelo", custom_model),
         ]
 
     @property
@@ -694,9 +723,11 @@ class CharacterEditor:
         """As áreas clicáveis, em pixels da janela: ('tab', índice), ('option', Option), ('button', nome)."""
         self._size = (width, height)
         hits: List[Tuple[Rect, str, Any]] = []
+        # as abas encolhem quando são tantas que não cabem na altura da janela
+        tab_height = min(TAB_HEIGHT, (height - 2 * PAD) // max(len(self.sections), 1) - 4)
         for index in range(len(self.sections)):
-            y = PAD + index * (TAB_HEIGHT + 4)
-            hits.append(((6, y, TAB_WIDTH - 6, y + TAB_HEIGHT), "tab", index))
+            y = PAD + index * (tab_height + 4)
+            hits.append(((6, y, TAB_WIDTH - 6, y + tab_height), "tab", index))
         left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
         top, bottom = PAD, height - FOOTER_HEIGHT
         for kind, (x0, y0, x1, y1), payload in self._tiles():

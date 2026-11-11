@@ -547,6 +547,15 @@ def main() -> None:
         skin_command_handler.place_water = lambda x, y, z: world_manager.place_water(x, y, z)
         skin_command_handler.place_block = lambda x, y, z, block: world_manager.place_block(x, y, z, block)
         skin_command_handler.player_cell = lambda: tuple(int(np.floor(float(v))) for v in player_token.position)
+        skin_command_handler.player_token = player_token
+        skin_command_handler.save_model_choice = max_frames is None  # uma execução automática não mexe na escolha
+        if "--sem-modelo" not in sys.argv[1:]:
+            # o modelo .glb da última vez (/skin modelo), no lugar do personagem montado
+            from src.clothing import custom_model_store
+            saved_model = custom_model_store.load_choice()
+            if saved_model is not None:
+                _, model_feedback, _ = skin_command_handler.apply_custom_model(saved_model)
+                print(model_feedback)
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
         create_gl=True,
@@ -1121,6 +1130,8 @@ def main() -> None:
                 editor_animator.update(dt)
             elif char_demo:
                 character_animator.update(dt)
+            if terrain_demo and player_token.custom_model is not None:
+                player_token.custom_model.update(dt, 0.0)  # o modelo .glb parado, de frente, na tela de criação
             # Nas seções do rosto a câmera vai para o rosto: na altura da cabeça, de perto, na
             # horizontal e com o personagem parado de frente para ela. Ao sair, volta ao que era.
             if character_editor.focus != editor_camera.get("focus", "body"):
@@ -1332,7 +1343,10 @@ def main() -> None:
             shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
             if editor_animator is not None:
                 editor_animator.sync()  # a pele recortada por um clique deste quadro já entra na pose
-            character_model.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
+            shown_body = player_token.custom_model if terrain_demo and player_token.custom_model is not None \
+                else character_model
+            shown_body.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
+            gl.glEnable(gl.GL_CULL_FACE)
             gl.glViewport(0, 0, fb_w, fb_h)
             # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
             character_editor.picker = character_editor.overlay = None

@@ -197,6 +197,12 @@ class SkinCommandHandler:
         self.place_water = None  # (x, y, z) -> bool e a célula do jogador (/agua); None fora do terreno
         self.place_block = None  # (x, y, z, BlockType) -> BlockType posto ou None (/bloco); None fora do terreno
         self.player_cell = None
+        self.player_token = None  # PlayerToken do terreno, que recebe o modelo de /skin modelo
+        self.model_choice: Optional[Dict[str, Any]] = None  # o modelo .glb em uso (ver custom_model_store)
+        self.custom_model_dir: Optional[str] = None  # pasta dos modelos (a padrão quando None)
+        self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
+        self.save_model_choice = True  # uma execução automática (--frames) deixa a escolha gravada em paz
+        self.model_gl = True  # False nos testes, sem contexto OpenGL
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
         self.is_importing: bool = False
@@ -298,6 +304,117 @@ class SkinCommandHandler:
         else:
             self.turntable_state["active"] = not self.turntable_state["active"]
         return True, f"[Girar] Rotação automática {'ligada' if self.turntable_state['active'] else 'desligada'}.", CYAN
+
+    # ------------------------------------------------------------------ /skin modelo
+    def _model_usage(self) -> str:
+        return ("Uso: /skin modelo <nome|caminho.glb> | lista | off | perfil <bipede|quadrupede|rastejante|flutuante|auto> "
+                "| altura <metros> | giro <0-3>")
+
+    def apply_custom_model(self, choice: Dict[str, Any]) -> Result:
+        """Constrói o modelo da ``choice`` (ver custom_model_store) e o põe no token. Roda na thread principal."""
+        from src.clothing import custom_model_store as store
+        from src.clothing.custom_model import CustomModel
+        from src.clothing.glb import ModelError
+        from src.clothing.procedural import RolesError
+        token = self.player_token
+        if token is None:
+            return False, "[Modelo] Só funciona no terreno (--terrain).", RED
+        path = store.path_of(choice["arquivo"], self.custom_model_dir or store.MODELS_DIR)
+        if path is None:
+            return False, f"[Modelo] Não achei o modelo '{choice['arquivo']}'. /skin modelo lista mostra os guardados.", RED
+        try:
+            model = CustomModel.from_file(path, choice["altura"], choice["giro"], create_gl=self.model_gl)
+        except ModelError as exc:
+            return False, f"[Modelo] {exc}", RED
+        if model.rig is not None:
+            try:
+                model.animate(profile=choice.get("perfil"))
+                note = f" Anda como '{model.animator.profile}'."
+            except (ModelError, RolesError) as exc:
+                note = f" Sem animação: {exc}"
+        else:
+            note = " Sem esqueleto: fica parado, na pose do arquivo."
+        previous = token.set_custom_model(model)
+        if previous is not None:
+            previous.delete()
+        self.model_choice = dict(choice)
+        warnings = f" ({len(model.warnings)} avisos de leitura)" if model.warnings else ""
+        return True, f"[Modelo] '{model.name}' em uso: {model.triangles} triângulos, {model.height:g} m.{note}{warnings}", GREEN
+
+    def clear_custom_model(self) -> None:
+        token = self.player_token
+        if token is not None:
+            previous = token.set_custom_model(None)
+            if previous is not None:
+                previous.delete()
+        self.model_choice = None
+
+    def _save_model_choice(self) -> None:
+        from src.clothing import custom_model_store as store
+        if self.model_choice is not None and self.save_model_choice:
+            try:
+                store.save_choice(self.model_choice, self.model_choice_path or store.CHOICE_PATH)
+            except OSError as exc:
+                print(f"[Modelo] Não consegui gravar a escolha: {exc}")
+
+    def custom_model(self, args: List[str]) -> Result:
+        """/skin modelo: usa um modelo .glb como o corpo do personagem (ver ``/skin modelo`` sem argumentos)."""
+        from src.clothing import custom_model_store as store
+        from src.clothing.glb import ModelError
+        from src.clothing.procedural import PROFILE_NAMES
+        if self.player_token is None:
+            return False, "[Modelo] Só funciona no terreno (--terrain).", RED
+        directory = self.custom_model_dir or store.MODELS_DIR
+        word = args[0].lower() if args else ""
+        if not args:
+            if self.model_choice is None:
+                return True, "[Modelo] Usando o personagem montado. " + self._model_usage(), GOLD
+            return True, f"[Modelo] Em uso: '{self.model_choice['arquivo']}'. " + self._model_usage(), GOLD
+        if word in ("lista", "list", "listar"):
+            names = store.list_models(directory)
+            return True, "[Modelo] Guardados: " + (", ".join(names) if names else "nenhum ainda") + ".", CYAN
+        if word in ("off", "desligar", "personagem", "montado"):
+            self.clear_custom_model()
+            if self.save_model_choice:
+                store.clear_choice(self.model_choice_path or store.CHOICE_PATH)
+            return True, "[Modelo] Voltou ao personagem montado.", CYAN
+        if word in ("perfil", "altura", "giro"):
+            if self.model_choice is None:
+                return False, "[Modelo] Escolha um modelo antes: /skin modelo <nome>.", RED
+            choice = dict(self.model_choice)
+            value = args[1].lower().replace(",", ".") if len(args) > 1 else ""
+            if word == "perfil":
+                if value not in PROFILE_NAMES + ("auto",):
+                    return False, f"[Modelo] Use /skin modelo perfil <{'|'.join(PROFILE_NAMES)}|auto>.", RED
+                choice["perfil"] = None if value == "auto" else value
+            elif word == "altura":
+                try:
+                    choice["altura"] = store.clamp_height(float(value))
+                except ValueError:
+                    return False, "[Modelo] Use /skin modelo altura <metros>, por exemplo 1.8.", RED
+            else:
+                try:
+                    choice["giro"] = int(value) % 4
+                except ValueError:
+                    return False, "[Modelo] Use /skin modelo giro <0 a 3> (quartos de volta).", RED
+            result = self.apply_custom_model(choice)
+            if result[0]:
+                self._save_model_choice()
+            return result
+        # nome guardado ou caminho de um arquivo novo (os espaços do caminho vêm em várias palavras)
+        text = " ".join(args)
+        name = text
+        if os.path.isfile(text):
+            try:
+                name = store.import_model(text, directory)
+            except ModelError as exc:
+                return False, f"[Modelo] {exc}", RED
+        choice = dict(store.DEFAULT_CHOICE)
+        choice.update(arquivo=name)
+        result = self.apply_custom_model(choice)
+        if result[0]:
+            self._save_model_choice()
+        return result
 
     # ------------------------------------------------------------------ /revelar
     def reveal(self, args: List[str]) -> Result:
@@ -1376,6 +1493,9 @@ SKIN_COMMANDS: List[Command] = [
     Command(("reset",), "/skin reset", "volta ao padrão", SkinCommandHandler.reset, [], "Personagem"),
     Command(("interface", "editor", "criar"), "/skin interface", "abre a tela de criação de personagem",
             SkinCommandHandler.interface, [], "Personagem"),
+    Command(("modelo", "model"), "/skin modelo <nome|caminho.glb|lista|off|perfil|altura|giro>",
+            "usa um modelo .glb como corpo do personagem", SkinCommandHandler.custom_model,
+            lambda: _model_options(), "Personagem"),
     Command(("salvar", "save"), "/skin salvar", "grava o personagem para a próxima vez", SkinCommandHandler.save, [],
             "Personagem"),
     Command(("carregar", "load"), "/skin carregar", "volta ao personagem gravado", SkinCommandHandler.load, [],
@@ -1409,6 +1529,12 @@ SCHEM_ALIASES = {
     "clear": "clear", "limpar": "clear",
     "info": "info",
 }
+
+
+def _model_options() -> List[str]:
+    """Autocompletar do /skin modelo: os modelos guardados e os subcomandos."""
+    from src.clothing import custom_model_store as store
+    return store.list_models() + ["lista", "off", "perfil", "altura", "giro"]
 
 
 def find_command(commands: List[Command], name: str) -> Optional[Command]:
