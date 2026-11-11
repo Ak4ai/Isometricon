@@ -18,6 +18,7 @@ import numpy as np
 
 from src.world.mesher import _CORNERS, _NORMALS
 from src.world.block_shapes import box_face_quad, shape_for
+from src.world.block import CUBE_LUT
 from src.world.room_reveal import INTERIOR, OBJECT, RoomMask
 from src.world.structure_mesher import _FACES as _STRUCTURE_FACES
 
@@ -250,7 +251,7 @@ def _terrain_caps(window, visible, hidden, origin, atlas):
     vertices, indices, base = [], [], 0
     for face in range(6):
         normal = _NORMALS[face]
-        mask = visible & _toward(hidden, normal) & (window.owner < 0) & (window.blocks > 0)
+        mask = visible & _toward(hidden, normal) & (window.owner < 0) & CUBE_LUT[window.blocks]
         cells = np.argwhere(mask)
         if len(cells) == 0:
             continue

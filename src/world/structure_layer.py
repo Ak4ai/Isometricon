@@ -10,7 +10,8 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
-from src.world.block import BlockType
+from src.world.block import LADDER_BY_FACING, BlockType
+from src.world.block_shapes import parse_block
 from src.world.schematic import Schematic
 
 BlockLookup = Callable[[int, int, int], BlockType]
@@ -35,6 +36,28 @@ class PlacedStructure:
         self._solid = self.schematic.solid_mask          # indexados [y, z, x]
         self._occupied = self.schematic.occupied_mask
         self._culls = self.schematic.full_cube_mask
+        self._ladders = self._find_ladders()
+
+    def _find_ladders(self) -> dict:
+        """Células locais (x, y, z) das escadas de mão, com o BlockType da escada (pela direção dela)."""
+        ladders = {}
+        grid = self.schematic.grid
+        names = {}
+        for y, z, x in np.argwhere(self._occupied & ~self._solid):
+            name = grid[y, z, x]
+            if name not in names:
+                base, props = parse_block(str(name))
+                names[name] = LADDER_BY_FACING.get(props.get("facing", "north")) if base == "ladder" else None
+            if names[name] is not None:
+                ladders[(int(x), int(y), int(z))] = names[name]
+        return ladders
+
+    def ladder_at(self, x: int, y: int, z: int) -> Optional[BlockType]:
+        """A escada de mão na célula do mundo, ou ``None``."""
+        if not self._ladders:
+            return None
+        ox, oy, oz = self.origin
+        return self._ladders.get((x - ox, y - oy, z - oz))
 
     def refresh(self) -> None:
         """Relê as máscaras depois de a grade mudar; a colisão e os cômodos passam a ver o bloco novo."""
@@ -82,11 +105,17 @@ class StructureLayer:
         return any(s.is_solid_at(x, y, z) for s in self.structures)
 
     def wrap_lookup(self, base: BlockLookup) -> BlockLookup:
-        """Devolve um ``block_lookup`` que enxerga o terreno e as construções (sólidas = pedra)."""
+        """Devolve um ``block_lookup`` que enxerga o terreno e as construções (sólidas = pedra; as escadas de mão
+        das construções voltam como a escada do terreno com a mesma direção, para o personagem subir nelas)."""
 
         def lookup(x: int, y: int, z: int) -> BlockType:
-            if self.structures and self.solid_at(x, y, z):
-                return BlockType.STONE
+            if self.structures:
+                if self.solid_at(x, y, z):
+                    return BlockType.STONE
+                for placed in self.structures:
+                    ladder = placed.ladder_at(x, y, z)
+                    if ladder is not None:
+                        return ladder
             return base(x, y, z)
 
         return lookup

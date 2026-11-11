@@ -5,6 +5,7 @@ import numpy as np
 from src.math.aabb import AABB
 from src.math.vector import vec3
 from src.world import BlockType, Chunk3D
+from src.world.block import SHAPED_LUT
 
 def _coordinate(value: int) -> int:
     # Valida coordenadas inteiras sem aceitar bool.
@@ -131,6 +132,8 @@ class VoxelGridProvider:
     ) -> int:
         """Retorna o maior Y não-AIR da coluna carregada em ``(x, z)``.
 
+        Os enfeites com forma (plantas, tochas, escadas de mão, fogo) não contam: não cobrem a coluna.
+
         O ``WorldManager`` atual transmite apenas colunas no chunk vertical
         ``y=0``. No modo dinâmico, a busca consulta essa coluna diretamente
         pelo ``block_lookup``: regiões descarregadas continuam retornando AIR
@@ -140,7 +143,8 @@ class VoxelGridProvider:
         z = _coordinate(world_z)
         if self._block_lookup is not None:
             for y in range(Chunk3D.SIZE - 1, -1, -1):
-                if self.get_block_at(x, y, z) != BlockType.AIR:
+                block = int(self.get_block_at(x, y, z))
+                if block != BlockType.AIR and not SHAPED_LUT[block]:
                     return y
             return -1
 
@@ -158,7 +162,7 @@ class VoxelGridProvider:
             local_z = z - chunk_z_min
             column = chunk.blocks[local_x, :, local_z]
             solid_indices = np.flatnonzero(
-                column != int(BlockType.AIR)
+                (column != int(BlockType.AIR)) & ~SHAPED_LUT[column]
             )
             if solid_indices.size == 0:
                 continue

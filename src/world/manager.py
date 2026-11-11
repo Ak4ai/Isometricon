@@ -355,6 +355,31 @@ class WorldManager:
         self._rebuild_after_water({(x // size, y // size, z // size)})
         return True
 
+    def place_block(self, x: int, y: int, z: int, block: BlockType) -> Optional[BlockType]:
+        """Põe um bloco numa célula de ar (ou de enfeite) carregada; devolve o bloco posto ou ``None``.
+
+        A escada de mão escolhe sozinha a direção: fica presa no primeiro bloco sólido ao lado (norte, sul, leste,
+        oeste); sem parede ao lado não há onde prendê-la.
+        """
+        from src.world.block import LADDER_BY_FACING, is_ladder, is_shaped, is_solid
+
+        current = self.water.world.block(x, y, z)
+        if current is None or not (current is BlockType.AIR or is_shaped(current)):
+            return None
+        if is_ladder(block):
+            # (dx, dz) até a parede -> a escada olha para o lado oposto
+            for (dx, dz), facing in (((0, 1), "north"), ((0, -1), "south"), ((-1, 0), "east"), ((1, 0), "west")):
+                wall = self.water.world.block(x + dx, y, z + dz)
+                if wall is not None and is_solid(wall):
+                    block = LADDER_BY_FACING[facing]
+                    break
+            else:
+                return None
+        self.water.world.set_block(x, y, z, block)
+        size = Chunk3D.SIZE
+        self._rebuild_after_water({(x // size, y // size, z // size)})
+        return block
+
     # ------------------------------------------------------------------ terreno sob as construções
     @staticmethod
     def _box_slices(chunk_key, lo, hi):

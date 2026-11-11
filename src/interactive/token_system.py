@@ -18,7 +18,15 @@ from src.math import (
 )
 from src.rendering.mesh import TexturedMesh
 from src.world import BlockType
+from src.world.block import is_ladder, ladder_wall_direction
 from src.physics import VoxelCollisionController
+
+# Velocidade do salto: com a gravidade de -24 m/s² sobe v²/2g = 1,33 bloco (sobe um degrau de 1 bloco com folga)
+JUMP_SPEED = 8.0
+# Velocidade de subida e descida numa escada de mão (blocos por segundo)
+CLIMB_SPEED = 3.0
+# A escada ainda segura o personagem com os pés até tanto acima dela: no topo ele sai por cima, não cai de volta
+LADDER_TOP_MARGIN = 0.45
 
 
 def _build_cylinder(
@@ -464,6 +472,7 @@ class PlayerToken:
         self.vertical_velocity: float = 0.0
         self.grounded: bool = False
         self.in_water: bool = False
+        self.on_ladder: bool = False
         self.current_surface_y: int = int(math.floor(self.position[1] - 1.0))
         self._collision_controller: VoxelCollisionController | None = None
         self._collision_provider: object | None = None
@@ -516,10 +525,12 @@ class PlayerToken:
                 collision_provider
             )
 
+        forward_pressed = keys_pressed.get(glfw.KEY_W, False)
+        back_pressed = keys_pressed.get(glfw.KEY_S, False)
         move_vec = np.zeros(3, dtype=np.float32)
-        if keys_pressed.get(glfw.KEY_W, False):
+        if forward_pressed:
             move_vec += forward_dir
-        if keys_pressed.get(glfw.KEY_S, False):
+        if back_pressed:
             move_vec -= forward_dir
         if keys_pressed.get(glfw.KEY_D, False):
             move_vec += right_dir
@@ -530,6 +541,7 @@ class PlayerToken:
         length = float(np.linalg.norm(move_vec))
 
         horizontal_delta = np.zeros(3, dtype=np.float32)
+        norm_move = np.zeros(3, dtype=np.float32)
         if length > 1e-4:
             self.is_moving = True
             norm_move = move_vec / length
@@ -545,11 +557,42 @@ class PlayerToken:
         else:
             self.is_moving = False
 
+        jump_pressed = keys_pressed.get(glfw.KEY_SPACE, False)
+        ladder = self._ladder_at(collision_provider)
+        self.on_ladder = ladder is not None
+        climbing = False
+        if ladder is not None and not jump_pressed:
+            # Na escada: W sobe, S desce, andar contra a parede da escada sobe; parado, fica onde está.
+            wall_x, wall_z = ladder_wall_direction(ladder)
+            wall = np.array([wall_x, 0.0, wall_z], dtype=np.float32)
+            into_wall = float(np.dot(norm_move, wall)) > 0.5
+            climbing = True
+            if forward_pressed and not back_pressed:
+                self.vertical_velocity = CLIMB_SPEED
+                # W é para subir: o passo para longe da parede não tira da escada; um empurrão contra a parede o
+                # mantém encostado e, quando os pés passam do topo do bloco, o leva para cima dele.
+                horizontal_delta = self._ladder_exit_step(collision_provider, wall_x, wall_z)
+                if horizontal_delta is not None:
+                    self.vertical_velocity = 0.0   # já está acima do bloco: passa para cima dele sem pulinho
+                else:
+                    horizontal_delta = wall * (self.speed * 0.5 * float(dt))
+            elif back_pressed and not forward_pressed and not self.grounded:
+                self.vertical_velocity = -CLIMB_SPEED
+                horizontal_delta = np.zeros(3, dtype=np.float32)
+            elif into_wall:
+                self.vertical_velocity = CLIMB_SPEED
+            else:
+                self.vertical_velocity = 0.0
+        elif jump_pressed and (self.grounded or ladder is not None) and self.vertical_velocity <= 0.0:
+            # Só salta do chão (ou da escada): no ar o Espaço não faz nada.
+            self.vertical_velocity = JUMP_SPEED
+
         result = self._collision_controller.move(
             self.position,
             horizontal_delta,
             float(dt),
             self.vertical_velocity,
+            climbing=climbing,
         )
         self.position[:] = result.position
         self.vertical_velocity = result.vertical_velocity
@@ -568,6 +611,54 @@ class PlayerToken:
         # Atualiza a animação procedural modular.
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
+
+    def _ladder_at(self, provider: object) -> Optional[BlockType]:
+        """A escada de mão em que o personagem está (o corpo dentro da célula dela), ou ``None``.
+
+        Os pés contam até ``LADDER_TOP_MARGIN`` acima do topo da escada: quem chega lá em cima não cai de volta
+        antes de passar para o bloco em que ela está presa.
+        """
+        get_block_at = getattr(provider, "get_block_at", None)
+        if get_block_at is None:
+            return None
+        x = int(math.floor(float(self.position[0])))
+        z = int(math.floor(float(self.position[2])))
+        feet = float(self.position[1])
+        low = int(math.floor(feet - LADDER_TOP_MARGIN))
+        high = int(math.floor(feet + 0.9))
+        for y in range(high, low - 1, -1):
+            try:
+                block = BlockType(get_block_at(x, y, z))
+            except (TypeError, ValueError):
+                continue
+            if is_ladder(block):
+                return block
+        return None
+
+    def _ladder_exit_step(self, provider: object, wall_x: int, wall_z: int) -> Optional[np.ndarray]:
+        """No alto da escada: o deslocamento que põe o personagem no meio do bloco em que ela está presa, quando os
+        pés já passaram do topo dele e há espaço livre em cima (dois blocos); senão ``None``."""
+        from src.world.block import is_solid
+
+        x = int(math.floor(float(self.position[0])))
+        z = int(math.floor(float(self.position[2])))
+        base = int(math.floor(float(self.position[1]) + 1e-3)) - 1   # o bloco logo abaixo do nível dos pés
+
+        def solid(y: int) -> bool:
+            try:
+                return is_solid(BlockType(provider.get_block_at(x + wall_x, y, z + wall_z)))
+            except (TypeError, ValueError):
+                return False
+
+        # folga acima do topo: com os pés rentes a ele, a colisão lateral ainda trata o bloco como parede
+        if float(self.position[1]) < base + 1.06 or not solid(base) or solid(base + 1) or solid(base + 2):
+            return None
+        step = np.zeros(3, dtype=np.float32)
+        if wall_x:
+            step[0] = (x + wall_x + 0.5) - float(self.position[0])
+        else:
+            step[2] = (z + wall_z + 0.5) - float(self.position[2])
+        return step
 
     def _is_in_water(self, provider: object) -> bool:
         """Detecta água ocupando o volume central do token."""

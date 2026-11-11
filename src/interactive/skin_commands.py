@@ -43,6 +43,19 @@ HSR_HISTORY = 100  # changes of the skin under the clothes that can be undone
 RED = (255, 85, 85)
 CYAN = (85, 255, 255)
 
+# /bloco: nome -> BlockType do terreno (a escada de mão escolhe a direção pela parede ao lado)
+from src.world.block import BlockType as _BlockType  # noqa: E402
+
+BLOCK_NAMES: Dict[str, Any] = {
+    "escada": _BlockType.LADDER_NORTH, "ladder": _BlockType.LADDER_NORTH,
+    "tocha": _BlockType.TORCH, "torch": _BlockType.TORCH,
+    "fogo": _BlockType.FIRE, "fire": _BlockType.FIRE,
+    "capim": _BlockType.SHORT_GRASS, "grass": _BlockType.SHORT_GRASS,
+    "papoula": _BlockType.POPPY, "poppy": _BlockType.POPPY,
+    "dente-de-leao": _BlockType.DANDELION, "dandelion": _BlockType.DANDELION,
+    "cogumelo": _BlockType.RED_MUSHROOM, "cogumelo-marrom": _BlockType.BROWN_MUSHROOM,
+}
+
 Result = Tuple[bool, str, Tuple[int, int, int]]
 KATANA_ID = 12187348
 
@@ -182,6 +195,7 @@ class SkinCommandHandler:
         self.sun_shadows = None  # SunShadowRenderer do terreno (/sombras); None fora dele
         self.world_seed = None  # () -> int, a seed do mundo aberto (/seed); None fora do terreno
         self.place_water = None  # (x, y, z) -> bool e a célula do jogador (/agua); None fora do terreno
+        self.place_block = None  # (x, y, z, BlockType) -> BlockType posto ou None (/bloco); None fora do terreno
         self.player_cell = None
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
@@ -350,6 +364,35 @@ class SkinCommandHandler:
             if self.place_water(x, y, z):
                 return True, f"[Agua] Fonte em {x} {y} {z}.", CYAN
         return False, f"[Agua] Não dá para pôr água perto de {x} {py} {z} (ocupado ou fora do mundo carregado).", RED
+
+    # ------------------------------------------------------------------ /bloco
+    def block(self, args: List[str]) -> Result:
+        """/bloco <nome> [x y z [altura]]: põe um enfeite (escada de mão, tocha, fogo, planta) no terreno.
+
+        Sem posição, vai 2 blocos a leste do jogador, na altura dos pés. ``altura`` empilha (uma escada inteira).
+        """
+        usage = "[Bloco] Use /bloco <" + "|".join(BLOCK_NAMES) + "> [x y z [altura]]."
+        if self.place_block is None or self.player_cell is None:
+            return False, "[Bloco] Só funciona no terreno (--terrain).", RED
+        if not args or args[0].lower() not in BLOCK_NAMES:
+            return False, usage, RED
+        block = BLOCK_NAMES[args[0].lower()]
+        if len(args) >= 4:
+            try:
+                x, y, z = (int(float(a.replace(",", "."))) for a in args[1:4])
+                height = int(args[4]) if len(args) > 4 else 1
+            except ValueError:
+                return False, usage, RED
+        elif len(args) == 1:
+            px, py, pz = self.player_cell()
+            x, y, z, height = px + 2, py, pz, 1
+        else:
+            return False, usage, RED
+        placed = [self.place_block(x, y + i, z, block) for i in range(max(1, min(height, 32)))]
+        if placed[0] is None:
+            return False, f"[Bloco] Não dá para pôr {args[0]} em {x} {y} {z} (ocupado, sem parede ou fora do mundo).", RED
+        count = sum(1 for p in placed if p is not None)
+        return True, f"[Bloco] {args[0]} em {x} {y} {z}" + (f" ({count} de altura)." if count > 1 else "."), CYAN
 
     # ------------------------------------------------------------------ /sombras
     def shadows(self, args: List[str]) -> Result:
@@ -1346,6 +1389,8 @@ ROOT_COMMANDS: List[Command] = [
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),
+    Command(("bloco", "block", "setblock"), "/bloco <escada|tocha|fogo|capim|papoula|...> [x y z [altura]]",
+            "põe um enfeite no terreno (escada de mão, tocha, fogo, planta)", SkinCommandHandler.block, None),
     Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>]",
             "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca"]),
     Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>]",
@@ -1388,6 +1433,7 @@ COMMAND_TREE: Dict[str, Any] = {
     "sombras": ["on", "off", "forca"],
     "seed": [],
     "agua": [],
+    "bloco": list(BLOCK_NAMES),
     "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},
 }
 

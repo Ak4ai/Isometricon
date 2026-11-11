@@ -59,6 +59,67 @@ def face_axis(face: int) -> int:
     return next(i for i, v in enumerate(normal) if v != 0.0)
 
 
+Rgb = Tuple[float, float, float]
+# A tinta da folhagem: a mesma do topo da grama do terreno (as texturas de capim e samambaia vêm em cinza)
+GRASS_TINT: Rgb = (0.38, 0.76, 0.24)
+DRY_TINT: Rgb = (0.66, 0.52, 0.30)   # folhas secas no chão (leaf_litter, também cinza)
+
+# UV dos cantos de um plano em pé, na ordem baixo-esquerda, baixo-direita, cima-direita, cima-esquerda
+# (v = 0 no alto da textura, como nas faces das caixas).
+_PLANE_UV = ((0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0))
+
+
+@dataclass(frozen=True)
+class Quad:
+    """Um plano sem espessura (planta em cruz, trilho, cipó), visto dos dois lados.
+
+    ``corners`` em 1/16 de bloco dentro da célula, no sentido anti-horário visto da frente; ``uvs`` (0 a 1, v = 0 no
+    alto) de cada canto. ``tint`` multiplica a cor (folhagem cinza ganha verde).
+    """
+
+    corners: Tuple[Vec, Vec, Vec, Vec]
+    texture: Optional[str] = None
+    uvs: Tuple[Tuple[float, float], ...] = _PLANE_UV
+    tint: Optional[Rgb] = None
+
+    def covers_face(self, face: int) -> bool:
+        return False  # um plano nunca fecha a face da célula: não esconde o vizinho nem ganha tampa
+
+
+def _quad_turn(quad: Quad, turns: int) -> Quad:
+    """Gira o plano ``turns`` quartos de volta no sentido horário visto de cima (como ``_turn``)."""
+    corners = quad.corners
+    for _ in range(turns % 4):
+        corners = tuple((16.0 - z, y, x) for x, y, z in corners)
+    return Quad(tuple(tuple(float(c) for c in p) for p in corners), quad.texture, quad.uvs, quad.tint)
+
+
+def quad_vertices(quad: Quad, cell_corner: np.ndarray, rect: Tuple[float, float, float, float],
+                  color: Rgb = (1.0, 1.0, 1.0)) -> np.ndarray:
+    """Os 8 vértices (8, 11) do plano: a frente (4) e as costas (4, na ordem inversa e com a normal oposta).
+
+    Os dois lados saem como quads separados (índices 0-1-2 2-3-0 de cada grupo de 4), porque o OpenGL descarta a
+    face de trás.
+    """
+    u0, v0, u1, v1 = rect
+    points = np.asarray(quad.corners, dtype=np.float32) / 16.0
+    normal = np.cross(points[1] - points[0], points[2] - points[0])
+    length = float(np.linalg.norm(normal))
+    normal = normal / length if length > 1e-9 else np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    tint = np.asarray(quad.tint or (1.0, 1.0, 1.0), dtype=np.float32) * np.asarray(color, dtype=np.float32)
+    out = np.empty((8, 11), dtype=np.float32)
+    for side, order, sign in ((0, (0, 1, 2, 3), 1.0), (1, (1, 0, 3, 2), -1.0)):
+        for i, k in enumerate(order):
+            row = out[side * 4 + i]
+            row[:3] = cell_corner + points[k]
+            row[3:6] = normal * sign
+            u, v = quad.uvs[k]
+            row[6] = u0 + u * (u1 - u0)
+            row[7] = v0 + v * (v1 - v0)
+            row[8:11] = tint
+    return out
+
+
 # ---------------------------------------------------------------------------------------- geometria
 def _box(x0, y0, z0, x1, y1, z1, texture: Optional[str] = None) -> Box:
     return Box((float(x0), float(y0), float(z0)), (float(x1), float(y1), float(z1)), texture)
@@ -260,9 +321,15 @@ def _cake(props) -> List[Box]:
     return [_box(1 + 2 * bites, 0, 1, 15, 8, 15)]
 
 
-def _ladder(props) -> List[Box]:
-    plate = _box(0, 0, 14, 16, 16, 16)  # com facing=north fica no lado sul
-    return [_turn(plate, TURNS_FROM_NORTH.get(props.get("facing", "north"), 0))]
+_OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
+
+
+def _ladder(props) -> List[Quad]:
+    """Um plano fino a 0,8/16 da parede em que a escada está presa (com facing=north, a parede do sul)."""
+    gap = 0.8
+    wall = Quad(((16.0, 0.0, gap), (0.0, 0.0, gap), (0.0, 16.0, gap), (16.0, 16.0, gap)), "ladder")  # lado norte
+    side = _OPPOSITE.get(props.get("facing", "north"), "south")
+    return [_quad_turn(wall, TURNS_FROM_NORTH[side])]
 
 
 def _door(base: str, props) -> List[Box]:
@@ -276,8 +343,153 @@ def _door(base: str, props) -> List[Box]:
     return [Box(boxed.lo, boxed.hi, texture)]
 
 
+def _cross(texture: str, tint: Optional[Rgb] = None, height: float = 16.0) -> List[Quad]:
+    """Dois planos em X na diagonal da célula, como as plantas do Minecraft (de 0,8 a 15,2)."""
+    a, b = 0.8, 15.2
+    return [
+        Quad(((a, 0.0, a), (b, 0.0, b), (b, height, b), (a, height, a)), texture, tint=tint),
+        Quad(((a, 0.0, b), (b, 0.0, a), (b, height, a), (a, height, b)), texture, tint=tint),
+    ]
+
+
+def _flat(texture: str, height: float = 0.25, tint: Optional[Rgb] = None, turns: int = 0) -> Quad:
+    """Um plano deitado a ``height``/16 do chão (trilho, vitória-régia, pétalas), virado para cima."""
+    uvs = ((0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0))  # u = x, v = z, como o topo das caixas
+    quad = Quad(((0.0, height, 16.0), (16.0, height, 16.0), (16.0, height, 0.0), (0.0, height, 0.0)),
+                texture, uvs, tint)
+    return _quad_turn(quad, turns)
+
+
+# Plantas altas de dois blocos: a metade de cima e a de baixo têm texturas próprias
+_DOUBLE_PLANTS = ("tall_grass", "large_fern", "lilac", "rose_bush", "peony", "sunflower", "tall_seagrass")
+_TINTED_PLANTS = ("short_grass", "grass", "fern", "tall_grass", "large_fern", "bush")
+_CROSS_NAMES = frozenset({
+    "short_grass", "grass", "fern", "dead_bush", "bush", "firefly_bush", "short_dry_grass", "tall_dry_grass",
+    "dandelion", "poppy", "blue_orchid", "allium", "azure_bluet", "oxeye_daisy", "cornflower", "lily_of_the_valley",
+    "wither_rose", "torchflower", "open_eyeblossom", "closed_eyeblossom", "cactus_flower",
+    "brown_mushroom", "red_mushroom", "nether_sprouts", "cobweb", "sugar_cane",
+    "kelp", "kelp_plant", "seagrass", "hanging_roots", "weeping_vines", "weeping_vines_plant",
+    "twisting_vines", "twisting_vines_plant", "cave_vines", "cave_vines_plant",
+    "wheat", "carrots", "potatoes", "beetroots", "nether_wart", "sweet_berry_bush", "torchflower_crop",
+    "fire", "soul_fire", *_DOUBLE_PLANTS,
+})
+_CROSS_SUFFIXES = ("_sapling", "_tulip", "_fungus", "_coral", "_coral_fan")
+# Estágio de crescimento (age) -> número da textura, nas plantações que têm menos texturas que estágios
+_CROP_STAGES = {
+    "wheat": (0, 1, 2, 3, 4, 5, 6, 7), "carrots": (0, 0, 1, 1, 2, 2, 2, 3), "potatoes": (0, 0, 1, 1, 2, 2, 2, 3),
+    "beetroots": (0, 1, 2, 3), "nether_wart": (0, 1, 1, 2), "sweet_berry_bush": (0, 1, 2, 3),
+    "torchflower_crop": (0, 1, 1),
+}
+
+
+def is_cross_plant(base: str) -> bool:
+    """O bloco (nome sem namespace nem propriedades) é desenhado como dois planos em X."""
+    if base in _CROSS_NAMES:
+        return True
+    if base.endswith("_roots") and "mangrove" not in base:
+        return True                     # raízes carmesim e distorcidas (as de mangue são um bloco)
+    return base.endswith(_CROSS_SUFFIXES)
+
+
+def _plant_texture(base: str, props) -> str:
+    if base in _DOUBLE_PLANTS:
+        return f"{base}_{'top' if props.get('half', 'lower') == 'upper' else 'bottom'}"
+    if base == "grass":
+        return "short_grass"            # o nome antigo do capim
+    if base in _CROP_STAGES:
+        stages = _CROP_STAGES[base]
+        age = min(max(int(props.get("age", "0") or 0), 0), len(stages) - 1)
+        return f"{base}_stage{stages[age]}"
+    if base in ("cave_vines", "cave_vines_plant") and props.get("berries") == "true":
+        return f"{base}_lit"
+    if base in ("fire", "soul_fire"):
+        return f"{base}_0"              # o primeiro quadro da animação
+    return base
+
+
+def _plant(base: str, props) -> List[Quad]:
+    tint = GRASS_TINT if base in _TINTED_PLANTS else None
+    return _cross(_plant_texture(base, props), tint)
+
+
+def _rail(base: str, props) -> List[Quad]:
+    """Trilho deitado a 1/16 do chão; nas rampas (ascending_*) sobe um bloco inteiro até o lado indicado."""
+    shape = props.get("shape", "north_south")
+    texture = base + ("_on" if base != "rail" and props.get("powered") == "true" else "")
+    if shape.startswith("ascending_"):
+        quad = Quad(((0.0, 1.0, 16.0), (16.0, 1.0, 16.0), (16.0, 17.0, 0.0), (0.0, 17.0, 0.0)), texture,
+                    ((0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)))  # sobe para o norte
+        return [_quad_turn(quad, TURNS_FROM_NORTH.get(shape[len("ascending_"):], 0))]
+    corners = {"south_east": 0, "south_west": 1, "north_west": 2, "north_east": 3}
+    if base == "rail" and shape in corners:
+        return [_flat("rail_corner", 1, turns=corners[shape])]
+    return [_flat(texture, 1, turns=1 if shape == "east_west" else 0)]
+
+
+def _vine(base: str, props) -> List[Quad]:
+    """Cipó e líquen: um plano encostado em cada lado marcado (north=true...), a 0,8/16 da parede."""
+    gap = 0.8
+    wall = Quad(((16.0, 0.0, gap), (0.0, 0.0, gap), (0.0, 16.0, gap), (16.0, 16.0, gap)), base)  # no lado norte
+    quads = [_quad_turn(wall, TURNS_FROM_NORTH[side]) for side in ("north", "east", "south", "west")
+             if props.get(side) == "true"]
+    if props.get("up") == "true":
+        top = 16.0 - gap
+        quads.append(Quad(((0.0, top, 0.0), (16.0, top, 0.0), (16.0, top, 16.0), (0.0, top, 16.0)), base))
+    if props.get("down") == "true":
+        quads.append(_flat(base, gap))
+    return quads or [wall]
+
+
+def _campfire(base: str, props) -> List:
+    """Quatro toras cruzadas e, acesa, o fogo em cruz por cima."""
+    lit = props.get("lit", "true") == "true"
+    log = f"{base}_log_lit" if lit else "campfire_log"
+    logs = [_box(1, 0, 0, 5, 4, 16, log), _box(11, 0, 0, 15, 4, 16, log),
+            _box(0, 3, 1, 16, 7, 5, log), _box(0, 3, 11, 16, 7, 15, log)]
+    turn = 1 if props.get("facing", "north") in ("east", "west") else 0
+    parts: List = [_turn(b, turn) for b in logs]
+    if lit:
+        parts += _cross(f"{base}_fire")
+    return parts
+
+
+def _flat_cover(base: str, props) -> List[Quad]:
+    """Coisas finas deitadas no chão: vitória-régia, pétalas, folhas secas, fio de armadilha."""
+    if base == "leaf_litter":
+        return [_flat(base, 0.25, DRY_TINT)]
+    if base == "tripwire":
+        return [_flat(base, 1.5, turns=1 if props.get("east") == "true" or props.get("west") == "true" else 0)]
+    return [_flat(base, 0.25)]
+
+
+def _snow(props) -> Optional[List[Box]]:
+    layers = min(max(int(props.get("layers", "1") or 1), 1), 8)
+    return None if layers == 8 else [_box(0, 0, 0, 16, 2 * layers, 16)]
+
+
+def _end_rod(props) -> List[Box]:
+    facing = props.get("facing", "up")
+    if facing in ("up", "down"):
+        return [_box(7, 0, 7, 9, 16, 9)]
+    return [_box(0, 7, 7, 16, 9, 9) if facing in ("east", "west") else _box(7, 7, 0, 9, 9, 16)]
+
+
+def _sea_pickle(props) -> List[Box]:
+    count = min(max(int(props.get("pickles", "1") or 1), 1), 4)
+    spots = ((6, 6), (2, 9), (9, 2), (9, 9))[:count]
+    return [_box(x, 0, z, x + 4, 6, z + 4) for x, z in spots]
+
+
 # (teste do nome, construtor). A ordem importa: os mais específicos primeiro.
 _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
+    (is_cross_plant, _plant),
+    (lambda b: b == "rail" or b.endswith("_rail"), _rail),
+    (lambda b: b in ("vine", "glow_lichen"), _vine),
+    (lambda b: b in ("campfire", "soul_campfire"), _campfire),
+    (lambda b: b in ("lily_pad", "pink_petals", "wildflowers", "leaf_litter", "tripwire"), _flat_cover),
+    (lambda b: b == "snow", _snow),
+    (lambda b: b == "end_rod", _end_rod),
+    (lambda b: b == "sea_pickle", _sea_pickle),
     (lambda b: b.endswith("_slab"), _slab),
     (lambda b: b.endswith("_stairs"), _stairs),
     (lambda b: b.endswith("_trapdoor"), _trapdoor),
@@ -287,13 +499,13 @@ _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
     (lambda b: b.endswith("_wall") and not b.endswith(("_wall_sign", "_wall_torch")), _wall),
     (lambda b: b == "iron_bars" or b.endswith("_pane"), _bars),
     (lambda b: b.endswith("_button"), _button),
-    (lambda b: b.endswith("_pressure_plate"), None),  # recebe o nome do bloco (ver shape_for)
+    (lambda b: b.endswith("_pressure_plate"), _pressure_plate),
     (lambda b: b.endswith("wall_torch"), _wall_torch),
     (lambda b: b.endswith("torch"), _torch),
     (lambda b: b.endswith("lantern"), _lantern),
     (lambda b: b == "chain", _chain),
     (lambda b: b == "candle" or (b.endswith("_candle") and not b.endswith("_candle_cake")), _candle),
-    (lambda b: b.endswith("_carpet"), None),  # recebe o nome do bloco (ver shape_for)
+    (lambda b: b.endswith("_carpet"), _carpet),
     (lambda b: b.startswith("potted_") or b == "flower_pot", _pot),
     (lambda b: b == "decorated_pot", _decorated_pot),
     (lambda b: b == "anvil" or b in ("chipped_anvil", "damaged_anvil"), _anvil),
@@ -302,17 +514,19 @@ _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
 ]
 
 
+# Os construtores que recebem também o nome do bloco
+_NEEDS_NAME = (_plant, _rail, _vine, _campfire, _flat_cover, _carpet, _pressure_plate)
+
+
 @lru_cache(maxsize=4096)
-def shape_for(block_name: str) -> Optional[Tuple[Box, ...]]:
-    """As caixas do bloco, ou ``None`` se é um cubo inteiro."""
+def shape_for(block_name: str) -> Optional[Tuple]:
+    """As partes do bloco (caixas ``Box`` e planos ``Quad``), ou ``None`` se é um cubo inteiro."""
     base, props = parse_block(block_name)
     if base.endswith("_door") and not base.endswith("trapdoor"):
         return tuple(_door(base, props))
     for matches, build in _RULES:
         if matches(base):
-            if build is None:  # as que dependem do nome do bloco
-                build = (lambda pr: _carpet(base, pr)) if base.endswith("_carpet") else (lambda pr: _pressure_plate(base, pr))
-            boxes = build(props)
+            boxes = build(base, props) if build in _NEEDS_NAME else build(props)
             return tuple(boxes) if boxes else None
     return None
 
@@ -322,15 +536,22 @@ def is_full_cube(block_name: str) -> bool:
 
 
 # Blocos que enfeitam o espaço sem barrar quem passa (nem selar um cômodo)
-_DECORATION_SUFFIXES = ("_button", "_pressure_plate", "_wall_sign", "_sign", "_carpet", "torch", "lantern", "_candle")
-_DECORATION_NAMES = ("chain", "ladder", "candle", "flower_pot")
+_DECORATION_SUFFIXES = ("_button", "_pressure_plate", "_wall_sign", "_sign", "_carpet", "torch", "lantern", "_candle",
+                        "_rail")
+_DECORATION_NAMES = ("chain", "ladder", "candle", "flower_pot", "rail", "vine", "glow_lichen", "lily_pad",
+                     "pink_petals", "wildflowers", "leaf_litter", "tripwire", "end_rod", "sea_pickle")
 
 
 def collides(block_name: str) -> bool:
-    """O personagem não atravessa o bloco (tochas, tapetes, placas, botões, velas, vasos... não barram)."""
+    """O personagem não atravessa o bloco (tochas, tapetes, placas, botões, velas, vasos, plantas, trilhos e fogo
+    não barram)."""
     base, props = parse_block(block_name)
     if base.startswith("potted_") or base in _DECORATION_NAMES or base.endswith(_DECORATION_SUFFIXES):
         return False
+    if is_cross_plant(base):
+        return False
+    if base == "snow" and int(props.get("layers", "1") or 1) < 8:
+        return False  # a neve fina não barra (como o tapete)
     if base.endswith("_door") and not base.endswith("trapdoor") and props.get("open") == "true":
         return False  # a porta aberta deixa passar (a colisão é por célula inteira)
     return True

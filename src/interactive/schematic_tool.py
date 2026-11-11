@@ -89,6 +89,10 @@ class StructureMeshes:
         self.main = self.doors = None
 
 
+# /schem load formas: a vitrine com uma amostra de cada forma de bloco (src/world/shape_showcase.py)
+SHOWCASE_NAMES = ("formas", "vitrine", "shapes")
+
+
 class SchematicTool:
     """Carrega, posiciona e fixa construções no mundo."""
 
@@ -143,13 +147,17 @@ class SchematicTool:
     # ------------------------------------------------------------------ comandos
     def load(self, text: str, origin: Optional[Tuple[int, int, int]] = None) -> Tuple[bool, str]:
         """Abre a prévia de uma construção. ``origin`` é o canto mínimo; sem ele, vai à frente do jogador."""
-        path = self.resolve(text)
-        if path is None:
-            return False, f"Construção '{text.strip()}' não encontrada. /schem list mostra as disponíveis."
-        try:
-            schematic = Schematic.load_from_file(path)
-        except Exception as error:  # arquivo corrompido ou formato desconhecido
-            return False, f"Não consegui ler '{os.path.basename(path)}': {error}"
+        if text.strip().strip("\"'").lower() in SHOWCASE_NAMES:
+            from src.world.shape_showcase import showcase_schematic
+            schematic = showcase_schematic()   # a vitrine das formas de bloco, montada em código
+        else:
+            path = self.resolve(text)
+            if path is None:
+                return False, f"Construção '{text.strip()}' não encontrada. /schem list mostra as disponíveis."
+            try:
+                schematic = Schematic.load_from_file(path)
+            except Exception as error:  # arquivo corrompido ou formato desconhecido
+                return False, f"Não consegui ler '{os.path.basename(path)}': {error}"
         self.cancel(silent=True)
         mesh = self._mesh_factory(schematic)
         start = list(origin) if origin is not None else self._default_origin(schematic)

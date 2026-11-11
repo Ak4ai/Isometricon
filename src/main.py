@@ -400,13 +400,13 @@ def main() -> None:
         print("[Skin] Personagem salvo carregado (use --novo para começar do padrão).")
 
     if terrain_demo:
-        print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, [R] nova seed)")
+        print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, Espaço para pular, [R] nova seed)")
         atlas = TextureAtlas()
         # a região da textura da água no atlas: o shader reconhece a água por ela (as duas passadas do terreno)
         water_uv = atlas.uv_table[int(BlockType.WATER)].reshape(-1, 2)
         water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
                       float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
-        generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True)
+        generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True, vegetation=True)
         world_manager = WorldManager(generator=generator, render_distance=2, atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
         avatar = None
@@ -538,6 +538,7 @@ def main() -> None:
     skin_command_handler.world_seed = (lambda: active_seed["value"]) if terrain_demo else None
     if terrain_demo:
         skin_command_handler.place_water = lambda x, y, z: world_manager.place_water(x, y, z)
+        skin_command_handler.place_block = lambda x, y, z, block: world_manager.place_block(x, y, z, block)
         skin_command_handler.player_cell = lambda: tuple(int(np.floor(float(v))) for v in player_token.position)
     chat_console = ChatConsole(
         command_handler=skin_command_handler,
@@ -685,7 +686,7 @@ def main() -> None:
         nonlocal world_manager, voxel_provider
         world_manager.delete()
         active_seed['value'] = world['seed']
-        world_manager = WorldManager(TerrainGenerator(seed=world['seed'], enable_caves=True),
+        world_manager = WorldManager(TerrainGenerator(seed=world["seed"], enable_caves=True, vegetation=True),
                                      render_distance=2, atlas=atlas)
         x, z = .5, .5
         player_token.position[:] = world.get('position') or [x, world_manager.get_height(x, z) + 1., z]
@@ -765,7 +766,7 @@ def main() -> None:
             world_manager.delete()
             schematic_tool.clear()  # o relevo muda: as construções não fazem mais sentido onde estavam
             room_tracker.reset()
-            world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True)
+            world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True, vegetation=True)
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0
@@ -1152,7 +1153,7 @@ def main() -> None:
             )
 
             if terrain_demo:
-                mode_badge = f"Seed: {active_seed['value']} (WASD: mover | [R]: reload) | "
+                mode_badge = f"Seed: {active_seed['value']} (WASD: mover | Espaço: pular | [R]: reload) | "
             elif char_demo:
                 spin_str = "Auto-spin: ON" if turntable_state["active"] else "Auto-spin: OFF"
                 mode_badge = f"👤 {char_customization.head_type_str.capitalize()} | {spin_str} | "

@@ -8,7 +8,7 @@ from typing import Callable, Optional, Tuple
 
 import numpy as np
 
-from src.world.block_shapes import box_face_quad, shape_for
+from src.world.block_shapes import Quad, box_face_quad, quad_vertices, shape_for
 from src.world.schematic import Schematic
 
 # (u0, v0, u1, v1) de um bloco e face
@@ -87,6 +87,17 @@ class StructureMesher:
             boxes = shapes[block]
             if boxes is not None:
                 for box in boxes:
+                    if isinstance(box, Quad):
+                        # planta, trilho, escada de mão: um plano visto dos dois lados (dois quads)
+                        name = box.texture or block
+                        key = (name, "north")
+                        if key not in uv_cache:
+                            uv_cache[key] = uv_lookup(name, "north")
+                        vertices.extend(quad_vertices(box, block_pos - 0.5, uv_cache[key]).ravel())
+                        for first in (vertex_offset, vertex_offset + 4):
+                            indices.extend((first, first + 1, first + 2, first + 2, first + 3, first))
+                        vertex_offset += 8
+                        continue
                     for face, ((dx, dy, dz), _, face_key, _, _) in enumerate(_FACES_BY_SHAPE_ORDER):
                         if box.covers_face(face) and padded[y + 1 + dy, z + 1 + dz, x + 1 + dx]:
                             continue

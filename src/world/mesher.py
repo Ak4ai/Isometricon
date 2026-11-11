@@ -6,7 +6,9 @@ from collections.abc import Callable, Mapping
 import numpy as np
 from numpy.typing import NDArray
 
-from src.world.block import BlockType, BLOCK_COLORS, get_block_color, is_opaque
+from src.world.block import (
+    BlockType, BLOCK_COLORS, CUBE_LUT, SHAPED_BLOCK_NAMES, SHAPED_LUT, get_block_color, is_opaque,
+)
 from src.world.chunk import Chunk3D
 
 
@@ -96,6 +98,34 @@ for _bt, _c in BLOCK_COLORS.items():
     _COLOR_LUT[int(_bt)] = _c
 
 
+def _shaped_template(block: BlockType, atlas: object) -> NDArray[np.float32]:
+    """Os vértices (4n, 11) da forma do bloco na célula (0, 0, 0): cada grupo de 4 é um quad.
+
+    A forma é a mesma das construções (``block_shapes.shape_for`` com o nome do Minecraft do bloco); a UV vem do
+    atlas do terreno. Sem atlas, a cor é a cor base do bloco.
+    """
+    from src.world.block_shapes import FACES, Quad, box_face_quad, parse_block, quad_vertices, shape_for
+
+    name = SHAPED_BLOCK_NAMES[block]
+    base, _ = parse_block(name)
+    use_atlas = atlas is not None and hasattr(atlas, "flipped_rect")
+    color = (1.0, 1.0, 1.0) if use_atlas else BLOCK_COLORS[block]
+    corner = np.zeros(3, dtype=np.float32)
+    quads = []
+    for part in shape_for(name) or ():
+        rect = atlas.flipped_rect(part.texture or base) if use_atlas else (0.0, 1.0, 1.0, 0.0)
+        if isinstance(part, Quad):
+            quads.append(quad_vertices(part, corner, rect, color))
+        else:
+            for face in range(len(FACES)):
+                quad = box_face_quad(part, face, corner, rect)
+                quad[:, 8:11] = color
+                quads.append(quad)
+    if not quads:
+        return np.empty((0, 11), dtype=np.float32)
+    return np.concatenate(quads).astype(np.float32)
+
+
 class ChunkMesher:
     """Converte voxels em quads visíveis: O(n) tempo, O(f) memória de saída.
 
@@ -109,6 +139,27 @@ class ChunkMesher:
         """``ambient_occlusion`` escurece, por vértice, os cantos entre blocos (embutido na cor do vértice)."""
         self.atlas = atlas
         self.ambient_occlusion = ambient_occlusion
+        self._templates: dict[int, NDArray[np.float32]] = {}
+
+    def _shaped_geometry(self, blocks: NDArray) -> tuple[NDArray[np.float32], int]:
+        """Os vértices das plantas, tochas, escadas de mão e fogo do chunk, e quantos quads são."""
+        parts = []
+        for block_id in np.unique(blocks[SHAPED_LUT[blocks]]):
+            block_id = int(block_id)
+            if block_id not in self._templates:
+                self._templates[block_id] = _shaped_template(BlockType(block_id), self.atlas)
+            template = self._templates[block_id]
+            if len(template) == 0:
+                continue
+            xs, ys, zs = np.where(blocks == block_id)
+            offsets = np.stack([xs, ys, zs], axis=-1).astype(np.float32)
+            cells = np.repeat(template[None, :, :], len(xs), axis=0)
+            cells[:, :, :3] += offsets[:, None, :]
+            parts.append(cells.reshape(-1, 11))
+        if not parts:
+            return np.empty((0, 11), dtype=np.float32), 0
+        vertices = np.concatenate(parts)
+        return vertices, len(vertices) // 4
 
     @staticmethod
     def _water_corner_height(blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels) -> float:
@@ -198,7 +249,7 @@ class ChunkMesher:
             for x, y in zip(x_idx, y_idx):
                 shell(x + 1, y + 1, 0, neighbor_at(origin_x + x, origin_y + y, origin_z - 1))
 
-        non_air = (blocks != BlockType.AIR)
+        non_air = CUBE_LUT[blocks]   # os blocos com forma saem à parte (_shaped_geometry)
         is_water = padded_water[1:17, 1:17, 1:17]
         neighbours = (
             np.s_[2:18, 1:17, 1:17],  # +X (0)
@@ -211,11 +262,15 @@ class ChunkMesher:
         # a face some atrás de um vizinho opaco, e a da água também atrás de outra água
         vis = [non_air & ~padded[n] & ~(is_water & padded_water[n]) for n in neighbours]
 
-        total_faces = sum(int(v.sum()) for v in vis)
+        cube_faces = sum(int(v.sum()) for v in vis)
+        shaped_vertices, shaped_quads = self._shaped_geometry(blocks)
+        total_faces = cube_faces + shaped_quads
         if total_faces == 0:
             return ChunkMeshData(np.empty((0, 11), dtype=np.float32), np.empty(0, dtype=np.uint32))
 
         vertices = np.empty((total_faces * 4, 11), dtype=np.float32)
+        if shaped_quads:
+            vertices[cube_faces * 4:] = shaped_vertices
         indices = np.empty(total_faces * 6, dtype=np.uint32)
 
         use_atlas = self.atlas is not None and hasattr(self.atlas, "uv_table")

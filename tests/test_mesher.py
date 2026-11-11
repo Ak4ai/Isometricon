@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from src.world import BlockType, Chunk3D, ChunkMeshData, ChunkMesher, get_block_color, is_opaque
+from src.world.block import is_shaped
 
 
 DIRECTIONS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
@@ -59,7 +60,7 @@ def test_water_level_reduces_rendered_height():
     assert np.isclose(data.vertices[:, 1].min(), 5.0)
 
 
-@pytest.mark.parametrize('block', [b for b in BlockType if b != BlockType.AIR])
+@pytest.mark.parametrize('block', [b for b in BlockType if b != BlockType.AIR and not is_shaped(b)])
 def test_single_block_geometry_normals_uvs_colors(block):
     chunk = Chunk3D()
     position = np.array([4, 6, 7])
@@ -165,7 +166,7 @@ def test_opacity_policy(block, opaque):
 
 
 @pytest.mark.parametrize('value,error', [
-    (-1, ValueError), (7, ValueError), (256, ValueError),
+    (-1, ValueError), (18, ValueError), (256, ValueError),
     (1.0, TypeError), (True, TypeError), (np.bool_(False), TypeError),
     ('1', TypeError), (None, TypeError),
 ])

@@ -40,6 +40,7 @@ class TerrainGenerator:
     enable_caves: bool = False
     cave_chance: float = 0.60
     allow_sparse_depth: bool = True
+    vegetation: bool = False   # capim, flores e cogumelos sobre a grama (o jogo liga; os testes antigos não)
 
     def __post_init__(self) -> None:
         for name in ('seed', 'base_height', 'octaves', 'dirt_depth', 'sea_level'):
@@ -51,7 +52,7 @@ class TerrainGenerator:
             if not isfinite(value):
                 raise ValueError(f'{name} deve ser finito.')
             object.__setattr__(self, name, float(value))
-        for name in ('enable_caves', 'allow_sparse_depth'):
+        for name in ('enable_caves', 'allow_sparse_depth', 'vegetation'):
             value = getattr(self, name)
             if not isinstance(value, (bool, np.bool_)):
                 raise TypeError(f'{name} deve ser booleano.')
@@ -151,5 +152,43 @@ class TerrainGenerator:
                 allow_sparse_depth=self.allow_sparse_depth,
             )
             carver.carve_region(chunks, self)
+        if self.vegetation and chunks:
+            self.plant_vegetation(chunks)
         return chunks
+
+    def _plant_roll(self, xs: np.ndarray, zs: np.ndarray) -> np.ndarray:
+        """Um número estável em [0, 1) por coluna (x, z), da seed: a mesma planta volta no mesmo lugar."""
+        h = (xs.astype(np.uint64) * np.uint64(0x9E3779B97F4A7C15)) ^ (zs.astype(np.uint64) * np.uint64(0xC2B2AE3D27D4EB4F))
+        h ^= np.uint64((self.seed * 0x165667B19E3779F9 + 0x27D4EB2F) & 0xFFFFFFFFFFFFFFFF)
+        h ^= h >> np.uint64(31)
+        h *= np.uint64(0xBF58476D1CE4E5B9)
+        h ^= h >> np.uint64(27)
+        h *= np.uint64(0x94D049BB133111EB)
+        h ^= h >> np.uint64(31)
+        return (h >> np.uint64(11)).astype(np.float64) / float(1 << 53)
+
+    def plant_vegetation(self, chunks: dict) -> None:
+        """Põe capim, flores e cogumelos no ar logo acima da grama, nos chunks dados (depois das cavernas)."""
+        size = Chunk3D.SIZE
+        # (limite acumulado, planta): 14% capim, 1,5% papoula, 1,5% dente-de-leão, 0,4% de cada cogumelo
+        table = ((0.140, BlockType.SHORT_GRASS), (0.155, BlockType.POPPY), (0.170, BlockType.DANDELION),
+                 (0.174, BlockType.RED_MUSHROOM), (0.178, BlockType.BROWN_MUSHROOM))
+        with np.errstate(over='ignore'):
+            for (cx, cy, cz), chunk in chunks.items():
+                grass = np.argwhere(chunk.blocks == int(BlockType.GRASS))
+                if len(grass) == 0:
+                    continue
+                rolls = self._plant_roll(grass[:, 0] + cx * size, grass[:, 2] + cz * size)
+                limits = np.array([limit for limit, _ in table])
+                picks = np.searchsorted(limits, rolls, side='right')
+                for (lx, ly, lz), pick in zip(grass, picks):
+                    if pick >= len(table):
+                        continue
+                    target, ty = chunk, int(ly) + 1
+                    if ty >= size:
+                        target, ty = chunks.get((cx, cy + 1, cz)), 0
+                        if target is None:
+                            continue
+                    if target.blocks[lx, ty, lz] == int(BlockType.AIR):
+                        target.blocks[lx, ty, lz] = int(table[pick][1])
 

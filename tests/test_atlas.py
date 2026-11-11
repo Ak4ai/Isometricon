@@ -12,9 +12,9 @@ from src.world.mesher import ChunkMesher
 def test_atlas_initialization_cpu_mode():
     """O TextureAtlas deve inicializar na CPU sem exigir contexto gráfico OpenGL."""
     atlas = TextureAtlas(create_gl=False)
-    assert atlas.atlas_image.size == (64, 64)
+    assert atlas.atlas_image.size == (128, 64)
     assert atlas.atlas_image.mode == "RGBA"
-    assert atlas.atlas_gl.size == (64, 64)
+    assert atlas.atlas_gl.size == (128, 64)
     assert len(atlas.tile_rects) >= 12
 
 

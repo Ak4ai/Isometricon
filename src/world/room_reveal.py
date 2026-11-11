@@ -21,7 +21,7 @@ from typing import Dict, Iterable, Optional, Tuple
 import numpy as np
 from scipy import ndimage
 
-from src.world.block import BlockType
+from src.world.block import SHAPED_BLOCK_NAMES, SHAPED_LUT, BlockType
 from src.world.chunk import Chunk3D
 
 WINDOW = (48, 32, 48)          # células em x, y, z
@@ -44,7 +44,8 @@ OBJECT = 192                   # sólido com o espaço logo acima (móvel, degra
 # Blocos que não contam como teto (a copa de uma árvore não faz um cômodo)
 _NOT_ROOF = (int(BlockType.LEAVES),)
 _OPAQUE = tuple(int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD))
-_PASSABLE = (int(BlockType.AIR), int(BlockType.WATER))
+# O que o personagem atravessa: ar, água e os enfeites com forma (plantas, tochas, escadas de mão, fogo)
+_PASSABLE = (int(BlockType.AIR), int(BlockType.WATER), *(int(b) for b in SHAPED_BLOCK_NAMES))
 
 _FACE_STRUCTURE = ndimage.generate_binary_structure(3, 1)  # vizinhança de 6 faces
 _FULL_STRUCTURE = ndimage.generate_binary_structure(3, 3)  # as 26 vizinhas (faces, arestas e quinas)
@@ -128,7 +129,7 @@ def extract_window_cells(
         solid[:, :floor_rows, :] = True
         roof[:, :floor_rows, :] = True
         culls[:, :floor_rows, :] = True
-    occupied = solid.copy()
+    occupied = solid | SHAPED_LUT[blocks]   # os enfeites do terreno são desenhados, mas não são parede
 
     for index, placed in enumerate(structures):
         (bx0, by0, bz0), (bx1, by1, bz1) = placed.bounds()

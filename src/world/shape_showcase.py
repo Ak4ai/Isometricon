@@ -77,4 +77,37 @@ def showcase_schematic() -> Schematic:
     put(21, 12, "minecraft:stone_bricks")
     put(21, 11, "minecraft:wall_torch[facing=north]")
 
+    # fileira 5: plantas em cruz (sobre grama), cogumelos e fogo
+    plants = ("short_grass", "fern", "poppy", "dandelion", "blue_orchid", "allium", "azure_bluet", "red_tulip",
+              "oxeye_daisy", "cornflower", "lily_of_the_valley", "torchflower", "oak_sapling", "cherry_sapling",
+              "dead_bush", "red_mushroom", "brown_mushroom", "crimson_fungus", "warped_roots", "sugar_cane",
+              "wheat[age=7]", "carrots[age=7]", "sweet_berry_bush[age=3]", "cobweb", "fire", "soul_fire")
+    for i, name in enumerate(plants):
+        x = 1 + i
+        grid[0, 15, x] = "minecraft:grass_block[snowy=false]"
+        put(x, 15, f"minecraft:{name}")
+    for i, name in enumerate(("tall_grass", "large_fern", "lilac", "rose_bush", "peony", "sunflower")):
+        put(1 + 2 * i, 17, f"minecraft:{name}[half=lower]")
+        put(1 + 2 * i, 17, f"minecraft:{name}[half=upper]", y=2)
+
+    # fileira 6: trilhos, cipó, fogueira, vitória-régia, neve, escada de mão em pé numa parede
+    put(14, 17, "minecraft:rail[shape=north_south]")
+    put(15, 17, "minecraft:rail[shape=east_west]")
+    put(16, 17, "minecraft:rail[shape=north_east]")
+    put(17, 17, "minecraft:powered_rail[powered=true,shape=north_south]")
+    put(18, 17, "minecraft:detector_rail[powered=false,shape=east_west]")
+    put(19, 17, "minecraft:rail[shape=ascending_east]")
+    put(20, 17, "minecraft:stone_bricks")
+    put(22, 17, "minecraft:campfire[facing=north,lit=true]")
+    put(24, 17, "minecraft:lily_pad")
+    put(26, 17, "minecraft:snow[layers=3]")
+    put(28, 17, "minecraft:end_rod[facing=up]")
+    for y in range(1, 5):
+        put(1, 20, "minecraft:stone_bricks", y=y)
+        put(1, 19, "minecraft:ladder[facing=north]", y=y)
+        put(3, 20, "minecraft:stone_bricks", y=y)
+        put(3, 19, "minecraft:vine[north=false,east=false,south=true,west=false,up=false]", y=y)
+    put(5, 20, "minecraft:stone_bricks")
+    put(5, 19, "minecraft:glow_lichen[south=true]")
+
     return Schematic(width, 6, length, grid, palette={}, name="formas")
