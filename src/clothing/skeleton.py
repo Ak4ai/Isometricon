@@ -272,6 +272,22 @@ def walk_rotations(walk_time: float):
     return rotations, (0.0, pose["bounce"], 0.0)
 
 
+def climb_rotations(climb_time: float):
+    """Bone rotations of climbing a ladder (the world token's ``climb_pose``)."""
+    from src.interactive.token_system import climb_pose
+    pose = climb_pose(climb_time)
+    rotations = {
+        "UpperLeg_L": rotation_x(pose["hip_L"]), "LowerLeg_L": rotation_x(pose["knee_L"]),
+        "Foot_L": rotation_x(pose["foot_L"]),
+        "UpperLeg_R": rotation_x(pose["hip_R"]), "LowerLeg_R": rotation_x(pose["knee_R"]),
+        "Foot_R": rotation_x(pose["foot_R"]),
+        "UpperArm_L": rotation_x(pose["arm_L"]), "LowerArm_L": rotation_x(pose["forearm_L"]),
+        "UpperArm_R": rotation_x(pose["arm_R"]), "LowerArm_R": rotation_x(pose["forearm_R"]),
+        "Head": rotation_x(pose["head_pitch"]),
+    }
+    return rotations, (0.0, pose["bounce"], 0.0)
+
+
 def skin(rows: np.ndarray, indices: np.ndarray, weights: np.ndarray, matrices: np.ndarray) -> np.ndarray:
     """Vertex rows (x, y, z, nx, ny, nz, ...) moved by linear blend skinning."""
     blended = np.einsum("nk,nkij->nij", weights, matrices[indices])

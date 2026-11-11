@@ -1,4 +1,4 @@
-"""A tecla de interação ("E") que aparece ao lado do personagem quando há algo para usar perto (uma porta).
+"""A tecla de interação ("F") que aparece ao lado do personagem quando há algo para usar perto (uma porta).
 
 A imagem da tecla é feita uma vez com o PIL (uma tecla em pixel, com sombra embaixo e a legenda ao lado) e
 desenhada sobre a cena com ``HudQuad``, presa ao ponto da tela acima da cabeça do jogador. Ela surge e some
@@ -28,7 +28,7 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def key_image(letter: str = "E", label: str = "") -> Image.Image:
+def key_image(letter: str = "F", label: str = "") -> Image.Image:
     """A imagem pronta, no tamanho da tela: a tecla em pixel (ampliada ``SCALE`` vezes, sem borrar) e, ao lado,
     a legenda com contorno escuro, no tamanho final para ficar nítida."""
     s = KEY_SIZE
@@ -79,6 +79,7 @@ class InteractPrompt:
         self.level = 0.0
         self.time = 0.0
         self.label = ""
+        self.letter = "F"   # a tecla de interagir (a das preferências)
         self._quad = None
         self._image_key = None
         self._anchor = None
@@ -102,9 +103,9 @@ class InteractPrompt:
     def render(self, feet, mvp: np.ndarray, width: int, height: int) -> None:
         if self._quad is None or self.level <= 0.0:
             return
-        key = (self.label,)
+        key = (self.letter, self.label)
         if key != self._image_key:
-            self._quad.set_image(key_image("E", self.label))
+            self._quad.set_image(key_image(self.letter, self.label))
             self._image_key = key
         spot = project((feet[0], feet[1] + HEAD_HEIGHT, feet[2]), mvp, width, height)
         if spot is None:

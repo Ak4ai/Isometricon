@@ -17,6 +17,7 @@ ACTIONS = {
     'chat': ('Abrir chat', 84), 'command': ('Abrir comandos', 47),
     'pan_modifier': ('Arrastar câmera (com clique)', 340),
     'zoom_in': ('Aproximar câmera', 61), 'zoom_out': ('Afastar câmera', 45),
+    'interact': ('Interagir (portas, escadas)', 70),
 }
 DEFAULTS = {'bindings': {k: v[1] for k, v in ACTIONS.items()}, 'vsync': True,
             'sensitivity': 1.0, 'invert_rotation': False, 'reduce_motion': False,

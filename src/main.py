@@ -675,6 +675,15 @@ def main() -> None:
         from src.interactive.context_cursor import CURSOR_IDLE
         return cursor_idle() < CURSOR_IDLE
 
+    def interact_key_name() -> str:
+        """A letra da tecla de interagir (F por padrão, ou a das preferências)."""
+        code = menus.preferences.data['bindings'].get('interact', glfw.KEY_F)
+        try:
+            name = glfw.get_key_name(code, 0)
+        except Exception:
+            name = None
+        return (name or "F").upper()
+
     def hovered_door_in_reach():
         """A porta sob o cursor, se está ao alcance da mão do personagem (ou None)."""
         return picking_state["door"] if picking_state["door_in_reach"] else None
@@ -781,14 +790,17 @@ def main() -> None:
             menus.go('pause')
             return True
         key = menus.preferences.canonical(key)
-        if terrain_demo and key == glfw.KEY_E and not character_editor.is_open:
-            # a porta sob o cursor, se ao alcance; senão a mais perto do personagem
-            door = hovered_door_in_reach() or schematic_tool.door_near(player_token.position)
-            if door is not None:
-                # perto de uma porta o E abre/fecha (e não gira a câmera)
-                if action == glfw.PRESS:
+        if terrain_demo and key == glfw.KEY_F and not character_editor.is_open:
+            # F interage: a porta sob o cursor, se ao alcance; senão a mais perto do personagem; senão a escada de
+            # mão (agarra; agarrado, solta)
+            if action == glfw.PRESS:
+                door = None if player_token.ladder_grip is not None else (
+                    hovered_door_in_reach() or schematic_tool.door_near(player_token.position))
+                if door is not None:
                     toggle_door_for_player(door)
-                return True
+                else:
+                    player_token.grab_ladder(voxel_provider)
+            return True
         keys_pressed[key] = (action != glfw.RELEASE)
 
         if terrain_demo and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
@@ -1143,8 +1155,9 @@ def main() -> None:
                 movement_right,
                 voxel_provider,
             )
-            if picking_state["aim"] is not None:
+            if picking_state["aim"] is not None and player_token.ladder_grip is None:
                 # com o cursor na cena, o personagem olha para ele (andando ou parado), não para onde anda
+                # (agarrado à escada, olha para ela)
                 from src.interactive.context_cursor import face_toward
                 player_token.yaw = face_toward(facing_before, player_token.position, picking_state["aim"], dt)
 
@@ -1539,11 +1552,18 @@ def main() -> None:
                 coordinate_overlay.render(window.width, window.height, player_token.position)
                 shader.use()
 
-            # 7. A tecla E ao lado do personagem, se há uma porta ao alcance
+            # 7. A tecla F ao lado do personagem, se há uma porta ou uma escada de mão ao alcance
             # (com uma porta ao alcance sob o cursor, o rótulo vai em cima dela, no cursor de contexto)
             near_door = None if character_editor.is_open else schematic_tool.door_near(player_token.position)
-            interact_prompt.update(dt, near_door is not None and hovered_door_in_reach() is None,
-                                   "" if near_door is None else ("Fechar" if near_door.is_open else "Abrir"))
+            near_ladder = (not character_editor.is_open and near_door is None and player_token.ladder_grip is None
+                           and player_token.ladder_near(voxel_provider) is not None)
+            if near_door is not None:
+                prompt_label = "Fechar" if near_door.is_open else "Abrir"
+            else:
+                prompt_label = "Escada" if near_ladder else ""
+            interact_prompt.letter = interact_key_name()
+            interact_prompt.update(dt, (near_door is not None and hovered_door_in_reach() is None) or near_ladder,
+                                   prompt_label)
             interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
             context_cursor.update(dt, cursor_mode)
             shader.use()
@@ -1591,7 +1611,7 @@ def main() -> None:
                     verb = "Fechar" if door.is_open else "Abrir"
                 from src.interactive.context_cursor import cursor_opacity
                 context_cursor.render(window.get_cursor_pos_framebuffer(), window.width, window.height,
-                                      prompt_at, "E", verb, opacity=cursor_opacity(cursor_idle()))
+                                      prompt_at, interact_key_name(), verb, opacity=cursor_opacity(cursor_idle()))
 
         # --------------------------------------------------------------
         # Captura de screenshot e limite de frames (para testes e automação)

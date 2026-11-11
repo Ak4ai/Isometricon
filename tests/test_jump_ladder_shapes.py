@@ -1,5 +1,7 @@
 """Salto com Espaço, escadas de mão e os blocos com forma nova (plantas em cruz, tocha, fogo, trilhos...)."""
 
+import math
+
 import glfw
 import numpy as np
 import pytest
@@ -102,48 +104,86 @@ def test_ladder_geometry_helpers():
     assert not is_solid(BlockType.LADDER_WEST) and is_shaped(BlockType.LADDER_WEST)
 
 
-def test_w_climbs_and_standing_still_holds_on_the_ladder():
+def grabbed(world, x=0.5, y=1.0, z=-0.4):
+    """Personagem na frente da escada de ``ladder_world``, assentado no chão, que aperta F."""
+    token = token_at(x, y, z)
+    run(token, world, {}, 3)
+    assert token.grab_ladder(world)
+    return token
+
+
+def test_without_grabbing_the_ladder_is_not_climbed():
+    """Andar contra a escada (ou apertar W nela) não sobe sozinho: é preciso agarrar com F."""
     world = ladder_world()
     token = token_at(0.5, 1.0, 0.5)
     run(token, world, {}, 3)
+    run(token, world, {glfw.KEY_D: True}, 30)    # D aponta para o sul, contra a parede da escada
+    run(token, world, {glfw.KEY_W: True}, 30)
+    assert float(token.position[1]) == pytest.approx(1.0)
+    assert not token.on_ladder
+
+
+def test_f_grabs_the_ladder_lined_up_facing_the_wall_and_w_climbs():
+    world = ladder_world()
+    token = grabbed(world)
+    run(token, world, {}, 30)
+    assert token.on_ladder
+    assert token.position[0] == pytest.approx(0.5, abs=0.02)        # alinhado à escada
+    assert token.position[2] == pytest.approx(0.66, abs=0.03)       # encostado nela, perto da parede
+    assert math.cos(token.yaw - math.atan2(0.0, 1.0)) == pytest.approx(1.0, abs=1e-3)  # de frente para a parede
     # W sobe, mesmo com a câmera olhando ao longo da parede (W aponta para o leste)
     run(token, world, {glfw.KEY_W: True}, 30)
-    assert token.on_ladder
     height = float(token.position[1])
     assert height == pytest.approx(1.0 + CLIMB_SPEED * 30 * DT, abs=0.05)
-    assert abs(token.position[0] - 0.5) < 0.05  # o W não tirou o personagem da escada
+    assert token.position[0] == pytest.approx(0.5, abs=0.02)        # o W não tira o personagem da escada
     # parado na escada: não cai
     run(token, world, {}, 60)
     assert float(token.position[1]) == pytest.approx(height)
+    assert token.climb_time > 0.0                                   # a animação de subir andou
 
 
-def test_s_descends_the_ladder_to_the_floor():
+def test_f_again_or_space_lets_go():
     world = ladder_world()
-    token = token_at(0.5, 3.5, 0.5)
-    run(token, world, {}, 3)
-    assert float(token.position[1]) == pytest.approx(3.5)
+    token = grabbed(world)
+    run(token, world, {glfw.KEY_W: True}, 40)
+    assert not token.grab_ladder(world) and not token.on_ladder      # F de novo: solta
+    run(token, world, {}, 90)
+    assert token.grounded and float(token.position[1]) == pytest.approx(1.0)
+    token = grabbed(world)
+    run(token, world, {glfw.KEY_W: True}, 40)
+    run(token, world, {glfw.KEY_SPACE: True}, 1)                     # Espaço: solta, para trás
+    assert not token.on_ladder
+    run(token, world, {}, 90)
+    assert token.grounded and token.position[2] < 0.6
+
+
+def test_s_descends_to_the_floor_and_lets_go():
+    world = ladder_world()
+    token = grabbed(world)
+    run(token, world, {glfw.KEY_W: True}, 50)
     run(token, world, {glfw.KEY_S: True}, 90)
     assert float(token.position[1]) == pytest.approx(1.0)
-    assert token.grounded
+    assert token.grounded and not token.on_ladder
 
 
-def test_walking_into_the_ladder_wall_climbs():
+def test_nothing_to_grab_far_from_a_ladder():
     world = ladder_world()
-    token = token_at(0.5, 1.0, 0.5)
+    token = token_at(3.5, 1.0, -2.5)
     run(token, world, {}, 3)
-    run(token, world, {glfw.KEY_D: True}, 20)   # D aponta para o sul, contra a parede da escada
-    assert token.position[1] > 1.5
+    assert token.ladder_near(world) is None
+    assert not token.grab_ladder(world)
 
 
 @pytest.mark.parametrize("dt", [1 / 60, 1 / 30, 1 / 12])
 def test_climbing_to_the_top_steps_onto_the_wall(dt):
     # W aponta para longe da parede (a câmera olha de lado): mesmo assim, no topo, o personagem passa para cima
     world = ladder_world()
-    token = token_at(0.5, 1.0, 0.5)
+    token = token_at(0.5, 1.0, -0.4)
     away = np.array([-0.7, 0.0, -0.7], dtype=np.float32)
     side = np.array([0.7, 0.0, -0.7], dtype=np.float32)
     for _ in range(3):
         token.update(dt, {}, away, side, world)
+    assert token.grab_ladder(world)
     for _ in range(int(4.0 / dt)):   # W até sair da escada por cima (aí o jogador solta o W)
         token.update(dt, {glfw.KEY_W: True}, away, side, world)
         if not token.on_ladder and token.position[2] > 1.0:
@@ -152,6 +192,17 @@ def test_climbing_to_the_top_steps_onto_the_wall(dt):
         token.update(dt, {}, away, side, world)
     assert token.position[2] > 1.0                      # passou para cima do muro
     assert float(token.position[1]) == pytest.approx(5.0)
+    assert token.grounded and not token.on_ladder
+
+
+def test_from_the_top_of_the_wall_f_grabs_the_ladder_to_go_down():
+    world = ladder_world()
+    token = token_at(0.5, 5.0, 1.5)                     # em cima do muro, junto da escada
+    run(token, world, {}, 3)
+    assert token.grab_ladder(world)
+    assert float(token.position[1]) == pytest.approx(4.0)
+    run(token, world, {glfw.KEY_S: True}, 62)       # desce os 3 blocos e, no chão, solta
+    assert float(token.position[1]) == pytest.approx(1.0)
     assert token.grounded and not token.on_ladder
 
 
@@ -168,8 +219,18 @@ def test_structure_ladders_are_climbable_through_the_layer_lookup():
     token = token_at(0.5, 1.0, 0.5)
     world = VoxelGridProvider(block_lookup=lookup)
     run(token, world, {}, 3)
+    assert token.grab_ladder(world)
     run(token, world, {glfw.KEY_W: True}, 20)
     assert token.on_ladder and token.position[1] > 1.5
+
+
+def test_the_climb_pose_alternates_hands_and_feet():
+    from src.interactive.token_system import climb_pose
+    up = climb_pose(math.pi / 2)        # a mão direita no alto, o pé esquerdo no degrau de cima
+    down = climb_pose(3 * math.pi / 2)
+    assert up["arm_R"] > up["arm_L"] and down["arm_L"] > down["arm_R"]
+    assert up["hip_R"] < up["hip_L"] or up["hip_L"] < up["hip_R"]
+    assert all(a < -2.0 for a in (up["arm_L"], up["arm_R"]))         # os braços para cima, na escada
 
 
 # ------------------------------------------------------------------------------------------- formas

@@ -27,6 +27,12 @@ JUMP_SPEED = 8.0
 CLIMB_SPEED = 3.0
 # A escada ainda segura o personagem com os pés até tanto acima dela: no topo ele sai por cima, não cai de volta
 LADDER_TOP_MARGIN = 0.45
+# Agarrado à escada (F), o personagem fica tanto do centro da célula em direção à parede, de frente para ela
+LADDER_HOLD = 0.16
+# Até onde (blocos, no plano) o F alcança uma escada
+LADDER_REACH = 1.3
+# Quão rápido o personagem se encaixa na escada ao agarrá-la (por segundo)
+LADDER_SNAP = 14.0
 
 
 def _build_cylinder(
@@ -258,6 +264,29 @@ def walk_pose(walk_time: float) -> Dict[str, float]:
         "head_pitch": math.sin(walk_time * 2.0) * math.radians(1.5),
     }
 
+def climb_pose(climb_time: float) -> Dict[str, float]:
+    """Ângulos (radianos) da subida de uma escada de mão em ``climb_time``: as mãos se revezam nos degraus acima da
+    cabeça e as pernas sobem um degrau cada, a mão de um lado com o pé do outro. Mesma convenção de ``walk_pose``
+    (negativo gira para a frente)."""
+    s = math.sin(climb_time)
+    return {
+        # os braços para cima e para a frente, na escada; o que sobe estica, o que desce dobra o cotovelo
+        "arm_L": math.radians(-150.0) - s * math.radians(22.0),
+        "arm_R": math.radians(-150.0) + s * math.radians(22.0),
+        "forearm_L": -math.radians(20.0) - max(0.0, -s) * math.radians(40.0),
+        "forearm_R": -math.radians(20.0) - max(0.0, s) * math.radians(40.0),
+        # a perna do lado oposto ao braço que sobe dobra para o degrau de cima
+        "hip_L": -math.radians(28.0) - max(0.0, -s) * math.radians(40.0),
+        "hip_R": -math.radians(28.0) - max(0.0, s) * math.radians(40.0),
+        "knee_L": math.radians(40.0) + max(0.0, -s) * math.radians(50.0),
+        "knee_R": math.radians(40.0) + max(0.0, s) * math.radians(50.0),
+        "foot_L": -math.radians(10.0),
+        "foot_R": -math.radians(10.0),
+        "head_pitch": -math.radians(12.0),   # olha para cima, para os degraus
+        "bounce": 0.0,
+    }
+
+
 class ModularCharacter:
     """Gerencia a hierarquia Forward Kinematics (FK) e animação procedural de caminhada."""
 
@@ -473,6 +502,9 @@ class PlayerToken:
         self.grounded: bool = False
         self.in_water: bool = False
         self.on_ladder: bool = False
+        # (x, z, BlockType) da escada agarrada (F), ou None: só agarrado se sobe ou desce
+        self.ladder_grip: Optional[Tuple[int, int, BlockType]] = None
+        self.climb_time: float = 0.0  # o ciclo da animação de subir (avança com a subida e a descida)
         self.current_surface_y: int = int(math.floor(self.position[1] - 1.0))
         self._collision_controller: VoxelCollisionController | None = None
         self._collision_provider: object | None = None
@@ -542,7 +574,7 @@ class PlayerToken:
 
         horizontal_delta = np.zeros(3, dtype=np.float32)
         norm_move = np.zeros(3, dtype=np.float32)
-        if length > 1e-4:
+        if length > 1e-4 and self.ladder_grip is None:   # agarrado à escada, W e S sobem e descem
             self.is_moving = True
             norm_move = move_vec / length
             horizontal_delta = norm_move * self.speed * float(dt)
@@ -558,33 +590,43 @@ class PlayerToken:
             self.is_moving = False
 
         jump_pressed = keys_pressed.get(glfw.KEY_SPACE, False)
-        ladder = self._ladder_at(collision_provider)
-        self.on_ladder = ladder is not None
         climbing = False
-        if ladder is not None and not jump_pressed:
-            # Na escada: W sobe, S desce, andar contra a parede da escada sobe; parado, fica onde está.
-            wall_x, wall_z = ladder_wall_direction(ladder)
-            wall = np.array([wall_x, 0.0, wall_z], dtype=np.float32)
-            into_wall = float(np.dot(norm_move, wall)) > 0.5
+        exiting = False
+        if self.ladder_grip is not None and self._ladder_at(collision_provider, *self.ladder_grip[:2]) is None:
+            self.ladder_grip = None   # a escada sumiu (ou o personagem saiu dela)
+        if self.ladder_grip is not None:
+            # Agarrado (como em Resident Evil): alinhado à escada, de frente para a parede; W sobe, S desce, parado
+            # fica onde está; Espaço solta; no topo passa para cima do bloco; embaixo, com S, desce para o chão.
+            x, z, block = self.ladder_grip
+            wall_x, wall_z = ladder_wall_direction(block)
             climbing = True
-            if forward_pressed and not back_pressed:
-                self.vertical_velocity = CLIMB_SPEED
-                # W é para subir: o passo para longe da parede não tira da escada; um empurrão contra a parede o
-                # mantém encostado e, quando os pés passam do topo do bloco, o leva para cima dele.
-                horizontal_delta = self._ladder_exit_step(collision_provider, wall_x, wall_z)
-                if horizontal_delta is not None:
-                    self.vertical_velocity = 0.0   # já está acima do bloco: passa para cima dele sem pulinho
+            self.is_moving = False
+            target = np.array([x + 0.5 + wall_x * LADDER_HOLD, 0.0, z + 0.5 + wall_z * LADDER_HOLD], dtype=np.float32)
+            horizontal_delta = (target - self.position) * min(float(dt) * LADDER_SNAP, 1.0)
+            horizontal_delta[1] = 0.0
+            target_yaw = math.atan2(wall_x, wall_z)
+            angle_diff = (target_yaw - self.yaw + math.pi) % (2.0 * math.pi) - math.pi
+            self.yaw += angle_diff * min(float(dt) * 14.0, 1.0)
+            self.vertical_velocity = 0.0
+            if jump_pressed:
+                self.ladder_grip = None
+                climbing = False
+                horizontal_delta = -np.array([wall_x, 0.0, wall_z], dtype=np.float32) * 0.3  # solta para trás
+            elif forward_pressed and not back_pressed:
+                step = self._ladder_exit_step(collision_provider, wall_x, wall_z)
+                if step is not None:
+                    horizontal_delta, exiting = step, True   # os pés passaram do topo: sobe para o bloco
+                elif self._ladder_at(collision_provider, x, z, float(self.position[1]) + CLIMB_SPEED * float(dt)):
+                    self.vertical_velocity = CLIMB_SPEED
+            elif back_pressed and not forward_pressed:
+                if self.grounded:
+                    self.ladder_grip = None   # chegou ao chão: solta
+                    climbing = False
                 else:
-                    horizontal_delta = wall * (self.speed * 0.5 * float(dt))
-            elif back_pressed and not forward_pressed and not self.grounded:
-                self.vertical_velocity = -CLIMB_SPEED
-                horizontal_delta = np.zeros(3, dtype=np.float32)
-            elif into_wall:
-                self.vertical_velocity = CLIMB_SPEED
-            else:
-                self.vertical_velocity = 0.0
-        elif jump_pressed and (self.grounded or ladder is not None) and self.vertical_velocity <= 0.0:
-            # Só salta do chão (ou da escada): no ar o Espaço não faz nada.
+                    self.vertical_velocity = -CLIMB_SPEED
+            self.climb_time += abs(self.vertical_velocity) * float(dt) * 2.4
+        elif jump_pressed and self.grounded and self.vertical_velocity <= 0.0:
+            # Só salta do chão: no ar o Espaço não faz nada.
             self.vertical_velocity = JUMP_SPEED
 
         result = self._collision_controller.move(
@@ -597,6 +639,9 @@ class PlayerToken:
         self.position[:] = result.position
         self.vertical_velocity = result.vertical_velocity
         self.grounded = result.grounded
+        if exiting:
+            self.ladder_grip = None
+        self.on_ladder = self.ladder_grip is not None
         self.in_water = self._is_in_water(collision_provider)
 
         if result.ground_block is not None:
@@ -607,12 +652,15 @@ class PlayerToken:
         # The avatar walks the same cycle as the token moves, and rests when it stops.
         if self.animator is not None:
             self.animator.walking = self.is_moving
+            self.animator.climbing = self.ladder_grip is not None
+            self.animator.climb_time = self.climb_time
             self.animator.update(dt, walk_time=self.walk_time)
         # Atualiza a animação procedural modular.
         if self.modular_character is not None:
             self.modular_character.update_animation(dt, self.is_moving, self.walk_time)
 
-    def _ladder_at(self, provider: object) -> Optional[BlockType]:
+    def _ladder_at(self, provider: object, x: Optional[int] = None, z: Optional[int] = None,
+                   feet: Optional[float] = None) -> Optional[BlockType]:
         """A escada de mão em que o personagem está (o corpo dentro da célula dela), ou ``None``.
 
         Os pés contam até ``LADDER_TOP_MARGIN`` acima do topo da escada: quem chega lá em cima não cai de volta
@@ -621,9 +669,9 @@ class PlayerToken:
         get_block_at = getattr(provider, "get_block_at", None)
         if get_block_at is None:
             return None
-        x = int(math.floor(float(self.position[0])))
-        z = int(math.floor(float(self.position[2])))
-        feet = float(self.position[1])
+        x = int(math.floor(float(self.position[0]))) if x is None else x
+        z = int(math.floor(float(self.position[2]))) if z is None else z
+        feet = float(self.position[1]) if feet is None else feet
         low = int(math.floor(feet - LADDER_TOP_MARGIN))
         high = int(math.floor(feet + 0.9))
         for y in range(high, low - 1, -1):
@@ -634,6 +682,54 @@ class PlayerToken:
             if is_ladder(block):
                 return block
         return None
+
+    def ladder_near(self, provider: object) -> Optional[Tuple[int, int, int, BlockType]]:
+        """A escada de mão ao alcance do F: (x, y, z, BlockType) da mais perto, na célula do personagem ou numa
+        vizinha, da altura dos pés até a cabeça, ou logo abaixo dos pés (do alto da parede, para descer)."""
+        get_block_at = getattr(provider, "get_block_at", None)
+        if get_block_at is None:
+            return None
+        px, py, pz = (float(v) for v in self.position)
+        fx, fz = int(math.floor(px)), int(math.floor(pz))
+        feet = int(math.floor(py + 0.05))
+        best = None
+        for dx in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                x, z = fx + dx, fz + dz
+                distance = math.hypot(x + 0.5 - px, z + 0.5 - pz)
+                if distance > LADDER_REACH or (best is not None and distance >= best[0]):
+                    continue
+                for y in (feet, feet + 1, feet - 1):
+                    try:
+                        block = BlockType(get_block_at(x, y, z))
+                    except (TypeError, ValueError):
+                        continue
+                    if is_ladder(block):
+                        best = (distance, x, y, z, block)
+                        break
+        return None if best is None else best[1:]
+
+    def grab_ladder(self, provider: object) -> bool:
+        """F: agarra a escada ao alcance (True) ou, já agarrado, solta. Do alto da parede, desce para ela."""
+        if self.ladder_grip is not None:
+            self.ladder_grip = None
+            self.on_ladder = False
+            return False
+        found = self.ladder_near(provider)
+        if found is None:
+            return False
+        x, y, z, block = found
+        self.ladder_grip = (x, z, block)
+        self.on_ladder = True
+        self.vertical_velocity = 0.0
+        if y < int(math.floor(float(self.position[1]) + 0.05)):
+            # do alto: os pés vão para o degrau de cima, já na coluna da escada
+            wall_x, wall_z = ladder_wall_direction(block)
+            self.position[0] = x + 0.5 + wall_x * LADDER_HOLD
+            self.position[2] = z + 0.5 + wall_z * LADDER_HOLD
+            self.position[1] = float(y)
+            self.grounded = False   # saiu do alto do bloco: o S desce, não solta
+        return True
 
     def _ladder_exit_step(self, provider: object, wall_x: int, wall_z: int) -> Optional[np.ndarray]:
         """No alto da escada: o deslocamento que põe o personagem no meio do bloco em que ela está presa, quando os

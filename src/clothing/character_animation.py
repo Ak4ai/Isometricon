@@ -209,6 +209,9 @@ class CharacterAnimator:
     def __init__(self, model, walking: bool = True):
         self.model = model
         self.walking = walking
+        self.climbing = False  # on a ladder: the climb pose (``climb_time`` its cycle) instead of the walk
+        self.climb = 0.0       # how far into the climb pose: eases in and out like ``stride``
+        self.climb_time = 0.0
         self.walk_time = 0.0
         self.stride = 0.0  # how far into the walk the pose is: 0 at rest, 1 walking
         self._bound_key = None
@@ -759,6 +762,10 @@ class CharacterAnimator:
         self.stride += (target - self.stride) * min(dt * STRIDE_EASE, 1.0)
         if abs(self.stride - target) < 1e-3:
             self.stride = target
+        climb_target = 1.0 if self.climbing else 0.0
+        self.climb += (climb_target - self.climb) * min(dt * STRIDE_EASE, 1.0)
+        if abs(self.climb - climb_target) < 1e-3:
+            self.climb = climb_target
         custom = getattr(self.model, "customization", None)
         shape = (self._nose_style(), (getattr(custom, "ear_style", None), getattr(custom, "ear_color", ""), getattr(custom, "horn_style", None),
                                      getattr(custom, "horn_color", ""), getattr(custom, "tail_style", None),
@@ -768,14 +775,30 @@ class CharacterAnimator:
             self._reshape(shape)
         if self.arms_out != self._arms_shown:
             self._arms_shown, self._shown = self.arms_out, None  # the rest pose is another one now
-        if self.stride == 0.0 and self._shown == "rest":
+        if self.stride == 0.0 and self.climb == 0.0 and self._shown == "rest":
             return
         if walk_time is not None:
             self.walk_time = walk_time
         elif self.walking:
             self.walk_time += dt * WALK_SPEED
-        self.show(self.pose(*self.walk_pose(self.walk_time, self.stride)))
-        self._shown = "walk" if self.stride > 0.0 else "rest"
+        rotations, root = self.walk_pose(self.walk_time, self.stride)
+        if self.climb > 0.0:
+            rotations, root = self._climbed(rotations, root)
+        self.show(self.pose(rotations, root))
+        self._shown = "walk" if self.stride > 0.0 or self.climb > 0.0 else "rest"
+
+    def _climbed(self, rotations, root):
+        """``rotations`` (a walk or the rest) turned ``climb`` of the way into the climb pose at ``climb_time``."""
+        from src.clothing.skeleton import climb_rotations, partial_rotation
+        climb, _ = climb_rotations(self.climb_time)
+        rotations = dict(rotations)
+        for bone, rotation in climb.items():
+            base = self.rest.get(bone)
+            target = rotation @ base if base is not None else rotation
+            current = rotations.get(bone, base if base is not None else np.eye(3))
+            # from the current pose to the climb one: the part of the turn between them
+            rotations[bone] = partial_rotation(target @ current.T, self.climb) @ current
+        return rotations, root
 
     def pose(self, rotations, root=(0.0, 0.0, 0.0)):
         """Skinning matrices of a pose, with the body's proportions (``body_shape``)."""
