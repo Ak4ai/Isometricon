@@ -545,6 +545,10 @@ _RULES: List[Tuple[Callable[[str], bool], Callable]] = [
 ]
 
 
+# Blocos em que o modelo do jogo, quando existe, vale mais que a regra daqui (a regra fica de reserva): a placa de
+# parede do jogo é um pouco mais fina (1,33/16) que a que eu tinha medido (2/16)
+_PREFER_MODELS = ("_wall_sign",)
+
 # Os construtores que recebem também o nome do bloco
 _NEEDS_NAME = (_plant, _rail, _vine, _campfire, _flat_cover, _carpet, _pressure_plate)
 
@@ -555,11 +559,37 @@ def shape_for(block_name: str) -> Optional[Tuple]:
     base, props = parse_block(block_name)
     if base.endswith("_door") and not base.endswith("trapdoor"):
         return tuple(_door(base, props))
+    if base.endswith(_PREFER_MODELS):
+        from_models = _shape_from_models(block_name)
+        if from_models is not None:
+            return from_models
     for matches, build in _RULES:
         if matches(base):
             boxes = build(base, props) if build in _NEEDS_NAME else build(props)
             return tuple(boxes) if boxes else None
-    return None
+    return _shape_from_models(block_name)
+
+
+@lru_cache(maxsize=1)
+def _models():
+    """Os modelos do Minecraft (a cópia local ou o jar), se existem; ``False`` se não."""
+    try:
+        from src.rendering.mc_models import MinecraftModels
+
+        return MinecraftModels.find() or False
+    except Exception:  # sem os modelos o jogo segue com os cubos de sempre
+        return False
+
+
+def _shape_from_models(block_name: str) -> Optional[Tuple]:
+    """As caixas do bloco lidas do blockstate e do modelo do Minecraft, para os que não têm regra aqui."""
+    models = _models()
+    if not models:
+        return None
+    boxes = models.boxes(block_name)
+    if not boxes:
+        return None
+    return tuple(Box(lo, hi) for lo, hi in boxes)
 
 
 def is_full_cube(block_name: str) -> bool:

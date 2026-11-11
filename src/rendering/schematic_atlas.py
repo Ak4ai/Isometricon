@@ -34,6 +34,7 @@ class SchematicAtlas:
         tile_size: int = 16,
         atlas_size: int = 1024,
         create_gl: bool = False,
+        models: object = "auto",
     ):
         """
         Args:
@@ -41,6 +42,9 @@ class SchematicAtlas:
             tile_size: Lado de cada ladrilho em pixels.
             atlas_size: Lado do atlas em pixels (quadrado).
             create_gl: Se True, já envia o atlas para a GPU (precisa de contexto OpenGL).
+            models: Os modelos do Minecraft (``MinecraftModels``) que dizem a textura de cada face; "auto" procura
+                o ``client.jar`` do jogador quando se usa a pasta de texturas padrão (e nenhum com outra pasta);
+                ``None`` desliga e fica só o palpite por nome.
         """
         self.textures_dir = textures_dir or DEFAULT_TEXTURES_DIR
         self.tile_size = tile_size
@@ -52,6 +56,10 @@ class SchematicAtlas:
         self.atlas_image: Image.Image
 
         self._build_atlas()
+        if models == "auto":
+            from src.rendering.mc_models import MinecraftModels
+            models = MinecraftModels.find() if textures_dir is None else None
+        self.models = models
         if create_gl:
             self.upload()
 
@@ -112,6 +120,12 @@ class SchematicAtlas:
     def get_uv(self, block_name: str, face: str = "all") -> Tuple[float, float, float, float]:
         """Retorna (u0, v0, u1, v1) para um bloco e face ('top', 'bottom' ou lateral)."""
         clean = self.clean_block_name(block_name)
+
+        # O que o Minecraft diz (blockstate + modelo): a textura exata da face, quando está no atlas
+        if self.models is not None:
+            texture = self.models.face_texture(block_name, face)
+            if texture is not None and texture in self.uv_map:
+                return self.uv_map[texture]
 
         if face in ("top", "+y"):
             candidates = [f"{clean}_top", f"{clean}_up", clean]

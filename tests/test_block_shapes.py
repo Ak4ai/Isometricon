@@ -126,10 +126,12 @@ def test_walls_have_low_and_tall_arms_and_an_optional_post():
 
 
 def test_wall_signs_stick_to_the_opposite_side():
-    assert extents("minecraft:cherry_wall_sign[facing=north]") == ((0, 4.5, 14), (16, 12.5, 16))
-    assert extents("minecraft:cherry_wall_sign[facing=south]")[1][2] == 2.0
-    assert extents("minecraft:cherry_wall_sign[facing=east]")[0][0] == 0.0
-    assert extents("minecraft:cherry_wall_sign[facing=west]")[0][0] == 14.0
+    # a espessura vem do modelo do jogo (1,33/16) quando ele existe, ou de 2/16 (a regra de reserva)
+    lo, hi = extents("minecraft:cherry_wall_sign[facing=north]")
+    assert lo[0] == 0 and hi[0] == 16 and 4 <= lo[1] < 5 and 12 < hi[1] <= 13 and 14 <= lo[2] < 15 and 15 < hi[2] <= 16
+    assert extents("minecraft:cherry_wall_sign[facing=south]")[1][2] < 2.0 + 1e-6
+    assert extents("minecraft:cherry_wall_sign[facing=east]")[0][0] < 1.0
+    assert extents("minecraft:cherry_wall_sign[facing=west]")[1][0] >= 15.5 and extents("minecraft:cherry_wall_sign[facing=west]")[0][0] >= 14.0
 
 
 def test_doors_close_on_the_opposite_side_and_swing_open():
