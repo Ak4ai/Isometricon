@@ -33,10 +33,11 @@ def test_map_project_save_load_keeps_base_and_objects(tmp_path):
 
 
 def test_old_object_file_loads_as_map_base():
-    project = MapProject.from_dict(_house().to_dict())
+    house = _house()
+    project = MapProject.from_dict(house.to_dict())
     assert project.size == (7, 7, 7)
     assert project.objects == []
-    assert project.base.voxel_count == 204
+    assert project.base.voxel_count == house.voxel_count
 
 
 def test_rotation_round_trip_for_a_non_symmetric_object():

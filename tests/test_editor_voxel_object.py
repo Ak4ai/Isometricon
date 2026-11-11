@@ -95,3 +95,20 @@ def test_sample_house_loads():
     assert house.size == (7, 7, 7)
     assert house.voxel_count > 100
     assert len(house.materials) >= 4
+
+
+def test_sample_house_is_hollow_and_has_an_open_door():
+    house = VoxelObject.load("assets/objects/casa_exemplo.json")
+    # Vãos abertos: 2 blocos de largura por 3 de altura, frente e fundos.
+    for z in (0, 6):
+        for x in (2, 3):
+            for y in (1, 2, 3):
+                assert house.get(x, y, z) == -1
+    # Interior 5x5 com 4 blocos livres de altura.
+    for x in range(1, 6):
+        for y in range(1, 5):
+            for z in range(1, 6):
+                assert house.get(x, y, z) == -1
+    # Piso e teto existem para o interior ser utilizável.
+    assert house.get(3, 0, 3) >= 0
+    assert house.get(3, 5, 3) >= 0

@@ -80,8 +80,9 @@ apagar, aponte diretamente para o voxel.
    `--terrain --map=...`.
 
 Há um exemplo em [`assets/objects/casa_exemplo.json`](../assets/objects/casa_exemplo.json)
-(204 voxels, 5 materiais): telhado em três camadas, paredes de tijolo, janelas e
-chaminé.
+(207 voxels, 4 materiais): telhado em duas camadas, paredes de tijolo, janelas,
+chaminé e **interior oco com 5×5×4 blocos livres**. As duas faces têm vãos de
+porta abertos de 2×3 blocos, então o token consegue entrar e sair.
 
 ## 📦 Formato do objeto/mapa
 

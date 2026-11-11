@@ -140,3 +140,24 @@ def test_hud_actions_toggle_modes(tmp_path):
     assert editor.mode == editor.SELECT
     editor._hud_action("cancel")
     assert editor.mode == editor.OFF
+
+
+def test_example_house_door_is_walkable_from_outside_to_interior():
+    from collections import deque
+    store = WorldObjectStore(1)
+    store.add(_house(), (0, 0, 0), 0, "casa")
+    provider = WorldTokenProvider(store, _height)
+    start = (3, 1, -1)
+    goal = (3, 1, 3)
+    queue = deque([start])
+    seen = {start}
+    while queue:
+        x, y, z = queue.popleft()
+        if (x, y, z) == goal:
+            break
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nxt = (x + dx, y, z + dz)
+            if nxt not in seen and provider.get_block_at(*nxt) == BlockType.AIR:
+                seen.add(nxt)
+                queue.append(nxt)
+    assert goal in seen
