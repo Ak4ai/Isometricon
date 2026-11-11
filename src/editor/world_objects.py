@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -32,6 +33,7 @@ from src.world import BlockType
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORLD_FORMAT = "isometricon-world-objects"
 WORLD_VERSION = 1
+CLICK_COOLDOWN = 0.25
 PANEL_WIDTH = 440
 PANEL_HEIGHT = 202
 _FONT_CANDIDATES = (
@@ -371,6 +373,7 @@ class WorldObjectEditor:
         self._preview_dirty = True
         self._meshes_dirty = True
         self.last_mouse_window: tuple[float, float] | None = None
+        self._last_click_time = 0.0
         self.token_position: tuple[float, float, float] | None = None
         self._window_width = 1280
         if create_gl:
@@ -686,6 +689,10 @@ class WorldObjectEditor:
                 return True
             if self.hud.contains(self.last_mouse_window[0], self.last_mouse_window[1], self._window_width):
                 return True
+        now = time.monotonic()
+        if now - self._last_click_time < CLICK_COOLDOWN:
+            return True
+        self._last_click_time = now
         if self.mode == self.PLACE:
             self.place_current()
             return True

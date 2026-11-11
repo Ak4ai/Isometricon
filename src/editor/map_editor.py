@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -55,6 +56,9 @@ PALETTE = (
 )
 MAX_UNDO = 50
 MAX_BRUSH = 8
+CLICK_COOLDOWN = 0.20
+DRAG_ARM_DELAY = 0.14
+DRAG_DISTANCE = 6.0
 MAX_GRID_SPACING = 8
 
 
@@ -117,6 +121,11 @@ class MapEditor:
         self.click_pending = False
         self.dragging = False
         self._last_drag_cell: tuple[int, int, int] | None = None
+        self._press_mouse: tuple[float, float] | None = None
+        self._press_time = 0.0
+        self._drag_armed = False
+        self._last_drag_mouse: tuple[float, float] | None = None
+        self._last_click_time = 0.0
         self.last_mouse: tuple[float, float] | None = None
         self.last_mouse_window: tuple[float, float] | None = None
         self.hex_mode = False
@@ -484,11 +493,23 @@ class MapEditor:
                 if 12 <= x <= 12 + PANEL_WIDTH and 12 <= y <= 12 + PANEL_HEIGHT:
                     self._hud_action(self.hud.hit(x - 12, y - 12) if self.hud is not None else None)
                     return True
+            now = time.monotonic()
+            if now - self._last_click_time < CLICK_COOLDOWN:
+                return True
+            self._last_click_time = now
+            self._press_mouse = self.last_mouse
+            self._press_time = now
+            self._drag_armed = False
+            self._last_drag_mouse = self.last_mouse
             self.dragging = True
             self.click_pending = True
             return True
         if action == glfw.RELEASE:
             self.dragging = False
+            self._drag_armed = False
+            self._press_mouse = None
+            self._last_drag_mouse = None
+            self._last_drag_cell = None
         return False
 
     def process_click(self) -> bool:
@@ -497,6 +518,7 @@ class MapEditor:
         self.click_pending = False
         result = self.apply_current_tool()
         self._last_drag_cell = self.cursor
+        self._last_drag_mouse = self.last_mouse
         return result
 
     def update_drag(self) -> None:
@@ -504,8 +526,25 @@ class MapEditor:
             return
         if self.tool in ("select",):
             return
+        now = time.monotonic()
+        if not self._drag_armed:
+            if now - self._press_time < DRAG_ARM_DELAY:
+                return
+            if self._press_mouse is None or self.last_mouse is None:
+                return
+            dx = self.last_mouse[0] - self._press_mouse[0]
+            dy = self.last_mouse[1] - self._press_mouse[1]
+            if dx * dx + dy * dy < DRAG_DISTANCE * DRAG_DISTANCE:
+                return
+            self._drag_armed = True
+        if self.last_mouse is not None and self._last_drag_mouse is not None:
+            dx = self.last_mouse[0] - self._last_drag_mouse[0]
+            dy = self.last_mouse[1] - self._last_drag_mouse[1]
+            if dx * dx + dy * dy < DRAG_DISTANCE * DRAG_DISTANCE:
+                return
         if self.cursor != self._last_drag_cell:
             self._last_drag_cell = self.cursor
+            self._last_drag_mouse = self.last_mouse
             self.apply_current_tool()
 
     def _hud_action(self, action: str | None) -> None:

@@ -106,10 +106,18 @@ def test_library_loading_and_object_export(tmp_path):
 def test_drag_paints_cells_while_held(tmp_path):
     editor = _editor(tmp_path)
     editor.tool = "build"
+    editor.last_mouse = (0.0, 0.0)
     assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.PRESS)
     editor.cursor = (1, 0, 1)
     assert editor.process_click()
+    # Sem mover o mouse, o cursor pode pular para o topo do novo voxel; não deve
+    # colocar outro cubo automaticamente.
     editor.cursor = (2, 0, 1)
+    editor.update_drag()
+    assert editor.map.get(2, 0, 1) == -1
+    # Com movimento real e após o atraso de armação, o arrasto funciona.
+    editor._press_time -= 1.0
+    editor.last_mouse = (20.0, 0.0)
     editor.update_drag()
     assert editor.map.get(2, 0, 1) >= 0
     editor.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.RELEASE)
