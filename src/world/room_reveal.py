@@ -296,16 +296,20 @@ def roof_coverage(solid: np.ndarray, roof: np.ndarray, seed) -> float:
 
 CEILING_RADIUS = 3      # colunas em volta do jogador onde se procura o teto do andar
 CEILING_REACH = 10      # o teto do andar conta até tantas células acima da cabeça
+FURNITURE_HEIGHT = 2     # o ar de uma coluna do andar pode começar até tantas células acima dos pés (móveis)
 STORY_MIN_COVERAGE = 0.45  # só há "andar" com teto em boa parte da volta (um galho ou uma viga não fazem andar)
 
 
 def story_ceiling(mask: RoomMask, position) -> Optional[int]:
     """A célula y (mundo) do teto do andar do jogador: o separador de cima do Isocraft (``StoryBand``).
 
-    É o teto mais baixo acima da cabeça entre as colunas perto do jogador (as paredes do fundo não somem por isso:
-    acima do teto só some a frente do cômodo e o que o tapa). Tudo dali para cima, em volta dele,
-    pode sumir para mostrar o andar. ``None`` ao ar livre, ou se o teto é pouco (menos que
-    ``STORY_MIN_COVERAGE`` das colunas em volta) ou alto demais.
+    É o teto mais comum do cômodo: para cada coluna do espaço do jogador, o primeiro teto acima da cabeça com o
+    espaço logo embaixo; vale a altura que mais colunas têm (no empate, a mais alta). Assim o corte é o mesmo em
+    qualquer ponto do cômodo, e uma viga, um rebaixo ou a verga de uma porta não o fazem descer (nem um vão de
+    pé-direito duplo o faz subir). Tudo dali para cima, em volta dele, pode sumir para mostrar o andar.
+
+    Fora de um cômodo fechado (debaixo de uma cobertura), vale o teto mais baixo em volta do jogador. ``None`` ao
+    ar livre, ou se o teto é pouco (menos que ``STORY_MIN_COVERAGE`` das colunas em volta) ou alto demais.
     """
     if mask is None or mask.window is None or mask.roof_coverage < STORY_MIN_COVERAGE:
         return None
@@ -320,6 +324,11 @@ def story_ceiling(mask: RoomMask, position) -> Optional[int]:
         y0 += 1  # o pé dentro do piso
     first = y0 + 2  # acima da cabeça
     top = min(WINDOW[1], first + CEILING_REACH)
+    if first >= top:
+        return None
+    room = _room_ceiling(mask, y0, first, top)
+    if room is not None:
+        return oy + room
     best = None
     for dx in range(-CEILING_RADIUS, CEILING_RADIUS + 1):
         for dz in range(-CEILING_RADIUS, CEILING_RADIUS + 1):
@@ -332,6 +341,33 @@ def story_ceiling(mask: RoomMask, position) -> Optional[int]:
             if hits.size and (best is None or hits[0] < best):
                 best = int(hits[0])
     return None if best is None else oy + first + best
+
+
+def _room_ceiling(mask: RoomMask, feet: int, first: int, top: int) -> Optional[int]:
+    """O teto mais comum das colunas do cômodo neste andar (y da janela); ``None`` sem cômodo.
+
+    Cada coluna conta pelo ar do cômodo que começa na altura dos pés (ou logo acima, sobre um móvel) e sobe até
+    o primeiro bloco: esse bloco, se é teto, é o teto da coluna. O espaço do cômodo pode seguir pela escada até
+    outro andar; só o ar que sai deste andar conta, e o teto mais comum deixa de fora o vão da escada."""
+    if not mask.active:
+        return None
+    space = (mask.data == INTERIOR)[:, feet:top, :]
+    roof = mask.window.roof[:, feet:top, :]
+    starts = space[:, :FURNITURE_HEIGHT + 1, :]
+    columns = starts.any(axis=1)
+    if not columns.any():
+        return None
+    start = np.argmax(starts, axis=1)                       # a primeira célula de ar do cômodo da coluna
+    rows = np.arange(space.shape[1])[None, :, None]
+    above = (rows >= start[:, None, :]) & ~space            # o primeiro bloco depois desse ar
+    ends = above.any(axis=1)
+    end = np.argmax(above, axis=1)
+    hit = np.take_along_axis(roof, end[:, None, :], axis=1)[:, 0, :]
+    valid = columns & ends & hit & (feet + end >= first)
+    if not valid.any():
+        return None
+    counts = np.bincount(feet + end[valid])
+    return int(np.flatnonzero(counts == counts.max())[-1])
 
 
 def story_center(mask: RoomMask, feet_y: int, cut_y: int):

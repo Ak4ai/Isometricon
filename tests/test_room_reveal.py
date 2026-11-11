@@ -325,6 +325,23 @@ def test_the_story_ceiling_is_the_lowest_roof_over_the_head():
     assert story_ceiling(outside, (13.5, 3.0, 13.5)) is None
 
 
+def test_the_story_ceiling_is_the_same_anywhere_in_the_room():
+    """O corte é o teto mais comum do cômodo: uma viga baixa perto do jogador não o faz descer, e um trecho de
+    pé-direito duplo não o faz subir; de qualquer ponto do cômodo, a mesma altura."""
+    from src.world.room_reveal import RoomRevealTracker, story_ceiling
+
+    def room(b):
+        box(b, 8, 8, size=11, height=5)                 # teto em y = 8, sala x/z 9..17
+        b[9:18, 6, 12] = BlockType.WOOD                 # uma viga baixa atravessando a sala (y = 6)
+        b[15:18, 8, 15:18] = BlockType.AIR              # um canto de pé-direito duplo...
+        b[14:19, 8:11, 14:19] = BlockType.STONE
+        b[15:18, 8:10, 15:18] = BlockType.AIR           # ...com teto em y = 10
+    chunks = world(room)
+    for position in ((10.5, 3.0, 10.5), (13.5, 3.0, 12.5), (16.5, 3.0, 16.5), (11.5, 3.0, 15.5)):
+        mask = RoomRevealTracker().update(0.0, position, chunks, 0)
+        assert story_ceiling(mask, position) == 8, position
+
+
 def test_a_lone_beam_overhead_is_not_a_story():
     from src.world.room_reveal import RoomRevealTracker, story_ceiling
 
