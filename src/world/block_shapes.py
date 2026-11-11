@@ -573,6 +573,26 @@ _DECORATION_NAMES = ("chain", "ladder", "candle", "flower_pot", "rail", "vine", 
                      "pink_petals", "wildflowers", "leaf_litter", "tripwire", "end_rod", "sea_pickle")
 
 
+# Os detalhes de dentro de uma casa (móveis, enfeites): o corte da casa de bonecas não os tira, mesmo encostados
+# na parede da frente; só o corredor de visão, se ficam na frente do personagem
+_DETAIL_WORDS = ("barrel", "chest", "shulker_box", "furnace", "smoker", "bookshelf", "crafting_table", "lectern",
+                 "cartography_table", "fletching_table", "smithing_table", "enchanting_table", "loom", "stonecutter",
+                 "grindstone", "anvil", "cauldron", "composter", "brewing_stand", "jukebox", "note_block", "beehive",
+                 "bee_nest", "_bed", "flower_pot", "potted_", "decorated_pot", "candle", "lantern", "banner",
+                 "campfire", "bell", "skull", "_head", "sign", "hay_block", "target", "chain", "end_rod",
+                 "lightning_rod", "_trapdoor", "_fence", "dispenser", "dropper", "hopper", "crafter", "_carpet",
+                 "torch", "button", "pressure_plate", "ladder", "scaffolding", "cake", "beacon", "conduit",
+                 "respawn_anchor", "lodestone", "vault", "trial_spawner", "spawner", "armor_stand", "item_frame")
+
+
+def is_room_detail(block_name: str) -> bool:
+    """O bloco é um detalhe de dentro da casa (móvel, enfeite), não parede: fica no corte da casa de bonecas."""
+    base, _ = parse_block(block_name)
+    if base.endswith("_fence_gate"):
+        return True
+    return any(word in base for word in _DETAIL_WORDS)
+
+
 def collides(block_name: str) -> bool:
     """O personagem não atravessa o bloco (tochas, tapetes, placas, botões, velas, vasos, plantas, trilhos e fogo
     não barram)."""

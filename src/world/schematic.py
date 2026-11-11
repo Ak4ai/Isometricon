@@ -117,10 +117,11 @@ class Schematic:
         self._solid_mask: Optional[np.ndarray] = None
         self._occupied_mask: Optional[np.ndarray] = None
         self._full_cube_mask: Optional[np.ndarray] = None
+        self._detail_mask: Optional[np.ndarray] = None
 
     def invalidate_masks(self) -> None:
         """Esquece as máscaras calculadas (depois de trocar blocos da grade, como abrir uma porta)."""
-        self._solid_mask = self._occupied_mask = self._full_cube_mask = None
+        self._solid_mask = self._occupied_mask = self._full_cube_mask = self._detail_mask = None
 
     def get_block(self, x: int, y: int, z: int) -> str:
         """Retorna o nome do bloco na coordenada local da estrutura."""
@@ -163,6 +164,15 @@ class Schematic:
 
             self._full_cube_mask = self._mask(lambda name: not is_air_name(name) and is_full_cube(name))
         return self._full_cube_mask
+
+    @property
+    def detail_mask(self) -> np.ndarray:
+        """Máscara booleana: True nos detalhes de dentro da casa (móveis, enfeites; ver ``is_room_detail``)."""
+        if self._detail_mask is None:
+            from src.world.block_shapes import is_room_detail
+
+            self._detail_mask = self._mask(lambda name: not is_air_name(name) and is_room_detail(name))
+        return self._detail_mask
 
     @classmethod
     def load_from_file(cls, filepath: str) -> "Schematic":

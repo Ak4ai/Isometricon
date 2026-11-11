@@ -83,6 +83,7 @@ class WindowCells:
     occupied: np.ndarray    # bool: há algo desenhado na célula (um sólido, ou um enfeite como tocha e tapete)
     culls: np.ndarray       # bool: cubo inteiro e opaco, o único que esconde a face do vizinho
     doors: Optional[np.ndarray] = None  # bool: portas das construções (abertas ou não): cada cômodo termina nelas
+    details: Optional[np.ndarray] = None  # bool: móveis e enfeites das construções (ficam na casa de bonecas)
 
 
 def extract_window(
@@ -130,6 +131,7 @@ def extract_window_cells(
         roof[:, :floor_rows, :] = True
         culls[:, :floor_rows, :] = True
     occupied = solid | SHAPED_LUT[blocks]   # os enfeites do terreno são desenhados, mas não são parede
+    details = np.zeros(WINDOW, dtype=bool)
 
     for index, placed in enumerate(structures):
         (bx0, by0, bz0), (bx1, by1, bz1) = placed.bounds()
@@ -142,13 +144,16 @@ def extract_window_cells(
         part = placed._solid[window].transpose(2, 0, 1)
         shown = placed._occupied[window].transpose(2, 0, 1)
         cube = placed._culls[window].transpose(2, 0, 1)
+        detail = placed.schematic.detail_mask[window].transpose(2, 0, 1)
         sel = (slice(lo[0] - ox, hi[0] - ox), slice(lo[1] - oy, hi[1] - oy), slice(lo[2] - oz, hi[2] - oz))
         solid[sel] |= part
         roof[sel] |= part
         occupied[sel] |= shown
         culls[sel] |= cube
+        details[sel] |= detail
         owner[sel][shown] = index
-    return WindowCells(solid, roof, blocks, owner, structures, occupied, culls, _door_cells(owner, structures, origin))
+    return WindowCells(solid, roof, blocks, owner, structures, occupied, culls, _door_cells(owner, structures, origin),
+                       details)
 
 
 def _door_cells(owner: np.ndarray, structures, origin) -> np.ndarray:
@@ -182,6 +187,7 @@ def compute_room(
     position,
     was_active: bool = False,
     doors: Optional[np.ndarray] = None,
+    details: Optional[np.ndarray] = None,
 ) -> RoomMask:
     """Calcula a máscara do espaço em que o jogador (posição dos pés) está.
 
@@ -234,6 +240,11 @@ def compute_room(
         mask[shell] = SHELL
         mask[space] = INTERIOR
         mask[(mask > 0) & (mask < INTERIOR) & _space_above_run(solid, space)] = OBJECT
+        if details is not None:
+            # os detalhes da casa (barril, baú, lanterna, alçapão...) encostados no cômodo também são móveis: a
+            # casa de bonecas tira a parede da frente, não o que está dentro (o corredor de visão ainda os tira
+            # quando tapam o personagem)
+            mask[(mask > 0) & (mask < INTERIOR) & details] = OBJECT
     return RoomMask(origin, mask, active, cells, exposure, coverage, walls)
 
 
@@ -486,7 +497,8 @@ class RoomRevealTracker:
                                                                                 previous.origin, blocks=False):
             return "window", key, previous, window  # o mundo mudou longe ou só a água correu: o cômodo é o mesmo
         mask = compute_room(window.solid, window.roof, origin, position,
-                            was_active=previous is not None and previous.active, doors=window.doors)
+                            was_active=previous is not None and previous.active, doors=window.doors,
+                            details=window.details)
         mask.window = window
         return "mask", key, mask, window
 

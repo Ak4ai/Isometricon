@@ -1386,6 +1386,13 @@ def main() -> None:
             shader.set_int("u_WaterPass", 1)
             # o corredor da câmera: o que tapa o personagem some (ver sightCarved no shader)
             feet = [float(v) for v in player_token.position]
+            # no ar (um pulo), os cortes ficam no chão de onde saiu: pular não muda o que aparece; numa escada de
+            # mão ou caindo para baixo do chão, seguem o personagem
+            floor_y = int(np.floor(feet[1] + 0.05))
+            if (player_token.grounded or player_token.on_ladder or story_state.get("ground_y") is None
+                    or floor_y < story_state["ground_y"]):
+                story_state["ground_y"] = floor_y
+            feet[1] = float(story_state["ground_y"])
             sight_target = model @ np.array([feet[0], feet[1] + 1.1, feet[2], 1.0])
             shader.set_float("u_SightActive", 1.0)  # num cômodo, só corta o que tapa o cômodo (ver o shader)
             shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
@@ -1393,7 +1400,7 @@ def main() -> None:
             shader.set_float("u_SightRadius", 2.6)
             # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
             from src.world.room_reveal import story_ceiling, story_center
-            ceiling = story_ceiling(room_tracker.mask, player_token.position)
+            ceiling = story_ceiling(room_tracker.mask, feet)
             if ceiling is not None:
                 story_state["cut_y"] = ceiling
             story_target = 1.0 if ceiling is not None and room_renderer.enabled else 0.0

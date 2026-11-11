@@ -390,3 +390,34 @@ def test_the_lintel_over_a_door_is_not_the_story_ceiling():
     mask = compute_room(cells.solid, cells.roof, origin, position, doors=cells.doors)
     mask.window = cells
     assert story_ceiling(mask, position) == 7
+
+
+def test_house_details_against_the_front_wall_stay_as_furniture():
+    """Um barril empilhado na parede da frente é detalhe da casa: entra na máscara como móvel (a casa de bonecas
+    não o tira); a parede ao lado continua parede."""
+    from src.world.room_reveal import OBJECT, SHELL, compute_room, extract_window, window_origin
+
+    position = (13.5, 3.0, 13.5)
+    origin = window_origin(position)
+    solid, roof = extract_window(origin, world(lambda b: box(b, 10, 10)))
+    ox, oy, oz = origin
+    details = np.zeros_like(solid)
+    solid[13 - ox, 3 - oy:7 - oy, 15 - oz] = True        # barris empilhados até o teto, na parede z = 16
+    details[13 - ox, 3 - oy:7 - oy, 15 - oz] = True
+    plain = compute_room(solid, roof, origin, position)
+    marked = compute_room(solid, roof, origin, position, details=details)
+    assert plain.data[13 - ox, 5 - oy, 15 - oz] != OBJECT          # sem o cômodo em cima: parecia parede
+    assert marked.data[13 - ox, 5 - oy, 15 - oz] == OBJECT
+    assert marked.data[12 - ox, 5 - oy, 16 - oz] == SHELL          # a parede
+
+
+def test_which_blocks_are_house_details():
+    from src.world.block_shapes import is_room_detail
+    for name in ("minecraft:barrel[facing=up]", "minecraft:chest[facing=north]", "minecraft:lantern[hanging=true]",
+                 "minecraft:spruce_trapdoor[open=false]", "minecraft:campfire", "minecraft:spruce_fence",
+                 "minecraft:bookshelf", "minecraft:red_bed[part=head]", "minecraft:potted_cactus"):
+        assert is_room_detail(name), name
+    for name in ("minecraft:spruce_planks", "minecraft:stone_bricks", "minecraft:oak_log[axis=y]",
+                 "minecraft:glass_pane", "minecraft:spruce_stairs[facing=north]", "minecraft:deepslate_tile_slab",
+                 "minecraft:white_wool", "minecraft:calcite"):
+        assert not is_room_detail(name), name
