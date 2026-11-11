@@ -43,6 +43,7 @@ class Rig:
     inverse_bind: np.ndarray            # (J, 4, 4)
     children: List[List[int]] = field(default_factory=list)
     order: List[int] = field(default_factory=list)   # pais antes dos filhos
+    base: np.ndarray = field(default_factory=lambda: np.identity(4))   # o que ``transformed`` fez nas raízes
 
     def __post_init__(self) -> None:
         count = len(self.names)
@@ -106,7 +107,8 @@ class Rig:
         local = self.rest_local.copy()
         for root in self.roots:
             local[root] = matrix @ local[root]
-        return Rig(list(self.names), self.parents.copy(), local, self.inverse_bind @ np.linalg.inv(matrix))
+        return Rig(list(self.names), self.parents.copy(), local, self.inverse_bind @ np.linalg.inv(matrix),
+                   base=matrix @ self.base)
 
     # ---- pose
     def solve(self, rotations: Optional[np.ndarray] = None, root_offset: Sequence[float] = (0.0, 0.0, 0.0)) -> np.ndarray:
@@ -130,6 +132,15 @@ class Rig:
             if rotations is not None:
                 matrix[:3, :3] = rotations[bone] @ matrix[:3, :3]
             world[bone] = matrix
+        return world @ self.inverse_bind
+
+    def solve_local(self, local: np.ndarray) -> np.ndarray:
+        """As matrizes de pele (J, 4, 4) para uma pose dada por matrizes locais (J, 4, 4) **nas unidades do arquivo**
+        (as que ``rest_local`` tinha antes de ``transformed``): é o que um clipe de animação entrega."""
+        world = np.zeros((len(self), 4, 4))
+        for bone in self.order:
+            parent = int(self.parents[bone])
+            world[bone] = self.base @ local[bone] if parent < 0 else world[parent] @ local[bone]
         return world @ self.inverse_bind
 
     def identity_rotations(self) -> np.ndarray:

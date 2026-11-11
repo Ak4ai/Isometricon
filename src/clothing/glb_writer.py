@@ -119,6 +119,17 @@ class GlbBuilder:
         self.skins.append(skin)
         return len(self.skins) - 1
 
+    def add_animation(self, name: str, tracks: Sequence[tuple], interpolation: str = "LINEAR") -> int:
+        """Um clipe. ``tracks``: (nó, "translation"|"rotation"|"scale", tempos, valores)."""
+        channels, samplers = [], []
+        for node, path, times, values in tracks:
+            samplers.append({"input": self._accessor(np.asarray(times), _FLOAT, "SCALAR", bounds=False),
+                             "output": self._accessor(np.asarray(values), _FLOAT, "VEC4" if path == "rotation" else "VEC3"),
+                             "interpolation": interpolation})
+            channels.append({"sampler": len(samplers) - 1, "target": {"node": int(node), "path": path}})
+        self.animations.append({"name": name, "channels": channels, "samplers": samplers})
+        return len(self.animations) - 1
+
     # ---- arquivo
     def document(self, scene_nodes: Sequence[int]) -> dict:
         doc = {"asset": {"version": "2.0", "generator": "isometricon"}, "scene": 0,

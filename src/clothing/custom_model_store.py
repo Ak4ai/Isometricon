@@ -41,6 +41,11 @@ def path_of(name: str, directory: str = MODELS_DIR) -> Optional[str]:
     return path if os.path.isfile(path) else None
 
 
+def roles_path(name: str, directory: str = MODELS_DIR) -> str:
+    """Onde ficam os papéis dos ossos ajustados à mão do modelo ``name`` (pode não existir)."""
+    return os.path.join(directory, safe_name(name) + ".papeis.json")
+
+
 def import_model(source: str, directory: str = MODELS_DIR) -> str:
     """Confere ``source`` (``ModelError`` se não serve), copia para a pasta e devolve o nome guardado."""
     if not os.path.isfile(source):
@@ -95,5 +100,5 @@ def clear_choice(path: str = CHOICE_PATH) -> None:
         pass
 
 
-__all__ = ["MODELS_DIR", "CHOICE_PATH", "DEFAULT_CHOICE", "safe_name", "list_models", "path_of", "import_model",
+__all__ = ["MODELS_DIR", "CHOICE_PATH", "DEFAULT_CHOICE", "safe_name", "list_models", "path_of", "roles_path", "import_model",
            "clamp_height", "save_choice", "load_choice", "clear_choice"]

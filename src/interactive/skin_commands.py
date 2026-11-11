@@ -307,15 +307,15 @@ class SkinCommandHandler:
 
     # ------------------------------------------------------------------ /skin modelo
     def _model_usage(self) -> str:
-        return ("Uso: /skin modelo <nome|caminho.glb> | lista | off | perfil <bipede|quadrupede|rastejante|flutuante|auto> "
-                "| altura <metros> | giro <0-3>")
+        return ("Uso: /skin modelo <nome|caminho.glb> | lista | off | perfil <bipede|quadrupede|rastejante|flutuante|clipes|auto> "
+                "| altura <metros> | giro <0-3> | papeis <salvar|off|arquivo>")
 
     def apply_custom_model(self, choice: Dict[str, Any]) -> Result:
         """Constrói o modelo da ``choice`` (ver custom_model_store) e o põe no token. Roda na thread principal."""
         from src.clothing import custom_model_store as store
         from src.clothing.custom_model import CustomModel
         from src.clothing.glb import ModelError
-        from src.clothing.procedural import RolesError
+        from src.clothing.procedural import Roles, RolesError
         token = self.player_token
         if token is None:
             return False, "[Modelo] Só funciona no terreno (--terrain).", RED
@@ -326,10 +326,16 @@ class SkinCommandHandler:
             model = CustomModel.from_file(path, choice["altura"], choice["giro"], create_gl=self.model_gl)
         except ModelError as exc:
             return False, f"[Modelo] {exc}", RED
+        if choice.get("perfil") == "clipes" and not model.clips_available:
+            model.delete()
+            return False, "[Modelo] Este arquivo não traz clipes de animação para os ossos dele; escolha outro perfil.", RED
         if model.rig is not None:
             try:
-                model.animate(profile=choice.get("perfil"))
-                note = f" Anda como '{model.animator.profile}'."
+                roles, roles_file = None, store.roles_path(choice["arquivo"], self.custom_model_dir or store.MODELS_DIR)
+                if choice.get("perfil") != "clipes" and os.path.isfile(roles_file):
+                    roles = Roles.load(model.rig, roles_file)   # os papéis ajustados à mão (/skin modelo papeis)
+                model.animate(roles, choice.get("perfil"))
+                note = f" Anda como '{model.animator.profile}'." + (" (papéis do arquivo .papeis.json)" if roles else "")
             except (ModelError, RolesError) as exc:
                 note = f" Sem animação: {exc}"
         else:
@@ -357,6 +363,49 @@ class SkinCommandHandler:
             except OSError as exc:
                 print(f"[Modelo] Não consegui gravar a escolha: {exc}")
 
+    def _model_roles(self, args: List[str]) -> Result:
+        """/skin modelo papeis <salvar|off|arquivo.json>: os papéis dos ossos (pernas, braços...) do modelo em uso."""
+        import shutil
+        from src.clothing import custom_model_store as store
+        from src.clothing.procedural import Roles, RolesError, auto_roles
+        if self.model_choice is None or self.player_token.custom_model is None:
+            return False, "[Modelo] Escolha um modelo antes: /skin modelo <nome>.", RED
+        model = self.player_token.custom_model
+        if model.rig is None:
+            return False, "[Modelo] Este modelo não tem esqueleto.", RED
+        directory = self.custom_model_dir or store.MODELS_DIR
+        target = store.roles_path(self.model_choice["arquivo"], directory)
+        word = args[0].lower() if args else ""
+        usage = "Uso: /skin modelo papeis <salvar | off | arquivo.json>"
+        if not args:
+            return True, f"[Modelo] {usage}. 'salvar' grava os papéis achados na pasta dos modelos para você editar.", GOLD
+        if word in ("salvar", "save"):
+            roles = auto_roles(model.rig, model.height)
+            os.makedirs(directory, exist_ok=True)
+            roles.save(model.rig, target)
+            return True, f"[Modelo] Papéis gravados em {os.path.relpath(target, PROJECT_ROOT)}; edite e use /skin modelo papeis <arquivo>.", CYAN
+        if word in ("off", "limpar"):
+            if os.path.isfile(target):
+                os.remove(target)
+            return self._reapply_model("[Modelo] Papéis ajustados removidos; volta à detecção automática.")
+        source = " ".join(args)
+        if not os.path.isfile(source):
+            return False, f"[Modelo] Não achei o arquivo '{source}'. {usage}", RED
+        try:
+            Roles.load(model.rig, source)   # confere antes de guardar
+        except RolesError as exc:
+            return False, f"[Modelo] {exc}", RED
+        os.makedirs(directory, exist_ok=True)
+        if os.path.abspath(source) != os.path.abspath(target):
+            shutil.copyfile(source, target)
+        return self._reapply_model("[Modelo] Papéis aplicados.")
+
+    def _reapply_model(self, prefix: str) -> Result:
+        result = self.apply_custom_model(dict(self.model_choice))
+        if result[0]:
+            return True, prefix + " " + result[1], result[2]
+        return result
+
     def custom_model(self, args: List[str]) -> Result:
         """/skin modelo: usa um modelo .glb como o corpo do personagem (ver ``/skin modelo`` sem argumentos)."""
         from src.clothing import custom_model_store as store
@@ -378,14 +427,16 @@ class SkinCommandHandler:
             if self.save_model_choice:
                 store.clear_choice(self.model_choice_path or store.CHOICE_PATH)
             return True, "[Modelo] Voltou ao personagem montado.", CYAN
+        if word in ("papeis", "papéis", "roles"):
+            return self._model_roles(args[1:])
         if word in ("perfil", "altura", "giro"):
             if self.model_choice is None:
                 return False, "[Modelo] Escolha um modelo antes: /skin modelo <nome>.", RED
             choice = dict(self.model_choice)
             value = args[1].lower().replace(",", ".") if len(args) > 1 else ""
             if word == "perfil":
-                if value not in PROFILE_NAMES + ("auto",):
-                    return False, f"[Modelo] Use /skin modelo perfil <{'|'.join(PROFILE_NAMES)}|auto>.", RED
+                if value not in PROFILE_NAMES + ("clipes", "auto"):
+                    return False, f"[Modelo] Use /skin modelo perfil <{'|'.join(PROFILE_NAMES)}|clipes|auto>.", RED
                 choice["perfil"] = None if value == "auto" else value
             elif word == "altura":
                 try:
@@ -1534,7 +1585,7 @@ SCHEM_ALIASES = {
 def _model_options() -> List[str]:
     """Autocompletar do /skin modelo: os modelos guardados e os subcomandos."""
     from src.clothing import custom_model_store as store
-    return store.list_models() + ["lista", "off", "perfil", "altura", "giro"]
+    return store.list_models() + ["lista", "off", "perfil", "altura", "giro", "papeis"]
 
 
 def find_command(commands: List[Command], name: str) -> Optional[Command]:

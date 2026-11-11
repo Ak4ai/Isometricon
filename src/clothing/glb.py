@@ -19,11 +19,14 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .clips import Channel, Clip, RestPose, decompose
 from .rig import MAX_BONES, Rig
 
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_TRIANGLES = 300_000
 MAX_TEXTURE_SIDE = 4096
+MAX_CLIPS = 64
+MAX_KEYFRAMES = 100_000   # por canal
 FLOATS_PER_VERTEX = 11  # posição(3), normal(3), uv(2), cor(3)
 
 _GLB_MAGIC = 0x46546C67  # "glTF"
@@ -63,7 +66,9 @@ class GlbModel:
 
     submeshes: List[Submesh] = field(default_factory=list)
     skins: int = 0              # quantos esqueletos o arquivo tem
-    animations: List[str] = field(default_factory=list)   # nomes dos clipes (ainda não usados)
+    animations: List[str] = field(default_factory=list)   # nomes dos clipes do arquivo
+    clips: List[Clip] = field(default_factory=list)       # os clipes que mexem nos ossos do esqueleto
+    rest_pose: Optional[RestPose] = None                   # pose de montagem em TRS, para tocar os clipes
     warnings: List[str] = field(default_factory=list)
     rig: Optional[Rig] = None   # o esqueleto da malha (o primeiro do arquivo que tem pesos), na mesma posição da malha
     transform: np.ndarray = field(default_factory=lambda: np.identity(4))   # o que ``normalize`` fez com o modelo
@@ -281,6 +286,7 @@ class _Reader:
             raise ModelError("O modelo não tem nenhuma malha de triângulos.")
         if self._rig_skin is not None:
             self.model.rig = self._build_rig(self._rig_skin)
+            self._build_clips()
         if self.model.triangles > MAX_TRIANGLES:
             raise ModelError(f"O modelo tem {self.model.triangles} triângulos; o limite é {MAX_TRIANGLES}.")
         return self.model
@@ -407,6 +413,56 @@ class _Reader:
             return Rig(names, parents, local, inverse_bind)
         except ValueError as error:
             raise ModelError(str(error)) from error
+
+    def _build_clips(self) -> None:
+        """Lê os clipes de ``animations`` que mexem nos ossos do esqueleto (os demais canais são ignorados)."""
+        nodes = self.doc.get("nodes", [])
+        joint_nodes = [int(j) for j in self.doc["skins"][self._rig_skin]["joints"]]
+        index_of = {node: i for i, node in enumerate(joint_nodes)}
+        count = len(joint_nodes)
+        translation, rotation, scale = np.zeros((count, 3)), np.zeros((count, 4)), np.ones((count, 3))
+        prefix = np.tile(np.identity(4), (count, 1, 1))
+        for i, node in enumerate(joint_nodes):
+            translation[i], rotation[i], scale[i] = decompose(_local_matrix(nodes[node]))
+            ancestor = self._parent_node.get(node)
+            between = np.identity(4)
+            while ancestor is not None and ancestor not in index_of:
+                between = _local_matrix(nodes[ancestor]) @ between   # nós soltos entre o osso e o pai dele
+                ancestor = self._parent_node.get(ancestor)
+            if ancestor is None:   # raiz do esqueleto: o que está acima dela, até a cena
+                parent = self._parent_node.get(node)
+                between = np.identity(4) if parent is None else self._world_of(parent)
+            prefix[i] = between
+        self.model.rest_pose = RestPose(translation, rotation, scale, prefix)
+        total = 0
+        for number, animation in enumerate(self.doc.get("animations", [])[:MAX_CLIPS]):
+            clip = Clip(animation.get("name") or f"animação {number}", 0.0)
+            samplers = animation.get("samplers", [])
+            for channel in animation.get("channels", []):
+                target = channel.get("target", {})
+                path = target.get("path")
+                joint = index_of.get(target.get("node"))
+                if joint is None or path not in ("translation", "rotation", "scale"):
+                    continue
+                try:
+                    sampler = samplers[int(channel["sampler"])]
+                    times = self.accessor(int(sampler["input"])).reshape(-1).astype(np.float64)
+                    values = self.accessor(int(sampler["output"])).astype(np.float64)
+                except (KeyError, IndexError, TypeError, ValueError):
+                    continue
+                mode = sampler.get("interpolation", "LINEAR")
+                if mode == "CUBICSPLINE" and len(values) == 3 * len(times):
+                    values = values[1::3]    # só os valores; as tangentes ficam de fora (interpolação linear)
+                if len(times) == 0 or len(values) != len(times) or len(times) > MAX_KEYFRAMES \
+                        or values.shape[1] != (4 if path == "rotation" else 3) or np.any(np.diff(times) < 0):
+                    continue
+                total += len(times)
+                if total > MAX_KEYFRAMES * 4:
+                    break
+                clip.channels.append(Channel(joint, path, times, values, step=(mode == "STEP")))
+                clip.duration = max(clip.duration, float(times[-1]))
+            if clip.channels:
+                self.model.clips.append(clip)
 
     def _material(self, index) -> dict:
         info = {"image": None, "color": (1.0, 1.0, 1.0, 1.0), "double_sided": False, "alpha_mode": "OPAQUE"}

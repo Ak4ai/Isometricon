@@ -164,3 +164,43 @@ def test_editor_has_a_model_section(game, glb):
     groups = section.groups() if callable(section.groups) else section.groups
     labels = [o.label for o in groups[0].options]
     assert "Meu_Monstro" in labels and len(groups) == 4
+
+
+# ---------------------------------------------------------------------------- fase 3: clipes e papéis
+def test_a_file_with_clips_plays_them_and_the_profile_can_override(game, tmp_path):
+    from tests.test_clips import animated_glb
+    path = tmp_path / "Animado.glb"
+    path.write_bytes(animated_glb())
+    ok, text, _ = run(game, f"/skin modelo {path}")
+    assert ok and game.player_token.custom_model.animator.profile == "clipes", text
+    assert run(game, "/skin modelo perfil bipede")[0]
+    assert game.player_token.custom_model.animator.profile == "bipede"
+    assert run(game, "/skin modelo perfil clipes")[0]
+    assert game.player_token.custom_model.animator.profile == "clipes"
+
+
+def test_clips_profile_is_refused_when_the_file_has_none(game, glb):
+    run(game, f"/skin modelo {glb}")
+    ok, text, _ = run(game, "/skin modelo perfil clipes")
+    assert not ok and "clipes" in text
+    assert game.player_token.custom_model is not None
+
+
+def test_roles_file_is_saved_edited_and_used(game, glb):
+    run(game, f"/skin modelo {glb}")
+    target = store.roles_path("Meu_Monstro", game.custom_model_dir)
+    assert not os.path.exists(target)
+    assert run(game, "/skin modelo papeis salvar")[0] and os.path.isfile(target)
+    ok, text, _ = run(game, f"/skin modelo papeis {target}")
+    assert ok, text
+    assert "papéis do arquivo" in text
+    assert run(game, "/skin modelo papeis off")[0] and not os.path.exists(target)
+
+
+def test_a_broken_roles_file_is_refused(game, glb, tmp_path):
+    run(game, f"/skin modelo {glb}")
+    bad = tmp_path / "ruim.json"
+    bad.write_text('{"perfil": "voador"}', encoding="utf-8")
+    ok, _, _ = run(game, f"/skin modelo papeis {bad}")
+    assert not ok
+    assert not os.path.exists(store.roles_path("Meu_Monstro", game.custom_model_dir))

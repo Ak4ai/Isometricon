@@ -45,7 +45,7 @@ def main() -> None:
     parser.add_argument("--yaw", type=float, default=None, help="com --capture, o giro em graus")
     parser.add_argument("--andar", type=float, nargs="?", const=3.0, default=None, metavar="VELOCIDADE",
                         help="anima o modelo andando (m/s; sem valor, 3). Precisa de esqueleto")
-    parser.add_argument("--perfil", choices=PROFILE_NAMES, default=None, help="perfil de movimento (padrão: o sugerido)")
+    parser.add_argument("--perfil", choices=PROFILE_NAMES + ("clipes",), default=None, help="perfil de movimento (padrão: o sugerido)")
     parser.add_argument("--papeis", default=None, help="arquivo JSON com os papéis dos ossos (padrão: detecção automática)")
     parser.add_argument("--salvar-papeis", default=None, help="grava no arquivo os papéis usados, para editar")
     parser.add_argument("--tempo", type=float, default=None, help="com --capture, avança a animação até este segundo")
@@ -78,9 +78,12 @@ def main() -> None:
             print(f"Não consegui animar: {error}")
             window.close()
             sys.exit(1)
-        print(f"Animação: perfil '{model.animator.profile}', {len(roles.legs)} pernas, {len(roles.arms)} braços, "
-              f"cabeça de {len(roles.head)} ossos, coluna de {len(roles.spine)}.")
-        if args.salvar_papeis:
+        if roles is None:
+            print(f"Animação: clipes do arquivo (andar/parado: {model.animator.names}).")
+        else:
+            print(f"Animação: perfil '{model.animator.profile}', {len(roles.legs)} pernas, {len(roles.arms)} braços, "
+                  f"cabeça de {len(roles.head)} ossos, coluna de {len(roles.spine)}.")
+        if args.salvar_papeis and roles is not None:
             roles.save(model.rig, args.salvar_papeis)
             print("Papéis gravados em", args.salvar_papeis)
     speed = args.andar if args.andar is not None else 0.0

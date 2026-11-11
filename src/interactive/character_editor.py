@@ -555,7 +555,7 @@ class CharacterEditor:
                 groups.append(Group("Como anda", [Option("Automático", "/skin modelo perfil auto",
                                                          selected=lambda m: choice("perfil") is None)] +
                                     [Option(p.capitalize(), f"/skin modelo perfil {p}",
-                                            selected=lambda m, p=p: choice("perfil") == p) for p in PROFILE_NAMES]))
+                                            selected=lambda m, p=p: choice("perfil") == p) for p in PROFILE_NAMES + ("clipes",)]))
                 groups.append(Group("Altura (m)", [Option(f"{h:g}", f"/skin modelo altura {h}",
                                                           selected=lambda m, h=h: abs((choice("altura") or 0) - h) < 1e-6)
                                                    for h in (0.6, 1.0, 1.5, 1.8, 2.2, 3.0)]))

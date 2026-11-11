@@ -13,6 +13,7 @@ from typing import List, Optional
 import numpy as np
 
 from .glb import GlbModel, ModelError, Submesh, load_model, parse_model
+from .clips import ClipAnimator, pick_clips
 from .procedural import ProceduralAnimator, Roles, auto_roles
 
 DEFAULT_HEIGHT = 1.8   # altura, em metros, a que o modelo é normalizado (o jogo usa metros)
@@ -40,7 +41,7 @@ class CustomModel:
         self.model = model.normalize(self.height, yaw_turns)
         self.parts: List[_Part] = []
         self._white: int = 0
-        self.animator: Optional[ProceduralAnimator] = None
+        self.animator = None   # ProceduralAnimator ou ClipAnimator
         if create_gl:
             self.upload()
 
@@ -65,13 +66,28 @@ class CustomModel:
         return self.model.rig
 
     # ------------------------------------------------------------------ animação
-    def animate(self, roles: Optional[Roles] = None, profile: Optional[str] = None) -> Roles:
-        """Liga a animação procedural. Sem ``roles`` os papéis são achados pela forma do esqueleto."""
+    def animate(self, roles: Optional[Roles] = None, profile: Optional[str] = None) -> Optional[Roles]:
+        """Liga a animação dos ossos.
+
+        Se o arquivo traz clipes de animação e ``profile`` é ``None`` ou ``"clipes"``, toca os clipes (andar e parado)
+        e devolve ``None``. Senão a animação é procedural: sem ``roles`` os papéis são achados pela forma do esqueleto.
+        """
         if self.rig is None:
             raise ModelError("Este modelo não tem esqueleto: não dá para animar os ossos.")
+        wants_clips = profile == "clipes" or (profile is None and roles is None)
+        if profile == "clipes" and not self.clips_available:
+            raise ModelError("Este arquivo não traz clipes de animação para os ossos dele.")
+        if wants_clips and self.clips_available:
+            walk, idle = pick_clips([c.name for c in self.model.clips])
+            self.animator = ClipAnimator(self.rig, self.model.rest_pose, self.model.clips, walk, idle)
+            return None
         roles = roles or auto_roles(self.rig, self.height)
-        self.animator = ProceduralAnimator(self.rig, roles, self.height, profile)
+        self.animator = ProceduralAnimator(self.rig, roles, self.height, None if profile == "clipes" else profile)
         return roles
+
+    @property
+    def clips_available(self) -> bool:
+        return bool(self.model.clips) and self.model.rest_pose is not None
 
     def update(self, dt: float, speed: float = 0.0) -> None:
         """Avança a animação ``dt`` segundos, com o modelo andando a ``speed`` m/s."""
