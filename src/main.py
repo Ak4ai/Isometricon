@@ -1628,15 +1628,6 @@ def main() -> None:
                     gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
                     gl.glDepthMask(gl.GL_FALSE)
                     shader.set_int("u_CutawayPass", 1)
-                world_manager.render(shader, model, view_projection)
-
-                # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
-                if underground_mode:
-                    gl.glEnable(gl.GL_BLEND)
-                    gl.glDepthFunc(gl.GL_ALWAYS)
-                    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-                    gl.glDepthMask(gl.GL_FALSE)
-                    shader.set_int("u_CutawayPass", 1)
                     world_manager.render(shader, model, view_projection)
                     gl.glDepthMask(gl.GL_TRUE)
                     gl.glDepthFunc(gl.GL_LESS)
