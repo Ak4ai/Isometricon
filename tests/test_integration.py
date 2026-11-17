@@ -162,3 +162,26 @@ def test_global_queries_validate_coordinates(method, args):
 
     with pytest.raises(TypeError):
         getattr(provider, method)(*args)
+
+
+def _column_provider(blocks):
+    """Um provedor cuja coluna (qualquer x, z) tem os blocos de ``blocks`` (y -> BlockType); o resto é ar."""
+    from src.integration.voxel_grid import VoxelGridProvider
+    return VoxelGridProvider(block_lookup=lambda x, y, z: blocks.get(y, BlockType.AIR))
+
+
+def test_swimming_in_a_lake_is_not_underground():
+    # chão até y=5, lago de y=6 a y=8: nadando em y=7 o topo "sólido" sem a água é o chão, abaixo do jogador
+    lake = {**{y: BlockType.STONE for y in range(0, 6)}, **{y: BlockType.WATER for y in range(6, 9)}}
+    provider = _column_provider(lake)
+    assert provider.get_top_solid_block(0, 0) == 8                    # com a água, a coluna "cobre" o jogador
+    assert provider.get_top_solid_block(0, 0, skip_water=True) == 5   # sem ela, o jogador está acima do chão
+    assert 7.0 > provider.get_top_solid_block(0, 0, skip_water=True) + 0.25
+
+
+def test_a_cave_under_a_lake_is_still_underground():
+    # caverna em y=3..4 com teto de pedra em y=5, e o lago por cima: o teto cobre o jogador
+    cave = {**{y: BlockType.STONE for y in (0, 1, 2, 5)}, **{y: BlockType.WATER for y in (6, 7, 8)}}
+    provider = _column_provider(cave)
+    top = provider.get_top_solid_block(0, 0, skip_water=True)
+    assert top == 5 and 3.0 < top + 0.25

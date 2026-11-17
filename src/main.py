@@ -1523,12 +1523,15 @@ def main() -> None:
                     )) + 0.25
                 )
             elif voxel_provider is not None and not room_renderer.visible:
+                # Só há "subsolo" com chão de verdade por cima do jogador: a água não cobre ninguém (nadar num lago
+                # não recorta o que está acima), mas o teto de uma caverna sob o lago cobre.
                 underground_mode = (
                     player_token.position[1]
                     < float(
                         voxel_provider.get_top_solid_block(
                             int(np.floor(float(player_token.position[0]))),
                             int(np.floor(float(player_token.position[2]))),
+                            skip_water=True,
                         )
                     ) + 0.25
                 )
@@ -1713,7 +1716,7 @@ def main() -> None:
             shader.use()
             # A miniatura não deve herdar o cutaway do terreno
             shader.set_bool("u_UndergroundMode", False)
-            shader.set_bool("u_WaterMode", False)
+            shader.set_bool("u_WaterMode", player_token.in_water)  # nadando, o personagem leva o tom da água como o resto da cena
             shader.set_int("u_CutawayPass", 0)
             shader.set_mat4("u_Projection", projection)
             shader.set_mat4("u_View", view)
