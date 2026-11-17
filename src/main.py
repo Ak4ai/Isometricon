@@ -767,6 +767,27 @@ def main() -> None:
         """A porta sob o cursor, se está ao alcance da mão do personagem (ou None)."""
         return picking_state["door"] if picking_state["door_in_reach"] else None
 
+    from src.interactive.chest_session import ChestSession
+    from src.world.chests import distance_to, find_chest
+    chest_session = ChestSession()  # F abre e fecha um baú: a tela escurece e o personagem para (sem inventário ainda)
+    chest_dim = {"quad": None}
+
+    def pick_interactable():
+        """O que o F usa agora: o baú aberto (para fechar), a porta sob o cursor, ou a porta ou o baú mais perto."""
+        if chest_session.is_open:
+            return "chest", chest_session.chest
+        door = hovered_door_in_reach()
+        if door is not None:
+            return "door", door
+        position = player_token.position
+        door = schematic_tool.door_near(position)
+        chest = find_chest(schematic_tool.layer.structures, position)
+        if door is not None and chest is not None:
+            return ("door", door) if distance_to(door, position) <= distance_to(chest, position) else ("chest", chest)
+        if door is not None:
+            return "door", door
+        return ("chest", chest) if chest is not None else (None, None)
+
     def toggle_door_for_player(door) -> None:
         px, py, pz = (float(v) for v in player_token.position)
         body = {(int(np.floor(px + dx)), int(np.floor(py + dy)), int(np.floor(pz + dz)))
@@ -872,6 +893,7 @@ def main() -> None:
             return True
 
         if key == glfw.KEY_ESCAPE and action == glfw.PRESS:
+            chest_session.close()
             keys_pressed.clear()
             pan_state['active'] = False
             picking_state['click_pending'] = False
@@ -883,10 +905,12 @@ def main() -> None:
             # F interage: a porta sob o cursor, se ao alcance; senão a mais perto do personagem; senão a escada de
             # mão (agarra; agarrado, solta)
             if action == glfw.PRESS:
-                door = None if player_token.ladder_grip is not None else (
-                    hovered_door_in_reach() or schematic_tool.door_near(player_token.position))
-                if door is not None:
-                    toggle_door_for_player(door)
+                kind, target = (None, None) if (player_token.ladder_grip is not None
+                                                and not chest_session.is_open) else pick_interactable()
+                if kind == "chest":
+                    chest_session.toggle(target)       # abre o baú ao alcance, ou fecha o que está aberto
+                elif kind == "door":
+                    toggle_door_for_player(target)
                 else:
                     player_token.grab_ladder(voxel_provider)
             return True
@@ -1256,9 +1280,10 @@ def main() -> None:
             # 1. Movimentação do token de personagem com WASD e aderência ao relevo
             movement_forward, movement_right = camera.get_movement_directions()
             facing_before = player_token.yaw
+            chest_session.update(dt)
             player_token.update(
                 dt,
-                keys_pressed,
+                {} if chest_session.locks_movement else keys_pressed,   # baú aberto: o teclado de movimento fica mudo
                 movement_forward,
                 movement_right,
                 voxel_provider,
@@ -1738,13 +1763,19 @@ def main() -> None:
             near_door = None if character_editor.is_open else schematic_tool.door_near(player_token.position)
             near_ladder = (not character_editor.is_open and near_door is None and player_token.ladder_grip is None
                            and player_token.ladder_near(voxel_provider) is not None)
-            if near_door is not None:
+            picked_kind, _ = (None, None) if (character_editor.is_open or player_token.ladder_grip is not None
+                                              and not chest_session.is_open) else pick_interactable()
+            near_chest = picked_kind == "chest"
+            if near_chest:
+                prompt_label = "Fechar" if chest_session.is_open else "Abrir"
+            elif near_door is not None:
                 prompt_label = "Fechar" if near_door.is_open else "Abrir"
             else:
                 prompt_label = "Escada" if near_ladder else ""
             interact_prompt.letter = interact_key_name()
-            interact_prompt.update(dt, (near_door is not None and hovered_door_in_reach() is None) or near_ladder,
-                                   prompt_label)
+            interact_prompt.update(
+                dt, near_chest or (near_door is not None and hovered_door_in_reach() is None) or near_ladder,
+                prompt_label)
             interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
             context_cursor.update(dt, cursor_mode)
             shader.use()
@@ -1775,6 +1806,14 @@ def main() -> None:
         # Renderizar interface 2D do Console de Chat (HUD estilo Minecraft)
         # --------------------------------------------------------------
         mark("hud_prompt")
+        if chest_session.dim > 0.001:
+            # baú aberto: um véu preto sobre a cena (o chat e o resto da interface ficam por cima dele)
+            if chest_dim["quad"] is None:
+                from src.rendering.hud_quad import HudQuad
+                chest_dim["quad"] = HudQuad()
+                chest_dim["quad"].set_image(Image.new("RGBA", (1, 1), (0, 0, 0, 255)))
+            chest_dim["quad"].draw(0, 0, window.width, window.height, size=(window.width, window.height),
+                                   opacity=chest_session.dim)
         character_editor.render(window.width, window.height)
         if map_editor is None or chat_console.is_open:
             chat_console.render(window.width, window.height)
