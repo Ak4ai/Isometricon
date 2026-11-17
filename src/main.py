@@ -387,6 +387,7 @@ def main() -> None:
         window.add_char_callback(menus.char)
         window.add_mouse_button_callback(menu_mouse)
         window.add_cursor_pos_callback(lambda x, y: menus.hover(*window.get_cursor_pos_framebuffer()))
+        window.add_scroll_callback(lambda x_offset, y_offset: menus.wheel(y_offset))
         menu_frames = 0
         while not window.should_close() and menus.result is None:
             window.poll_events()
@@ -405,6 +406,7 @@ def main() -> None:
         window._char_callbacks.clear()
         window._mouse_button_callbacks.clear()
         window._cursor_pos_callbacks.clear()
+        window._scroll_callbacks.clear()
         if window.should_close() or menus.result[0] == 'exit':
             menus.delete()
             shader.delete()
@@ -432,7 +434,8 @@ def main() -> None:
         print("[Skin] Personagem salvo carregado (use --novo para começar do padrão).")
 
     map_world = None
-    world_objects = None
+    construction_panel = None   # o painel de construções (/schem); só no terreno procedural
+    selection_box = None
     if terrain_demo:
         print(f"[Terrain] Modo terreno ativo. Seed inicial: {active_seed['value']} (WASD para andar, Espaço para pular, [R] nova seed)")
         atlas = TextureAtlas()
@@ -441,7 +444,8 @@ def main() -> None:
         water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
                       float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
         generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True, vegetation=True)
-        world_manager = WorldManager(generator=generator, render_distance=2, atlas=atlas)
+        world_manager = WorldManager(generator=generator,
+                                     render_distance=menus.preferences.data['render_distance'], atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
         avatar = None
         if "--token-antigo" not in sys.argv[1:]:
@@ -497,20 +501,33 @@ def main() -> None:
         if map_world is not None:
             voxel_provider = VoxelGridProvider(block_lookup=map_world.get_block_at)
         else:
-            # objetos voxel colocados no terreno (por seed) ficam por cima das construções do /schem
-            from src.editor.world_objects import WorldObjectEditor
-            world_objects = WorldObjectEditor(
-                active_seed["value"], terrain_lookup, world_manager.get_height, create_gl=True,
-            )
+            # O painel de construções: escondido até o /schem; coloca .schem e objetos do editor com o mouse
+            from src.editor.object_names import object_library_paths
+            from src.editor.selection import SelectionBoxRenderer
+            from src.interactive.construction_panel import ConstructionPanel
+            from src.world.structure_sources import entry_for_text, library as construction_library
+
+            def construction_entries():
+                # os objetos de exemplo (assets/objects), os exportados pelo editor e o saves/objeto.json antigo
+                return construction_library(schematic_tool.schematics_dir, object_library_paths())
+
+            construction_panel = ConstructionPanel(schematic_tool, construction_entries)
+            selection_box = SelectionBoxRenderer()
             if world_object_path:
-                if not world_objects.load_object(world_object_path):
-                    print(f"[Objetos] {world_objects.status}")
-            voxel_provider = VoxelGridProvider(block_lookup=world_objects.provider.get_block_at)
+                entry = entry_for_text(world_object_path, schematic_tool.schematics_dir)
+                if entry is None:
+                    print(f"[Construções] Objeto não encontrado: {world_object_path}")
+                else:
+                    construction_panel.open(entry)
+            voxel_provider = VoxelGridProvider(block_lookup=terrain_lookup)
         # Revela só o espaço fechado do jogador (cômodo, caverna) e escurece o resto
         from src.rendering.room_reveal import RoomRevealRenderer
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
+        # a cena do jogo num framebuffer próprio: MSAA, escala de resolução e FXAA mudam na hora (Configurações)
+        from src.rendering.scene_target import SceneTarget
+        scene_target = SceneTarget()
         room_tracker = RoomRevealTracker(background=True)
         room_renderer = RoomRevealRenderer(terrain_atlas=atlas, structure_atlas=lambda: schematic_tool.atlas_if_ready(),
                                            background=True)
@@ -565,7 +582,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = shadow_renderer = None
+        room_tracker = room_renderer = shadow_renderer = scene_target = None
         interact_prompt = None
         context_cursor = None
         player_token = None
@@ -578,7 +595,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = shadow_renderer = None
+        room_tracker = room_renderer = shadow_renderer = scene_target = None
         interact_prompt = None
         context_cursor = None
         player_token = None
@@ -597,6 +614,7 @@ def main() -> None:
         turntable_state=turntable_state,
     )
     skin_command_handler.schematic_tool = schematic_tool
+    skin_command_handler.construction_panel = construction_panel
     skin_command_handler.room_reveal = room_renderer
     skin_command_handler.sun_shadows = shadow_renderer
     skin_command_handler.world_seed = (lambda: active_seed["value"]) if terrain_demo else None
@@ -621,6 +639,12 @@ def main() -> None:
     if schematic_tool is not None:
         # Enter/Esc na prévia respondem no chat, como o resto dos comandos
         schematic_tool.notify = lambda text: chat_console.add_message("[Schem] " + text, (85, 255, 85))
+    if construction_panel is not None:
+        # as construções salvas: no mundo do menu, ou no arquivo da seed (--terrain direto)
+        from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
+        saved = (selected_world.get("structures") or []) if selected_world else             SeedStore(seed_store_path(active_seed["value"])).read()
+        for warning in restore_structures(schematic_tool, saved):
+            chat_console.add_message("[Schem] " + warning, (255, 85, 85))
     if initial_cmd:
         for single_cmd in initial_cmd.split(";"):
             single_cmd = single_cmd.strip()
@@ -807,6 +831,22 @@ def main() -> None:
     else:
         menus.world = selected_world
 
+    def save_structures():
+        """Grava as construções: no mundo do menu, se há um; senão no arquivo da seed."""
+        from src.world.structure_save import SeedStore, seed_store_path, to_data
+        items = to_data(schematic_tool.layer)
+        try:
+            if menus.world is not None:
+                menus.world["structures"] = items
+                menus.library.save(menus.world)
+            else:
+                SeedStore(seed_store_path(active_seed["value"])).write(items, active_seed["value"])
+        except (OSError, ValueError) as error:
+            chat_console.add_message(f"[Schem] Não consegui salvar as construções: {error}", (255, 85, 85))
+
+    if construction_panel is not None:
+        schematic_tool.on_change = save_structures
+
     def save_world():
         if not terrain_demo:
             return
@@ -814,6 +854,9 @@ def main() -> None:
             menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'])
         menus.world['seed'] = active_seed['value']
         menus.world['position'] = [float(v) for v in player_token.position]
+        if construction_panel is not None:
+            from src.world.structure_save import to_data
+            menus.world['structures'] = to_data(schematic_tool.layer)
         if character_model is not None and not getattr(character_model, 'is_loading', False):
             menus.world['character'] = character_save.to_dict(character_model)
         menus.library.save(menus.world)
@@ -832,13 +875,18 @@ def main() -> None:
         world_manager.delete()
         active_seed['value'] = world['seed']
         world_manager = WorldManager(TerrainGenerator(seed=world["seed"], enable_caves=True, vegetation=True),
-                                     render_distance=2, atlas=atlas)
+                                     render_distance=menus.preferences.data['render_distance'], atlas=atlas)
         x, z = .5, .5
         player_token.position[:] = world.get('position') or [x, world_manager.get_height(x, z) + 1., z]
         player_token.vertical_velocity = 0.0
         player_token._collision_controller = None
         world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-        schematic_tool.clear()  # as construções pertencem ao mundo anterior
+        # as construções do mundo anterior saem; as deste voltam (sem regravar nada: recarregar não é mudança)
+        from src.world.structure_save import restore as restore_structures
+        for warning in restore_structures(schematic_tool, world.get('structures') or []):
+            chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+        if construction_panel is not None:
+            construction_panel.close()
         room_tracker.reset()
         voxel_provider = VoxelGridProvider(
             block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
@@ -871,8 +919,9 @@ def main() -> None:
             if map_editor.handle_key(key, action, mods):
                 return True
 
-        if world_objects is not None and not chat_console.is_open and not character_editor.is_open:
-            if world_objects.handle_key(key, action, mods):
+        if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
+            if construction_panel.handle_key(key, action, mods):
+                keys_pressed.clear()
                 return True
 
         # Intercepta eventos de teclado para o console de chat estilo Minecraft
@@ -923,15 +972,19 @@ def main() -> None:
             active_seed["value"] = new_seed
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
             world_manager.delete()
-            schematic_tool.clear()  # o relevo muda: as construções não fazem mais sentido onde estavam
             room_tracker.reset()
             world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True, vegetation=True)
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-            if world_objects is not None:
-                world_objects.switch_seed(new_seed)
+            # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
+            from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
+            saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else []
+            for warning in restore_structures(schematic_tool, saved):
+                chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+            if construction_panel is not None:
+                construction_panel.close()
 
         if char_demo:
             if key == glfw.KEY_SPACE and action == glfw.PRESS:
@@ -1000,8 +1053,9 @@ def main() -> None:
             if map_editor.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
                 return
 
-        if world_objects is not None:
-            if world_objects.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
+        if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
+            if construction_panel.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT),
+                                                      window.get_cursor_pos(), window.width):
                 return
 
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
@@ -1063,6 +1117,7 @@ def main() -> None:
         """A roda do mouse rola a grade da tela de criação; fora dela, é o zoom da câmera."""
         mouse_used()
         if menus.active:
+            menus.wheel(y_offset)
             return
         if character_editor.handle_scroll(window.get_cursor_pos()[0], y_offset):
             return
@@ -1082,8 +1137,8 @@ def main() -> None:
             return
         if map_editor is not None and not chat_console.is_open and map_editor.handle_char(codepoint):
             return
-        if (world_objects is not None and not chat_console.is_open and not character_editor.is_open
-                and world_objects.handle_char(codepoint)):
+        if (construction_panel is not None and not chat_console.is_open and not character_editor.is_open
+                and construction_panel.handle_char(codepoint)):
             return
         if not character_editor.handle_char(codepoint):
             chat_console.handle_char(codepoint)
@@ -1179,6 +1234,26 @@ def main() -> None:
     gc.collect()
     gc.freeze()
     gc.callbacks.append(lambda phase, info: gc.freeze() if phase == "stop" and info["generation"] == 2 else None)
+    # Configurações > Gráficos: aplicadas quando mudam (o /sombras do chat continua valendo até a próxima mudança)
+    from src.core.frame_limiter import FrameLimiter
+    from src.core.game_storage import GRAPHICS
+    frame_limiter = FrameLimiter()
+    graphics_applied = {"key": None}
+
+    def apply_graphics():
+        prefs = menus.preferences.data
+        key = tuple(prefs[name] for name in GRAPHICS)
+        if key == graphics_applied["key"]:
+            return
+        graphics_applied["key"] = key
+        if world_manager is not None:
+            world_manager.render_distance = int(prefs["render_distance"])
+        if shadow_renderer is not None:
+            shadow_renderer.enabled = prefs["shadows"] != "off"
+            shadow_renderer.quality = {"low": 0, "medium": 1, "high": 2}.get(prefs["shadows"], 2)
+            shadow_renderer.steps = int(prefs["shadow_range"])
+            shadow_renderer.strength = float(prefs["shadow_strength"])
+
     while not window.should_close():
         dt = window.update_delta_time()
         if frametimes_path:
@@ -1209,6 +1284,7 @@ def main() -> None:
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             menus.render(window.width, window.height)
             window.swap_buffers()
+            frame_limiter.wait(menus.preferences.data["fps_limit"])
             continue
         if menus.world is not None:
             menus.world['played'] += dt
@@ -1283,6 +1359,9 @@ def main() -> None:
             movement_forward, movement_right = camera.get_movement_directions()
             facing_before = player_token.yaw
             chest_session.update(dt)
+            lid_update = chest_session.take_lid_update()
+            if lid_update is not None:
+                schematic_tool.set_chest_lid(*lid_update)   # a tampa do baú gira: refaz a malha dos baús
             player_token.update(
                 dt,
                 {} if chest_session.locks_movement else keys_pressed,   # baú aberto: o teclado de movimento fica mudo
@@ -1392,6 +1471,11 @@ def main() -> None:
             gl.GL_COLOR_BUFFER_BIT
             | gl.GL_DEPTH_BUFFER_BIT
         )
+        apply_graphics()
+        if scene_target is not None and not editing:
+            prefs = menus.preferences.data
+            scene_target.begin(window.width, window.height, samples=prefs["msaa"], scale=prefs["render_scale"],
+                               fxaa=prefs["fxaa"])
 
         # --------------------------------------------------------------
         # Matrizes da câmera
@@ -1527,8 +1611,6 @@ def main() -> None:
             mark("misc")
             chunk_revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
             room_structures = list(schematic_tool.layer.structures)
-            if world_objects is not None:
-                room_structures += world_objects.room_structures()
             if map_world is not None:
                 room_structures += map_world.room_structures()
             if len(room_structures) > len(schematic_tool.layer.structures):
@@ -1539,12 +1621,14 @@ def main() -> None:
             mark("room_renderer")
             shadow_renderer.update(room_tracker)
             mark("shadows")
-            if world_objects is not None:
+            if construction_panel is not None and construction_panel.is_open:
+                # o bloco que o mouse aponta (terreno e construções) e as células ocupadas pelo jogador
                 cursor_x, cursor_y = window.get_cursor_pos_framebuffer()
-                world_objects.update_cursor(
-                    cursor_x, cursor_y, window.width, window.height, view, projection, model,
-                    token_position=player_token.position, mouse_window=window.get_cursor_pos(),
-                )
+                ray = screen_to_world_ray(cursor_x, cursor_y, window.width, window.height, view, projection, model)
+                px, py, pz = (float(v) for v in player_token.position)
+                body = ((math.floor(px - 0.35), math.floor(py), math.floor(pz - 0.35)),
+                        (math.floor(px + 0.35), math.floor(py + 1.79), math.floor(pz + 0.35)))
+                construction_panel.update_cursor(raycast_voxels(ray, voxel_provider, max_distance=512.0), body)
             # Configuração do modo subterrâneo (cutaway de caverna) e água
             underground_mode = False
             if map_world is None and voxel_provider is not None and not room_renderer.visible:
@@ -1644,42 +1728,71 @@ def main() -> None:
                 # Mapa do editor (--map=...): o volume base e os objetos, no lugar do terreno procedural; as construções
                 # do /schem, os cômodos e as tampas seguem abaixo, como no terreno.
                 map_world.render(shader, model)
-            else:
-                world_manager.render(shader, model, view_projection)
-                room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
-                mark("story_and_world_draw")
 
-                # 2. Segundo passe: terreno acima do jogador translúcido (cutaway de caverna)
-                if underground_mode:
-                    gl.glEnable(gl.GL_BLEND)
-                    gl.glDepthFunc(gl.GL_ALWAYS)
-                    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-                    gl.glDepthMask(gl.GL_FALSE)
-                    shader.set_int("u_CutawayPass", 1)
-                    world_manager.render(shader, model, view_projection)
-                    gl.glDepthMask(gl.GL_TRUE)
-                    gl.glDepthFunc(gl.GL_LESS)
-                    gl.glDisable(gl.GL_BLEND)
+            def draw_solids():
+                """O que é opaco no mundo: o terreno e as tampas dele, as construções do /schem e as tampas delas.
+                As construções usam outro atlas, em que a região da água do terreno pode ser outra textura: nada delas
+                é tratado como água."""
+                if map_world is None:
+                    gl.glActiveTexture(gl.GL_TEXTURE0)
+                    gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
+                    shader.set_int("u_TextureAtlas", 0)
+                    shader.set_bool("u_UndergroundMode", underground_mode)   # as construções desligam: volta aqui
+                    shader.set_bool("u_WaterMode", player_token.in_water)
                     shader.set_int("u_CutawayPass", 0)
+                    shader.set_int("u_WaterPass", 1)
+                    world_manager.render(shader, model, view_projection)
+                    room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
+                shader.set_int("u_WaterPass", 0)
+                schematic_tool.draw(shader, model, window.time, preview=False)
+                room_renderer.draw_structure_caps(shader, model)
+
+            # Pré-passada de profundidade: os descartes do shader (transparência, cortes) desligam o teste de
+            # profundidade antecipado da placa, e sem ele cada fragmento escondido pagaria os raios do sol. A 1ª
+            # passada só escreve a profundidade; a 2ª, sem escrever, sombreia só o que ficou na frente. Vale para o
+            # terreno e para as construções (de dentro de uma casa, quase tudo na tela é parede, piso e móvel dela).
+            shader.set_bool("u_DepthOnly", True)
+            gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
+            draw_solids()
+            gl.glColorMask(gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE)
+            shader.set_bool("u_DepthOnly", False)
+            gl.glDepthFunc(gl.GL_LEQUAL)
+            gl.glDepthMask(gl.GL_FALSE)
+            draw_solids()
+            gl.glDepthMask(gl.GL_TRUE)
+            gl.glDepthFunc(gl.GL_LESS)
+            mark("story_and_world_draw")
+
+            if map_world is None and underground_mode:
+                # 2. Segundo passe: terreno acima do jogador translúcido (cutaway de caverna)
+                gl.glActiveTexture(gl.GL_TEXTURE0)
+                gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
+                shader.set_int("u_TextureAtlas", 0)
+                shader.set_bool("u_UndergroundMode", True)
+                shader.set_bool("u_WaterMode", player_token.in_water)
+                shader.set_int("u_WaterPass", 1)
+                gl.glEnable(gl.GL_BLEND)
+                gl.glDepthFunc(gl.GL_ALWAYS)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                gl.glDepthMask(gl.GL_FALSE)
+                shader.set_int("u_CutawayPass", 1)
+                world_manager.render(shader, model, view_projection)
+                gl.glDepthMask(gl.GL_TRUE)
+                gl.glDepthFunc(gl.GL_LESS)
+                gl.glDisable(gl.GL_BLEND)
+                shader.set_int("u_CutawayPass", 0)
 
             gl.glEnable(gl.GL_CULL_FACE)
 
-            # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma. Usam outro atlas, em que a
-            # região da água do terreno pode ser outra textura: nada delas é tratado como água.
+            # 2b. A prévia do /schem (holograma translúcido), depois do que é opaco
             mark("underground_pass")
             shader.set_int("u_WaterPass", 0)
-            schematic_tool.draw(shader, model, window.time)
-            room_renderer.draw_structure_caps(shader, model)
-            if world_objects is not None:
-                # os objetos do editor, ainda dentro da revelação de cômodo (cortes, tampas e a luz de fora)
-                shader.set_int("u_WaterPass", 0)
-                world_objects.update()
-                world_objects.render_objects(shader, model)
+            schematic_tool.draw(shader, model, window.time, solids=False)
             if cursor_state["hidden"] and not pan_state["active"] and cursor_in_use():
                 # a profundidade do que está sob o mouse (terreno e construções, já cortados): o hover do próximo
                 # quadro começa nela
                 depth_probe.read(window.get_cursor_pos_framebuffer(), window.width, window.height,
-                                 projection @ view @ model)
+                                 projection @ view @ model, scale=scene_target.scale if scene_target.active else 1.0)
             else:
                 depth_probe.clear()
             mark("structures_draw")
@@ -1707,8 +1820,19 @@ def main() -> None:
             grid_renderer.render(projection, view, model)
             mark("grid_draw")
 
-            if world_objects is not None:
-                world_objects.render(shader, projection, view, model, solids=False)   # prévia e seleção
+            if construction_panel is not None and construction_panel.is_open and selection_box is not None:
+                # a caixa da construção selecionada (amarela) e a do holograma (verde se cabe, vermelha se não)
+                chosen = construction_panel.selected
+                if chosen is not None:
+                    low, high = chosen.bounds()
+                    selection_box.render(projection, view, model, low, high, (1.0, 0.85, 0.25))
+                preview = schematic_tool.preview
+                if preview is not None and construction_panel.cursor is not None:
+                    low = tuple(preview.origin)
+                    high = (low[0] + preview.schematic.width - 1, low[1] + preview.schematic.height - 1,
+                            low[2] + preview.schematic.length - 1)
+                    colour = (0.45, 1.0, 0.55) if construction_panel.valid else (1.0, 0.35, 0.30)
+                    selection_box.render(projection, view, model, low, high, colour)
 
             # 4. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
@@ -1758,6 +1882,8 @@ def main() -> None:
             shader.set_int("u_TextureAtlas", 0)
             player_token.draw(shader=shader, base_model=base_model)
             mark("player_draw")
+            # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
+            scene_target.finish()
 
             if coordinate_overlay is not None:
                 coordinate_overlay.render(window.width, window.height, player_token.position)
@@ -1784,8 +1910,8 @@ def main() -> None:
             interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
             context_cursor.update(dt, cursor_mode)
             shader.use()
-            if world_objects is not None:
-                world_objects.render_hud(window.width, window.height)
+            if construction_panel is not None:
+                construction_panel.render(window.width, window.height)
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
@@ -1800,6 +1926,8 @@ def main() -> None:
                 shader.set_mat4("u_Model", model @ transform)
                 mesh.draw()
 
+        if scene_target is not None:
+            scene_target.finish()   # sem efeito se a cena já foi para a tela
         # Restaurar estados OpenGL (o HUD pode ter deixado outro programa ativo)
         gl.glDisable(gl.GL_BLEND)
         gl.glDepthMask(gl.GL_TRUE)
@@ -1871,6 +1999,7 @@ def main() -> None:
         # --------------------------------------------------------------
         window.swap_buffers()
         mark("swap")
+        frame_limiter.wait(menus.preferences.data["fps_limit"])
 
     # ------------------------------------------------------------------
     # 8. Liberar recursos
@@ -1886,6 +2015,7 @@ def main() -> None:
     gl.glDeleteTextures(1, [token_tex_id])
     chat_console.delete()
     if schematic_tool is not None:
+        schematic_tool.on_change = lambda: None   # apagar as malhas ao sair não é tirar as construções do save
         schematic_tool.delete()
     if room_tracker is not None:
         room_tracker.close()
@@ -1893,12 +2023,16 @@ def main() -> None:
         room_renderer.delete()
     if shadow_renderer is not None:
         shadow_renderer.delete()
+    if scene_target is not None:
+        scene_target.delete()
     if map_editor is not None:
         map_editor.delete()
     if map_world is not None:
         map_world.delete()
-    if world_objects is not None:
-        world_objects.delete()
+    if construction_panel is not None:
+        construction_panel.delete()
+    if selection_box is not None:
+        selection_box.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

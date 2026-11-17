@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import lru_cache
 from hashlib import blake2b
 from math import floor, isfinite
 from numbers import Real
@@ -10,6 +11,21 @@ import numpy as np
 
 from src.world.block import BlockType
 from src.world.chunk import Chunk3D, _coordinate
+
+
+@lru_cache(maxsize=1 << 16)
+def _lattice(seed: int, x: int, z: int) -> float:
+    """O valor do ponto (x, z) da grade do ruído: hash estável da stdlib, sem hash() do Python nem estado aleatório
+    global. A divisão é entre inteiros (exata, arredondada uma vez): por isso fica em Python, e não em numpy."""
+    key = f'{seed}:{x}:{z}'.encode('ascii')
+    value = int.from_bytes(blake2b(key, digest_size=8).digest(), 'big')
+    return 2 * (value / (2**64 - 1)) - 1
+
+
+@lru_cache(maxsize=1 << 16)
+def _column_height(generator: "TerrainGenerator", x: int, z: int) -> int:
+    """``get_height`` guardado por coluna: as cavernas perguntam a mesma coluna a cada passo do túnel."""
+    return generator._compute_height(x, z)
 
 
 def _fade(t: float) -> float:
@@ -77,10 +93,7 @@ class TerrainGenerator:
 
 
     def _lattice_value(self, x: int, z: int) -> float:
-        # Hash estável da stdlib, sem hash() do Python nem estado aleatório global.
-        key = f'{self.seed}:{x}:{z}'.encode('ascii')
-        value = int.from_bytes(blake2b(key, digest_size=8).digest(), 'big')
-        return 2 * (value / (2**64 - 1)) - 1
+        return _lattice(self.seed, x, z)
 
     def _noise(self, x: float, z: float) -> float:
         ix, iz = floor(x), floor(z)
@@ -92,7 +105,9 @@ class TerrainGenerator:
 
     def get_height(self, world_x: int, world_z: int) -> int:
         """Retorna Y sólido em [base+floor(-amplitude), base+floor(amplitude)]."""
-        x, z = _coordinate(world_x), _coordinate(world_z)
+        return _column_height(self, _coordinate(world_x), _coordinate(world_z))
+
+    def _compute_height(self, x: int, z: int) -> int:
         total, weight_sum = 0.0, 0.0
         weight, frequency = 1.0, self.frequency
         for _ in range(self.octaves):
@@ -103,29 +118,51 @@ class TerrainGenerator:
         noise = max(-1.0, min(1.0, total / weight_sum))
         return self.base_height + floor(self.amplitude * noise)
 
+    def heights(self, xs: np.ndarray, zs: np.ndarray) -> np.ndarray:
+        """``get_height`` de muitas colunas de uma vez (arrays de inteiros do mesmo formato): a mesma conta, na mesma
+        ordem, em float64; só os pontos da grade (poucos por chunk) passam pelo hash."""
+        xs, zs = np.broadcast_arrays(np.asarray(xs, dtype=np.int64), np.asarray(zs, dtype=np.int64))
+        fx, fz = xs.astype(np.float64), zs.astype(np.float64)
+        total = np.zeros(xs.shape, dtype=np.float64)
+        weight_sum, weight, frequency = 0.0, 1.0, self.frequency
+        for _ in range(self.octaves):
+            px, pz = fx * frequency, fz * frequency
+            ix, iz = np.floor(px), np.floor(pz)
+            u, v = _fade(px - ix), _fade(pz - iz)
+            ix, iz = ix.astype(np.int64), iz.astype(np.int64)
+            # os quatro cantos de cada ponto; o hash só uma vez por canto distinto
+            corners = np.stack([np.stack([ix, iz], -1), np.stack([ix + 1, iz], -1),
+                                np.stack([ix, iz + 1], -1), np.stack([ix + 1, iz + 1], -1)]).reshape(-1, 2)
+            unique, inverse = np.unique(corners, axis=0, return_inverse=True)
+            values = np.array([_lattice(self.seed, int(x), int(z)) for x, z in unique])
+            a, b, c, d = values[inverse.reshape(4, *ix.shape)]
+            near, far = a + u * (b - a), c + u * (d - c)
+            total += weight * (near + v * (far - near))
+            weight_sum += weight
+            weight *= self.persistence
+            frequency *= self.lacunarity
+        noise = np.maximum(-1.0, np.minimum(1.0, total / weight_sum))
+        return self.base_height + np.floor(self.amplitude * noise).astype(np.int64)
+
     def populate_chunk(self, chunk: Chunk3D) -> None:
         """Substitui todos os voxels, preservando array, coordenadas e AABB.
 
         Calcula uma altura por coluna X/Z e preenche Y por fatias locais.
         O mundo sólido continua em profundidade, sem piso artificial em Y=0.
         """
-        for z in range(chunk.SIZE):
-            for x in range(chunk.SIZE):
-                world_x, origin_y, world_z = chunk.local_to_world(x, 0, z)
-                surface = self.get_height(world_x, world_z)
-                column = chunk.blocks[x, :, z]
-                column[:] = BlockType.AIR
-
-                def end(world_y: int) -> int:
-                    return max(0, min(chunk.SIZE, world_y - origin_y + 1))
-
-                column[:end(surface)] = BlockType.STONE
-                column[end(surface - self.dirt_depth - 1):end(surface)] = BlockType.DIRT
-                if origin_y <= surface < origin_y + chunk.SIZE:
-                    column[surface - origin_y] = (
-                        BlockType.DIRT if surface < self.sea_level else BlockType.GRASS
-                    )
-                column[end(surface):end(self.sea_level)] = BlockType.WATER
+        size = chunk.SIZE
+        origin_x, origin_y, origin_z = chunk.local_to_world(0, 0, 0)
+        local = np.arange(size, dtype=np.int64)
+        surface = self.heights(origin_x + local[:, None], origin_z + local[None, :])[:, None, :]   # [x, 1, z]
+        y = (origin_y + local)[None, :, None]                                                         # [1, y, 1]
+        blocks = np.full((size, size, size), int(BlockType.AIR), dtype=chunk.blocks.dtype)
+        blocks[np.broadcast_to(y <= surface, blocks.shape)] = int(BlockType.STONE)
+        blocks[np.broadcast_to((y >= surface - self.dirt_depth) & (y <= surface), blocks.shape)] = int(BlockType.DIRT)
+        top = np.where(surface < self.sea_level, int(BlockType.DIRT), int(BlockType.GRASS))
+        at_top = np.broadcast_to(y == surface, blocks.shape)
+        blocks[at_top] = np.broadcast_to(top, blocks.shape)[at_top]
+        blocks[np.broadcast_to((y > surface) & (y <= self.sea_level), blocks.shape)] = int(BlockType.WATER)
+        chunk.blocks[...] = blocks
 
     def generate_region(
         self, positions: Iterable[tuple[int, int, int]],

@@ -126,18 +126,18 @@ Funcionalidade: Colocar objeto no mundo procedural
 
 | Requisito | Requisitos relacionados | Implementação |
 |---|---|---|
-| FR-051 | FR-041, FR-042, FR-045 | `docs/EDITOR.md`, `src/editor/map_project.py`, `src/editor/world_objects.py` |
-| FR-052 | FR-035, FR-043 | `WorldObjectEditor`, `--object` |
-| FR-053 | FR-012, FR-048 | `WorldObjectEditor.update_cursor`, HUD |
+| FR-051 | FR-041, FR-042, FR-045 | `docs/EDITOR.md`, `src/editor/map_project.py`, `src/interactive/construction_panel.py` |
+| FR-052 | FR-035, FR-043 | `ConstructionPanel`, `--object` |
+| FR-053 | FR-012, FR-048 | `ConstructionPanel.update_cursor`, HUD |
 | FR-054 | FR-012, FR-016 | `WorldObjectProvider`, validação de células |
-| FR-055 | FR-042 | `WorldObjectEditor.handle_key` |
+| FR-055 | FR-042 | `ConstructionPanel.handle_key` |
 | FR-056 | FR-042, FR-047 | `WorldObjectStore`, `PlacedObject` |
 | FR-057 | FR-045, FR-007 | `WorldObjectStore.load_seed/save` |
 | FR-058 | FR-016, FR-012 | `WorldObjectProvider`, `player_token.update` |
-| FR-059 | FR-047 | seleção/remoção no `WorldObjectEditor` |
+| FR-059 | FR-047 | seleção/remoção no `ConstructionPanel` |
 | FR-060 | FR-010, FR-011, FR-007 | `WorldObjectRenderer` |
 | FR-061 | FR-011, FR-058 | `WorldObjectRenderer`, `MapWorld.render` |
-| FR-062 | FR-041, FR-043 | `MapEditor` (`N`), `WorldObjectEditor` (`N`), `object_names.py` |
+| FR-062 | FR-041, FR-043 | `MapEditor` (`N`), `ConstructionPanel` (`N`), `object_names.py` |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `WorldObjectHud` |
 | DR-008 | FR-041 | JSON `isometricon-world-objects` |
@@ -149,7 +149,7 @@ Funcionalidade: Colocar objeto no mundo procedural
 
 ## 6. Testes
 
-- `tests/test_editor_world_objects.py` — persistência, colisão do provider,
+- `tests/test_construction_panel.py, tests/test_structure_save.py` — persistência, colisão do provider,
   colocação, remoção, arquivo inválido, sobreposição com token e atalhos.
 - Teste manual: `--terrain --object=assets/objects/casa_exemplo.json`.
 - Regressão: fluxo de mapa independente (`--map-editor` e `--terrain --map`).

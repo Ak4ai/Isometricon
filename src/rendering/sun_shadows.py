@@ -14,8 +14,10 @@ from src.world.block import BlockType
 from src.world.room_reveal import WINDOW, RoomRevealTracker
 
 SHADOW_UNIT = 3  # unidade de textura da máscara de sombra (0 atlas, 2 máscara do espaço)
+HORIZON_UNIT = 4  # unidade do mapa de alturas por quadrante (column_horizons)
 
 
+SOFT_SPREAD = 0.15  # o raio do disco do cone borrado do shader (softSun); a nítida (0.08) cabe dentro dele
 SOLID_VALUE, WATER_VALUE = 255, 128  # na textura: o shader lê sólido > 0.75 e água entre 0.25 e 0.75
 
 
@@ -26,16 +28,83 @@ def mask_values(window) -> np.ndarray:
     return values
 
 
+def quadrant_channel(step_x: int, step_z: int) -> int:
+    """O canal de ``column_horizons`` do rumo do raio: 0 (+x +z), 1 (+x -z), 2 (-x +z), 3 (-x -z)."""
+    return (0 if step_x > 0 else 2) + (0 if step_z > 0 else 1)
+
+
+def column_horizons(values: np.ndarray, rise: float = 0.0) -> np.ndarray:
+    """Para cada coluna (x, z) e cada quadrante de rumo, a altura a partir da qual o raio do sol já não encontra mais
+    nada: ``values`` é [x, y, z]; o resultado é [x, z, 4], inteiros >= 0.
+
+    O raio anda sempre no mesmo sentido em x e em z, então só visita colunas do seu quadrante à frente; e, se sobe
+    pelo menos ``rise`` por célula andada no plano, chega a uma coluna a uma distância d já ``rise * d`` mais alto.
+    Uma coluna q à frente de p só o tapa se a célula ocupada (sólido ou água) mais alta dela, H(q), fica na altura em
+    que ele passa por ela. Estando na célula de altura y >= o valor de p, nenhuma tapa: o shader para ali, com a mesma
+    luz que teria no fim do caminho. Com ``rise`` 0 o valor é só 1 + o H mais alto do quadrante.
+
+    A distância no plano entre as células p e q é pelo menos ((|dx| - 1)+ + (|dz| - 1)+) / raiz(2) (a soma das folgas
+    em cada eixo); com ela o máximo fica separável: um máximo com desconto em x e depois em z.
+    """
+    filled = values > 0
+    heights = np.arange(values.shape[1], dtype=np.int32)[None, :, None]
+    tops = np.where(filled, heights, -1).max(axis=1).astype(np.float64) + 1.0      # [x, z]: H + 1 (0 vazia)
+    k = max(float(rise), 0.0) / np.sqrt(2.0)                                       # desconto por célula de folga
+
+    def ahead_max(v: np.ndarray, axis: int, forward: bool) -> np.ndarray:
+        """max sobre j à frente de i (j >= i se ``forward``) de v[j] - k * (|j - i| - 1)+, ao longo de ``axis``."""
+        index = np.arange(v.shape[axis], dtype=np.float64)
+        index = index[:, None] if axis == 0 else index[None, :]
+        if forward:   # g(i) = max_{j >= i} v[j] - k (j - i); o resultado é max(v[i], g(i + 1))
+            g = np.flip(np.maximum.accumulate(np.flip(v - k * index, axis), axis=axis), axis) + k * index
+            nxt = np.concatenate([np.take(g, range(1, v.shape[axis]), axis=axis),
+                                  np.full_like(np.take(g, [0], axis=axis), -np.inf)], axis=axis)
+        else:         # g(i) = max_{j <= i} v[j] - k (i - j); o resultado é max(v[i], g(i - 1))
+            g = np.maximum.accumulate(v + k * index, axis=axis) - k * index
+            nxt = np.concatenate([np.full_like(np.take(g, [0], axis=axis), -np.inf),
+                                  np.take(g, range(0, v.shape[axis] - 1), axis=axis)], axis=axis)
+        return np.maximum(v, nxt)
+
+    out = np.empty(tops.shape + (4,), dtype=np.int32)
+    for step_x in (1, -1):
+        along_x = ahead_max(tops, 0, step_x > 0)
+        for step_z in (1, -1):
+            bound = ahead_max(along_x, 1, step_z > 0)
+            out[..., quadrant_channel(step_x, step_z)] = np.clip(np.ceil(bound - 1e-9), 0, 255)
+    return out
+
+
+def cone_rise(sun_direction, spread: float = SOFT_SPREAD) -> float:
+    """A menor subida por célula andada no plano (dy / |dxz|) entre os raios do cone em volta de ``sun_direction``,
+    com uma folga; 0 se o cone chega ao horizonte. O shader confere de novo, raio a raio (ver traceSun)."""
+    sun = np.asarray(sun_direction, dtype=np.float64)
+    sun = sun / np.linalg.norm(sun)
+    t1 = np.cross(sun, (0.0, 1.0, 0.0))
+    if np.linalg.norm(t1) < 1e-6:
+        return 0.0
+    t1 /= np.linalg.norm(t1)
+    t2 = np.cross(sun, t1)
+    angles = np.linspace(0.0, 2.0 * np.pi, 720, endpoint=False)[:, None]
+    rays = sun + (t1 * np.cos(angles) + t2 * np.sin(angles)) * spread
+    rise = rays[:, 1] / np.maximum(np.linalg.norm(rays[:, [0, 2]], axis=1), 1e-9)
+    return max(float(rise.min()) * 0.98, 0.0)
+
+
 class SunShadowRenderer:
     """Mantém a textura de blocos sólidos e os uniforms das sombras."""
 
-    def __init__(self, strength: float = 1.0) -> None:
+    def __init__(self, strength: float = 1.0, sun_direction=(0.55, 0.26, 0.7)) -> None:
         self.enabled = True
+        # a subida mínima dos raios do sol (o u_LightDir do terreno, girado só em torno de y: a elevação não muda);
+        # se o sol for outro, o shader só deixa de usar o atalho nos raios que sobem menos
+        self.rise = cone_rise(sun_direction)
+        self.quality = 2   # 0 baixa (um raio), 1 média, 2 alta: ver u_ShadowQuality no shader
+        self.steps = 56    # até quantas células o raio procura o que tapa o sol
         self.strength = float(strength)  # 0 sem sombra, 1 sombra inteira
         self.texture_id = 0
+        self.horizon_id = 0  # textura 2D RGBA: column_horizons + 1, um quadrante por canal
         self._uploaded = None  # as células da janela que estão na GPU
         self._origin = (0, 0, 0)
-        self._top = WINDOW[1]
 
     def update(self, tracker: RoomRevealTracker) -> None:
         """Envia a janela de blocos sólidos para a GPU quando o rastreador calculou uma nova."""
@@ -46,13 +115,16 @@ class SunShadowRenderer:
         sx, sy, sz = WINDOW
         # a janela é [x, y, z]; a textura 3D quer (profundidade z, altura y, largura x)
         values = mask_values(mask.window)
-        filled = np.flatnonzero(values.any(axis=(0, 2)))
-        self._top = int(filled.max()) if filled.size else -1   # o raio do sol que sobe acima disso já está livre
         data = np.ascontiguousarray(values.transpose(2, 1, 0))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
         gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
+        # [x, z, 4] -> a textura 2D quer (altura z, largura x, canais)
+        horizons = np.ascontiguousarray((column_horizons(values, self.rise)).astype(np.uint8).transpose(1, 0, 2))
+        gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
+        gl.glTexSubImage2D(gl.GL_TEXTURE_2D, 0, 0, 0, sx, sz, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, horizons)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         self._uploaded = mask.window
         self._origin = mask.origin
@@ -71,6 +143,14 @@ class SunShadowRenderer:
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
         gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx), dtype=np.uint8))
+        self.horizon_id = gl.glGenTextures(1)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
+        for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
+                            (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA8, sx, sz, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE,
+                        np.zeros((sz, sx, 4), dtype=np.uint8))
         gl.glActiveTexture(gl.GL_TEXTURE0)
 
     @property
@@ -79,18 +159,24 @@ class SunShadowRenderer:
 
     def apply(self, shader, base_model: np.ndarray) -> None:
         """Liga as sombras no shader do mundo (antes de desenhar o terreno e as construções)."""
+        # a água usa a matriz mesmo sem sombras (a normal das ondas vai do mundo para o espaço desenhado)
+        inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64)).astype(np.float32)
+        shader.set_mat4("u_ShadowInvModel", inverse_model)
         if not self.active:
             shader.set_float("u_ShadowStrength", 0.0)
             return
-        inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64)).astype(np.float32)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         shader.set_int("u_ShadowMask", SHADOW_UNIT)
-        shader.set_mat4("u_ShadowInvModel", inverse_model)
+        shader.set_int("u_ShadowHorizon", HORIZON_UNIT)
+        shader.set_float("u_ShadowHorizonRise", self.rise)
+        shader.set_int("u_ShadowSteps", int(self.steps))
+        shader.set_int("u_ShadowQuality", int(self.quality))
         shader.set_vec3("u_ShadowOrigin", float(self._origin[0]), float(self._origin[1]), float(self._origin[2]))
         shader.set_vec3("u_ShadowSize", float(WINDOW[0]), float(WINDOW[1]), float(WINDOW[2]))
-        shader.set_float("u_ShadowTop", float(self._top))
         shader.set_float("u_ShadowStrength", self.strength)
 
     @staticmethod
@@ -99,6 +185,7 @@ class SunShadowRenderer:
 
     def delete(self) -> None:
         if self.texture_id:
-            gl.glDeleteTextures(1, [self.texture_id])
+            gl.glDeleteTextures(2, [self.texture_id, self.horizon_id])
             self.texture_id = 0
+            self.horizon_id = 0
         self._uploaded = None

@@ -107,7 +107,7 @@ def _surface_heights(
     return {pos: h for pos, h in heights.items() if blocker_heights.get(pos, -1) <= h}
 
 
-def _relief_segments(
+def _relief_segments_sparse(
     chunks: Mapping[tuple[int, int, int], Chunk3D],
     epsilon: float,
 ) -> list[tuple[float, float, float, float, float, float, float, float]]:
@@ -135,6 +135,75 @@ def _relief_segments(
     return sorted(segments)
 
 
+def _surface_height_grid(chunks):
+    """Alturas da superfície tática numa matriz densa: (x0, z0, alturas, válidas), ou None se esparso demais.
+
+    Mesma regra de ``_surface_heights`` (inclusive o piso -1 e o bloqueio por folhagem), sem laço por coluna.
+    """
+
+    if not chunks:
+        return None
+    columns = {(cx, cz) for cx, _, cz in chunks}
+    min_x = min(cx for cx, _ in columns)
+    min_z = min(cz for _, cz in columns)
+    width = (max(cx for cx, _ in columns) - min_x + 1) * Chunk3D.SIZE
+    depth = (max(cz for _, cz in columns) - min_z + 1) * Chunk3D.SIZE
+    if width * depth > len(columns) * Chunk3D.SIZE**2 * 4:
+        return None
+    heights = np.full((width, depth), _NO_HEIGHT, dtype=np.int32)
+    blockers = np.full((width, depth), _NO_HEIGHT, dtype=np.int32)
+    for (cx, cy, cz), chunk in chunks.items():
+        sx, sz = (cx - min_x) * Chunk3D.SIZE, (cz - min_z) * Chunk3D.SIZE
+        area = np.s_[sx:sx + Chunk3D.SIZE, sz:sz + Chunk3D.SIZE]
+        for lookup, target in ((_SURFACE_LUT, heights), (_BLOCKER_LUT, blockers)):
+            mask = lookup[chunk.blocks]
+            if mask.any():
+                local = np.where(mask, _LOCAL_Y, -1).max(axis=1)
+                world = np.where(local >= 0, np.maximum(local + cy * Chunk3D.SIZE, -1), _NO_HEIGHT)
+                np.maximum(target[area], world, out=target[area])
+    valid = (heights != _NO_HEIGHT) & (blockers <= heights)
+    return min_x * Chunk3D.SIZE, min_z * Chunk3D.SIZE, heights, valid
+
+
+def _relief_segment_array(chunks, epsilon: float) -> np.ndarray:
+    """Os segmentos de ``_relief_segments_sparse`` como matriz (N, 8) float64, na mesma ordem."""
+
+    grid = _surface_height_grid(chunks)
+    if grid is None:
+        return np.asarray(_relief_segments_sparse(chunks, epsilon), dtype=np.float64).reshape(-1, 8)
+    x0, z0, heights, valid = grid
+    parts = []
+    for axis in (0, 1):
+        a = (slice(None, -1), slice(None)) if axis == 0 else (slice(None), slice(None, -1))
+        b = (slice(1, None), slice(None)) if axis == 0 else (slice(None), slice(1, None))
+        here, there = heights[a], heights[b]
+        step = valid[a] & valid[b] & (here != there)
+        lx, lz = np.nonzero(step)
+        if not len(lx):
+            continue
+        h, o = here[lx, lz], there[lx, lz]
+        y = np.maximum(h, o).astype(np.float64) + 1.0 + float(epsilon)
+        inward = np.where(h > o, -1.0, 1.0)
+        x = (lx + x0).astype(np.float64)
+        z = (lz + z0).astype(np.float64)
+        zero = np.zeros_like(x)
+        if axis == 0:   # vizinha a leste: o degrau está no plano x + 1, ao longo de z
+            parts.append(np.column_stack((x + 1.0, y, z, x + 1.0, y, z + 1.0, inward, zero)))
+        else:           # vizinha ao sul: o degrau está no plano z + 1, ao longo de x
+            parts.append(np.column_stack((x, y, z + 1.0, x + 1.0, y, z + 1.0, zero, inward)))
+    if not parts:
+        return np.empty((0, 8), dtype=np.float64)
+    segments = np.concatenate(parts)
+    order = np.lexsort(segments.T[::-1])
+    return segments[order]
+
+
+def _relief_segments(chunks, epsilon: float):
+    """Segmentos (x0, y, z0, x1, y, z1, ix, iz) onde a altura da superfície muda, em ordem."""
+
+    return [tuple(row) for row in _relief_segment_array(chunks, epsilon).tolist()]
+
+
 def build_relief_contour_vertices(
     chunks: Mapping[tuple[int, int, int], Chunk3D],
     *,
@@ -145,10 +214,8 @@ def build_relief_contour_vertices(
     Em terreno plano não há linha nenhuma, e uma escarpa de vários blocos recebe uma linha só, no topo.
     """
 
-    segments = _relief_segments(chunks, epsilon)
-    if not segments:
-        return np.empty((0, 3), dtype=np.float32)
-    return np.asarray([s[:6] for s in segments], dtype=np.float32).reshape(-1, 3)
+    segments = _relief_segment_array(chunks, epsilon)
+    return segments[:, :6].astype(np.float32).reshape(-1, 3)
 
 
 def build_relief_contour_ribbons(
@@ -162,14 +229,13 @@ def build_relief_contour_ribbons(
     Uma fita tem espessura fixa no mundo, então aparece igual em qualquer zoom (uma linha de 1 pixel some).
     """
 
-    triangles = []
-    for x0, y, z0, x1, _, z1, ix, iz in _relief_segments(chunks, epsilon):
-        a, b = (x0, y, z0), (x1, y, z1)
-        a2, b2 = (x0 + ix * width, y, z0 + iz * width), (x1 + ix * width, y, z1 + iz * width)
-        triangles += [a, b, b2, a, b2, a2]
-    if not triangles:
-        return np.empty((0, 3), dtype=np.float32)
-    return np.asarray(triangles, dtype=np.float32).reshape(-1, 3)
+    s = _relief_segment_array(chunks, epsilon)
+    x0, y, z0, x1, z1, ix, iz = s[:, 0], s[:, 1], s[:, 2], s[:, 3], s[:, 5], s[:, 6], s[:, 7]
+    a = np.stack((x0, y, z0), axis=1)
+    b = np.stack((x1, y, z1), axis=1)
+    a2 = np.stack((x0 + ix * width, y, z0 + iz * width), axis=1)
+    b2 = np.stack((x1 + ix * width, y, z1 + iz * width), axis=1)
+    return np.stack((a, b, b2, a, b2, a2), axis=1).astype(np.float32).reshape(-1, 3)
 
 
 def build_surface_grid_vertices(

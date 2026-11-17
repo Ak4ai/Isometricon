@@ -86,8 +86,8 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
     * revelação: fora do espaço, tapa o cômodo (o raio para dentro da cena cai no espaço do andar) e, do centro do
       cômodo (``center``, x e z) para trás, está na borda virada para a câmera (o raio de volta não passa pelo
       espaço); na metade da frente, basta tapar;
-    * corte do andar: do teto para cima, dentro do raio, a metade da frente (medida do centro do cômodo) e, atrás
-      dele, o que tapa o cômodo;
+    * corte do andar: do teto para cima, dentro do raio, o que não está no fundo do cômodo e, no fundo, o que está
+      sobre o cômodo menos o beiral (a laje à frente das paredes do fundo, ver ``_eave``);
     * corredor: do pé para cima, no cilindro entre a câmera e o personagem, o que tapa o cômodo;
     * as portas ficam.
     """
@@ -122,7 +122,9 @@ def cut_cells(room: RoomMask, view_dir, story: Optional[StoryCut] = None,
         cut &= ys > sight.feet_y                          # a fileira dos pés fica (a borda da parede)
     if story is not None:
         near = (xs - story.center[0]) ** 2 + (zs - story.center[1]) ** 2 < story.radius ** 2  # com o pontilhado
-        cut |= occupied & (ys >= story.cut_y) & near & (~_behind_room(interior, room.origin, story, flat) | covers)
+        over, eave = _eave(room.data, room.origin, story, flat)
+        cut |= occupied & (ys >= story.cut_y) & near & ~eave & (~_behind_room(interior, room.origin, story, flat)
+                                                                | over)
     if sight is not None:
         # a fileira dos pés (a borda da parede, os móveis no chão) fica; o piso de cima, na frente, sai
         candidates = occupied & (ys > sight.feet_y) & covers
@@ -143,6 +145,44 @@ def _behind_room(interior: np.ndarray, origin, story: StoryCut, flat) -> np.ndar
     floor[:, :, :] = interior[:, layer:layer + 1, :]
     toward = (-float(flat[0]), 0.0, -float(flat[1]))
     return _reaches(floor, toward, CAMERA_STEPS)
+
+
+_AXES = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+
+def _eave(data: np.ndarray, origin, story: StoryCut, flat) -> Tuple[np.ndarray, np.ndarray]:
+    """O beiral do corte do andar (``overRoom`` e ``eave`` no shader), bool [x, y, z] da janela, a partir da máscara.
+
+    Devolve ``(over, eave)``. ``over``: a coluna está sobre o chão do cômodo (na altura dos pés, o espaço ou um
+    móvel/degrau); do teto para cima, o que está nela tapa o cômodo e some, menos o beiral. ``eave``: na laje do teto
+    (a célula y do corte), a faixa das paredes do fundo de um vértice a outro:
+
+    * a aba: coluna sobre o cômodo com a parede do fundo ao lado (o vizinho para dentro da cena não é cômodo);
+    * o topo da parede do fundo: coluna fora do cômodo com o cômodo ao lado, do lado da câmera;
+    * as pontas: coluna fora do cômodo vizinha, ao longo da parede, de um topo de parede do fundo (os vértices).
+    """
+    layer = story.feet_y - origin[1]
+    over = np.zeros(data.shape, dtype=bool)
+    eave = np.zeros(data.shape, dtype=bool)
+    if not 0 <= layer < data.shape[1]:
+        return over, eave
+    floor = (data[:, layer, :] == INTERIOR) | (data[:, layer, :] == OBJECT)
+    outside = ~floor
+    band = np.zeros_like(floor)
+    for o in _AXES:
+        d = o[0] * float(flat[0]) + o[1] * float(flat[1])
+        if d > 0.3:
+            band |= floor & _shifted(outside, o)               # a aba
+        elif d < -0.3:
+            wall = outside & _shifted(floor, o)                # o topo da parede do fundo
+            band |= wall
+            for p in ((o[1], o[0]), (-o[1], -o[0])):           # ao longo da parede: as pontas
+                band |= outside & _shifted(wall, p)
+    over[:, :, :] = floor[:, None, :]
+    slab = story.cut_y - origin[1]
+    if 0 <= slab < data.shape[1]:
+        eave[:, slab, :] = band
+    return over, eave
 
 
 def _in_corridor(shape, origin, sight: SightCut, candidates: Optional[np.ndarray] = None) -> np.ndarray:

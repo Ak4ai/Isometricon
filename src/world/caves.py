@@ -172,7 +172,11 @@ class CaveCarver:
         radius: float,
         chunks: dict[tuple[int, int, int], Chunk3D],
     ) -> None:
-        """Gera uma camada de pedra esculpida ao redor do túnel apenas no subterrâneo negativo (Y < 0)."""
+        """Gera uma camada de pedra esculpida ao redor do túnel apenas no subterrâneo negativo (Y < 0).
+
+        Em numpy, com o mesmo resultado da versão bloco a bloco: as mesmas contas na mesma ordem (o seno e o cosseno
+        da rugosidade saem do ``math``, um por linha e coluna, para não mudar nem o último dígito), e os chunks
+        novos entram no dicionário na ordem em que a varredura x, z, y os encontraria."""
         max_outer_r = radius + self.shell_thickness + 0.6
         max_outer_sq = max_outer_r * max_outer_r
 
@@ -182,46 +186,28 @@ class CaveCarver:
         max_y = min(-1, floor(py + max_outer_r))  # Apenas Y < 0 (Y >= 0 já possui rocha sólida)
         min_z = floor(pz - max_outer_r)
         max_z = floor(pz + max_outer_r)
+        if max_y < min_y or max_x < min_x or max_z < min_z:
+            return
 
-        for bx in range(min_x, max_x + 1):
-            dx = bx - px
-            for bz in range(min_z, max_z + 1):
-                dz = bz - pz
-                dxz_sq = dx * dx + dz * dz
-                if dxz_sq > max_outer_sq:
-                    continue
-
-                # Rugosidade orgânica suave baseada na posição do bloco
-                roughness = 0.45 * sin(bx * 1.5) * cos(bz * 1.5)
-                effective_outer_r = radius + self.shell_thickness + roughness
-                effective_outer_sq = effective_outer_r * effective_outer_r
-
-                for by in range(min_y, max_y + 1):
-                    dy = by - py
-                    dist_sq = dxz_sq + dy * dy
-                    if dist_sq > effective_outer_sq:
-                        continue
-
-                    cx = bx // Chunk3D.SIZE
-                    cy = by // Chunk3D.SIZE
-                    cz = bz // Chunk3D.SIZE
-                    chunk_key = (cx, cy, cz)
-
-                    # Se a coluna correspondente existe no mapa (cx, 0, cz), instancia chunk subterrâneo
-                    if chunk_key not in chunks:
-                        if (cx, 0, cz) in chunks:
-                            # Inicia 100% como ar; somente a casca receberá pedra!
-                            chunks[chunk_key] = Chunk3D(cx, cy, cz)
-                        else:
-                            continue
-
-                    chunk = chunks[chunk_key]
-                    lx = bx % Chunk3D.SIZE
-                    ly = by % Chunk3D.SIZE
-                    lz = bz % Chunk3D.SIZE
-
-                    # Define como rocha para formar a casca
-                    chunk.blocks[lx, ly, lz] = BlockType.STONE
+        bxs = np.arange(min_x, max_x + 1)
+        bzs = np.arange(min_z, max_z + 1)
+        bys = np.arange(min_y, max_y + 1)
+        dx = (bxs - px)[:, None]
+        dz = (bzs - pz)[None, :]
+        dxz_sq = dx * dx + dz * dz                                                    # [x, z]
+        # Rugosidade orgânica suave baseada na posição do bloco
+        sin_x = np.array([sin(int(bx) * 1.5) for bx in bxs])
+        cos_z = np.array([cos(int(bz) * 1.5) for bz in bzs])
+        roughness = (0.45 * sin_x)[:, None] * cos_z[None, :]
+        effective_outer_r = radius + self.shell_thickness + roughness
+        effective_outer_sq = effective_outer_r * effective_outer_r
+        dy = bys - py
+        dist_sq = dxz_sq[:, :, None] + (dy * dy)[None, None, :]                       # [x, z, y]
+        inside = (dxz_sq <= max_outer_sq)[:, :, None] & (dist_sq <= effective_outer_sq[:, :, None])
+        ix, iz, iy = np.nonzero(inside)                                               # na ordem x, z, y
+        if len(ix) == 0:
+            return
+        _stamp(chunks, bxs[ix], bys[iy], bzs[iz], int(BlockType.STONE), create=True)
 
     def _carve_tunnel_air(
         self,
@@ -232,7 +218,7 @@ class CaveCarver:
         chunks: dict[tuple[int, int, int], Chunk3D],
         terrain_generator: object | None,
     ) -> None:
-        """Escava o vazio (AIR) no centro do túnel/salão."""
+        """Escava o vazio (AIR) no centro do túnel/salão (em numpy, com o mesmo resultado bloco a bloco)."""
         r_sq = radius * radius
         min_x = floor(px - radius)
         max_x = floor(px + radius)
@@ -243,45 +229,59 @@ class CaveCarver:
 
         if not self.allow_sparse_depth and min_y < 1:
             min_y = 1
+        if max_y < min_y:
+            return
 
         has_generator = terrain_generator is not None and hasattr(terrain_generator, "get_height")
         sea = getattr(terrain_generator, "sea_level", 7) if has_generator else 7
 
-        for bx in range(min_x, max_x + 1):
-            dx = bx - px
-            for bz in range(min_z, max_z + 1):
-                dz = bz - pz
-                dxz_sq = dx * dx + dz * dz
-                if dxz_sq > r_sq:
-                    continue
+        bxs = np.arange(min_x, max_x + 1)
+        bzs = np.arange(min_z, max_z + 1)
+        bys = np.arange(min_y, max_y + 1)
+        dx = (bxs - px)[:, None]
+        dz = (bzs - pz)[None, :]
+        dxz_sq = dx * dx + dz * dz                                                    # [x, z]
+        columns = dxz_sq <= r_sq
+        limit_y = np.full(dxz_sq.shape, max_y, dtype=np.int64)
+        if has_generator and columns.any():
+            cx, cz = np.nonzero(columns)
+            # get_height guarda cada coluna (o túnel volta às mesmas a cada passo)
+            surf = np.array([terrain_generator.get_height(int(bxs[i]), int(bzs[k])) for i, k in zip(cx, cz)],
+                            dtype=np.int64)
+            lowered = (surf < sea) & (max_y >= surf)
+            limit_y[cx[lowered], cz[lowered]] = surf[lowered] - 1
+        dy = bys - py
+        inside = (columns[:, :, None] & (bys[None, None, :] <= limit_y[:, :, None])
+                  & (dxz_sq[:, :, None] + (dy * dy)[None, None, :] <= r_sq))
+        ix, iz, iy = np.nonzero(inside)
+        if len(ix) == 0:
+            return
+        _stamp(chunks, bxs[ix], bys[iy], bzs[iz], int(BlockType.AIR), create=False,
+               only=(int(BlockType.STONE), int(BlockType.DIRT), int(BlockType.GRASS)))
 
-                limit_y = max_y
-                if has_generator:
-                    surf = terrain_generator.get_height(bx, bz)
-                    if surf < sea and limit_y >= surf:
-                        limit_y = surf - 1
 
-                for by in range(min_y, limit_y + 1):
-                    dy = by - py
-                    if dxz_sq + dy * dy > r_sq:
-                        continue
-
-                    cx = bx // Chunk3D.SIZE
-                    cy = by // Chunk3D.SIZE
-                    cz = bz // Chunk3D.SIZE
-                    chunk_key = (cx, cy, cz)
-
-                    if chunk_key not in chunks:
-                        continue
-
-                    chunk = chunks[chunk_key]
-                    lx = bx % Chunk3D.SIZE
-                    ly = by % Chunk3D.SIZE
-                    lz = bz % Chunk3D.SIZE
-
-                    current = chunk.blocks[lx, ly, lz]
-                    if current == BlockType.WATER:
-                        continue
-
-                    if current in (BlockType.STONE, BlockType.DIRT, BlockType.GRASS):
-                        chunk.blocks[lx, ly, lz] = BlockType.AIR
+def _stamp(chunks, xs, ys, zs, value, *, create, only=None) -> None:
+    """Põe ``value`` nas células (xs, ys, zs) do mundo, chunk por chunk. ``create``: cria o chunk que falta (só se
+    a coluna (cx, 0, cz) existe), na ordem em que as células o encontram; ``only``: troca só esses blocos."""
+    size = Chunk3D.SIZE
+    kx, ky, kz = xs // size, ys // size, zs // size
+    x0, y0, z0 = int(kx.min()), int(ky.min()), int(kz.min())
+    ny, nz = int(ky.max()) - y0 + 1, int(kz.max()) - z0 + 1
+    code = ((kx - x0) * ny + (ky - y0)) * nz + (kz - z0)       # um número por chunk (a caixa é de poucos chunks)
+    unique, first, inverse = np.unique(code, return_index=True, return_inverse=True)
+    for group in np.argsort(first, kind="stable"):
+        c = int(unique[group])
+        key = (x0 + c // (ny * nz), y0 + (c // nz) % ny, z0 + c % nz)
+        chunk = chunks.get(key)
+        if chunk is None:
+            if not create or (key[0], 0, key[2]) not in chunks:
+                continue
+            chunk = chunks[key] = Chunk3D(*key)    # inicia 100% como ar; somente a casca recebe pedra
+        cells = inverse == group
+        lx, ly, lz = xs[cells] % size, ys[cells] % size, zs[cells] % size
+        if only is None:
+            chunk.blocks[lx, ly, lz] = value
+        else:
+            current = chunk.blocks[lx, ly, lz]
+            hit = np.isin(current, only)
+            chunk.blocks[lx[hit], ly[hit], lz[hit]] = value

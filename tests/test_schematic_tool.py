@@ -256,3 +256,130 @@ def test_resolve_accepts_names_and_paths(folder):
     assert t.resolve("minha casa") == f"{folder}{__import__('os').sep}minha casa.schem"
     assert t.resolve(f'"{path}"') == path
     assert t.resolve("outra") is None and t.resolve("") is None
+
+
+# ---------------------------------------------------------------- construções unificadas (mouse, girar, selecionar)
+
+def long_house():
+    """5 de largura (x), 3 de altura, 7 de comprimento (z); o canto (0, 0, 0) tem um marco."""
+    blocks = {(x, 0, z): "minecraft:stone" for x in range(5) for z in range(7)}
+    blocks[(0, 1, 0)] = "minecraft:oak_planks"
+    return make_schematic(blocks, 5, 3, 7, name="longa")
+
+
+@pytest.fixture
+def free_tool(monkeypatch):
+    house = long_house()
+    monkeypatch.setattr(Schematic, "load_from_file", classmethod(lambda cls, path: house))
+    t = SchematicTool(ground_height=lambda x, z: 4, mesh_factory=lambda schematic: FakeMesh())
+    monkeypatch.setattr(t, "resolve", lambda text: "longa.schem" if text.strip().strip("\"'") == "longa" else None)
+    t.changes = []
+    t.on_change = lambda: t.changes.append(1)
+    return t
+
+
+def test_aim_centres_the_base_on_the_pointed_block(free_tool):
+    assert free_tool.load("longa")[0]
+    free_tool.aim((10, 4, 20))
+    assert free_tool.preview.origin == [10 - 2, 5, 20 - 3]
+
+
+def test_rotate_preview_swaps_width_and_length_and_keeps_the_centre(free_tool):
+    free_tool.load("longa")
+    free_tool.aim((10, 4, 20))
+    free_tool.rotate_preview()
+    p = free_tool.preview
+    assert (p.schematic.width, p.schematic.length) == (7, 5) and p.rotation == 1
+    assert p.origin == [10 - 3, 5, 20 - 2]
+    assert (p.base.width, p.base.length) == (5, 7)          # a original fica guardada
+
+
+def test_fits_is_false_over_another_structure_and_on_the_player(free_tool):
+    free_tool.load("longa")
+    free_tool.aim((10, 4, 20))
+    assert free_tool.fits()
+    free_tool.confirm()
+    free_tool.load("longa")
+    free_tool.aim((12, 4, 22))                               # metade em cima da primeira
+    assert not free_tool.fits()
+    free_tool.aim((40, 4, 40))
+    assert free_tool.fits()
+    assert not free_tool.fits(player_box=((40, 5, 40), (40, 6, 40)))
+
+
+def test_structure_at_and_remove_any(free_tool):
+    removed = []
+    free_tool.on_remove = removed.append
+    for x in (0, 20, 40):
+        free_tool.load("longa")
+        free_tool.aim((x, 4, 0))
+        free_tool.confirm()
+    middle = free_tool.layer.structure_at(20, 5, 0)
+    assert middle is free_tool.layer.structures[1]
+    assert free_tool.layer.structure_at(20, 9, 0) is None   # acima da caixa
+    assert free_tool.remove(middle)[0]
+    assert removed == [middle] and len(free_tool.layer) == 2
+    assert free_tool.layer.structure_at(20, 5, 0) is None
+
+
+def test_rotate_placed_moves_the_box_and_tells_the_world(free_tool):
+    events = []
+    free_tool.on_remove = lambda p: events.append(("remove", p.bounds()))
+    free_tool.on_place = lambda p: events.append(("place", p.bounds()))
+    free_tool.load("longa")
+    free_tool.aim((10, 4, 20))
+    free_tool.confirm()
+    events.clear()
+    placed = free_tool.layer.structures[0]
+    old = placed.bounds()
+    assert free_tool.rotate_placed(placed)[0]
+    new = free_tool.layer.structures[0]
+    assert new.rotation == 1 and (new.schematic.width, new.schematic.length) == (7, 5)
+    assert events == [("remove", old), ("place", new.bounds())]
+
+
+def test_on_change_is_called_once_per_change(free_tool):
+    free_tool.load("longa")
+    free_tool.aim((10, 4, 20))
+    free_tool.confirm()
+    assert free_tool.changes == [1]
+    free_tool.rotate_placed(free_tool.layer.structures[0])
+    free_tool.remove(free_tool.layer.structures[0])
+    free_tool.load("longa")
+    free_tool.confirm()
+    free_tool.clear()
+    assert len(free_tool.changes) == 5
+
+
+def test_confirm_keeps_entry_and_rotation(free_tool):
+    free_tool.load("longa")
+    free_tool.rotate_preview()
+    free_tool.confirm()
+    placed = free_tool.layer.structures[0]
+    assert placed.entry == {"kind": "schem", "name": "longa"} and placed.rotation == 1
+
+
+def test_load_accepts_an_editor_object_json():
+    t = SchematicTool(mesh_factory=lambda schematic: FakeMesh())
+    ok, _ = t.load("assets/objects/casa_exemplo.json", (0, 0, 0))
+    assert ok and t.preview.entry["kind"] == "object"
+    assert getattr(t.preview.schematic, "tints", None) is not None
+
+
+def test_schem_opens_the_construction_panel(tool):
+    from src.interactive.construction_panel import ConstructionPanel
+    handler = SkinCommandHandler(character_model=None)
+    handler.schematic_tool = tool
+    panel = ConstructionPanel(tool, lambda: [("casa", {"kind": "schem", "name": "casa"}), ("formas", {"kind": "formas"})],
+                              create_gl=False)
+    handler.construction_panel = panel
+    run = lambda line: handler.execute(line, run_async=False)
+
+    ok, message, _ = run("/schem")
+    assert ok and panel.is_open and "Esc" in message
+    panel.close()
+    assert not run("/schem load nao_existe")[0] and not panel.is_open
+    assert run("/schem load casa")[0] and panel.is_open and tool.preview.entry == {"kind": "schem", "name": "casa"}
+    assert run("/schem place")[0] and len(tool.layer) == 1
+    ok, message, _ = run("/schem list")
+    assert ok and "casa" in message and "formas" in message

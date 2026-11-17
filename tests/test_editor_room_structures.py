@@ -5,7 +5,7 @@ import numpy as np
 from src.editor.map_world import MapWorld
 from src.editor.room_structures import ObjectStructureCache, object_structure
 from src.editor.voxel_object import VoxelObject
-from src.editor.world_objects import WorldObjectEditor
+from src.editor.map_project import PlacedObject
 from src.world import BlockType
 from src.world.room_caps import _structure_caps
 from src.world.room_reveal import compute_room, extract_window_cells, window_origin
@@ -50,16 +50,38 @@ def test_inside_a_house_made_of_objects_the_room_reveal_turns_on_and_outside_it_
     assert not _room_at([], (3.5, 1.0, 3.5)).active                          # sem a casa, não há cômodo
 
 
-def test_the_cache_keeps_the_same_structure_until_the_object_moves(tmp_path):
-    editor = WorldObjectEditor(1, _terrain, _height, create_gl=False, store_path=str(tmp_path / "mundo_1.json"))
-    placed = editor.store.add(_house(), (0, 0, 0), 0, "casa")
-    first = editor.room_structures()
-    assert editor.room_structures()[0] is first[0]                           # a mesma construção: o cômodo não recalcula
+def test_the_cache_keeps_the_same_structure_until_the_object_moves():
+    cache = ObjectStructureCache()                                            # o mapa do editor (--map) usa
+    placed = PlacedObject(_house(), (0, 0, 0), 0, "casa")
+    first = cache.structures([placed])
+    assert cache.structures([placed])[0] is first[0]                         # a mesma construção: o cômodo não recalcula
     placed.position = (4, 0, 4)
-    moved = editor.room_structures()
+    moved = cache.structures([placed])
     assert moved[0] is not first[0] and moved[0].origin == (4, 0, 4)
-    editor.store.remove(0)
-    assert editor.room_structures() == []
+    assert cache.structures([]) == []
+
+
+def test_example_house_placed_in_the_world_can_be_entered_through_its_door():
+    """A casa de exemplo colocada pelo painel (objeto do editor virando construção): a porta deixa passar."""
+    from collections import deque
+    from src.interactive.schematic_tool import SchematicTool
+
+    tool = SchematicTool(mesh_factory=lambda schematic: None)
+    assert tool.load("assets/objects/casa_exemplo.json", (0, 0, 0))[0]
+    tool.confirm()
+    look = tool.layer.wrap_lookup(_terrain)
+    start, goal = (3, 1, -1), (3, 1, 3)
+    queue, seen = deque([start]), {start}
+    while queue:
+        x, y, z = queue.popleft()
+        if (x, y, z) == goal:
+            break
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nxt = (x + dx, y, z + dz)
+            if nxt not in seen and look(*nxt) == BlockType.AIR and look(nxt[0], y + 1, nxt[2]) == BlockType.AIR:
+                seen.add(nxt)
+                queue.append(nxt)
+    assert goal in seen
 
 
 def test_the_caps_of_a_cut_wall_take_the_voxel_colour():

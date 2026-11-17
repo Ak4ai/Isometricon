@@ -160,7 +160,9 @@ def test_atlas_derived_blocks_use_material_texture():
     atlas = SchematicAtlas()
     uv = atlas.uv_map
     assert atlas.get_uv("minecraft:dark_oak_fence[east=true]", "north") == uv["dark_oak_planks"]
-    assert atlas.get_uv("minecraft:cherry_wall_sign[facing=east]", "north") == uv["cherry_planks"]
+    # a placa usa a textura própria quando o pacote tem (a 26.x tem), senão a madeira da árvore
+    sign = uv.get("cherry_sign", uv["cherry_planks"])
+    assert atlas.get_uv("minecraft:cherry_wall_sign[facing=east]", "north") == sign
     assert atlas.get_uv("minecraft:quartz_slab[type=top]", "top") == uv["quartz_block_top"]
     assert atlas.get_uv("minecraft:quartz_slab[type=top]", "north") == uv["quartz_block_side"]
     assert atlas.get_uv("minecraft:smooth_quartz_stairs[facing=north]", "north") == uv["quartz_block_bottom"]

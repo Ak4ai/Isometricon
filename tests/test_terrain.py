@@ -97,12 +97,14 @@ def test_world_coordinates_at_adjacent_borders(axis, boundary, monkeypatch):
         positions.append(tuple(p))
     calls = []
     real_height = TerrainGenerator.get_height
+    real_heights = TerrainGenerator.heights
 
-    def record(self, x, z):
-        calls.append((x, z))
-        return real_height(self, x, z)
+    def record(self, xs, zs):   # o preenchimento pede as alturas das colunas de uma vez
+        xs, zs = np.broadcast_arrays(np.asarray(xs), np.asarray(zs))
+        calls.extend(zip(xs.ravel().tolist(), zs.ravel().tolist()))
+        return real_heights(self, xs, zs)
 
-    monkeypatch.setattr(TerrainGenerator, 'get_height', record)
+    monkeypatch.setattr(TerrainGenerator, 'heights', record)
     region = generator.generate_region(positions)
     expected_calls = []
     for chunk in region.values():
@@ -112,7 +114,7 @@ def test_world_coordinates_at_adjacent_borders(axis, boundary, monkeypatch):
             height = real_height(generator, wx, wz)
             assert chunk.get_block(x, height, z) == BlockType.GRASS
             assert chunk.get_block(x, height + 1, z) == BlockType.AIR
-    assert calls == expected_calls  # Exactly one height evaluation per column.
+    assert sorted(calls) == sorted(expected_calls)  # Exactly one height evaluation per column.
     for other in range(16):
         a, b = [other, other], [other, other]
         a[axis // 2], b[axis // 2] = boundary - 1, boundary

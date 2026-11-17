@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 import glfw
 from src.core.game_storage import ACTIONS, Preferences, WorldLibrary
 from src.interactive.menu_style import icon, world_thumbnail, menu_base
+from src.interactive import settings_screen
 
 PANEL = '#F2E8D1'
 CARD = '#FBF4E4'
@@ -83,6 +84,11 @@ class GameMenus:
 
         self.draft = copy.deepcopy(self.preferences.data)
         self.last_image = None
+        # Configurações: a aba aberta, a rolagem da coluna de opções e a ordem das áreas de clique do último desenho
+        self.settings_tab = 'general'
+        self.list_scroll = 0.0
+        self.follow_focus = True
+        self.hits_order = []
 
     @property
     def active(self):
@@ -106,7 +112,40 @@ class GameMenus:
     def settings(self):
         self.return_page = self.page
         self.draft = copy.deepcopy(self.preferences.data)
+        self.settings_tab, self.list_scroll, self.follow_focus = 'general', 0.0, True
         self.go('settings')
+
+    def focused_row_id(self):
+        """A opção em foco nas Configurações (a linha ou uma das setas dela), ou None."""
+        if not self.hits_order:
+            return None
+        action = self.hits_order[self.focus % len(self.hits_order)]
+        return action.split(':')[1] if action.startswith(('row:', 'shift:')) else None
+
+    def switch_tab(self, step=0, tab=None):
+        tabs = [name for name, _ in settings_screen.TABS]
+        self.settings_tab = tab or tabs[(tabs.index(self.settings_tab) + step) % len(tabs)]
+        self.list_scroll, self.focus, self.follow_focus, self.capture = 0.0, 0, True, None
+        self.hits_order = []
+        self.dirty = True
+
+    def shift_row(self, row_id, step, wrap=False):
+        row = next((r for r in settings_screen.rows(self.settings_tab, self.draft) if r.id == row_id), None)
+        if row is None:
+            return
+        if row.kind == 'toggle':
+            self.draft[row.key] = not self.draft[row.key]
+        elif row.kind == 'choice':
+            settings_screen.shift(self.draft, row.key, step, wrap=wrap)
+        elif row.kind == 'bind' and step > 0 and wrap:
+            self.capture = row.key
+        self.dirty = True
+
+    def wheel(self, dy):
+        if self.active and self.page == 'settings':
+            self.list_scroll = max(0.0, self.list_scroll - dy * 64)
+            self.follow_focus = False
+            self.dirty = True
 
     def back(self):
         if self.capture:
@@ -174,10 +213,13 @@ class GameMenus:
             elif action.startswith('toggle:'):
                 key = action[7:]
                 self.draft[key] = not self.draft[key]
-            elif action == 'sensitivity':
-                self.draft['sensitivity'] = round(.25 + (self.draft['sensitivity'] % 2), 2)
-            elif action == 'text_scale':
-                self.draft['text_scale'] = 1.25 if self.draft['text_scale'] == 1 else 1
+            elif action.startswith('tab:'):
+                self.switch_tab(tab=action[4:])
+            elif action.startswith('row:'):
+                self.shift_row(action[4:], 1, wrap=True)    # Enter ou clique: o próximo valor (dá a volta)
+            elif action.startswith('shift:'):
+                _, row_id, step = action.split(':')
+                self.shift_row(row_id, int(step))
             elif action == 'defaults':
                 from src.core.game_storage import DEFAULTS
                 self.draft = copy.deepcopy(DEFAULTS)
@@ -217,6 +259,19 @@ class GameMenus:
                     self.preferences.data = old
             self.dirty = True
             return True
+        if self.page == 'settings' and key in (glfw.KEY_Q, glfw.KEY_E, glfw.KEY_PAGE_UP, glfw.KEY_PAGE_DOWN):
+            self.switch_tab(-1 if key in (glfw.KEY_Q, glfw.KEY_PAGE_UP) else 1)
+            return True
+        if self.page == 'settings' and key in (glfw.KEY_LEFT, glfw.KEY_RIGHT) and self.hits_order:
+            step = -1 if key == glfw.KEY_LEFT else 1
+            action = self.hits_order[self.focus % len(self.hits_order)]
+            if action.startswith('tab:'):
+                self.switch_tab(step)
+                self.render_focus_tab = True
+            elif self.focused_row_id():
+                self.shift_row(self.focused_row_id(), step)
+            self.dirty = True
+            return True
         if key == glfw.KEY_ESCAPE:
             self.back()
         elif self.field and key == glfw.KEY_BACKSPACE:
@@ -225,7 +280,14 @@ class GameMenus:
             return True  # O caractere espaço chega pelo callback Unicode.
         elif key in (glfw.KEY_TAB, glfw.KEY_DOWN, glfw.KEY_UP):
             self.field = None
-            self.focus = (self.focus + (-1 if key == glfw.KEY_UP or mods & glfw.MOD_SHIFT else 1)) % max(len(self.hits), 1)
+            step = -1 if key == glfw.KEY_UP or mods & glfw.MOD_SHIFT else 1
+            self.focus = (self.focus + step) % max(len(self.hits), 1)
+            # as setas ‹ › de cada opção são só do mouse: o teclado passa direto por elas
+            for _ in range(len(self.hits)):
+                if not self.hits[self.focus % len(self.hits)][1].startswith('shift:'):
+                    break
+                self.focus = (self.focus + step) % len(self.hits)
+            self.follow_focus = True
         elif key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER, glfw.KEY_SPACE):
             if self.field:
                 self.field = None
@@ -253,43 +315,34 @@ class GameMenus:
         self.scene_image = image
         self.scene_owner = self.world["id"] if self.world else None
 
-    def adjust_sensitivity(self, x):
-        rect = next((r for r,a in self.hits if a=='sensitivity'),None)
-        if rect:
-            scale=(rect[2]-rect[0])/538
-            percent=max(0.,min(1.,(x-(rect[2]-186*scale))/(116*scale)))
-            self.draft['sensitivity']=round(.25+percent*1.75,2)
-            self.dirty=True
+    def hit_at(self, x, y):
+        """A área de clique sob o ponto: a última desenhada ganha (as setas ‹ › ficam por cima da linha)."""
+        for index in range(len(self.hits) - 1, -1, -1):
+            rect, action = self.hits[index]
+            if rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]:
+                return index, action
+        return None, None
 
     def hover(self, x, y):
-        if self._pressed == 'sensitivity':
-            self.adjust_sensitivity(x)
-        for index, (rect, _) in enumerate(self.hits):
-            if rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]:
-                if self.focus != index:
-                    self.focus, self.dirty = index, True
-                break
+        index, _ = self.hit_at(x, y)
+        if index is not None and self.focus != index:
+            self.focus, self.dirty = index, True
 
     def mouse_button(self, x, y, action):
         if action == glfw.PRESS:
-            self._pressed = next((a for rect,a in self.hits if rect[0]<=x<=rect[2] and rect[1]<=y<=rect[3]), None)
+            self._pressed = self.hit_at(x, y)[1]
             self.dirty = True
         elif action == glfw.RELEASE:
-            if self._pressed == 'sensitivity':
-                self.adjust_sensitivity(x)
-                self._pressed = None
-                return
             pressed, self._pressed = self._pressed, None
             self.dirty = True
-            if pressed and any(a==pressed and rect[0]<=x<=rect[2] and rect[1]<=y<=rect[3] for rect,a in self.hits):
+            if pressed and self.hit_at(x, y)[1] == pressed:
                 self.activate(pressed)
 
     def click(self, x, y):
-        for index, (rect, action) in enumerate(self.hits):
-            if rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]:
-                self.focus = index
-                self.activate(action)
-                return
+        index, action = self.hit_at(x, y)
+        if index is not None:
+            self.focus = index
+            self.activate(action)
 
     def image(self, width, height, *, native=False):
         # Um canvas lógico mantém a leitura e as áreas de clique em diferentes resoluções.
@@ -357,7 +410,6 @@ class GameMenus:
             label_size=19 if self.page=='welcome' else 17
             available=ex-bx-inset-18
             toggle = action.startswith('toggle:')
-            slider = action == 'sensitivity'
             if toggle:
                 title = title.split(' · ')[0]
                 available -= 65
@@ -366,16 +418,6 @@ class GameMenus:
                 draw.rounded_rectangle((sx,sy,sx+46,sy+24),12,fill='#355B48' if on else '#B6B8A5')
                 knob = sx+26 if on else sx+4
                 draw.ellipse((knob,sy+4,knob+16,sy+20),fill='#EAC374' if on else '#FBF4E4')
-            if slider:
-                title = 'Sensibilidade do pan'
-                available -= 190
-                sx, ex_track, sy = ex-186, ex-70, by+23
-                percent = (self.draft['sensitivity']-.25)/1.75
-                knob=sx+(ex_track-sx)*percent
-                draw.rounded_rectangle((sx,sy-3,ex_track,sy+3),3,fill='#D2C8AD')
-                draw.rounded_rectangle((sx,sy-3,max(sx+1,knob),sy+3),3,fill='#4D725B')
-                draw.ellipse((knob-7,sy-7,knob+7,sy+7),fill=GOLD,outline='#A58244')
-                text((ex-58,by+13),f"{self.draft['sensitivity']:.2f}×",12)
             label_font=font(round(label_size*text_factor))
             if not field and draw.textlength(title,font=label_font)>available:
                 while title and draw.textlength(title+'…',font=label_font)>available:
@@ -469,42 +511,11 @@ class GameMenus:
             if (self.scroll+1)*5 < len(worlds):
                 button(715, 'Próxima', 'next', bx=end-200, ex=end)
         elif self.page == 'settings':
-            text((x, 136), 'Suas preferências, em todos os mundos.', 15, MUTED)
-            for cx in (72, 670):
-                for cy in (166, 430):
-                    draw.rounded_rectangle((cx,cy+4,cx+578,cy+252),8,fill='#CFBFA0')
-                    draw.rounded_rectangle((cx, cy, cx+578, cy+248), 8, fill=CARD, outline=LINE)
-                    draw.line((cx+20, cy+70, cx+558, cy+70), fill=LINE)
-            text((92, 184), 'Som', 28, heading=True)
-            text((92, 262), 'Sons da floresta', 16, MUTED)
-            text((92, 307), 'Áudio ainda não disponível no motor.', 15, MUTED)
-            text((92, 355), 'Os controles serão ativados com o sistema de som.', 12, MUTED)
-            text((92, 448), 'Controles', 28, heading=True)
-            actions = list(ACTIONS.items())
-            self.scroll = min(self.scroll, (len(actions)-1)//3)
-            for i, (action, (label, _)) in enumerate(actions[self.scroll*3:self.scroll*3+3]):
-                key = self.draft['bindings'][action]
-                keyname = glfw.get_key_name(key, 0) if self.quad else None
-                value = (keyname or {32: 'Espaço', 340: 'Shift', 341: 'Ctrl'}.get(key, chr(key) if 33 <= key <= 126 else str(key))).upper()
-                caption = 'Pressione uma tecla…' if self.capture == action else f'{label}   [{value}]'
-                button(512 + i*48, caption, 'bind:' + action, bx=92, ex=630)
-            # Paginação compacta deixa o cadastro de ações crescer sem cortar a tela.
-            text((304, 657), f'{self.scroll+1}/{(len(actions)+2)//3}', 11, MUTED)
-            for rect, action, caption in [((92,658,220,676),'prev','< Anterior'),
-                                          ((500,658,630,676),'next','Próxima >')]:
-                text((rect[0]+5,rect[1]), caption, 11, MUTED)
-                self.hits.append((rect,action))
-            text((690, 184), 'Tela', 28, heading=True)
-            button(250, 'Sincronização vertical · ' + ('Sim' if self.draft['vsync'] else 'Não'),
-                   'toggle:vsync', bx=690, ex=1228)
-            button(306, 'Inverter rotação · ' + ('Sim' if self.draft['invert_rotation'] else 'Não'),
-                   'toggle:invert_rotation', bx=690, ex=1228)
-            button(362, f"Sensibilidade do pan · {self.draft['sensitivity']:.2f}×", 'sensitivity', bx=690, ex=1228)
-            text((690, 448), 'Acessibilidade', 28, heading=True)
-            button(512, 'Reduzir movimento · ' + ('Sim' if self.draft['reduce_motion'] else 'Não'),
-                   'toggle:reduce_motion', bx=690, ex=1228)
-            button(568, f"Texto · {int(self.draft['text_scale']*100)}%", 'text_scale', bx=690, ex=1228)
-            text((690, 635), 'ESC cancela a escolha de uma tecla.', 13, MUTED)
+            def add_hit(rect, action):
+                self.hits.append((rect, action))
+                self._control_bounds[action] = (max(0, int(rect[0]) - 3), max(0, int(rect[1]) - 5),
+                                                min(1320, int(rect[2]) + 3), min(876, int(rect[3]) + 9))
+            settings_screen.draw_settings(self, image, draw, text, font, add_hit)
             draw.line((72,698,1248,698),fill=LINE)
             button(720, 'Voltar', 'back', bx=72, ex=250)
             button(720, 'Restaurar padrões', 'defaults', bx=270, ex=540)
@@ -554,6 +565,11 @@ class GameMenus:
         self.hits = [((r[0]*scale+self.offset[0], r[1]*scale+self.offset[1],
                        r[2]*scale+self.offset[0], r[3]*scale+self.offset[1]), a) for r,a in self.hits]
         self._layout_hits = self.hits.copy()
+        self.hits_order = [action for _, action in self.hits]
+        if getattr(self, 'render_focus_tab', False):
+            # trocou de aba com ← → numa pílula: o foco fica na pílula da aba nova
+            self.render_focus_tab = False
+            self.focus = self.hits_order.index('tab:' + self.settings_tab)
         if native:
             return image
         resized = image.resize((max(1,round(1320*scale)),max(1,round(876*scale))),Image.Resampling.LANCZOS)
@@ -590,7 +606,8 @@ class GameMenus:
             world_state=tuple((self.world or {}).get(k) for k in ('id','name','seed','played','saved_at'))
             state=(self.page,width,height,tuple(self.fields.items()),self.field,self.capture,
                    self.message,self.scroll,self.version,world_state,
-                   self.preferences.data['text_scale'],json.dumps(self.draft,sort_keys=True))
+                   self.preferences.data['text_scale'],json.dumps(self.draft,sort_keys=True),
+                   (self.settings_tab,round(self.list_scroll),self.focus) if self.page=='settings' else None)
             region=None
             redraw=True
             if self.quad and state==self._raster_state:

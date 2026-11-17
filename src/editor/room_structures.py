@@ -20,8 +20,8 @@ from src.world.structure_layer import PlacedStructure
 AIR = "minecraft:air"
 
 
-def object_structure(obj: VoxelObject, origin: Tuple[int, int, int], name: str = "objeto") -> PlacedStructure:
-    """O objeto (já girado) na posição ``origin`` como uma construção com as mesmas células ocupadas."""
+def object_schematic(obj: VoxelObject, name: str = "objeto") -> Schematic:
+    """O objeto como ``Schematic``: cada voxel vira o bloco com o nome da textura dele e a cor vai em ``tints``."""
     sx, sy, sz = obj.size
     grid = np.full((sy, sz, sx), AIR, dtype=object)
     tints = np.ones((sy, sz, sx, 3), dtype=np.float32)
@@ -35,7 +35,12 @@ def object_structure(obj: VoxelObject, origin: Tuple[int, int, int], name: str =
         tints[y, z, x] = colours[index]
     schematic = Schematic(sx, sy, sz, grid, {}, name)
     schematic.tints = tints
-    return PlacedStructure(name, schematic, (int(origin[0]), int(origin[1]), int(origin[2])))
+    return schematic
+
+
+def object_structure(obj: VoxelObject, origin: Tuple[int, int, int], name: str = "objeto") -> PlacedStructure:
+    """O objeto (já girado) na posição ``origin`` como uma construção com as mesmas células ocupadas."""
+    return PlacedStructure(name, object_schematic(obj, name), (int(origin[0]), int(origin[1]), int(origin[2])))
 
 
 class ObjectStructureCache:

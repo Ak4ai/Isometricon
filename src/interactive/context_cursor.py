@@ -304,10 +304,12 @@ void main() { depth_value = texelFetch(depth_pixel, ivec2(0, 0), 0).r; gl_Positi
         program = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
         vao = gl.glGetIntegerv(gl.GL_VERTEX_ARRAY_BINDING)
         unit = gl.glGetIntegerv(gl.GL_ACTIVE_TEXTURE)
-        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, 0)
+        # lê do framebuffer em que a cena está sendo desenhada (a tela, ou o da cena: ver SceneTarget)
+        source = int(gl.glGetIntegerv(gl.GL_DRAW_FRAMEBUFFER_BINDING))
+        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, source)
         gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, self._depth_fbo)
         gl.glBlitFramebuffer(x, y, x + 1, y + 1, 0, 0, 1, 1, gl.GL_DEPTH_BUFFER_BIT, gl.GL_NEAREST)
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, source)
         gl.glActiveTexture(gl.GL_TEXTURE0 + self.UNIT)
         texture = gl.glGetIntegerv(gl.GL_TEXTURE_BINDING_2D)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self._depth_texture)
@@ -327,12 +329,13 @@ void main() { depth_value = texelFetch(depth_pixel, ivec2(0, 0), 0).r; gl_Positi
         gl.glBindVertexArray(int(vao))
         gl.glUseProgram(int(program))
 
-    def read(self, mouse, width: int, height: int, mvp: np.ndarray) -> None:
+    def read(self, mouse, width: int, height: int, mvp: np.ndarray, scale: float = 1.0) -> None:
         """Pede a profundidade sob o mouse e recolhe a leitura mais nova que a GPU já terminou.
 
         Ler o pixel na hora faria a CPU esperar a GPU acabar o quadro: o pixel vai, só na GPU, para um buffer
         da GPU, com uma cerca (``glFenceSync``) logo atrás; o buffer só é lido depois que a cerca passou, e até
-        lá vale a leitura anterior. O ponto é do quadro em que foi pedido (com as matrizes dele)."""
+        lá vale a leitura anterior. O ponto é do quadro em que foi pedido (com as matrizes dele). ``scale`` é a
+        escala da cena desenhada fora da tela (o pixel lido é o do mouse nessa resolução)."""
         import ctypes
         import OpenGL.GL as gl
         from OpenGL.raw.GL.VERSION.GL_1_0 import glReadPixels as read_pixels
@@ -362,8 +365,9 @@ void main() { depth_value = texelFetch(depth_pixel, ivec2(0, 0), 0).r; gl_Positi
         # pede
         slot = self._frame % ring
         self._drop(slot)
-        x, y = int(mouse[0]), int(height - 1 - int(mouse[1]))
-        if 0 <= x < width and 0 <= y < height:
+        target_w, target_h = max(1, round(width * scale)), max(1, round(height * scale))
+        x, y = int(mouse[0] * scale), int(target_h - 1 - int(mouse[1] * scale))
+        if 0 <= x < target_w and 0 <= y < target_h:
             if self._ready:
                 self._copy(x, y, slot)
                 self._fences[slot] = gl.glFenceSync(gl.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)

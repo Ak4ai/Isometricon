@@ -113,8 +113,9 @@ def showcase_schematic() -> Schematic:
     # fileira 7: baús (simples nas quatro direções, duplo, de ender, armadilha e uma coluna de três)
     for i, facing in enumerate(("south", "west", "north", "east")):
         put(8 + 2 * i, 20, f"minecraft:chest[facing={facing},type=single]")
-    put(17, 20, "minecraft:chest[facing=south,type=left]")
-    put(18, 20, "minecraft:chest[facing=south,type=right]")
+    # com facing=south o parceiro da "left" fica a oeste e o da "right" a leste: a "right" é a de oeste
+    put(17, 20, "minecraft:chest[facing=south,type=right]")
+    put(18, 20, "minecraft:chest[facing=south,type=left]")
     put(21, 20, "minecraft:ender_chest[facing=south]")
     put(23, 20, "minecraft:trapped_chest[facing=south,type=single]")
     for y in (1, 2, 3):

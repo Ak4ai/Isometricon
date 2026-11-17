@@ -41,6 +41,7 @@ class RoomRevealRenderer:
         self._structure_caps: Optional[TexturedMesh] = None
         self.enabled = True
         self.exterior = float(exterior)  # brilho do que está fora do espaço: 0 preto, 1 normal
+        self.ceiling = 1.0               # brilho do teto do espaço que sobra do corte do andar: 0 preto, 1 normal
         self.level = 0.0                 # intensidade suavizada, 0 a 1
         self.texture_id = 0
         self._shown: Optional[RoomMask] = None  # a máscara que está na GPU
@@ -127,6 +128,7 @@ class RoomRevealRenderer:
         shader.set_vec3("u_RoomSize", float(WINDOW[0]), float(WINDOW[1]), float(WINDOW[2]))
         shader.set_vec3("u_ViewDir", float(view_dir[0]), float(view_dir[1]), float(view_dir[2]))
         shader.set_float("u_RoomExterior", self.exterior)
+        shader.set_float("u_RoomCeiling", self.ceiling)
         shader.set_float("u_RoomActive", float(self.level))
 
     # ------------------------------------------------------------------ tampas

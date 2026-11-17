@@ -25,6 +25,8 @@ class PlacedStructure:
     schematic: Schematic
     origin: Tuple[int, int, int]
     mesh: object = None  # malha para desenhar (TexturedMesh), quando já existe
+    rotation: int = 0    # voltas de 90° já aplicadas à grade (ver ``src/world/block_rotation.py``)
+    entry: Optional[dict] = None  # de onde veio (``src/world/structure_sources.py``), para salvar e refazer
     _solid: np.ndarray = field(init=False, repr=False)
 
     revision: int = field(init=False, default=0)  # sobe quando um bloco muda (porta aberta ou fechada)
@@ -71,6 +73,15 @@ class PlacedStructure:
         s = self.schematic
         return (ox, oy, oz), (ox + s.width - 1, oy + s.height - 1, oz + s.length - 1)
 
+    def occupies(self, x: int, y: int, z: int) -> bool:
+        """Se a célula do mundo tem um bloco desta construção (sólido ou não: porta, planta, escada de mão)."""
+        ox, oy, oz = self.origin
+        lx, ly, lz = x - ox, y - oy, z - oz
+        s = self.schematic
+        if 0 <= lx < s.width and 0 <= ly < s.height and 0 <= lz < s.length:
+            return bool(self._occupied[ly, lz, lx])
+        return False
+
     def is_solid_at(self, x: int, y: int, z: int) -> bool:
         ox, oy, oz = self.origin
         lx, ly, lz = x - ox, y - oy, z - oz
@@ -89,10 +100,27 @@ class StructureLayer:
     def __len__(self) -> int:
         return len(self.structures)
 
-    def add(self, name: str, schematic: Schematic, origin: Tuple[int, int, int], mesh: object = None) -> PlacedStructure:
-        placed = PlacedStructure(name, schematic, (int(origin[0]), int(origin[1]), int(origin[2])), mesh)
+    def add(self, name: str, schematic: Schematic, origin: Tuple[int, int, int], mesh: object = None, *,
+            rotation: int = 0, entry: Optional[dict] = None) -> PlacedStructure:
+        placed = PlacedStructure(name, schematic, (int(origin[0]), int(origin[1]), int(origin[2])), mesh,
+                                 int(rotation) % 4, entry)
         self.structures.append(placed)
         return placed
+
+    def remove(self, placed: PlacedStructure) -> bool:
+        """Tira essa construção (pela identidade); False se ela não está na camada."""
+        for index, item in enumerate(self.structures):
+            if item is placed:
+                del self.structures[index]
+                return True
+        return False
+
+    def structure_at(self, x: int, y: int, z: int) -> Optional[PlacedStructure]:
+        """A construção com um bloco nessa célula; a colocada por último ganha."""
+        for placed in reversed(self.structures):
+            if placed.occupies(int(x), int(y), int(z)):
+                return placed
+        return None
 
     def remove_last(self) -> Optional[PlacedStructure]:
         return self.structures.pop() if self.structures else None

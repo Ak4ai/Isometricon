@@ -118,10 +118,12 @@ class Schematic:
         self._occupied_mask: Optional[np.ndarray] = None
         self._full_cube_mask: Optional[np.ndarray] = None
         self._detail_mask: Optional[np.ndarray] = None
+        self._door_mask: Optional[np.ndarray] = None
 
     def invalidate_masks(self) -> None:
         """Esquece as máscaras calculadas (depois de trocar blocos da grade, como abrir uma porta)."""
         self._solid_mask = self._occupied_mask = self._full_cube_mask = self._detail_mask = None
+        self._door_mask = None
 
     def get_block(self, x: int, y: int, z: int) -> str:
         """Retorna o nome do bloco na coordenada local da estrutura."""
@@ -136,6 +138,14 @@ class Schematic:
     def _mask(self, test) -> np.ndarray:
         lookup = {name: bool(test(name)) for name in set(self.grid.ravel().tolist())}
         return np.vectorize(lookup.__getitem__, otypes=[bool])(self.grid)
+
+    @property
+    def door_mask(self) -> np.ndarray:
+        """Máscara booleana (height, length, width): True nas células de porta (aberta ou fechada)."""
+        if self._door_mask is None:
+            from src.world.doors import is_door
+            self._door_mask = self._mask(is_door)
+        return self._door_mask
 
     @property
     def occupied_mask(self) -> np.ndarray:

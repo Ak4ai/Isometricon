@@ -69,3 +69,69 @@ def test_the_screen_fades_in_and_out_and_the_player_is_locked_while_open():
     assert session.dim > 0.0                                       # ...enquanto a tela ainda clareia
     session.update(FADE_SECONDS * 2)
     assert session.dim == 0.0
+
+
+def test_the_lid_opens_and_closes_in_steps_and_reports_each_change_once():
+    from src.interactive.chest_session import LID_SECONDS
+    session = ChestSession()
+    chest = SimpleNamespace(name="bau")
+    assert session.take_lid_update() is None                       # nada se mexe: nada a refazer
+    session.open(chest)
+    amounts = []
+    for _ in range(40):
+        session.update(LID_SECONDS / 10)
+        update = session.take_lid_update()
+        if update is not None:
+            assert update[0] is chest
+            amounts.append(update[1])
+    assert amounts == sorted(amounts) and amounts[-1] == 1.0       # só sobe, e chega toda aberta
+    assert amounts.count(1.0) == 1                                 # parada de vez: não pede para refazer a malha de novo
+    assert 0.0 < amounts[0] < 0.2                                  # começa devagar (suavizado)
+    session.close()
+    closing = []
+    for _ in range(40):
+        session.update(LID_SECONDS / 10)
+        update = session.take_lid_update()
+        if update is not None:
+            closing.append(update[1])
+    assert closing == sorted(closing, reverse=True) and closing[-1] == 0.0
+    assert session.lid_chest is None and session.take_lid_update() is None     # soltou o baú depois de fechar
+
+
+def test_the_lid_keeps_the_chest_until_it_is_shut_and_another_chest_waits():
+    from src.interactive.chest_session import LID_SECONDS
+    session = ChestSession()
+    first, second = SimpleNamespace(name="um"), SimpleNamespace(name="dois")
+    session.open(first)
+    session.update(LID_SECONDS)                                    # aberta de vez
+    session.close()
+    session.update(LID_SECONDS / 4)                                # ainda fechando
+    assert session.lid_chest is first and 0.0 < session.lid < 1.0
+    assert not session.open(second)                                # o outro espera a tampa fechar
+    session.update(LID_SECONDS)
+    session.take_lid_update()
+    assert session.open(second) and session.lid_chest is second
+    # reabrir o mesmo baú no meio do fechamento continua de onde a tampa está, sem pulo
+    session.close()
+    session.update(LID_SECONDS / 5)
+    middle = session.lid
+    assert session.open(second) and session.lid == middle
+
+
+def test_the_tool_hands_the_lid_amount_to_the_chest_mesh_of_that_structure():
+    from src.interactive.schematic_tool import SchematicTool
+
+    class FakeMeshes:
+        def __init__(self):
+            self.calls = []
+
+        def rebuild_chests(self, lids=None):
+            self.calls.append(lids)
+
+    mesh = FakeMeshes()
+    chest = SimpleNamespace(structure=SimpleNamespace(mesh=mesh), local=(2, 1, 3))
+    tool = SchematicTool()
+    tool.set_chest_lid(chest, 0.25)
+    tool.set_chest_lid(chest, 0.0)
+    assert mesh.calls == [{(2, 1, 3): 0.25}, None]                 # fechada de vez: sem entrada, o baú sai fechado
+    tool.set_chest_lid(SimpleNamespace(structure=SimpleNamespace(mesh=None), local=(0, 0, 0)), 1.0)  # sem malha: nada

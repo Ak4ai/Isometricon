@@ -6,7 +6,7 @@ import pytest
 from src.rendering.atlas import TextureAtlas
 from src.world import BlockType, Schematic
 from src.world.room_caps import RAY_START, RAY_STEP, RAY_STEPS, build_caps, hidden_cells
-from src.world.room_reveal import INTERIOR, RoomRevealTracker, window_origin
+from src.world.room_reveal import INTERIOR, OBJECT, RoomRevealTracker, window_origin
 from src.world.structure_layer import StructureLayer
 from tests.test_room_reveal import box, world
 
@@ -183,7 +183,8 @@ def test_cut_cells_keep_the_back_walls_and_cut_the_front_ones():
 
 
 def test_cut_cells_follow_the_story_cut_above_the_ceiling():
-    """Acima do teto do andar some a metade da frente; atrás do centro só o que tapa o cômodo."""
+    """Acima do teto do andar some a frente e, no fundo, o que está sobre o cômodo; em cima das paredes do fundo fica
+    (escurecido pelo shader)."""
     from src.world.room_caps import StoryCut, cut_cells
 
     def upstairs(b):
@@ -194,8 +195,50 @@ def test_cut_cells_follow_the_story_cut_above_the_ceiling():
     story = StoryCut(cut_y=7, feet_y=3, center=(13.5, 13.5), radius=12.0)
     cut = cut_cells(room, ISO, story=story)
     assert cut[16 - ox, 8 - oy, 16 - oz]
-    assert not cut[10 - ox, 8 - oy, 10 - oz]
+    assert not cut[10 - ox, 8 - oy, 10 - oz]             # o canto do fundo do andar de cima fica
     assert not cut[10 - ox, 4 - oy, 13 - oz]             # a parede do fundo do andar continua
+
+
+def test_story_cut_leaves_an_eave_along_the_back_walls():
+    """Beiral: do teto do cômodo sobra a laje em cima das paredes do fundo e mais um bloco para dentro, reta de uma
+    ponta à outra; o resto da laje e o que está acima dela sobre o cômodo somem."""
+    from src.world.room_caps import StoryCut, cut_cells
+
+    def upstairs(b):
+        b[11, 8, 13] = BlockType.STONE                   # algo do andar de cima, junto da parede do fundo
+        b[10, 8, 13] = BlockType.STONE                   # a parede do andar de cima, em cima da parede do fundo
+    room = _iso_room(upstairs)
+    ox, oy, oz = room.origin
+    cut = cut_cells(room, ISO, story=StoryCut(cut_y=7, feet_y=3, center=(13.5, 13.5), radius=24.0))
+    # a aba: um bloco à frente de cada parede do fundo, por toda a parede, até a parede da frente
+    assert not any(cut[11 - ox, 7 - oy, z - oz] for z in range(11, 16))
+    assert not any(cut[x - ox, 7 - oy, 11 - oz] for x in range(11, 16))
+    # a laje em cima das próprias paredes do fundo fica, de um vértice ao outro
+    assert not any(cut[10 - ox, 7 - oy, z - oz] for z in range(10, 17))
+    assert not any(cut[x - ox, 7 - oy, 10 - oz] for x in range(10, 17))
+    # a laje em cima das paredes da frente some (a quina da frente e o meio delas)
+    assert cut[16 - ox, 7 - oy, 16 - oz] and cut[16 - ox, 7 - oy, 13 - oz] and cut[13 - ox, 7 - oy, 16 - oz]
+    # a dois blocos da parede e no meio, a laje some
+    assert cut[12 - ox, 7 - oy, 13 - oz] and cut[13 - ox, 7 - oy, 13 - oz] and cut[13 - ox, 7 - oy, 12 - oz]
+    # acima da laje, sobre o cômodo (tapa a vista) some; em cima da parede do fundo fica (escurecido no shader)
+    assert cut[11 - ox, 8 - oy, 13 - oz]
+    assert not cut[10 - ox, 8 - oy, 13 - oz]
+
+
+def test_eave_ignores_furniture_and_steps_on_the_floor():
+    """Um móvel ou degrau no chão é chão do cômodo: a laje em volta dele não vira beiral."""
+    from src.world.room_caps import StoryCut, _eave
+
+    def chest(b):
+        b[13, 3, 13] = BlockType.STONE                   # um bloco solto no meio do chão
+    room = _iso_room(chest)
+    ox, oy, oz = room.origin
+    assert room.data[13 - ox, 3 - oy, 13 - oz] == OBJECT
+    flat = np.array(ISO)[[0, 2]] / np.linalg.norm(np.array(ISO)[[0, 2]])
+    over, eave = _eave(room.data, room.origin, StoryCut(cut_y=7, feet_y=3, center=(13.5, 13.5), radius=24.0), flat)
+    assert over[13 - ox, 7 - oy, 13 - oz]                # o bloco solto é chão do cômodo
+    assert not any(eave[x - ox, 7 - oy, z - oz] for x in (12, 13, 14) for z in (12, 13, 14))
+    assert eave[11 - ox, 7 - oy, 13 - oz] and eave[10 - ox, 7 - oy, 13 - oz] and not over[10 - ox, 7 - oy, 13 - oz]
 
 
 def test_caps_close_the_faces_left_open_by_the_cuts(atlas):

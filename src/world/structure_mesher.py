@@ -4,11 +4,11 @@ A geração dos vértices é feita só com NumPy (sem OpenGL); `build_mesh` cria
 `TexturedMesh` na hora de enviar à GPU.
 """
 
-from typing import Callable, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 
-from src.world.block_shapes import Quad, box_face_quad, quad_vertices, shape_for
+from src.world.block_shapes import Quad, box_face_quad, chest_hinge, is_chest_lid, quad_vertices, shape_for
 from src.world.schematic import Schematic
 
 # (u0, v0, u1, v1) de um bloco e face
@@ -35,6 +35,21 @@ _FACES_BY_SHAPE_ORDER = _FACES
 
 # Layout por vértice do TexturedMesh: posição(3), normal(3), uv(2), cor(3)
 FLOATS_PER_VERTEX = 11
+LID_OPEN_RADIANS = np.pi / 2.0 * 1.1   # a tampa aberta: pouco mais de um quarto de volta (a do jogo vai a 90 graus)
+
+
+def swing_lid(quad: np.ndarray, hinge: np.ndarray, axis, amount: float) -> np.ndarray:
+    """Gira uma face (4, 11) da tampa do baú em volta da dobradiça: ``amount`` 0 é fechada, 1 é toda aberta.
+
+    A frente da tampa sobe (a rotação é negativa em volta do eixo da largura). As normais giram junto.
+    """
+    from src.clothing.rig import rotation_matrix
+
+    rotation = rotation_matrix(axis, -LID_OPEN_RADIANS * float(amount)).astype(np.float32)
+    out = quad.copy()
+    out[:, :3] = (quad[:, :3] - hinge) @ rotation.T + hinge
+    out[:, 3:6] = quad[:, 3:6] @ rotation.T
+    return out
 
 
 class StructureMesher:
@@ -47,6 +62,7 @@ class StructureMesher:
         center: bool = True,
         cells: Optional[np.ndarray] = None,
         cull: bool = True,
+        chest_open: Optional[Dict[Tuple[int, int, int], float]] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Gera (vértices float32, índices uint32) com as faces expostas ao ar.
 
@@ -58,6 +74,8 @@ class StructureMesher:
                 vendo a construção inteira, então as partes desenhadas à parte se encaixam sem buracos.
             cull: se False, nenhuma face é descartada pelo vizinho (as portas: a parede ao lado pode sumir no
                 corte de visão, e a face encostada nela, virada para dentro da parede, nunca aparece com ela lá).
+            chest_open: (x, y, z) local de um baú -> quanto a tampa está aberta (0 a 1); as peças da tampa giram em
+                volta da dobradiça. Sem entrada, o baú sai fechado.
         """
         w, h, l = schematic.width, schematic.height, schematic.length
         # Os centros dos blocos vão de 0 a dim-1: o meio deles está em (dim-1)/2
@@ -78,9 +96,12 @@ class StructureMesher:
         indices = []
         vertex_offset = 0
 
+        tints = getattr(schematic, "tints", None)   # a cor de cada célula (objetos do editor); sem ela, branco
+
         # argwhere devolve [y, z, x] na ordem de varredura (y, z, x)
         for y, z, x in np.argwhere(occupied):
             block = schematic.grid[y, z, x]
+            tint = (1.0, 1.0, 1.0) if tints is None else tuple(float(c) for c in tints[y, z, x])
             block_pos = np.array([x, y, z], dtype=np.float32) - offset
             if block not in shapes:
                 shapes[block] = shape_for(block)
@@ -93,7 +114,10 @@ class StructureMesher:
                         key = (name, "north")
                         if key not in uv_cache:
                             uv_cache[key] = uv_lookup(name, "north")
-                        vertices.extend(quad_vertices(box, block_pos - 0.5, uv_cache[key]).ravel())
+                        plane = np.array(quad_vertices(box, block_pos - 0.5, uv_cache[key]), dtype=np.float32).reshape(-1, 11)
+                        if tints is not None:
+                            plane[:, 8:11] = tint
+                        vertices.extend(plane.ravel())
                         for first in (vertex_offset, vertex_offset + 4):
                             indices.extend((first, first + 1, first + 2, first + 2, first + 3, first))
                         vertex_offset += 8
@@ -106,6 +130,14 @@ class StructureMesher:
                         if key not in uv_cache:
                             uv_cache[key] = uv_lookup(name, face_key)
                         quad = box_face_quad(box, face, block_pos - 0.5, uv_cache[key])
+                        amount = chest_open.get((int(x), int(y), int(z)), 0.0) if chest_open else 0.0
+                        if amount > 0.0 and is_chest_lid(box):
+                            point, axis = chest_hinge(block)
+                            quad = swing_lid(quad, block_pos - 0.5 + np.asarray(point, dtype=np.float32) / 16.0,
+                                             axis, amount)
+                        if tints is not None:
+                            quad = np.array(quad, dtype=np.float32).reshape(-1, 11)
+                            quad[:, 8:11] = tint
                         vertices.extend(quad.ravel())
                         indices.extend((
                             vertex_offset, vertex_offset + 1, vertex_offset + 2,
@@ -123,7 +155,7 @@ class StructureMesher:
                 us, vs = (u0, u1), (v0, v1)
                 for corner, (cu, cv) in zip(corners, uv_order):
                     pos = block_pos + 0.5 * np.array(corner, dtype=np.float32)
-                    vertices.extend((*pos, *normal, us[cu], vs[cv], 1.0, 1.0, 1.0))
+                    vertices.extend((*pos, *normal, us[cu], vs[cv], *tint))
                 indices.extend((
                     vertex_offset, vertex_offset + 1, vertex_offset + 2,
                     vertex_offset + 2, vertex_offset + 3, vertex_offset,

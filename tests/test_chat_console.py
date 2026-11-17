@@ -377,3 +377,13 @@ def test_async_model_defers_reloads_to_poll():
     model.reload()
     assert model.is_loading and model.parts == []
     assert model.loading_status
+
+
+def test_revelar_sets_the_outside_and_the_ceiling_brightness():
+    handler = SkinCommandHandler(character_model=None)
+    renderer = SimpleNamespace(exterior=0.12, ceiling=1.0, enabled=True)
+    handler.room_reveal = renderer
+    assert run(handler, "/revelar teto 0,5")[0] and renderer.ceiling == 0.5 and renderer.exterior == 0.12
+    assert run(handler, "/revelar escuro 0.3")[0] and renderer.exterior == 0.3 and renderer.ceiling == 0.5
+    ok, msg, _ = run(handler, "/revelar teto 2")
+    assert not ok and "teto" in msg and renderer.ceiling == 0.5

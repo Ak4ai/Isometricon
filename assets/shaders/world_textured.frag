@@ -51,7 +51,15 @@ uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
 uniform mat4 u_ShadowInvModel;   // do espaço desenhado (girado pelo modelo) de volta ao mundo
 uniform float u_ShadowStrength;  // 0 sem sombra
-uniform float u_ShadowTop;       // y (na janela) do bloco mais alto: acima dele, subindo, nada tapa o sol
+// Por coluna (x, z) da janela, um canal por quadrante de rumo (+x+z, +x-z, -x+z, -x-z): a altura a partir da qual um
+// raio que sobe pelo menos u_ShadowHorizonRise por célula andada no plano não encontra mais nada (x 255). Ver
+// column_horizons em src/rendering/sun_shadows.py.
+uniform sampler2D u_ShadowHorizon;
+uniform float u_ShadowHorizonRise;
+// Qualidade (Configurações > Gráficos): até onde o raio procura (células, até 56) e quantos raios por pixel
+// (0 baixa: um raio; 1 média: cone borrado de 8 e nítido de 3; 2 alta: 12 e 6).
+uniform int u_ShadowSteps;
+uniform int u_ShadowQuality;
 
 float shadowCell(vec3 worldPos)
 {
@@ -102,13 +110,20 @@ float traceSun(vec3 worldPos, vec3 dir)
     vec3 tMax = vec3(safe.x > 0.0 ? 1.0 - frac.x : frac.x,
                      safe.y > 0.0 ? 1.0 - frac.y : frac.y,
                      safe.z > 0.0 ? 1.0 - frac.z : frac.z) * tDelta;
+    // o raio anda sempre no mesmo sentido em x e z: só passa pelas colunas do seu quadrante à frente
+    vec4 quadrant = vec4(stepDir.x > 0 && stepDir.z > 0, stepDir.x > 0 && stepDir.z <= 0,
+                         stepDir.x <= 0 && stepDir.z > 0, stepDir.x <= 0 && stepDir.z <= 0);
+    bool useHorizon = stepDir.y > 0 && safe.y >= u_ShadowHorizonRise * length(safe.xz);
     float light = 1.0;
     for (int i = 0; i < 56; i++)
     {
+        if (i >= u_ShadowSteps)
+            break;
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
             return light;                                     // saiu da janela (para cima ou para longe): sol livre
-        if (stepDir.y > 0 && float(cell.y) > u_ShadowTop)
-            return light;                                     // subindo e acima de tudo o que há: sol livre
+        // subindo e acima de tudo o que há nas colunas à frente: nada mais o tapa, sol livre
+        if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
+            return light;
         float value = texelFetch(u_ShadowMask, cell, 0).r;
         if (value > 0.75)
             return 0.0;
@@ -220,31 +235,42 @@ float sunCone(vec3 origin, vec3 sunDir, int rays, float spread, float spin)
     return lit / float(rays);
 }
 
-// O cone borrado (12 raios, 0.15) em duas etapas: 4 raios espalhados pelo disco primeiro; se os 4 chegam ao sol o
-// ponto está no sol pleno e para aí (é a maior parte do chão aberto); senão os outros 8 completam a mesma média de 12.
-float softSun(vec3 origin, vec3 sunDir, float spin)
+// O cone borrado (``rays`` raios, 0.15) em duas etapas: um a cada quatro, espalhados pelo disco, primeiro; se todos
+// chegam ao sol o ponto está no sol pleno e para aí (é a maior parte do chão aberto); senão os outros completam a média.
+// Com ``umbra``, se nenhum dos quatro chega o ponto já fica na sombra inteira: dentro de um cômodo é quase tudo (o
+// teto tapa), e só perto da porta e das janelas, onde algum passa, a penumbra é calculada inteira.
+float softSun(vec3 origin, vec3 sunDir, float spin, int rays, bool umbra)
 {
     vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(sunDir, t1);
+    int stride = rays / 4;
     float first = 0.0;
-    for (int k = 0; k < 12; k += 3)
+    for (int k = 0; k < 12; k += 1)
     {
-        float r = sqrt((float(k) + 0.5) / 12.0) * 0.15;
+        if (k >= rays)
+            break;
+        if (k % stride != 0)
+            continue;
+        float r = sqrt((float(k) + 0.5) / float(rays)) * 0.15;
         float a = float(k) * 2.3999632 + spin;
         first += traceSun(origin, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
     }
     if (first >= 3.999)
         return 1.0;
+    if (umbra && first <= 0.001)
+        return 0.0;
     float rest = 0.0;
     for (int k = 0; k < 12; k++)
     {
-        if (k % 3 == 0)
+        if (k >= rays)
+            break;
+        if (k % stride == 0)
             continue;
-        float r = sqrt((float(k) + 0.5) / 12.0) * 0.15;
+        float r = sqrt((float(k) + 0.5) / float(rays)) * 0.15;
         float a = float(k) * 2.3999632 + spin;
         rest += traceSun(origin, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
     }
-    return (first + rest) / 12.0;
+    return (first + rest) / float(rays);
 }
 
 // Fração da luz do sol que chega ao ponto (1 = sol inteiro). A nitidez muda ao longo da sombra:
@@ -252,13 +278,19 @@ float softSun(vec3 origin, vec3 sunDir, float spin)
 // - a borrada sai do ponto exato, com mais raios, cone mais largo e girado por pixel (sem degraus);
 // onde a sombra é escura (junto ao bloco) vale a nítida, onde é clara (longe dele) vale a borrada, e no meio as duas
 // se misturam aos poucos: nítido, meio nítido, meio borrado, borrado.
-float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
+float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir, bool indoor)
 {
-    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(gl_FragCoord.xy) * 6.2831853);
+    if (u_ShadowQuality <= 0)
+        return traceSun(snappedPos + worldNormal * 0.04, sunDir);   // baixa: um raio, sombra nítida em pixel
+    bool high = u_ShadowQuality >= 2;
+    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(gl_FragCoord.xy) * 6.2831853,
+                         high ? 12 : 8, indoor);
+    if (indoor && soft <= 0.0)
+        return 0.0;                                            // dentro do cômodo, longe das aberturas: sombra
     float blur = smoothstep(0.1, 0.9, soft);                   // 0 no escuro (nítido) .. 1 no claro (borrado)
     if (blur >= 1.0)
         return soft;                                           // só a borrada conta: os 6 raios da nítida sobram
-    float sharp = sunCone(snappedPos + worldNormal * 0.04, sunDir, 6, 0.08, 0.0);
+    float sharp = sunCone(snappedPos + worldNormal * 0.04, sunDir, high ? 6 : 3, 0.08, 0.0);
     return mix(sharp, soft, blur);
 }
 
@@ -298,6 +330,7 @@ uniform vec3 u_RoomSize;        // tamanho da máscara em células
 uniform vec3 u_ViewDir;         // para onde a câmera olha, em coordenadas do mundo
 uniform mat4 u_RoomInvModel;    // do espaço desenhado (girado pelo modelo) de volta ao mundo
 uniform float u_RoomExterior;   // brilho do que fica fora do espaço (0 preto, 1 normal)
+uniform float u_RoomCeiling;    // brilho do teto do espaço que sobra do corte do andar (0 preto, 1 normal)
 
 // Valor da máscara na célula que contém o ponto do mundo; -1 fora da janela.
 float roomCell(vec3 worldPos)
@@ -413,16 +446,61 @@ bool behindRoom(vec3 c)
     return false;
 }
 
-bool storyCovers(vec3 cell)
+// A coluna (x, z) está sobre o chão do cômodo: na altura dos pés, o espaço (255) ou um móvel/degrau (192).
+bool overRoom(vec2 xz)
 {
-    vec3 c = cell + 0.5;
-    // o que não está no fundo do cômodo (a frente, os lados de fora) some inteiro
-    if (u_RoomActive <= 0.001 || !behindRoom(c))
-        return true;
-    // atrás do centro, só o que tapa o cômodo (o teto e o andar de cima sobre ele); as paredes do fundo ficam
-    return u_RoomActive > 0.001 && coversRoom(c);
+    return roomCell(vec3(xz.x, u_SightFeetY + 0.5, xz.y)) > 0.7;
 }
 
+// Beiral: na laje do teto (a célula y do corte), a faixa das paredes do fundo de um vértice a outro. É a aba (coluna
+// sobre o cômodo com a parede do fundo ao lado), o topo da parede do fundo (coluna fora do cômodo com o cômodo ao
+// lado, do lado da câmera) e as pontas (vizinha de um topo de parede do fundo ao longo da parede: os vértices).
+// ``_eave`` em src/world/room_caps.py faz a mesma conta para as tampas.
+bool eaveColumn(vec2 xz)
+{
+    vec2 f = normalize(u_StoryView.xz);
+    bool over = overRoom(xz);
+    const vec2 axes[4] = vec2[4](vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0));
+    for (int i = 0; i < 4; i++)
+    {
+        vec2 o = axes[i];
+        float d = dot(o, f);
+        if (over && d > 0.3 && !overRoom(xz + o))
+            return true;                                // a aba
+        if (!over && d < -0.3)
+        {
+            if (overRoom(xz + o))
+                return true;                            // o topo da parede do fundo
+            vec2 p = vec2(o.y, o.x);                    // ao longo da parede: as pontas
+            if (!overRoom(xz + p) && overRoom(xz + p + o))
+                return true;
+            if (!overRoom(xz - p) && overRoom(xz - p + o))
+                return true;
+        }
+    }
+    return false;
+}
+
+bool eave(vec3 c)
+{
+    return floor(c.y) == u_StoryCutY && eaveColumn(c.xz);
+}
+
+bool storyCovers(vec3 cell)
+{
+    if (u_RoomActive <= 0.001)
+        return true;
+    vec3 c = cell + 0.5;
+    // o beiral fica sempre, de um vértice ao outro
+    if (eave(c))
+        return false;
+    // o que não está no fundo do cômodo (a frente, os lados de fora) some inteiro; no fundo, some o que está sobre o
+    // cômodo (a laje do teto e o andar de cima, que tapam o cômodo); o que está em cima das paredes do fundo e além
+    // delas fica, escurecido como o lado de fora (ver roomFactor)
+    return !behindRoom(c) || overRoom(c.xz);
+}
+
+uniform bool u_DepthOnly;        // pré-passada de profundidade: descarta como sempre e para antes da luz
 uniform bool u_KeepVisible;      // portas: nenhum corte de visão as remove
 
 bool sightCarved()
@@ -474,6 +552,7 @@ void main()
     // da frente, terra por cima) some. Um fragmento tapa se, seguindo o raio da câmera para dentro
     // da cena, ele chega ao interior do espaço.
     float roomFactor = 1.0;
+    float roomLit = 1.0;          // o brilho que o cômodo dá ao fragmento: 1 no espaço, u_RoomExterior fora dele
     if (u_RoomActive > 0.001)
     {
         vec3 worldPos = (u_RoomInvModel * vec4(v_FragPos, 1.0)).xyz;
@@ -498,10 +577,17 @@ void main()
                 discard;
         }
         float inside = here >= 0.2 ? 1.0 : 0.0;   // o espaço, a casca e a borda pela quina (64)
-        // do teto do andar para cima é outro andar: escurece como o lado de fora (a escada liga, mas não é o cômodo)
+        float lit = mix(u_RoomExterior, 1.0, inside);
+        // do teto do andar para cima é outro andar (a escada liga, mas não é o cômodo): escurece como o lado de fora,
+        // até o jogador entrar nele. Só o beiral (a laje do teto do cômodo junto às paredes do fundo) fica com o
+        // brilho do teto, para mostrar que há um teto em cima.
         if (blockCell.y >= u_StoryCutY)
-            inside *= 1.0 - u_StoryActive;
-        roomFactor = mix(1.0, mix(u_RoomExterior, 1.0, inside), u_RoomActive);
+        {
+            float upper = eave(blockCell + 0.5) ? u_RoomCeiling : u_RoomExterior;
+            lit = mix(lit, upper, u_StoryActive);
+        }
+        roomLit = lit;
+        roomFactor = mix(1.0, lit, u_RoomActive);
     }
 
     if (sightCarved())
@@ -526,6 +612,11 @@ void main()
         float layer_fade = exp(-height_above_player * max(u_CutawayFade, 0.0));
         texColor.a *= clamp(u_CutawayAlpha * layer_fade, 0.04, 1.0);
     }
+
+    // Pré-passada de profundidade (ver src/main.py): só os descartes acima contam; a luz fica para a passada
+    // seguinte, que então só sombreia o fragmento da frente de cada pixel.
+    if (u_DepthOnly)
+        return;
 
     vec3 norm = normalize(v_Normal);
     vec3 lightDir = normalize(u_LightDir);
@@ -558,13 +649,25 @@ void main()
             vec3 exactPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
             worldPos = snapToTexel(exactPos, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
+            if (!water)
+                waterAbove = waterRun(worldPos + worldNormal * 0.05, vec3(0.0, 1.0, 0.0));
             if (dot(norm, lightDir) > 0.02 || water)  // a face de costas para o sol já é sombra (a água não tem costas)
             {
                 vec3 sunDirWorld = normalize(mat3(u_ShadowInvModel) * lightDir);
-                sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld);
+                // a água (a superfície e o fundo debaixo dela) leva um raio só, do ponto preso ao texel: a sombra
+                // fica nítida, em degraus de pixel como a do chão, e as ondas e o tingido escondem a falta da
+                // penumbra. Custa um raio em vez de até 18, e o lago pagava isso duas vezes (fundo e superfície).
+                // fora do cômodo, escurecido (a 12%), a penumbra quase não aparece: um raio basta
+                bool dimmed = u_RoomActive > 0.5 && roomLit < 0.5;
+                if (water || waterAbove > 0.0 || dimmed)
+                    sunVis = traceSun(worldPos + worldNormal * 0.04, sunDirWorld);
+                else
+                {
+                    // o ar em frente da face é o espaço do jogador: o teto o tapa, a não ser junto às aberturas
+                    bool indoor = u_RoomActive > 0.001 && roomCell(worldPos + worldNormal * 0.04) > 0.9;
+                    sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld, indoor);
+                }
             }
-            if (!water)
-                waterAbove = waterRun(worldPos + worldNormal * 0.05, vec3(0.0, 1.0, 0.0));
         }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
         if (waterAbove > 0.0)

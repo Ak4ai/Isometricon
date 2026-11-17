@@ -191,6 +191,7 @@ class SkinCommandHandler:
         self.turntable_state = turntable_state
         self.chat_console = None
         self.schematic_tool = None  # SchematicTool do terreno (/schem); None fora dele
+        self.construction_panel = None  # ConstructionPanel do terreno: o /schem sozinho o abre
         self.room_reveal = None  # RoomRevealRenderer do terreno (/revelar); None fora dele
         self.sun_shadows = None  # SunShadowRenderer do terreno (/sombras); None fora dele
         self.world_seed = None  # () -> int, a seed do mundo aberto (/seed); None fora do terreno
@@ -562,18 +563,22 @@ class SkinCommandHandler:
 
     # ------------------------------------------------------------------ /revelar
     def reveal(self, args: List[str]) -> Result:
-        """/revelar [on|off|escuro <0-1>]: revela só o espaço fechado do jogador (cômodo, caverna)."""
+        """/revelar [on|off|escuro <0-1>|teto <0-1>]: revela só o espaço fechado do jogador (cômodo, caverna)."""
         renderer = self.room_reveal
         if renderer is None:
             return False, "[Revelar] Só funciona no terreno (--terrain).", RED
         word = args[0].lower() if args else ""
-        if word in ("escuro", "dark", "brilho"):
+        if word in ("escuro", "dark", "brilho", "teto", "ceiling"):
             try:
                 value = float(args[1].replace(",", ".")) if len(args) > 1 else None
             except ValueError:
                 value = None
+            ceiling = word in ("teto", "ceiling")
             if value is None or not 0.0 <= value <= 1.0:
-                return False, "[Revelar] Use /revelar escuro <0 a 1> (0 preto, 1 sem escurecer).", RED
+                return False, f"[Revelar] Use /revelar {'teto' if ceiling else 'escuro'} <0 a 1> (0 preto, 1 sem escurecer).", RED
+            if ceiling:
+                renderer.ceiling = value
+                return True, f"[Revelar] Brilho do teto do cômodo: {value:g}.", CYAN
             renderer.exterior = value
             return True, f"[Revelar] Brilho do que fica fora: {value:g}.", CYAN
         if word in ("on", "ligar", "sim"):
@@ -581,7 +586,7 @@ class SkinCommandHandler:
         elif word in ("off", "desligar", "nao", "não"):
             renderer.enabled = False
         elif word:
-            return False, "[Revelar] Use /revelar [on|off|escuro <0 a 1>].", RED
+            return False, "[Revelar] Use /revelar [on|off|escuro <0 a 1>|teto <0 a 1>].", RED
         else:
             renderer.enabled = not renderer.enabled
         return True, f"[Revelar] {'ligado' if renderer.enabled else 'desligado'}.", CYAN
@@ -687,12 +692,16 @@ class SkinCommandHandler:
         tool = self.schematic_tool
         if tool is None:
             return False, "[Schem] Só funciona no terreno (--terrain).", RED
+        panel = self.construction_panel
         sub = SCHEM_ALIASES.get(args[0].lower()) if args else None
+        if sub is None and not args and panel is not None:
+            panel.open()
+            return True, "[Schem] Painel de construções aberto. Esc fecha.", GREEN
         if sub is None:
             return True, "Uso: /schem load <nome|caminho> [x y z] | list | place | cancel | remove | clear | info", GOLD
         rest = args[1:]
         if sub == "list":
-            names = tool.names()
+            names = [label for label, _ in panel.library()] if panel is not None else tool.names()
             return True, "[Schem] " + (", ".join(names) if names else "nenhuma em assets/schematics."), CYAN
         if sub == "load":
             origin = None
@@ -702,6 +711,8 @@ class SkinCommandHandler:
             if not rest:
                 return False, "[Schem] Diga qual: /schem load <nome|caminho> [x y z]. /schem list mostra as disponíveis.", RED
             ok, message = tool.load(" ".join(rest), origin)
+            if ok and panel is not None:
+                panel.open()   # com a prévia já feita: o painel a adota
             return ok, "[Schem] " + message, GREEN if ok else RED
         if sub == "info":
             lines = tool.describe()
@@ -1657,9 +1668,10 @@ ROOT_COMMANDS: List[Command] = [
             "põe um enfeite no terreno (escada de mão, tocha, fogo, planta)", SkinCommandHandler.block, None),
     Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>]",
             "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca"]),
-    Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>]",
-            "revela só o espaço fechado em que o jogador está", SkinCommandHandler.reveal, ["on", "off", "escuro"]),
-    Command(("schem", "schematic", "estrutura"), "/schem <load|list|place|cancel|remove|clear|info>",
+    Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>|teto <0-1>]",
+            "revela só o espaço fechado em que o jogador está", SkinCommandHandler.reveal,
+            ["on", "off", "escuro", "teto"]),
+    Command(("schem", "schematic", "estrutura"), "/schem [load|list|place|cancel|remove|clear|info]",
             "coloca construções (.schem) no terreno", SkinCommandHandler.schem, None),
 ]
 
@@ -1716,7 +1728,7 @@ def _schematic_names() -> List[str]:
 
 COMMAND_TREE: Dict[str, Any] = {
     "skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"],
-    "revelar": ["on", "off", "escuro"],
+    "revelar": ["on", "off", "escuro", "teto"],
     "sombras": ["on", "off", "forca"],
     "seed": [],
     "agua": [],

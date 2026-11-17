@@ -43,6 +43,8 @@ def main() -> None:
     parser.add_argument("--zoom", type=float, default=1.0, help="aproxima a câmera (2 = o dobro)")
     parser.add_argument("--olhar", type=float, nargs=2, metavar=("X", "Z"), default=None,
                         help="aponta a câmera para este ponto da construção (a partir do canto)")
+    parser.add_argument("--tampa", type=float, default=0.0, metavar="0-1",
+                        help="abre a tampa de todos os baús (0 fechada, 1 toda aberta), para conferir a forma")
     parser.add_argument("--frames", type=int, default=None, help="fecha depois de N quadros")
     parser.add_argument("--capture", default=None, help="salva o último quadro neste PNG")
     args = parser.parse_args()
@@ -75,7 +77,14 @@ def main() -> None:
     else:
         schematic = Schematic.load_from_file(args.schematic)
     print(f"Estrutura: {schematic.name} ({schematic.width}x{schematic.height}x{schematic.length})")
-    mesh = StructureMesher.build_mesh(schematic, atlas, center=True)
+    if args.tampa > 0.0:
+        from src.rendering.mesh import TexturedMesh
+        from src.world.chests import is_chest
+        lids = {(int(x), int(y), int(z)): args.tampa
+                for y, z, x in np.argwhere(np.vectorize(is_chest, otypes=[bool])(schematic.grid))}
+        mesh = TexturedMesh(*StructureMesher.build_arrays(schematic, atlas.get_uv, center=True, chest_open=lids))
+    else:
+        mesh = StructureMesher.build_mesh(schematic, atlas, center=True)
     print(f"Malha: {mesh.index_count // 3} triângulos, com as faces ocultas descartadas.")
 
     shader.use()

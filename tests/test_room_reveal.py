@@ -453,3 +453,40 @@ def test_an_open_side_still_counts_as_an_open_front_not_a_sealed_room():
     ox, oy, oz = room.origin
     if room.active:
         assert room.data[13 - ox, 4 - oy, 12 - oz] == INTERIOR
+
+
+def test_stepping_out_of_a_door_switches_to_the_room_on_the_other_side(monkeypatch):
+    """Parado na porta, o espaço junta as duas salas (a porta não conta); um passo para dentro da sala nova e o
+    rastreador já refaz o cômodo: a sala de onde ele veio escurece, sem esperar fechar a porta nem se afastar."""
+    import src.world.room_reveal as rr
+
+    def two_rooms(b):
+        box(b, 4, 10)                                    # sala A: x 4..10
+        box(b, 10, 10)                                   # sala B: x 10..16, parede comum em x = 10
+        b[10, 3:5, 13] = BlockType.AIR                   # o vão da porta (aberta)
+    chunks = world(two_rooms)
+    original = rr.extract_window_cells
+
+    def with_door(origin, chunks, structures=()):
+        cells = original(origin, chunks, structures)
+        ox, oy, oz = origin
+        cells.doors = np.zeros_like(cells.solid)
+        cells.doors[10 - ox, 3 - oy:5 - oy, 13 - oz] = True
+        return cells
+    monkeypatch.setattr(rr, "extract_window_cells", with_door)
+
+    def interior(mask, x, z):
+        ox, oy, oz = mask.origin
+        return mask.data[x - ox, 3 - oy, z - oz] == INTERIOR
+
+    tracker = RoomRevealTracker()
+    tracker.update(0.0, (7.5, 3.0, 13.5), chunks, 0)                 # na sala A
+    assert interior(tracker.mask, 7, 13) and not interior(tracker.mask, 13, 13)
+    tracker.update(0.5, (10.5, 3.0, 13.5), chunks, 0)                # na porta: as duas juntas
+    assert tracker.mask.door_column == (10, 13)
+    assert interior(tracker.mask, 7, 13) and interior(tracker.mask, 13, 13)
+    tracker.update(0.01, (11.5, 3.0, 13.5), chunks, 0)               # um passo para dentro da B, logo em seguida
+    assert tracker.mask.door_column is None
+    assert interior(tracker.mask, 13, 13) and not interior(tracker.mask, 7, 13)
+    tracker.update(0.01, (12.5, 3.0, 13.5), chunks, 0)               # andando na B: o mesmo cômodo, sem refazer
+    assert interior(tracker.mask, 13, 13) and not interior(tracker.mask, 7, 13)

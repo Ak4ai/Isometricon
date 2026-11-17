@@ -49,22 +49,41 @@ def open_sheet(source: str, name: str):
 
 
 def tiles_of(sheet: Image.Image, kind: str):
-    """Os quatro ladrilhos (corpo, tampa, topo, fecho) de uma folha; o fecho só existe no baú simples."""
+    """Os ladrilhos de uma folha: corpo, tampa, topo, fecho e os dois interiores (visíveis com a tampa levantada)."""
     width = 14 if kind == "single" else 15   # cada metade do baú duplo tem 15 de largura
-    x0 = 0 if kind == "right" else 1          # onde a arte encosta no ladrilho (a caixa começa em x=1, ou em 0 na "right")
+    x0 = 0 if kind == "left" else 1           # onde a arte encosta no ladrilho (a caixa começa em x=1, ou em 0 na "left")
     body = sheet.crop((DEPTH, DEPTH + 5 + DEPTH, DEPTH + width, DEPTH + 5 + DEPTH + 10))
     lid = sheet.crop((DEPTH, DEPTH, DEPTH + width, DEPTH + 5))
     # na folha da tampa o 1º quadrado do alto é o interior (escuro, o que se vê com o baú aberto) e o 2º é o topo de fora
     top = sheet.crop((DEPTH + width, 0, DEPTH + 2 * width, DEPTH))
+    # o interior: o 1º quadrado da tampa (a face de baixo dela) e o 2º do corpo (a face de cima dele, o que se vê
+    # olhando para dentro do baú); o 1º do corpo é o fundo
+    lid_in = sheet.crop((DEPTH, 0, DEPTH + width, DEPTH))
+    body_in = sheet.crop((DEPTH + width, DEPTH + 5, DEPTH + 2 * width, DEPTH + 5 + DEPTH))
+    # a folha do jogo deixa o fundo do baú transparente ou preto: aqui ele vira madeira escura, para a boca do baú
+    # aberto parecer um baú vazio e não um buraco
+    INNER = (58, 36, 13, 255)
+
+    def wood(piece: Image.Image) -> Image.Image:
+        piece = Image.alpha_composite(Image.new("RGBA", piece.size, INNER), piece)
+        pixels = piece.load()
+        for x in range(piece.width):
+            for y in range(piece.height):
+                if sum(pixels[x, y][:3]) < 12:
+                    pixels[x, y] = INNER
+        return piece
+
+    lid_in, body_in = wood(lid_in), wood(body_in)
     out = {}
-    for name, piece, y in (("body", body, 0), ("lid", lid, 0), ("top", top, 1)):
+    for name, piece, y in (("body", body, 0), ("lid", lid, 0), ("top", top, 1), ("lidin", lid_in, 1),
+                           ("bodyin", body_in, 1)):
         tile = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
         tile.paste(piece, (x0, y))
         out[name] = tile
-    if kind == "single":
-        lock = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
-        lock.paste(sheet.crop((1, 1, 3, 5)), (1, 1))
-        out["lock"] = lock
+    # o fecho: 2 de largura no baú simples; o duplo tem um pedaço de 1 em cada metade, na junção
+    lock = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    lock.paste(sheet.crop((1, 1, 3 if kind == "single" else 2, 5)), (1, 1))
+    out["lock"] = lock
     return out
 
 

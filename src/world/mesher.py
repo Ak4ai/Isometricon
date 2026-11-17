@@ -126,6 +126,24 @@ def _shaped_template(block: BlockType, atlas: object) -> NDArray[np.float32]:
     return np.concatenate(quads).astype(np.float32)
 
 
+def blocks_around(chunk_at: Callable[[tuple[int, int, int]], "Chunk3D | None"], key: tuple[int, int, int]) -> np.ndarray:
+    """Os IDs do cubo 18³ em volta do chunk ``key``: ele no meio e a camada encostada de cada um dos 26 vizinhos
+    (ar onde o vizinho não existe). ``chunk_at(key)`` devolve o chunk ou None."""
+    out = np.zeros((18, 18, 18), dtype=np.uint8)
+    # (fatia no cubo 18³, fatia no vizinho) para o deslocamento -1, 0, +1 em cada eixo
+    spans = {-1: (slice(0, 1), slice(15, 16)), 0: (slice(1, 17), slice(0, 16)), 1: (slice(17, 18), slice(0, 1))}
+    cx, cy, cz = key
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                chunk = chunk_at((cx + dx, cy + dy, cz + dz))
+                if chunk is None:
+                    continue
+                (ox, sx), (oy, sy), (oz, sz) = spans[dx], spans[dy], spans[dz]
+                out[ox, oy, oz] = chunk.blocks[sx, sy, sz]
+    return out
+
+
 class ChunkMesher:
     """Converte voxels em quads visíveis: O(n) tempo, O(f) memória de saída.
 
@@ -162,7 +180,8 @@ class ChunkMesher:
         return vertices, len(vertices) // 4
 
     @staticmethod
-    def _water_corner_height(blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels) -> float:
+    def _water_corner_height(blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels,
+                             around=None) -> float:
         """Altura (0..1) do canto (cx, cz) do topo da água na camada ``y``: a média das quatro células em volta que
         são água; cheia se alguma delas tem água logo acima (a superfície encosta na água de cima sem degrau)."""
         water = int(BlockType.WATER)
@@ -170,6 +189,8 @@ class ChunkMesher:
         def block_at(lx: int, ly: int, lz: int) -> int:
             if 0 <= lx < 16 and 0 <= ly < 16 and 0 <= lz < 16:
                 return int(blocks[lx, ly, lz])
+            if around is not None:
+                return int(around[lx + 1, ly + 1, lz + 1])
             if neighbor_at is None:
                 return int(BlockType.AIR)
             return int(neighbor_at(origin_x + lx, origin_y + ly, origin_z + lz))
@@ -191,6 +212,7 @@ class ChunkMesher:
         chunk: Chunk3D,
         neighbor_at: Callable[[int, int, int], BlockType | int] | None = None,
         water_levels: Mapping[tuple[int, int, int], float] | None = None,
+        around: np.ndarray | None = None,
     ) -> ChunkMeshData:
         """Gera a malha sem alterar o chunk nem alocar recursos de GPU.
 
@@ -198,6 +220,10 @@ class ChunkMesher:
         coordenadas MUNDIAIS somente fora do chunk e retorna um ID válido.
         O chamador deve retornar AIR para chunks desconhecidos e reconstruir
         malhas afetadas quando vizinhos mudarem. Erros do callback propagam.
+
+        ``around``, no lugar de ``neighbor_at``: os IDs do cubo 18³ em volta do chunk (o chunk no meio e uma camada
+        de cada vizinho, ver ``blocks_around``). Dá a mesma malha, sem uma chamada por bloco da borda (eram ~1.700,
+        três quartos do tempo da malha).
         """
         blocks = chunk.blocks
         if not np.any(blocks):
@@ -216,7 +242,12 @@ class ChunkMesher:
             padded[i, j, k] = is_opaque(value)
             padded_water[i, j, k] = int(value) == water
 
-        if neighbor_at is not None and self.ambient_occlusion:
+        if around is not None:
+            padded = _OPAQUE_LUT[around]
+            padded_water = around == water
+            padded[1:17, 1:17, 1:17] = _OPAQUE_LUT[blocks]
+            padded_water[1:17, 1:17, 1:17] = blocks == water
+        elif neighbor_at is not None and self.ambient_occlusion:
             # o AO também olha as arestas e os cantos do cubo de 18³: a casca inteira vem do mundo
             for i in range(-1, 17):
                 for j in range(-1, 17):
@@ -313,7 +344,7 @@ class ChunkMesher:
                         key = (cx, y, cz)
                         if key not in corner_heights:
                             corner_heights[key] = self._water_corner_height(
-                                blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels)
+                                blocks, origin_x, origin_y, origin_z, cx, y, cz, neighbor_at, water_levels, around)
                         v_slice[i, corner, 1] = y + corner_heights[key]
 
             if use_atlas:

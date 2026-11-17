@@ -536,11 +536,14 @@ def _chest(base: str, props) -> List[Box]:
         variant = "trapped"
     else:
         variant = "normal"
-    lo_x, hi_x = 1.0, 15.0  # com facing=south: o baú duplo se estende para o lado do parceiro
+    # O baú duplo se estende para o lado do parceiro. No jogo o parceiro de uma metade "left" fica no sentido horário do
+    # facing (com facing=south, a oeste) e o da "right" no anti-horário (a leste); as folhas de textura concordam: o
+    # aro da "left" está na borda de leste, o da "right" na de oeste, e a junção fica sem aro.
+    lo_x, hi_x = 1.0, 15.0
     if kind == "left":
-        hi_x = 16.0
-    elif kind == "right":
         lo_x = 0.0
+    elif kind == "right":
+        hi_x = 16.0
     turns = TURNS_FROM_SOUTH.get(props.get("facing", "south"), 0)
     prefix = f"chest_{variant}_{kind if kind in ('left', 'right') else 'single'}_"
     if not all(_chest_tile_exists(prefix + part) for part in ("body", "lid", "top")):
@@ -550,19 +553,53 @@ def _chest(base: str, props) -> List[Box]:
     # 16 ela fica encostada onde a caixa começa (a metade do baú duplo que encosta no parceiro vai até a borda)
     x0, x1 = lo_x, hi_x
     body_art, lid_art, top_art = (x0, 1, x1, 10), (x0, 0, x1, 5), (x0, 1, x1, 15)
+    inner_art = (x0, 1, x1, 15)
+    # o corpo termina um pouco antes do alto e a tampa começa um pouco depois do fundo: no vão ficam chapas finas com o
+    # interior (a boca do baú e a face de baixo da tampa), que só aparecem com a tampa levantada
     boxes = [
-        Box((lo_x, 0.0, 1.0), (hi_x, 9.0, 15.0), prefix + "body",
+        Box((lo_x, 0.0, 1.0), (hi_x, 8.9, 15.0), prefix + "body",
             (("side", body_art), ("top", body_art), ("bottom", body_art))),
-        Box((lo_x, 9.0, 1.0), (hi_x, 13.9, 15.0), prefix + "lid",
+        Box((lo_x, 9.1, 1.0), (hi_x, 13.9, 15.0), prefix + "lid",
             (("side", lid_art), ("top", lid_art), ("bottom", lid_art))),
         # o topo da tampa: uma chapa fina por cima, que leva a arte do alto (que não cabe no mesmo ladrilho das laterais)
         Box((lo_x, 13.9, 1.0), (hi_x, 14.0, 15.0), prefix + "top",
             (("side", (x0, 1, x1, 2)), ("top", top_art), ("bottom", top_art))),
     ]
-    if kind == "single" and _chest_tile_exists(prefix + "lock"):
-        boxes.append(Box((7.0, 7.0, 15.0), (9.0, 11.0, 16.0), prefix + "lock",
-                         (("side", (1, 1, 3, 5)), ("top", (1, 1, 3, 2)), ("bottom", (1, 1, 3, 2)))))
+    if _chest_tile_exists(prefix + "bodyin") and _chest_tile_exists(prefix + "lidin"):
+        boxes.insert(1, Box((lo_x, 8.9, 1.0), (hi_x, 9.0, 15.0), prefix + "bodyin",
+                            (("side", (x0, 1, x1, 2)), ("top", inner_art), ("bottom", inner_art))))
+        boxes.insert(3, Box((lo_x, 9.0, 1.0), (hi_x, 9.1, 15.0), prefix + "lidin",
+                            (("side", (x0, 1, x1, 2)), ("top", inner_art), ("bottom", inner_art))))
+    if _chest_tile_exists(prefix + "lock"):
+        if kind == "single":
+            lock, art = Box((7.0, 7.0, 15.0), (9.0, 11.0, 16.0)), (1, 1, 3, 5)
+        else:   # o duplo tem um fecho no meio: um pedaço de 1 em cada metade, na junção
+            edge = lo_x if kind == "left" else hi_x - 1.0
+            lock, art = Box((edge, 7.0, 15.0), (edge + 1.0, 11.0, 16.0)), (1, 1, 2, 5)
+        boxes.append(Box(lock.lo, lock.hi, prefix + "lock",
+                         (("side", art), ("top", (art[0], art[1], art[2], art[1] + 1)),
+                          ("bottom", (art[0], art[1], art[2], art[1] + 1)))))
     return [_turn(box, turns) for box in boxes]
+
+
+_LID_PARTS = ("lidin", "lid", "top", "lock")
+
+
+def is_chest_lid(box) -> bool:
+    """A caixa é uma peça da tampa do baú (a que gira ao abrir): a tampa, a chapa de cima, a de baixo e o fecho."""
+    texture = getattr(box, "texture", None) or ""
+    return texture.startswith("chest_") and texture.rsplit("_", 1)[-1] in _LID_PARTS
+
+
+def chest_hinge(block_name: str) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    """A dobradiça da tampa de um baú: (ponto em 1/16 de bloco dentro da célula, eixo). Fica na borda de trás, no
+    fundo da tampa (y = 9), e o eixo corre pela largura do baú; os dois giram com o ``facing`` como a forma."""
+    turns = TURNS_FROM_SOUTH.get(parse_block(block_name)[1].get("facing", "south"), 0)
+    point, axis = (8.0, 9.0, 1.0), (1.0, 0.0, 0.0)
+    for _ in range(turns % 4):                 # a mesma volta de ``_turn``: (x, z) -> (16 - z, x); o eixo, (x, z) -> (-z, x)
+        point = (16.0 - point[2], point[1], point[0])
+        axis = (-axis[2], axis[1], axis[0])
+    return point, axis
 
 
 def _banner(base: str, props) -> List[Box]:

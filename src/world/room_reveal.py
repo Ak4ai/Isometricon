@@ -63,6 +63,9 @@ class RoomMask:
     roof_coverage: float = 0.0     # fração das colunas em volta do jogador com teto baixo (ou parede)
     wall_coverage: float = 0.0     # fração dos raios horizontais que batem numa parede
     window: Optional["WindowCells"] = None  # o que há em cada célula (preenchido pelo rastreador)
+    # (x, z) do mundo da porta em que o jogador estava parado: ela não contou, e o espaço pode ter juntado os dois
+    # cômodos que ela separa; só vale enquanto ele está nessa coluna (ver RoomRevealTracker._same_room)
+    door_column: Optional[Tuple[int, int]] = None
 
 
 def window_origin(position) -> Tuple[int, int, int]:
@@ -158,16 +161,13 @@ def extract_window_cells(
 
 def _door_cells(owner: np.ndarray, structures, origin) -> np.ndarray:
     """As células da janela ocupadas por portas das construções."""
-    from src.world.doors import is_door
-
     doors = np.zeros(owner.shape, dtype=bool)
     for index, placed in enumerate(structures):
         cells = np.argwhere(owner == index)
         if len(cells) == 0:
             continue
         local = cells + np.asarray(origin) - np.asarray(placed.origin)
-        names = placed.schematic.grid[local[:, 1], local[:, 2], local[:, 0]]
-        marks = np.fromiter((is_door(name) for name in names), dtype=bool, count=len(names))
+        marks = placed.schematic.door_mask[local[:, 1], local[:, 2], local[:, 0]]
         doors[tuple(cells[marks].T)] = True
     return doors
 
@@ -205,7 +205,10 @@ def compute_room(
     seed = tuple(cell)
     if solid[seed]:
         return outside
+    door_column = None
     if doors is not None and doors.any():
+        if doors[seed[0], :, seed[2]].any():
+            door_column = (seed[0] + origin[0], seed[2] + origin[2])
         doors = doors.copy()
         doors[seed[0], :, seed[2]] = False
         solid = solid | doors
@@ -253,7 +256,7 @@ def compute_room(
             # casa de bonecas tira a parede da frente, não o que está dentro (o corredor de visão ainda os tira
             # quando tapam o personagem)
             mask[(mask > 0) & (mask < INTERIOR) & details] = OBJECT
-    return RoomMask(origin, mask, active, cells, exposure, coverage, walls)
+    return RoomMask(origin, mask, active, cells, exposure, coverage, walls, door_column=door_column)
 
 
 def _space_above_run(solid: np.ndarray, space: np.ndarray) -> np.ndarray:
@@ -451,6 +454,8 @@ class RoomRevealTracker:
         mask = self.mask if mask is None else mask
         if mask is None or not mask.active:
             return False
+        if mask.door_column is not None and (cell[0], cell[2]) != mask.door_column:
+            return False  # saiu da porta: o espaço (que juntava os dois cômodos) é refeito com ela fechando de novo
         local = [c - o for c, o in zip(cell, mask.origin)]
         if not all(0 <= v < size for v, size in zip(local, WINDOW)):
             return False
@@ -483,8 +488,9 @@ class RoomRevealTracker:
             # resultado)
             self._key = key
             return self.mask
-        if self.mask is not None and self._age < self.MIN_INTERVAL and key[1:] == self._key[1:]:
-            return self.mask  # só andou: espera o intervalo mínimo
+        left_door = self.mask is not None and self.mask.door_column is not None
+        if self.mask is not None and self._age < self.MIN_INTERVAL and key[1:] == self._key[1:] and not left_door:
+            return self.mask  # só andou: espera o intervalo mínimo (saindo de uma porta não: o cômodo troca já)
         args = (key, cell, tuple(float(v) for v in position), chunks, structures, self.mask, self._key)
         if self._executor is not None:
             self._job = self._executor.submit(self._compute, *args)
