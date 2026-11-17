@@ -231,6 +231,14 @@ def compute_room(
     open_front = coverage >= roof_limit and walls >= MIN_WALL_COVERAGE
     active = cells >= MIN_SPACE_CELLS and (exposure < limit or open_front)
 
+    if active and exposure < limit:
+        # um vão de porta sem a porta (ou uma janela sem vidro) é ar com teto colado ao céu: o cômodo termina nele,
+        # como termina numa porta de verdade. Sem isso o vão entra no espaço do jogador e a parede em volta dele, que
+        # "tapa" esse vão na vista da câmera, some junto: o buraco cresce além da porta. (O espaço aberto, como uma
+        # varanda, vale pela cobertura e fica como está; a coluna do jogador também: quem está no vão está no cômodo.)
+        doorway = leaks.copy()
+        doorway[seed[0], :, seed[2]] = False
+        space = space & ~doorway
     if active:
         # a borda: o sólido que encosta no espaço também pela quina (o canto da parede, a parede atrás do piso de
         # um mezanino ou na altura do teto). Só ilumina como o cômodo; o corte continua vendo a casca de faces.

@@ -421,3 +421,35 @@ def test_which_blocks_are_house_details():
                  "minecraft:glass_pane", "minecraft:spruce_stairs[facing=north]", "minecraft:deepslate_tile_slab",
                  "minecraft:white_wool", "minecraft:calcite"):
         assert not is_room_detail(name), name
+
+
+def test_a_doorway_without_a_door_ends_the_room_like_a_door_does():
+    """O vão de porta sem a porta não entra no espaço do jogador: se entrasse, a parede em volta dele, que o tapa na vista
+    da câmera, sumiria junto e o buraco cresceria além da porta."""
+    chunks = world(lambda b: box(b, 10, 10, doors=[(3, 1, 0), (3, 2, 0)]))   # um vão de 1x2 na parede de trás
+    room = room_at(chunks, (13.5, 3.0, 13.5))
+    assert room.active
+    ox, oy, oz = room.origin
+    doorway = [(13, 4, 10), (13, 5, 10)]                                       # as duas células do vão (mundo)
+    assert all(room.data[x - ox, y - oy, z - oz] < INTERIOR for x, y, z in doorway)
+    assert room.data[13 - ox, 4 - oy, 12 - oz] == INTERIOR                      # o ar de dentro continua cômodo
+
+
+def test_standing_in_the_doorway_keeps_the_player_in_the_room():
+    chunks = world(lambda b: box(b, 10, 10, doors=[(3, 1, 0), (3, 2, 0)]))
+    room = room_at(chunks, (13.5, 4.0, 10.5))                                  # parado no próprio vão
+    assert room.active
+    ox, oy, oz = room.origin
+    assert room.data[13 - ox, 4 - oy, 10 - oz] == INTERIOR                      # a coluna de quem está no vão fica
+
+
+def test_an_open_side_still_counts_as_an_open_front_not_a_sealed_room():
+    """Uma varanda (um lado inteiro aberto) continua valendo pela cobertura: vedar só vale para um cômodo quase fechado."""
+    def porch(blocks):
+        box(blocks, 10, 10)
+        blocks[11:16, 3:7, 10] = BlockType.AIR                               # a parede de trás inteira aberta
+    chunks = world(porch)
+    room = room_at(chunks, (13.5, 3.0, 13.5))
+    ox, oy, oz = room.origin
+    if room.active:
+        assert room.data[13 - ox, 4 - oy, 12 - oz] == INTERIOR

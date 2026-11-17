@@ -290,6 +290,13 @@ class SchematicTool:
         """O atlas das construções, se já foi criado (não cria um só para consultar)."""
         return self._atlas
 
+    def ensure_atlas(self):
+        """O atlas das construções, criado agora se ainda não existe (precisa de OpenGL).
+
+        As tampas dos cortes da revelação de cômodo usam este atlas: os objetos e o mapa do editor, que não passam por um
+        ``/schem``, o pedem por aqui para as tampas deles aparecerem."""
+        return self._ensure_atlas()
+
     def _ensure_atlas(self):
         if self._atlas is None:
             from src.rendering.schematic_atlas import SchematicAtlas

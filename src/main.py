@@ -1531,6 +1531,8 @@ def main() -> None:
                 room_structures += world_objects.room_structures()
             if map_world is not None:
                 room_structures += map_world.room_structures()
+            if len(room_structures) > len(schematic_tool.layer.structures):
+                schematic_tool.ensure_atlas()   # as tampas dos objetos e do mapa usam o atlas das construções
             room_tracker.update(dt, player_token.position, loaded_chunks, chunk_revision, room_structures)
             mark("room_tracker")
             room_renderer.update(dt, room_tracker)
