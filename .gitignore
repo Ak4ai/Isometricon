@@ -168,3 +168,6 @@ assets/models/clothing/reference_cage_*.mesh
 
 # Modelos e blockstates do Minecraft (arquivos da Mojang), só nesta máquina
 assets/minecraft_models/
+
+# Ladrilhos do baú recortados das texturas de entidade do jogo (arte da Mojang), só nesta máquina
+assets/textures/blocks/chest_*.png

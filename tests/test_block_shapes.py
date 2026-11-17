@@ -298,8 +298,24 @@ def test_no_cap_for_a_fence_post_beside_a_hidden_cube():
     assert caps_count({(0, 0, 0): "minecraft:oak_fence", (1, 0, 0): "minecraft:stone"}, [(1, 0, 0)]) == 0
 
 
-def test_entity_blocks_get_a_shape_and_a_block_texture():
+def _with_chest_tiles(monkeypatch, present):
+    """Finge que os ladrilhos do baú existem (ou não) e esquece as formas já guardadas, antes e depois do teste."""
+    from src.world import block_shapes
+    monkeypatch.setattr(block_shapes, "_chest_tile_exists", lambda name: present)
+    block_shapes.shape_for.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_shape_cache():
+    from src.world import block_shapes
+    block_shapes.shape_for.cache_clear()
+    yield
+    block_shapes.shape_for.cache_clear()
+
+
+def test_entity_blocks_get_a_shape_and_a_block_texture(monkeypatch):
     """Baú, faixa e cama são entidades no jogo (sem textura de bloco): ganham forma e uma textura que lembra."""
+    _with_chest_tiles(monkeypatch, False)   # sem os ladrilhos do baú
     chest = boxes("minecraft:chest[facing=north,type=single,waterlogged=false]")[0]
     assert (chest.lo, chest.hi) == ((1, 0, 1), (15, 14, 15)) and chest.texture == "oak_planks"
     # o baú duplo se estende para o lado do parceiro: facing=south, a metade left vai até x = 16
@@ -309,3 +325,48 @@ def test_entity_blocks_get_a_shape_and_a_block_texture():
     banner = boxes("minecraft:white_wall_banner[facing=west]")[0]
     assert banner.texture == "white_wool" and banner.hi[0] - banner.lo[0] <= 1.0  # uma placa fina, no lado leste
     assert not collides("minecraft:white_wall_banner[facing=west]") and collides("minecraft:chest[facing=north]")
+
+
+def test_a_chest_with_its_tiles_is_a_body_a_lid_a_top_plate_and_a_lock(monkeypatch):
+    """Com os ladrilhos do baú (``make_chest_tiles.py``), o baú tem corpo, tampa, chapa do topo e fecho, com a arte dele."""
+    _with_chest_tiles(monkeypatch, True)
+    parts = boxes("minecraft:chest[facing=south,type=single,waterlogged=false]")
+    assert [b.texture for b in parts] == ["chest_normal_single_body", "chest_normal_single_lid",
+                                          "chest_normal_single_top", "chest_normal_single_lock"]
+    body, lid, top, lock = parts
+    assert (body.lo, body.hi) == ((1, 0, 1), (15, 9, 15)) and (lid.lo[1], lid.hi[1]) == (9, 13.9)
+    assert top.hi[1] == 14.0 and lock.hi[2] == 16.0           # o fecho sai à frente do baú
+    assert all(b.face_uv for b in parts)
+    # as peças se encaixam sem se sobrepor (nada de z-fighting): o corpo termina onde a tampa começa
+    assert body.hi[1] == lid.lo[1] and lid.hi[1] == top.lo[1]
+    # o baú duplo não leva fecho e cada metade usa a folha dela; o de ender e o de armadilha têm a arte deles
+    left = boxes("minecraft:chest[facing=south,type=left]")
+    assert [b.texture for b in left] == ["chest_normal_left_body", "chest_normal_left_lid", "chest_normal_left_top"]
+    assert left[0].hi[0] == 16.0 and boxes("minecraft:chest[facing=south,type=right]")[0].lo[0] == 0.0
+    assert boxes("minecraft:ender_chest[facing=south]")[0].texture == "chest_ender_single_body"
+    assert boxes("minecraft:trapped_chest[facing=south]")[0].texture == "chest_trapped_single_body"
+    # ele gira com o facing, e a colisão continua do tamanho do baú
+    east = boxes("minecraft:chest[facing=east,type=single]")
+    assert east[3].lo[0] == 15.0 and collides("minecraft:chest[facing=north]")
+
+
+def test_the_chest_tile_script_cuts_the_sheet_into_four_tiles(tmp_path):
+    from PIL import Image
+    import importlib.util, os
+    path = os.path.join(os.path.dirname(__file__), "..", "scripts", "make_chest_tiles.py")
+    spec = importlib.util.spec_from_file_location("make_chest_tiles", path)
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    sheet = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    sheet.paste((10, 20, 30, 255), (14, 33, 28, 43))      # a frente do corpo
+    sheet.paste((40, 50, 60, 255), (14, 14, 28, 19))      # a frente da tampa
+    sheet.paste((70, 80, 90, 255), (28, 0, 42, 14))       # o topo de fora (o quadrado ao lado, escuro, é o interior)
+    sheet.paste((5, 5, 5, 255), (14, 0, 28, 14))          # o interior da tampa: não pode ir para o topo
+    sheet.paste((200, 200, 0, 255), (1, 1, 3, 5))         # o fecho
+    tiles = script.tiles_of(sheet, "single")
+    assert set(tiles) == {"body", "lid", "top", "lock"}
+    assert tiles["body"].getpixel((1, 0)) == (10, 20, 30, 255) and tiles["body"].getpixel((0, 0))[3] == 0
+    assert tiles["lid"].getpixel((14, 4)) == (40, 50, 60, 255)
+    assert tiles["top"].getpixel((1, 1)) == (70, 80, 90, 255) and tiles["top"].getpixel((14, 14)) == (70, 80, 90, 255)
+    assert tiles["lock"].getpixel((1, 1)) == (200, 200, 0, 255)
+    assert "lock" not in script.tiles_of(sheet, "left")    # só o baú simples tem fecho

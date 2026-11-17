@@ -9,6 +9,7 @@ A textura de cada face vem do atlas pelo nome do bloco; a UV acompanha o recorte
 (uma laje mostra só a metade de baixo da textura nas laterais).
 """
 
+import os
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -516,16 +517,52 @@ _FULL_LANTERNS = ("sea_lantern", "jack_o_lantern")
 TURNS_FROM_SOUTH = {"south": 0, "west": 1, "north": 2, "east": 3}
 
 
+# Os ladrilhos do baú (``chest_<variante>_<tipo>_<peça>.png``) saem de ``textures/entity/chest`` do jogo pelo
+# ``scripts/make_chest_tiles.py`` e ficam fora do git (arte da Mojang); sem eles o baú volta à caixa de tábuas.
+_CHEST_TILES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                "assets", "textures", "blocks")
+
+
+@lru_cache(maxsize=None)
+def _chest_tile_exists(name: str) -> bool:
+    return os.path.isfile(os.path.join(_CHEST_TILES_DIR, name + ".png"))
+
+
 def _chest(base: str, props) -> List[Box]:
-    texture = "obsidian" if base == "ender_chest" else "oak_planks"
     kind = props.get("type", "single")
+    if base == "ender_chest":
+        variant, kind = "ender", "single"
+    elif base == "trapped_chest":
+        variant = "trapped"
+    else:
+        variant = "normal"
     lo_x, hi_x = 1.0, 15.0  # com facing=south: o baú duplo se estende para o lado do parceiro
     if kind == "left":
         hi_x = 16.0
     elif kind == "right":
         lo_x = 0.0
-    box = _box(lo_x, 0, 1, hi_x, 14, 15, texture)
-    return [_turn(box, TURNS_FROM_SOUTH.get(props.get("facing", "south"), 0))]
+    turns = TURNS_FROM_SOUTH.get(props.get("facing", "south"), 0)
+    prefix = f"chest_{variant}_{kind if kind in ('left', 'right') else 'single'}_"
+    if not all(_chest_tile_exists(prefix + part) for part in ("body", "lid", "top")):
+        texture = "obsidian" if base == "ender_chest" else "oak_planks"
+        return [_turn(_box(lo_x, 0, 1, hi_x, 14, 15, texture), turns)]
+    # a arte da folha do baú: o corpo (14 de largura, 10 de altura), a tampa (14x5) e o topo (14x14); no ladrilho de
+    # 16 ela fica encostada onde a caixa começa (a metade do baú duplo que encosta no parceiro vai até a borda)
+    x0, x1 = lo_x, hi_x
+    body_art, lid_art, top_art = (x0, 1, x1, 10), (x0, 0, x1, 5), (x0, 1, x1, 15)
+    boxes = [
+        Box((lo_x, 0.0, 1.0), (hi_x, 9.0, 15.0), prefix + "body",
+            (("side", body_art), ("top", body_art), ("bottom", body_art))),
+        Box((lo_x, 9.0, 1.0), (hi_x, 13.9, 15.0), prefix + "lid",
+            (("side", lid_art), ("top", lid_art), ("bottom", lid_art))),
+        # o topo da tampa: uma chapa fina por cima, que leva a arte do alto (que não cabe no mesmo ladrilho das laterais)
+        Box((lo_x, 13.9, 1.0), (hi_x, 14.0, 15.0), prefix + "top",
+            (("side", (x0, 1, x1, 2)), ("top", top_art), ("bottom", top_art))),
+    ]
+    if kind == "single" and _chest_tile_exists(prefix + "lock"):
+        boxes.append(Box((7.0, 7.0, 15.0), (9.0, 11.0, 16.0), prefix + "lock",
+                         (("side", (1, 1, 3, 5)), ("top", (1, 1, 3, 2)), ("bottom", (1, 1, 3, 2)))))
+    return [_turn(box, turns) for box in boxes]
 
 
 def _banner(base: str, props) -> List[Box]:
