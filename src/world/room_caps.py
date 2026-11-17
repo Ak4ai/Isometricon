@@ -316,11 +316,16 @@ def _structure_caps(window, visible, culling, origin, uv_lookup):
                 us, vs = (u0, u1), (v0, v1)
                 at = centers[pick]
                 count = len(at)
+                tints = getattr(placed.schematic, "tints", None)   # a cor de cada célula (objetos do editor)
                 quad = np.empty((count, 4, 11), dtype=np.float32)
                 quad[:, :, :3] = at[:, None, :] + corner_offsets[None, :, :]
                 quad[:, :, 3:6] = normal
                 quad[:, :, 6:8] = np.array([(us[cu], vs[cv]) for cu, cv in uv_order], dtype=np.float32)
-                quad[:, :, 8:11] = 1.0
+                if tints is None:
+                    quad[:, :, 8:11] = 1.0
+                else:
+                    picked = local[pick]
+                    quad[:, :, 8:11] = tints[picked[:, 1], picked[:, 2], picked[:, 0]][:, None, :]
                 vertices.append(quad.reshape(-1, 11))
                 first = base + np.arange(count, dtype=np.uint32)[:, None] * 4
                 indices.append((first + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32)).ravel())

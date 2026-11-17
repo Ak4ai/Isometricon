@@ -116,9 +116,9 @@ Funcionalidade: Colocar objeto no mundo procedural
    carregados.
 7. O modo é ativado por **`P` no teclado ou pelo botão “Colocar” no HUD**;
    o HUD também expõe Selecionar, Objeto, Girar, Remover e Sair.
-8. Ao entrar em um objeto/mapa, as partes acima dos pés do token ficam
-   translúcidas para o personagem continuar visível, reutilizando o cutaway do
-   modo terreno.
+8. Ao entrar em um objeto/mapa, vale a revelação de cômodo do modo terreno
+   (a mesma das construções `/schem`): o espaço fechado se revela e o resto
+   escurece, e o corredor da câmera abre onde algo tapa o personagem.
 
 ---
 

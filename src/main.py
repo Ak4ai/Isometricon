@@ -468,6 +468,8 @@ def main() -> None:
             try:
                 map_world = MapWorld(map_path, create_gl=True)
                 player_token.position[:] = map_world.spawn_position()
+                if pos_arg:   # --pos=x,y,z vale também no mapa
+                    player_token.position[:] = [float(v) for v in pos_arg.split(",")]
                 print(f"[Map] Mapa carregado para jogar: {os.path.basename(map_path)} ({map_world.project.voxel_count} voxels).")
             except Exception as exc:
                 print(f"[Map] Falha ao carregar mapa: {exc}")
@@ -1520,34 +1522,30 @@ def main() -> None:
             map_editor.render(shader, projection, view, model, window.time,
                               window.width, window.height)
         elif terrain_demo:
-            if map_world is None:
-                # Espaço fechado do jogador: a máscara e a suavização do efeito
-                mark("misc")
-                chunk_revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
-                room_tracker.update(dt, player_token.position, loaded_chunks, chunk_revision,
-                                    schematic_tool.layer.structures)
-                mark("room_tracker")
-                room_renderer.update(dt, room_tracker)
-                mark("room_renderer")
-                shadow_renderer.update(room_tracker)
-                mark("shadows")
+            # Espaço fechado do jogador: a máscara e a suavização do efeito. Enxerga o terreno, as construções do
+            # /schem e também os objetos e o mapa do editor (viram construções só para este cálculo).
+            mark("misc")
+            chunk_revision, loaded_chunks = world_manager.get_loaded_chunks_snapshot()
+            room_structures = list(schematic_tool.layer.structures)
+            if world_objects is not None:
+                room_structures += world_objects.room_structures()
+            if map_world is not None:
+                room_structures += map_world.room_structures()
+            room_tracker.update(dt, player_token.position, loaded_chunks, chunk_revision, room_structures)
+            mark("room_tracker")
+            room_renderer.update(dt, room_tracker)
+            mark("room_renderer")
+            shadow_renderer.update(room_tracker)
+            mark("shadows")
             if world_objects is not None:
                 cursor_x, cursor_y = window.get_cursor_pos_framebuffer()
                 world_objects.update_cursor(
                     cursor_x, cursor_y, window.width, window.height, view, projection, model,
                     token_position=player_token.position, mouse_window=window.get_cursor_pos(),
                 )
-            # Configuração do modo subterrâneo (cutaway) e água
+            # Configuração do modo subterrâneo (cutaway de caverna) e água
             underground_mode = False
-            if map_world is not None:
-                underground_mode = (
-                    player_token.position[1]
-                    < float(map_world.get_top_solid_block(
-                        int(np.floor(float(player_token.position[0]))),
-                        int(np.floor(float(player_token.position[2]))),
-                    )) + 0.25
-                )
-            elif voxel_provider is not None and not room_renderer.visible:
+            if map_world is None and voxel_provider is not None and not room_renderer.visible:
                 # Só há "subsolo" com chão de verdade por cima do jogador: a água não cobre ninguém (nadar num lago
                 # não recorta o que está acima), mas o teto de uma caverna sob o lago cobre.
                 underground_mode = (
@@ -1567,89 +1565,89 @@ def main() -> None:
             shader.set_bool("u_WaterMode", player_token.in_water)
             shader.set_int("u_CutawayPass", 0)
 
+            # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
+            shader.set_int("u_TextureAtlas", 0)
+            view_projection = projection @ view
+            shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
+            shadow_renderer.apply(shader, model)
+            room_renderer.apply(shader, model, view)
+            mark("room_apply_caps")
+            # água: na passada 1 (esta) ela é descartada e o fundo recebe a luz que a atravessa; a 2 vem no fim
+            shader.set_vec4("u_WaterRect", *water_rect)
+            shader.set_float("u_Time", float(window.time))
+            shader.set_vec3("u_CameraPos", *(float(v) for v in camera._camera_position()))
+            shader.set_int("u_WaterPass", 1)
+            # o corredor da câmera: o que tapa o personagem some (ver sightCarved no shader)
+            feet = [float(v) for v in player_token.position]
+            # no ar (um pulo), os cortes ficam no chão de onde saiu: pular não muda o que aparece; numa escada de
+            # mão ou caindo para baixo do chão, seguem o personagem
+            floor_y = int(np.floor(feet[1] + 0.05))
+            if (player_token.grounded or player_token.on_ladder or story_state.get("ground_y") is None
+                    or floor_y < story_state["ground_y"]):
+                story_state["ground_y"] = floor_y
+            feet[1] = float(story_state["ground_y"])
+            sight_target = model @ np.array([feet[0], feet[1] + 1.1, feet[2], 1.0])
+            # Ao ar livre o corredor só liga quando algo bloqueia a vista do peito ou da cabeça (se só as pernas ficam
+            # atrás de um degrau, não abre buraco); ligado, corta o cilindro inteiro, dos pés para cima, e os pés
+            # aparecem. Num cômodo fica sempre ligado (só corta o que tapa o cômodo: ver o shader).
+            from src.world.sight import sight_needed
+            sight_world_dir = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (
+                np.array(camera._camera_position(), dtype=np.float64) - sight_target[:3])
+            window_cells = room_tracker.mask.window if room_tracker.mask is not None else None
+            outdoors_target = 1.0 if (
+                room_renderer.level > 0.001 or window_cells is None
+                or sight_needed(window_cells.solid, room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
+            story_state["sight"] += (outdoors_target - story_state["sight"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
+            if abs(outdoors_target - story_state["sight"]) < 0.01:
+                story_state["sight"] = outdoors_target
+            shader.set_float("u_SightActive", story_state["sight"])
+            shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
+            shader.set_float("u_SightFeetY", float(np.floor(feet[1] + 0.05)))
+            shader.set_float("u_SightRadius", 2.6)
+            # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
+            from src.world.room_reveal import story_ceiling, story_center
+            ceiling = story_ceiling(room_tracker.mask, feet)
+            if ceiling is not None:
+                story_state["cut_y"] = ceiling
+            story_target = 1.0 if ceiling is not None and room_renderer.enabled else 0.0
+            story_state["level"] += (story_target - story_state["level"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
+            if abs(story_target - story_state["level"]) < 0.01:
+                story_state["level"] = story_target
+            shader.set_float("u_StoryActive", story_state["level"])
+            shader.set_float("u_StoryCutY", float(story_state["cut_y"]))
+            center_key = (room_tracker.version, story_state["cut_y"], int(np.floor(feet[1] + 0.05)))
+            if story_state.get("center_key") != center_key:
+                story_state["center_key"] = center_key
+                story_state["center"] = story_center(room_tracker.mask, int(np.floor(feet[1] + 0.05)),
+                                                     int(story_state["cut_y"]))
+            center = story_state["center"] or (feet[0], feet[2])  # fora de cômodo, o próprio personagem
+            shader.set_vec2("u_StoryCenter", float(center[0]), float(center[1]))
+            # as tampas seguem os mesmos cortes (o corte do andar só quando ele está inteiro, sem o fade)
+            from src.world.room_caps import SightCut, StoryCut
+            room_renderer.story = (StoryCut(int(story_state["cut_y"]), int(np.floor(feet[1] + 0.05)),
+                                            (float(center[0]), float(center[1])), 24.0)
+                                   if story_state["level"] >= 0.999 else None)
+            room_renderer.center = (float(center[0]), float(center[1]))
+            room_renderer.sight = SightCut((feet[0], feet[1] + 1.1, feet[2]), (0.0, 0.0, 0.0), 2.6,
+                                           int(np.floor(feet[1] + 0.05)))
+            shader.set_float("u_StoryRadius", 24.0)
+            story_view = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (-np.asarray(view, dtype=np.float64)[2, :3])
+            story_view /= max(float(np.linalg.norm(story_view)), 1e-9)
+            shader.set_vec3("u_StoryView", *(float(v) for v in story_view))
+            shader.set_mat4("u_SightModel", np.asarray(model, dtype=np.float32))
+            shader.set_mat4("u_SightInvModel", np.linalg.inv(np.asarray(model, dtype=np.float64)).astype(np.float32))
             if map_world is not None:
-                # Mapa estático do editor: volume base + construções, com o mesmo shader.
-                map_world.render(shader, model, cutaway=underground_mode,
-                                 player_y=float(player_token.position[1]))
+                # Mapa do editor (--map=...): o volume base e os objetos, no lugar do terreno procedural; as construções
+                # do /schem, os cômodos e as tampas seguem abaixo, como no terreno.
+                map_world.render(shader, model)
             else:
-                # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
-                gl.glActiveTexture(gl.GL_TEXTURE0)
-                gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
-                shader.set_int("u_TextureAtlas", 0)
-                view_projection = projection @ view
-                shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
-                shadow_renderer.apply(shader, model)
-                room_renderer.apply(shader, model, view)
-                mark("room_apply_caps")
-                # água: na passada 1 (esta) ela é descartada e o fundo recebe a luz que a atravessa; a 2 vem no fim
-                shader.set_vec4("u_WaterRect", *water_rect)
-                shader.set_float("u_Time", float(window.time))
-                shader.set_vec3("u_CameraPos", *(float(v) for v in camera._camera_position()))
-                shader.set_int("u_WaterPass", 1)
-                # o corredor da câmera: o que tapa o personagem some (ver sightCarved no shader)
-                feet = [float(v) for v in player_token.position]
-                # no ar (um pulo), os cortes ficam no chão de onde saiu: pular não muda o que aparece; numa escada de
-                # mão ou caindo para baixo do chão, seguem o personagem
-                floor_y = int(np.floor(feet[1] + 0.05))
-                if (player_token.grounded or player_token.on_ladder or story_state.get("ground_y") is None
-                        or floor_y < story_state["ground_y"]):
-                    story_state["ground_y"] = floor_y
-                feet[1] = float(story_state["ground_y"])
-                sight_target = model @ np.array([feet[0], feet[1] + 1.1, feet[2], 1.0])
-                # Ao ar livre o corredor só liga quando algo bloqueia a vista do peito ou da cabeça (se só as pernas ficam
-                # atrás de um degrau, não abre buraco); ligado, corta o cilindro inteiro, dos pés para cima, e os pés
-                # aparecem. Num cômodo fica sempre ligado (só corta o que tapa o cômodo: ver o shader).
-                from src.world.sight import sight_needed
-                sight_world_dir = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (
-                    np.array(camera._camera_position(), dtype=np.float64) - sight_target[:3])
-                window_cells = room_tracker.mask.window if room_tracker.mask is not None else None
-                outdoors_target = 1.0 if (
-                    room_renderer.level > 0.001 or window_cells is None
-                    or sight_needed(window_cells.solid, room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
-                story_state["sight"] += (outdoors_target - story_state["sight"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
-                if abs(outdoors_target - story_state["sight"]) < 0.01:
-                    story_state["sight"] = outdoors_target
-                shader.set_float("u_SightActive", story_state["sight"])
-                shader.set_vec3("u_SightTarget", *(float(v) for v in sight_target[:3]))
-                shader.set_float("u_SightFeetY", float(np.floor(feet[1] + 0.05)))
-                shader.set_float("u_SightRadius", 2.6)
-                # o corte do andar: debaixo de teto, do teto para cima some em volta do personagem
-                from src.world.room_reveal import story_ceiling, story_center
-                ceiling = story_ceiling(room_tracker.mask, feet)
-                if ceiling is not None:
-                    story_state["cut_y"] = ceiling
-                story_target = 1.0 if ceiling is not None and room_renderer.enabled else 0.0
-                story_state["level"] += (story_target - story_state["level"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
-                if abs(story_target - story_state["level"]) < 0.01:
-                    story_state["level"] = story_target
-                shader.set_float("u_StoryActive", story_state["level"])
-                shader.set_float("u_StoryCutY", float(story_state["cut_y"]))
-                center_key = (room_tracker.version, story_state["cut_y"], int(np.floor(feet[1] + 0.05)))
-                if story_state.get("center_key") != center_key:
-                    story_state["center_key"] = center_key
-                    story_state["center"] = story_center(room_tracker.mask, int(np.floor(feet[1] + 0.05)),
-                                                         int(story_state["cut_y"]))
-                center = story_state["center"] or (feet[0], feet[2])  # fora de cômodo, o próprio personagem
-                shader.set_vec2("u_StoryCenter", float(center[0]), float(center[1]))
-                # as tampas seguem os mesmos cortes (o corte do andar só quando ele está inteiro, sem o fade)
-                from src.world.room_caps import SightCut, StoryCut
-                room_renderer.story = (StoryCut(int(story_state["cut_y"]), int(np.floor(feet[1] + 0.05)),
-                                                (float(center[0]), float(center[1])), 24.0)
-                                       if story_state["level"] >= 0.999 else None)
-                room_renderer.center = (float(center[0]), float(center[1]))
-                room_renderer.sight = SightCut((feet[0], feet[1] + 1.1, feet[2]), (0.0, 0.0, 0.0), 2.6,
-                                               int(np.floor(feet[1] + 0.05)))
-                shader.set_float("u_StoryRadius", 24.0)
-                story_view = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (-np.asarray(view, dtype=np.float64)[2, :3])
-                story_view /= max(float(np.linalg.norm(story_view)), 1e-9)
-                shader.set_vec3("u_StoryView", *(float(v) for v in story_view))
-                shader.set_mat4("u_SightModel", np.asarray(model, dtype=np.float32))
-                shader.set_mat4("u_SightInvModel", np.linalg.inv(np.asarray(model, dtype=np.float64)).astype(np.float32))
                 world_manager.render(shader, model, view_projection)
                 room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
                 mark("story_and_world_draw")
 
-                # 2. Segundo passe: terreno acima do jogador translúcido (cutaway)
+                # 2. Segundo passe: terreno acima do jogador translúcido (cutaway de caverna)
                 if underground_mode:
                     gl.glEnable(gl.GL_BLEND)
                     gl.glDepthFunc(gl.GL_ALWAYS)
@@ -1662,23 +1660,29 @@ def main() -> None:
                     gl.glDisable(gl.GL_BLEND)
                     shader.set_int("u_CutawayPass", 0)
 
-                gl.glEnable(gl.GL_CULL_FACE)
+            gl.glEnable(gl.GL_CULL_FACE)
 
-                # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma. Usam outro atlas, em que a
-                # região da água do terreno pode ser outra textura: nada delas é tratado como água.
-                mark("underground_pass")
+            # 2b. Construções fixadas com /schem (opacas) e a prévia em holograma. Usam outro atlas, em que a
+            # região da água do terreno pode ser outra textura: nada delas é tratado como água.
+            mark("underground_pass")
+            shader.set_int("u_WaterPass", 0)
+            schematic_tool.draw(shader, model, window.time)
+            room_renderer.draw_structure_caps(shader, model)
+            if world_objects is not None:
+                # os objetos do editor, ainda dentro da revelação de cômodo (cortes, tampas e a luz de fora)
                 shader.set_int("u_WaterPass", 0)
-                schematic_tool.draw(shader, model, window.time)
-                room_renderer.draw_structure_caps(shader, model)
-                if cursor_state["hidden"] and not pan_state["active"] and cursor_in_use():
-                    # a profundidade do que está sob o mouse (terreno e construções, já cortados): o hover do próximo
-                    # quadro começa nela
-                    depth_probe.read(window.get_cursor_pos_framebuffer(), window.width, window.height,
-                                     projection @ view @ model)
-                else:
-                    depth_probe.clear()
-                mark("structures_draw")
+                world_objects.update()
+                world_objects.render_objects(shader, model)
+            if cursor_state["hidden"] and not pan_state["active"] and cursor_in_use():
+                # a profundidade do que está sob o mouse (terreno e construções, já cortados): o hover do próximo
+                # quadro começa nela
+                depth_probe.read(window.get_cursor_pos_framebuffer(), window.width, window.height,
+                                 projection @ view @ model)
+            else:
+                depth_probe.clear()
+            mark("structures_draw")
 
+            if map_world is None:
                 # 2c. A água, translúcida, sobre tudo o que já está na tela (sem escrever profundidade)
                 gl.glActiveTexture(gl.GL_TEXTURE0)
                 gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
@@ -1690,20 +1694,19 @@ def main() -> None:
                 world_manager.render(shader, model, view_projection)
                 gl.glDepthMask(gl.GL_TRUE)
                 mark("water_pass")
-                gl.glDisable(gl.GL_BLEND)
-                shader.set_int("u_WaterPass", 0)
-                shader.set_float("u_SightActive", 0.0)
-                room_renderer.disable(shader)
-                shadow_renderer.disable(shader)
-                shader.set_bool("u_WorldStyle", False)
+            gl.glDisable(gl.GL_BLEND)
+            shader.set_int("u_WaterPass", 0)
+            shader.set_float("u_SightActive", 0.0)
+            room_renderer.disable(shader)
+            shadow_renderer.disable(shader)
+            shader.set_bool("u_WorldStyle", False)
 
-                # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
-                grid_renderer.render(projection, view, model)
-                mark("grid_draw")
+            # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
+            grid_renderer.render(projection, view, model)
+            mark("grid_draw")
 
             if world_objects is not None:
-                world_objects.update()
-                world_objects.render(shader, projection, view, model)
+                world_objects.render(shader, projection, view, model, solids=False)   # prévia e seleção
 
             # 4. Renderiza o bloco abaixo do token reluzindo em branco pulsante (no chão)
             bx, by, bz = player_token.get_current_block()
