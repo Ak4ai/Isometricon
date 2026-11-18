@@ -216,22 +216,59 @@ def test_replace_npc_keeps_its_place_and_id():
     assert c.replace_npc("ninguem", {}) is None
 
 
-def test_editor_has_an_npc_tab_while_an_npc_is_on_it():
-    from src.interactive.character_editor import NPC_SECTION, CharacterEditor
+def npc_editor():
+    from src.interactive.character_editor import CharacterEditor
     sent = []
     h = SimpleNamespace(character_model=SimpleNamespace(body="male", customization=None), busy_status="",
                         npc_editing={"nome": "Bia", "lado": "amigavel", "molde": "guarda", "fala": "Oi"},
                         execute=lambda command: (sent.append(command), (True, "feito", (0, 0, 0)))[1])
     editor = CharacterEditor(h, {"active": False, "yaw": 0.0}, create_gl=False)
     editor.open()
-    assert editor.sections[0].title == NPC_SECTION and editor.active == 0
+    return editor, h, sent
+
+
+def press(editor, rect):
+    x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    editor.handle_mouse_button(x, y, 0, 1)
+    editor.handle_mouse_button(x, y, 0, 0)
+
+
+def button(editor, name):
+    return next(r for r, k, p in editor.layout(1280, 720) if k == "button" and p == name)
+
+
+def test_npc_creation_is_a_wizard_that_ends_with_the_identity():
+    from src.interactive.character_editor import NPC_SECTION
+    editor, h, _ = npc_editor()
+    assert editor.wizard and [name for name, _ in editor.steps] == \
+        ["Modelo", "Roupa", "Ajustes", "Rosto", "Cabelo", "Identidade"]
+    assert editor.step == 0 and editor.sections[editor.active].title == "Modelo"
+    hits = editor.layout(1280, 720)
+    assert not any(k == "field" for _, k, _ in hits)               # o campo do Roblox fica na etapa da roupa
+    pills = [editor.sections[p].title for _, k, p in hits if k == "tab"]
+    assert pills == ["Modelo", "Corpo", "Prontos"]                 # as abas da etapa, nada das outras
+    press(editor, button(editor, "back"))
+    assert editor.step == 0                                        # antes da primeira não há nada
+    press(editor, button(editor, "next"))
+    assert editor.step == 1 and any(k == "field" for _, k, _ in editor.layout(1280, 720))
+    step = next(r for r, k, p in editor.layout(1280, 720) if k == "step" and p == 5)
+    press(editor, step)                                            # um clique na régua pula para a etapa
+    assert editor.sections[editor.active].title == NPC_SECTION
+    image = editor.image(1280, 720)                                # o pergaminho desenha sem erro
+    assert image.size[1] == 720 and image.getpixel((200, 400))[:3] != (22, 24, 30)
+    press(editor, button(editor, "next"))                          # na última, o botão cria o NPC
+    assert not editor.is_open
+    h.npc_editing = None
+    editor.open()
+    assert not editor.wizard and NPC_SECTION not in [x.title for x in editor.sections]
+
+
+def test_editor_has_an_npc_tab_while_an_npc_is_on_it():
+    editor, h, sent = npc_editor()
+    editor.go_step(len(editor.steps) - 1)
     hits = editor.layout(1280, 720)
     option = lambda label: next((r, p) for r, k, p in hits if k == "option" and p.label == label)
-
-    def click(rect):
-        x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
-        editor.handle_mouse_button(x, y, 0, 1)
-        editor.handle_mouse_button(x, y, 0, 0)
+    click = lambda rect: press(editor, rect)
 
     rect, name = option("Nome")
     click(rect)
@@ -249,10 +286,6 @@ def test_editor_has_an_npc_tab_while_an_npc_is_on_it():
     click(rect)
     editor.handle_key(256, 1)                                # Esc desiste sem mandar nada
     assert sent[-1] == "/npc definir lado hostil" and not editor.typing and editor.is_open
-    editor.close()
-    h.npc_editing = None
-    editor.open()
-    assert NPC_SECTION not in [x.title for x in editor.sections]
 
 
 def test_npc_commands_list_talk_edit_and_remove():

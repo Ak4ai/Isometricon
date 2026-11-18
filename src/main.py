@@ -667,7 +667,7 @@ def main() -> None:
         chat_console.open(chat_text or "")
 
     # Tela de criação de personagem (/skin interface, ou --editor para já abrir nela).
-    from src.interactive.character_editor import CharacterEditor
+    from src.interactive.character_editor import CharacterEditor, PANEL_WIDTH as character_editor_panel_width
     character_editor = CharacterEditor(skin_command_handler, turntable_state, create_gl=True)
     character_editor.autosave = max_frames is None  # an automated run (--frames) leaves the save alone
     character_editor.clipboard = chat_console._get_clipboard_string
@@ -2077,6 +2077,8 @@ def main() -> None:
             fps_overlay.render(window.width, window.height,
                                FpsOverlay.MARGIN + (22 if coordinate_overlay is not None else 0))
         character_editor.render(window.width, window.height)
+        # com a tela de criação aberta, o chat fica ao lado do painel dela (por cima, tapava os botões do rodapé)
+        chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open else 16)
         if map_editor is None or chat_console.is_open:
             chat_console.render(window.width, window.height)
         if context_cursor is not None:

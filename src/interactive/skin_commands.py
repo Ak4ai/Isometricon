@@ -653,8 +653,8 @@ class SkinCommandHandler:
         name = self.combat.unique_npc_name(" ".join(words).strip() or "Novo NPC")
         self.npc_request = {"nome": name, "lado": "amigavel" if ally else "hostil", "molde": creature.key,
                             "fala": DEFAULT_LINE, "corpo": "feminino" if female else "masculino"}
-        return True, (f"[NPC] Criando {name}. Na aba NPC da tela: nome, lado, ficha e fala. Monte a aparência e "
-                      "feche a tela: o NPC aparece na sua frente."), GREEN
+        return True, (f"[NPC] Criando {name}: monte o NPC etapa por etapa (modelo, roupa, ajustes, rosto, cabelo) e, "
+                      "por último, dê nome, lado, ficha e fala. Ao criar, ele aparece na sua frente."), GREEN
 
     def npc_set(self, field: str, value: str) -> Result:
         """/npc definir <nome|lado|molde|fala> <valor>: muda o NPC que está na tela de criação."""
@@ -729,7 +729,7 @@ class SkinCommandHandler:
             if self.combat.session is not None and self.combat.session.get(token.id) is not None:
                 return False, f"[NPC] {name} está numa luta agora.", RED
             self.npc_request = {"editar": token.id}
-            return True, f"[NPC] Editando {name}: a aparência e, na aba NPC, nome, lado, ficha e fala. Feche a tela para voltar.", GREEN
+            return True, f"[NPC] Editando {name}: as etapas da aparência e, na última, nome, lado, ficha e fala.", GREEN
         return False, usage, GOLD
 
     def sheet(self, args: List[str]) -> Result:

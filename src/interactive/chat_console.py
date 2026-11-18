@@ -100,6 +100,7 @@ class ChatConsole:
         self._ignore_chars: set = set()
 
         self.combat_log: Optional[CombatLogView] = None
+        self.left = 16   # a margem esquerda da caixa (a tela de criação aberta empurra o chat para o lado dela)
         self._combat_key: Any = None
 
         self.hud_dirty: bool = True
@@ -741,10 +742,15 @@ class ChatConsole:
             self.combat_log = view
             self.hud_dirty = True
 
+    def set_left(self, left: int) -> None:
+        """Muda a margem esquerda da caixa (e redesenha só quando ela muda)."""
+        if left != self.left:
+            self.left, self.hud_dirty = left, True
+
     def _box_width(self, width: int) -> int:
         """A largura da caixa: a de sempre; no combate, da margem esquerda até a borda do menu de combate."""
         if self.combat_log is None:
-            return min(740, width - 32)
+            return min(740, width - self.left - 16)
         right = self.combat_log.right if self.combat_log.right is not None else width - 16
         return max(COMBAT_MIN_WIDTH, min(width - 32, int(right) - 16 - 6 - 10))
 
@@ -873,7 +879,7 @@ class ChatConsole:
         view = self.combat_log
         draw = ImageDraw.Draw(img)
         body = st.font(14)
-        box_x = 16
+        box_x = self.left
         box_w = self._box_width(width)
         line_height = 20
         rows: List[List[Segment]] = []
@@ -923,7 +929,7 @@ class ChatConsole:
             return img
 
         # Dimensões da caixa de chat (canto inferior esquerdo; no combate, até a borda do menu de combate)
-        box_x = 16
+        box_x = self.left
         box_w = self._box_width(width)
         line_height = 20
         max_lines = 8

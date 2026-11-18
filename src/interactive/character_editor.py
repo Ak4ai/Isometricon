@@ -61,7 +61,7 @@ PAD = 12
 CARD = (88, 112)   # a garment: picture and two lines of name
 TEXT_TILE = 34     # height of a named option (two to a row)
 ENTRY_TILE = 40    # height of a field of free text (one to a row)
-NPC_SECTION = "NPC"  # the tab of the NPC on the screen (only while one is made or edited)
+NPC_SECTION = "Identidade"  # the tab of the NPC on the screen (only while one is made or edited)
 SWATCH = 32        # a colour (seven to a row)
 GAP = 8
 SWATCHES_PER_ROW = 7
@@ -84,6 +84,17 @@ BRUSHES = (("esconder", "Esconder pele"), ("mostrar", "Mostrar pele"), ("apagar"
 BRUSH_SIZES = (("Pequeno", 10), ("Médio", 22), ("Grande", 40))  # radius, in pixels of the window
 HISTORY_BUTTON, HISTORY_GAP, HISTORY_MARGIN = 40, 6, 12  # the undo and redo arrows at the top right of the scene
 HISTORY_NOTICE = 48  # how far down they go while the loading notice is in that corner  # sections worked on with the camera close to the face
+
+# A criação de NPC é um assistente por etapas: cada etapa junta abas da tela, a identidade vem por último.
+NPC_STEPS = (("Modelo", ("Modelo", "Corpo", "Prontos")),
+             ("Roupa", ("Superior", "Jaqueta", "Inferior", "Vestidos", "Sapatos", "Extras")),
+             ("Ajustes", ("Ajustes", FINE_SECTION)),
+             ("Rosto", FACE_SECTIONS),
+             ("Cabelo", ("Cabelo",)),
+             ("Identidade", (NPC_SECTION,)))
+WIZARD_MARGIN = 18   # as margens do pergaminho do assistente
+WIZARD_HEADER = 112  # o título e as etapas, acima das abas da etapa
+PILL_HEIGHT, PILL_GAP = 26, 6
 
 BACKGROUND = (22, 24, 30, 240)
 TAB_STRIP = (15, 16, 20, 245)
@@ -273,6 +284,8 @@ class CharacterEditor:
         self._thumbnails: Any = None
         self._pictured: set = set()
         self.is_open = False
+        self.wizard = False   # a tela veste um NPC: as abas viram etapas, no visual do pergaminho
+        self.steps: List[Tuple[str, List[int]]] = []
         self.active = 0
         self.bones_view: Optional[dict] = None  # os ossos do modelo na tela (a cena põe a cada quadro): xy, depth, parents
         self.bone_hover: Optional[int] = None
@@ -360,9 +373,6 @@ class CharacterEditor:
             Group("Nome", [Option("Nome", "", entry="/npc definir nome", value=text("nome"))]),
             Group("Lado", [Option(label, f"/npc definir lado {side}", selected=lambda m, side=side: spec().get("lado") == side)
                            for label, side in (("Amigável", "amigavel"), ("Hostil", "hostil"))]),
-            Group("Corpo", [Option(n.capitalize(), f"/skin corpo {n}",
-                                   selected=lambda m, v=BODIES[n]: _value(getattr(m, "body", "")) == _value(v))
-                            for n in ("feminino", "masculino")]),
             Group("Ficha de combate (do bestiário)", [
                 Option(c.name, f"/npc definir molde {key}",
                        selected=lambda m, key=key: spec().get("molde") == key)
@@ -704,13 +714,17 @@ class CharacterEditor:
     def open(self) -> None:
         # a aba NPC vem primeiro enquanto a tela veste um NPC (o jogo põe a ficha dele em handler.npc_editing)
         npc = getattr(self.handler, "npc_editing", None) is not None
-        sections = ([Section(NPC_SECTION, self._npc_groups)] if npc else []) + self._base_sections
+        sections = self._base_sections + ([Section(NPC_SECTION, self._npc_groups)] if npc else [])
+        self.wizard = npc
         if npc or [x.title for x in sections] != [x.title for x in self.sections]:
             self.sections, self.active, self.scroll, self._groups = sections, 0, 0, None
+        self.steps = self._make_steps() if npc else []
+        if self.steps:
+            self.active = self.steps[0][1][0]
         self.typing, self.entry, self._entry_option = False, "", None
         self.refresh_catalog()
         self.is_open = True
-        self.message = ("Dê nome, lado e ficha ao NPC aqui; monte a aparência nas outras abas. Esc fecha."
+        self.message = ("Monte o NPC etapa por etapa; o nome e o lado vêm no fim. Arraste para girar a vista."
                         if npc else "Arraste para girar e inclinar a vista. W liga o andar. Esc fecha.")
         self._was_spinning = True
         self.turntable["active"] = True
@@ -755,6 +769,26 @@ class CharacterEditor:
             except OSError:
                 self._thumbnails = None
 
+    def _make_steps(self) -> List[Tuple[str, List[int]]]:
+        """As etapas do assistente com os índices das abas de cada uma; uma aba fora delas entra antes da última."""
+        where = {section.title: index for index, section in enumerate(self.sections)}
+        steps = [(title, [where[t] for t in titles if t in where]) for title, titles in NPC_STEPS]
+        used = {i for _, indices in steps for i in indices}
+        rest = [i for i in range(len(self.sections)) if i not in used]
+        if rest:
+            steps.insert(len(steps) - 1, ("Outros", rest))
+        return [step for step in steps if step[1]]
+
+    @property
+    def step(self) -> int:
+        """A etapa do assistente em que está a aba aberta."""
+        return next((k for k, (_, indices) in enumerate(self.steps) if self.active in indices), 0)
+
+    def go_step(self, index: int) -> None:
+        if 0 <= index < len(self.steps):
+            self.select_section(self.steps[index][1][0])
+            self.dirty = True
+
     def select_section(self, index: int) -> None:
         if 0 <= index < len(self.sections) and index != self.active:
             self.active, self.scroll, self._groups, self.dirty = index, 0, None, True
@@ -789,28 +823,40 @@ class CharacterEditor:
         """As áreas clicáveis, em pixels da janela: ('tab', índice), ('option', Option), ('button', nome)."""
         self._size = (width, height)
         hits: List[Tuple[Rect, str, Any]] = []
-        # as abas encolhem quando são tantas que não cabem na altura da janela
-        tab_height = min(TAB_HEIGHT, (height - 2 * PAD) // max(len(self.sections), 1) - 4)
-        for index in range(len(self.sections)):
-            y = PAD + index * (tab_height + 4)
-            hits.append(((6, y, TAB_WIDTH - 6, y + tab_height), "tab", index))
-        left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
-        top, bottom = PAD, height - FOOTER_HEIGHT
+        if self.wizard:
+            hits += [(rect, "step", k) for k, rect in self._step_rects()]
+            hits += [(rect, "tab", index) for index, rect in self._pills()]
+        else:
+            # as abas encolhem quando são tantas que não cabem na altura da janela
+            tab_height = min(TAB_HEIGHT, (height - 2 * PAD) // max(len(self.sections), 1) - 4)
+            for index in range(len(self.sections)):
+                y = PAD + index * (tab_height + 4)
+                hits.append(((6, y, TAB_WIDTH - 6, y + tab_height), "tab", index))
+        left, right, top = self._grid_box()
+        bottom = height - FOOTER_HEIGHT
         for kind, (x0, y0, x1, y1), payload in self._tiles():
             y0, y1 = y0 + top - self.scroll, y1 + top - self.scroll
             if kind == "option" and y1 > top and y0 < bottom:
                 hits.append(((x0, max(y0, top), x1, min(y1, bottom)), "option", payload))
         half = (right - left - GAP) // 2
-        hits.append(((left, height - 86, right, height - 54), "field", "add"))
-        hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
-        hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
+        if not self.wizard or self.steps[self.step][0] == "Roupa":
+            hits.append(((left, height - 86, right, height - 54), "field", "add"))
+        if self.wizard:
+            low = height - WIZARD_MARGIN
+            third = (right - left - 2 * GAP) // 3
+            hits.append(((left, low - 34, left + third, low), "button", "back"))
+            hits.append(((left + third + GAP, low - 34, right - third - GAP, low), "button", "spin"))
+            hits.append(((right - third, low - 34, right, low), "button", "next"))
+        else:
+            hits.append(((left, height - 44, left + half, height - PAD), "button", "spin"))
+            hits.append(((left + half + GAP, height - 44, right, height - PAD), "button", "done"))
         self._hits = hits
         return hits
 
     def _tiles(self) -> List[Tuple[str, Rect, Any]]:
         """A grade inteira, sem rolagem, com y a partir do seu topo: ('title', área, texto) e
         ('option', área, Option). Também mede a altura do conteúdo."""
-        left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
+        left, right, _ = self._grid_box()
         tiles: List[Tuple[str, Rect, Any]] = []
         y = 0
         for group in self.groups():
@@ -818,7 +864,7 @@ class CharacterEditor:
             y += 26
             kind = group.options[0].kind if group.options else "text"
             if kind == "card":
-                columns, (w, h) = 3, CARD
+                columns, (w, h) = max(1, (right - left + GAP) // (CARD[0] + GAP)), CARD
             elif kind == "swatch":
                 columns, (w, h) = SWATCHES_PER_ROW, (SWATCH, SWATCH)
             elif kind == "slider":
@@ -837,7 +883,40 @@ class CharacterEditor:
         return tiles
 
     def _max_scroll(self) -> int:
-        return max(0, self._content_height - (self._size[1] - FOOTER_HEIGHT - PAD))
+        return max(0, self._content_height - (self._size[1] - FOOTER_HEIGHT - self._grid_box()[2]))
+
+    def _grid_box(self) -> Tuple[int, int, int]:
+        """Onde fica a grade de opções no painel: a esquerda, a direita e o topo."""
+        if self.wizard:
+            pills = self._pills()
+            top = (max(rect[3] for _, rect in pills) + 10) if pills else WIZARD_HEADER + 4
+            return WIZARD_MARGIN, PANEL_WIDTH - WIZARD_MARGIN, top
+        return TAB_WIDTH + PAD, PANEL_WIDTH - PAD, PAD
+
+    def _step_rects(self) -> List[Tuple[int, Rect]]:
+        """As marcas das etapas do assistente, lado a lado sob o título (o número e o nome embaixo)."""
+        count = len(self.steps)
+        if not count:
+            return []
+        width = (PANEL_WIDTH - 2 * WIZARD_MARGIN) // count
+        return [(k, (WIZARD_MARGIN + k * width, 62, WIZARD_MARGIN + (k + 1) * width, 104)) for k in range(count)]
+
+    def _pills(self) -> List[Tuple[int, Rect]]:
+        """As abas da etapa aberta, em pílulas que quebram a linha (nenhuma quando a etapa tem uma aba só)."""
+        if not self.steps:
+            return []
+        indices = self.steps[self.step][1]
+        if len(indices) < 2:
+            return []
+        from src.interactive import combat_style as st
+        x, y, out = WIZARD_MARGIN, WIZARD_HEADER, []
+        for index in indices:
+            w = st.measure(self.sections[index].title, 13, bold=True) + 24
+            if x + w > PANEL_WIDTH - WIZARD_MARGIN and x > WIZARD_MARGIN:
+                x, y = WIZARD_MARGIN, y + PILL_HEIGHT + PILL_GAP
+            out.append((index, (x, y, x + w, y + PILL_HEIGHT)))
+            x += w + PILL_GAP
+        return out
 
     def hit(self, x: float, y: float) -> Optional[Tuple[Rect, str, Any]]:
         for rect, kind, payload in self._hits:
@@ -936,7 +1015,7 @@ class CharacterEditor:
                 self._slider_sent = 0.0
                 self._drag_picker(x, y)
         elif kind == "option" and payload.slider is not None:
-            x0, x1 = TAB_WIDTH + PAD + 10, PANEL_WIDTH - PAD - 10
+            x0, x1 = self._grid_box()[0] + 10, self._grid_box()[1] - 10
             self._slider = (payload, x0, x1)
             self._drag_slider(x)
         elif kind == "option":
@@ -944,6 +1023,15 @@ class CharacterEditor:
         elif payload == "spin":
             self.turntable["active"] = self._was_spinning = not self.turntable.get("active")
             self.dirty = True
+        elif kind == "step":
+            self.go_step(payload)
+        elif payload == "back":
+            self.go_step(self.step - 1)
+        elif payload == "next":
+            if self.step + 1 < len(self.steps):
+                self.go_step(self.step + 1)
+            else:
+                self.close()
         elif payload == "done":
             self.close()
         return True
@@ -953,7 +1041,8 @@ class CharacterEditor:
         """Where a picker's tile is in the window, whole (the grid may be cutting it)."""
         for kind, (x0, y0, x1, y1), payload in self._tiles():
             if kind == "option" and payload.picker == option.picker:
-                return (x0, y0 + PAD - self.scroll, x1, y1 + PAD - self.scroll)
+                top = self._grid_box()[2]
+                return (x0, y0 + top - self.scroll, x1, y1 + top - self.scroll)
         return None
 
     def _picker_zone(self, option: Option, y: float) -> Optional[str]:
@@ -1195,11 +1284,19 @@ class CharacterEditor:
         """O painel inteiro (PANEL_WIDTH x altura da janela) como imagem RGBA."""
         from PIL import Image, ImageDraw
         hits = self.layout(width, height)
-        panel = Image.new("RGBA", (PANEL_WIDTH, height), BACKGROUND)
+        # as cores: as da tela escura, ou as do pergaminho no assistente de NPC (as mesmas variáveis, locais)
+        BACKGROUND, TILE, TILE_HOVER, ACCENT, TEXT, MUTED, FIELD, TRACK, EDGE = self._palette()
+        if self.wizard:
+            from src.interactive import combat_style as st
+            panel = st.card(PANEL_WIDTH, height, radius=0, corners=False, shadow=False)[0]
+        else:
+            panel = Image.new("RGBA", (PANEL_WIDTH, height), BACKGROUND)
         draw = ImageDraw.Draw(panel)
-        draw.rectangle((0, 0, TAB_WIDTH, height), fill=TAB_STRIP)
+        if not self.wizard:
+            draw.rectangle((0, 0, TAB_WIDTH, height), fill=TAB_STRIP)
         title, text, small = self._font(15), self._font(14), self._font(11)
-        left, top, bottom = TAB_WIDTH + PAD, PAD, height - FOOTER_HEIGHT
+        left, right, top = self._grid_box()
+        bottom = height - FOOTER_HEIGHT
 
         # A grade é desenhada inteira e só a parte visível é copiada: um quadro cortado pela
         # borda aparece pela metade, não vazio.
@@ -1218,8 +1315,8 @@ class CharacterEditor:
             if payload.kind == "entry":
                 editing = self.typing and self._entry_option is payload
                 hovered = self.hover == ("option", id(payload))
-                pen.rounded_rectangle(draw_rect, 6, fill=(14, 15, 19, 255),
-                                      outline=ACCENT if editing else (MUTED if hovered else TILE_HOVER),
+                pen.rounded_rectangle(draw_rect, 6, fill=FIELD,
+                                      outline=ACCENT if editing else (MUTED if hovered else (EDGE or TILE_HOVER)),
                                       width=2 if editing else 1)
                 shown = (self.entry + "|") if editing else (payload.value() if payload.value else "")
                 room = x1 - x0 - 20
@@ -1228,7 +1325,8 @@ class CharacterEditor:
                 pen.text((x0 + 10, (y0 + y1) // 2), shown or "Clique e escreva",
                          font=text, fill=TEXT if shown else MUTED, anchor="lm")
                 continue
-            pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE)
+            pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE,
+                                  outline=EDGE)
             if payload.kind == "slider":
                 value = self.slider_value(payload) if self.model is not None else 0
                 pen.text((x0 + 10, y0 + 13), payload.label, font=small, fill=TEXT, anchor="lm")
@@ -1236,7 +1334,7 @@ class CharacterEditor:
                          fill=ACCENT if value else MUTED, anchor="rm")
                 t0, t1, ty = x0 + 10, x1 - 10, y0 + 31
                 knob = t0 + (value + 100) / 200 * (t1 - t0)
-                pen.line((t0, ty, t1, ty), fill=(14, 15, 19, 255), width=4)
+                pen.line((t0, ty, t1, ty), fill=TRACK, width=4)
                 pen.line(((t0 + t1) / 2, ty, knob, ty), fill=ACCENT, width=4)
                 pen.line(((t0 + t1) / 2, ty - 5, (t0 + t1) / 2, ty + 5), fill=MUTED, width=1)
                 pen.ellipse((knob - 7, ty - 7, knob + 7, ty + 7), fill=TEXT)
@@ -1276,9 +1374,10 @@ class CharacterEditor:
             elif payload.check:
                 ticked = self.model is not None and payload.selected(self.model)
                 box = (x0 + 12, (y0 + y1) // 2 - 8, x0 + 28, (y0 + y1) // 2 + 8)
-                pen.rounded_rectangle(box, 3, fill=ACCENT if ticked else (14, 15, 19, 255), outline=ACCENT if ticked else MUTED)
+                pen.rounded_rectangle(box, 3, fill=ACCENT if ticked else FIELD, outline=ACCENT if ticked else MUTED)
                 if ticked:
-                    pen.line((box[0] + 3, box[1] + 8, box[0] + 7, box[1] + 12, box[0] + 13, box[1] + 4), fill=(20, 20, 24, 255), width=2)
+                    pen.line((box[0] + 3, box[1] + 8, box[0] + 7, box[1] + 12, box[0] + 13, box[1] + 4),
+                             fill=(251, 244, 228, 255) if self.wizard else (20, 20, 24, 255), width=2)
                 pen.text((x0 + 36, (y0 + y1) // 2), self._fit_text(pen, payload.label, text, x1 - x0 - 44, 1)[0],
                          font=text, fill=TEXT, anchor="lm")
                 continue
@@ -1288,6 +1387,8 @@ class CharacterEditor:
             if self.model is not None and payload.selected(self.model):
                 pen.rounded_rectangle(draw_rect, 6, outline=ACCENT, width=2)
         panel.alpha_composite(grid.crop((0, self.scroll, PANEL_WIDTH, self.scroll + view)), (0, top))
+        if self.wizard:
+            self._draw_wizard_header(draw)   # antes das etapas: o fio que as liga passa por baixo delas
 
         for rect, kind, payload in hits:
             x0, y0, x1, y1 = rect
@@ -1296,12 +1397,15 @@ class CharacterEditor:
                 continue
             if kind == "field":
                 mine = self.typing and self._entry_option is None
-                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if mine else TILE_HOVER)
+                draw.rounded_rectangle(rect, 6, fill=FIELD, outline=ACCENT if mine else (EDGE or TILE_HOVER))
                 shown = (self.entry + "|") if mine else ""
                 while shown and draw.textlength(shown, font=small) > x1 - x0 - 16:
                     shown = shown[1:]
                 draw.text((x0 + 8, (y0 + y1) // 2), shown or "Adicionar do Roblox: cole o id ou o link",
                           font=small, fill=TEXT if shown else MUTED, anchor="lm")
+                continue
+            if self.wizard and kind in ("tab", "step", "button"):
+                self._draw_wizard_hit(draw, rect, kind, payload, hovered)
                 continue
             if kind == "tab":
                 active = payload == self.active
@@ -1319,16 +1423,92 @@ class CharacterEditor:
                           fill=(20, 20, 24, 255) if payload == "done" else TEXT, anchor="mm")
 
         # rodapé: o que está acontecendo
-        draw.rectangle((TAB_WIDTH, bottom, PANEL_WIDTH, bottom + 1), fill=TILE)
+        draw.rectangle((left if self.wizard else TAB_WIDTH, bottom, right if self.wizard else PANEL_WIDTH, bottom + 1),
+                       fill=EDGE or TILE)
         status = self._busy or self.message
-        for k, line in enumerate(self._fit_text(draw, status, small, PANEL_WIDTH - TAB_WIDTH - 2 * PAD, 2)):
+        for k, line in enumerate(self._fit_text(draw, status, small, right - left, 2)):
             draw.text((left, bottom + 10 + k * 15), line, font=small, fill=ACCENT if self._busy else MUTED)
         if self._max_scroll() > 0:  # barra de rolagem
             track = bottom - top
             size = max(24, int(track * track / max(self._content_height, 1)))
             at = top + int((track - size) * self.scroll / self._max_scroll())
-            draw.rounded_rectangle((PANEL_WIDTH - 6, at, PANEL_WIDTH - 3, at + size), 2, fill=TILE_HOVER)
+            edge = PANEL_WIDTH - (8 if self.wizard else 3)
+            draw.rounded_rectangle((edge - 3, at, edge, at + size), 2, fill=EDGE or TILE_HOVER)
         return panel
+
+    def _palette(self) -> Tuple[Any, ...]:
+        """As cores do painel: fundo, quadro, quadro sob o mouse, destaque, texto, legenda, campo, trilho e borda."""
+        if not self.wizard:
+            return BACKGROUND, TILE, TILE_HOVER, ACCENT, TEXT, MUTED, (14, 15, 19, 255), (14, 15, 19, 255), None
+        from src.interactive import combat_style as st
+        a = lambda c: (*c, 255)
+        return (a(st.CARD), a(st.BUTTON), (241, 229, 201, 255), a(st.FOREST), a(st.INK), a(st.MUTED),
+                (255, 251, 242, 255), a(st.TRACK), a(st.BUTTON_EDGE))
+
+    def _draw_wizard_header(self, draw: Any) -> None:
+        """O topo do assistente: o que se faz, a etapa em Georgia e a régua das etapas."""
+        from src.interactive import combat_style as st
+        editing = "personagem" in (getattr(self.handler, "npc_editing", None) or {})
+        name, count = self.steps[self.step][0], len(self.steps)
+        x = WIZARD_MARGIN
+        st.write(draw, (x, 16), f"{'EDITAR' if editing else 'CRIAR'} NPC  ·  ETAPA {self.step + 1} DE {count}", 11,
+                 st.GOLD_DARK, bold=True)
+        st.write(draw, (x, 32), name, 24, st.INK, heading=True)
+        rects = self._step_rects()
+        if rects:   # o fio que liga as etapas, verde até a etapa aberta
+            y = rects[0][1][1] + 11
+            first, last = [(r[0] + r[2]) // 2 for _, r in (rects[0], rects[-1])]
+            here = (rects[self.step][1][0] + rects[self.step][1][2]) // 2
+            draw.line((first, y, last, y), fill=(*st.LINE, 255), width=2)
+            draw.line((first, y, here, y), fill=(*st.FOREST, 255), width=2)
+        draw.line((x, WIZARD_HEADER - 4, PANEL_WIDTH - x, WIZARD_HEADER - 4), fill=(*st.LINE, 255))
+
+    def _draw_wizard_hit(self, draw: Any, rect: Rect, kind: str, payload: Any, hovered: bool) -> None:
+        """Uma etapa, uma aba da etapa ou um botão do assistente, no visual das telas de entrada e do combate."""
+        from src.interactive import combat_style as st
+        x0, y0, x1, y1 = rect
+        if kind == "step":
+            cx, size = (x0 + x1) // 2, 22
+            done, here = payload < self.step, payload == self.step
+            fill = st.FOREST if done else (st.GOLD if here else st.BUTTON)
+            edge = (161, 122, 52) if here else (st.FOREST if done else st.BUTTON_EDGE)
+            if hovered and not here:
+                draw.ellipse((cx - size // 2 - 3, y0 - 3, cx + size // 2 + 3, y0 + size + 3), outline=(*st.GOLD, 255), width=2)
+            draw.ellipse((cx - size // 2, y0, cx + size // 2, y0 + size), fill=(*fill, 255), outline=(*edge, 255), width=2)
+            cy = y0 + size // 2
+            if done:   # o visto, em traço (a fonte não tem o caractere)
+                draw.line((cx - 5, cy, cx - 1, cy + 4, cx + 5, cy - 4), fill=(*st.CREAM, 255), width=2)
+            else:
+                draw.text((cx, cy), str(payload + 1), font=st.font(11, bold=True), anchor="mm",
+                          fill=(*(st.INK if here else st.MUTED), 255))
+            label = st.fit(self.steps[payload][0], 10, x1 - x0 - 2, bold=here)
+            st.write(draw, (cx - st.measure(label, 10, bold=here) / 2, y0 + size + 6), label, 10,
+                     st.INK if here else st.MUTED, bold=here)
+            return
+        if kind == "tab":
+            active = payload == self.active
+            fill = st.FOREST if active else ((241, 229, 201) if hovered else st.BUTTON)
+            draw.rounded_rectangle(rect, (y1 - y0) // 2, fill=(*fill, 255),
+                                   outline=(*(st.FOREST if active else st.BUTTON_EDGE), 255))
+            label = self.sections[payload].title
+            st.write(draw, ((x0 + x1 - st.measure(label, 13, bold=True)) / 2, y0 + 7), label, 13,
+                     st.CREAM if active else st.INK, bold=True)
+            return
+        last = self.step + 1 >= len(self.steps)
+        editing = "personagem" in (getattr(self.handler, "npc_editing", None) or {})
+        enabled = not (payload == "back" and self.step == 0)
+        primary = payload == "next"
+        if payload == "back":
+            label = "‹  Voltar"
+        elif payload == "spin":
+            label = "Girar: sim" if self.turntable.get("active") else "Girar: não"
+        else:
+            label = ("Salvar NPC" if editing else "Criar NPC") if last else "Próximo  ›"
+        st.button(draw, (x0, y0, x1, y1 - 3), enabled=enabled, primary=primary)
+        if hovered and enabled:
+            draw.rounded_rectangle((x0, y0, x1, y1 - 3), 7, outline=(*st.FOREST, 255), width=2)
+        w = st.measure(label, 13, bold=True)
+        st.write(draw, ((x0 + x1 - w) / 2, y0 + 9), label, 13, st.INK if enabled else st.MUTED, bold=True)
 
     def render(self, width: int, height: int) -> None:
         """Desenha o painel sobre a cena (a textura só é refeita quando algo mudou)."""
