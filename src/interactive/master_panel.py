@@ -30,6 +30,8 @@ SLIDERS = (
     ('torch', 'Luz do grupo', 0, 100, lambda v: 'apagada' if v == 0 else f'{v}%'),
 )
 CLOCK_LABELS = ('Parado', '1×', '10×', '60×')
+WAR_LABELS = ('Sem', 'Revela', 'Em volta')
+WAR_HINTS = ('o mundo todo à vista', 'o explorado fica limpo', 'a névoa fecha atrás de você')
 
 
 class MasterPanel:
@@ -44,6 +46,8 @@ class MasterPanel:
         self._signature = None
         self.image: Optional[Image.Image] = None
         self.on_change = None                       # chamado quando o mestre muda algo (o main grava o mundo)
+        self.on_recover = None                      # "Recobrir": cobre de novo o explorado (o main liga)
+        self.scale = 1.0                            # numa janela baixa, o painel encolhe para caber
         if create_gl:
             from src.rendering.hud_quad import HudQuad
             self.quad = HudQuad()
@@ -63,13 +67,19 @@ class MasterPanel:
 
     @property
     def right(self) -> float:
-        return LEFT + WIDTH
+        return LEFT + WIDTH * self.scale
+
+    def _local(self, x: float, y: float) -> Tuple[float, float]:
+        """Da janela para o desenho do painel (sem a escala)."""
+        return LEFT + (x - LEFT) / self.scale, TOP + (y - TOP) / self.scale
 
     def contains(self, x: float, y: float) -> bool:
+        x, y = self._local(x, y)
         return self.is_open and LEFT <= x <= LEFT + WIDTH and TOP <= y <= TOP + max(self.height, 1)
 
     # ---- entrada ----
     def hit_at(self, x: float, y: float) -> Optional[str]:
+        x, y = self._local(x, y)
         for rect, action in reversed(self.hits):
             if rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]:
                 return action
@@ -107,6 +117,7 @@ class MasterPanel:
         rect = next((r for r, a in self.hits if a == action), None)
         if rect is None:
             return
+        x = self._local(x, 0)[0]
         t = max(0.0, min(1.0, (x - rect[0]) / max(rect[2] - rect[0], 1.0)))
         name = action[7:]
         if name == 'hour':
@@ -131,6 +142,11 @@ class MasterPanel:
             a.reset()
         elif action.startswith('clock:'):
             a.clock = int(action[6:])
+        elif action.startswith('war:'):
+            a.fog_war = int(action[4:])
+        elif action == 'recover':
+            if self.on_recover is not None:
+                self.on_recover()
         elif action.startswith('preset:'):
             values = dict(PRESETS)[action[7:]]
             for key, value in values.items():
@@ -148,7 +164,7 @@ class MasterPanel:
         return (tuple(sorted(self.ambience.to_dict().items(), key=lambda kv: kv[0]))
                 if self.ambience.clock == 0 else self.ambience.clock_text(),
                 tuple(self.ambience.to_dict()[k] for k in ('clock', 'brightness', 'temperature', 'fog', 'saturation',
-                                                          'torch')),
+                                                          'torch', 'fog_war')),
                 self.hover, self.pressed)
 
     def draw_image(self) -> Image.Image:
@@ -233,24 +249,32 @@ class MasterPanel:
                      outline=(161, 122, 52, 255) if hot else (*style.BUTTON_SHADOW, 255), width=2)
         hit((x0 - 4, ty - 14, x1 + 4, ty + 14), 'slider:hour')
         y = ty + 24
-        style.write(draw, (x0, y), 'Relógio', 13, style.MUTED)
+        style.write(draw, (x0, y), 'Relógio · minutos de jogo por segundo', 13, style.MUTED)
         y += 22
         gap = 8
         cw = (x1 - x0 - gap * 3) / 4
         for i, label in enumerate(CLOCK_LABELS):
             bx = x0 + i * (cw + gap)
             chip((bx, y, bx + cw, y + 30), label, f'clock:{i}', selected=a.clock == i)
-        y += 38
-        style.write(draw, (x0, y), 'minutos de jogo por segundo', 11, style.MUTED)
-
-        y += 24
+        y += 40
         draw.line((x0, y, x1, y), fill=(*style.LINE, 255))
         y += 14
         for key, label, low, high, text in SLIDERS:
             value = getattr(a, key)
             track(y, key, (value - low) / (high - low), label, text(value))
-            y += 49
+            y += 45
 
+        # a névoa de guerra: o que o grupo ainda não viu fica coberto
+        style.write(draw, (x0, y), 'Névoa de guerra', 15, style.INK)
+        hint = WAR_HINTS[a.fog_war]
+        style.write(draw, (x1 - style.measure(hint, 12), y + 3), hint, 12, style.MUTED)
+        y += 26
+        for i, label in enumerate(WAR_LABELS):
+            bx = x0 + i * (cw + gap)
+            chip((bx, y, bx + cw, y + 30), label, f'war:{i}', selected=a.fog_war == i)
+        bx = x0 + 3 * (cw + gap)
+        chip((bx, y, bx + cw, y + 30), 'Recobrir', 'recover')
+        y += 44
         draw.line((x0, y, x1, y), fill=(*style.LINE, 255))
         y += 14
         style.write(draw, (x0, y), 'Cenas prontas', 15, style.INK)
@@ -258,9 +282,9 @@ class MasterPanel:
         cw = (x1 - x0 - gap * 2) / 3
         for i, (name, _) in enumerate(PRESETS):
             col, row = i % 3, i // 3
-            bx, by = x0 + col * (cw + gap), y + row * 38
+            bx, by = x0 + col * (cw + gap), y + row * 36
             chip((bx, by, bx + cw, by + 30), name, 'preset:' + name)
-        y += 2 * 38 + 4
+        y += -(-len(PRESETS) // 3) * 36 + 4
         chip((x0, y, x1, y + 32), 'Restaurar o padrão', 'reset')
         y += 32 + 20
         if height != int(y - oy):            # a primeira vez: mede o conteúdo e refaz no tamanho certo
@@ -283,7 +307,10 @@ class MasterPanel:
             if self.quad is not None:
                 self.quad.set_image(self.image)
         if self.quad is not None:
-            self.quad.draw(self.offset[0], self.offset[1], width, height)
+            self.scale = min(1.0, (height - 2 * TOP) / max(self.height + 8, 1))
+            pad = TOP - self.offset[1]
+            self.quad.draw(LEFT - pad * self.scale, TOP - pad * self.scale, width, height,
+                           size=(self.image.width * self.scale, self.image.height * self.scale))
 
     def delete(self) -> None:
         if self.quad is not None:

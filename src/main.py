@@ -665,6 +665,11 @@ def main() -> None:
     from src.interactive.master_panel import MasterPanel
     ambience = Ambience.from_dict(selected_world.get("ambiente") if isinstance(selected_world, dict) else None)
     master_panel = MasterPanel(ambience) if terrain_demo else None
+    from src.rendering.fog_of_war import FogOfWar
+    fog_war = FogOfWar()   # o explorado (névoa de guerra do /mestre), guardado no mundo
+    fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
+    if master_panel is not None:
+        master_panel.on_recover = fog_war.explored.clear
     if terrain_demo:
         skin_command_handler.combat = combat
         skin_command_handler.master_panel = master_panel
@@ -887,6 +892,7 @@ def main() -> None:
         menus.world['combat'] = combat.sheet.to_dict()
         menus.world['npcs'] = combat.npc_list()
         menus.world['ambiente'] = ambience.to_dict()
+        menus.world['nevoa_explorada'] = fog_war.explored.to_data()
         menus.library.save(menus.world)
         if not menus.active:
             menus.capture_scene(window.width,window.height)
@@ -930,6 +936,7 @@ def main() -> None:
         combat.sheet = PlayerSheet.from_dict(world.get('combat'))
         combat.load_npcs(world.get('npcs'))
         ambience.load(world.get('ambiente'))
+        fog_war.explored.load(world.get('nevoa_explorada'))
         menus.world = world
 
 
@@ -1023,6 +1030,7 @@ def main() -> None:
             player_token.position[1] = float(new_surface) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
             combat.clear()                     # os inimigos ficavam no relevo antigo
+            fog_war.explored.clear()           # o explorado era de outro relevo
             # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
             from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
             saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else []
@@ -1820,6 +1828,11 @@ def main() -> None:
             if shadow_renderer is not None:
                 shadow_renderer.sun_direction = sun_now
             ambience.apply(shader, (model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3])
+            fog_war.update(ambience.fog_war, float(player_token.position[0]), float(player_token.position[2]))
+            fog_war_args = (ambience.fog_war, np.linalg.inv(np.asarray(model, dtype=np.float64)), ambience.war_color(),
+                            (float(player_token.position[0]), float(player_token.position[2])))
+            fog_war.apply(shader, *fog_war_args)
+            grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
             gl.glClearColor(*ambience.background(), 1.0)
             if character_shadows is not None:
                 shadow_casters = []
@@ -2004,6 +2017,8 @@ def main() -> None:
             shader.set_bool("u_WorldStyle", False)
 
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
+            grid_renderer.fog = (ambience.fog / 100.0,
+                                 tuple((model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3]))
             grid_renderer.render(projection, view, model)
             mark("grid_draw")
 
@@ -2255,6 +2270,7 @@ def main() -> None:
         construction_panel.delete()
     if master_panel is not None:
         master_panel.delete()
+    fog_war.delete()
     if selection_box is not None:
         selection_box.delete()
     fps_overlay.delete()

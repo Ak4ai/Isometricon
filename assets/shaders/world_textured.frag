@@ -575,6 +575,36 @@ uniform float u_FogAmount = 0.0;      // 0 sem névoa
 uniform vec3 u_FogColor;
 uniform vec3 u_FogCenter;             // os pés do jogador, no espaço desenhado
 uniform float u_TorchAmount = 0.0;    // 0 sem a luz do grupo
+// a névoa de guerra (src/rendering/fog_of_war.py): 0 desligada, 1 o explorado fica limpo (u_FogWarMap), 2 só em volta
+uniform int u_FogWar = 0;
+uniform sampler2D u_FogWarMap;        // 1 explorado, 0 não; [z][x] a partir de u_FogWarOrigin, em blocos do mundo
+uniform mat4 u_FogInvModel;           // do espaço desenhado para o mundo
+uniform vec3 u_FogWarColor;
+uniform vec2 u_FogWarCenter;          // x, z (mundo) do personagem
+uniform float u_FogWarRadius;         // até onde ele enxerga
+uniform vec2 u_FogWarOrigin;
+uniform float u_FogWarSize;
+
+// os tufos da névoa: ruído que deriva com o tempo, de 0 a 1
+float fogWisps(vec2 xz)
+{
+    vec2 drift = xz * 0.11 + u_Time * vec2(0.22, 0.09);
+    return 0.62 * valueNoise(vec3(drift, u_Time * 0.05)) + 0.38 * valueNoise(vec3(drift * 2.3 + 17.0, u_Time * 0.08));
+}
+
+// o quanto a névoa de guerra cobre este ponto: 0 visto, 1 coberto. A borda anda com os tufos (não é um recorte).
+float fogWarCover(vec3 world, float wisps)
+{
+    float d = length(world.xz - u_FogWarCenter);
+    float seen = 1.0 - smoothstep(u_FogWarRadius - 3.0, u_FogWarRadius + 0.5, d + (wisps - 0.5) * 3.0);
+    if (u_FogWar == 1)
+    {
+        float m = texture(u_FogWarMap, (world.xz - u_FogWarOrigin) / u_FogWarSize).r;
+        seen = max(seen, smoothstep(0.25, 0.85, m + (wisps - 0.5) * 0.6));
+    }
+    return 1.0 - seen;
+}
+
 vec3 envGrade(vec3 color, vec3 albedo)
 {
     color *= u_EnvTint;
@@ -589,9 +619,35 @@ vec3 envGrade(vec3 color, vec3 albedo)
     color = max(mix(vec3(luma), color, u_EnvSaturation), 0.0);
     if (u_FogAmount > 0.001)
     {
-        float distance_ = max(length(offset.xz) - 2.5, 0.0);
-        float f = u_FogAmount * (1.0 - exp(-distance_ * (0.04 + 0.16 * u_FogAmount)));
+        // a névoa densa (estilo cidade na névoa): perto do jogador ainda se vê, e logo depois vira uma parede clara.
+        // Cai mais rente ao chão (mais grossa no que fica abaixo dos pés), e anda: tufos de ruído que derivam com o
+        // tempo. Muita névoa também traz um grão de filme por cima.
+        float amount = u_FogAmount;
+        float reach = max(length(offset.xz) - mix(3.0, 1.2, amount), 0.0);
+        float density = mix(0.035, 0.34, pow(amount, 1.4));
+        float low = 1.0 + 0.7 * clamp(-offset.y / 4.0, 0.0, 1.0);                  // os vales enchem primeiro
+        float wisps = fogWisps(v_FragPos.xz);
+        density *= low * mix(1.0, 0.55 + 0.9 * wisps, smoothstep(0.15, 0.6, amount));
+        float f = 1.0 - exp(-pow(reach * density, 1.5));
+        f *= min(1.0, amount * 1.6);                                                // pouca névoa nunca cobre tudo
         color = mix(color, u_FogColor, clamp(f, 0.0, 1.0));
+        float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 7.13) * 97.0, vec2(12.9898, 78.233))) * 43758.5453);
+        color += (grain - 0.5) * 0.07 * smoothstep(0.45, 1.0, amount);
+    }
+    if (u_FogWar > 0)
+    {
+        // o que ninguém viu: uma névoa quase opaca, mais clara e mais escura nos tufos, com volume e grão
+        vec3 world = (u_FogInvModel * vec4(v_FragPos, 1.0)).xyz;
+        float wisps = fogWisps(world.xz);
+        float cover = fogWarCover(world, wisps);
+        if (cover > 0.001)
+        {
+            float rise = clamp((v_FragPos.y - u_FogCenter.y) / 6.0, 0.0, 1.0);    // os picos furam um pouco a névoa
+            vec3 mist = u_FogWarColor * (0.86 + 0.28 * wisps);
+            color = mix(color, mist, clamp(cover * (0.97 - 0.18 * rise * (1.0 - wisps)), 0.0, 1.0));
+            float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 5.31) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);
+            color += (grain - 0.5) * 0.05 * cover;
+        }
     }
     return color;
 }

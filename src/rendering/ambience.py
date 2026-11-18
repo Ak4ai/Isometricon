@@ -41,6 +41,7 @@ class Ambience:
     fog: int = 0                  # 0 a 100
     saturation: int = 100         # 0 a 200 (%)
     torch: int = 0                # a luz do grupo, 0 a 100
+    fog_war: int = 0              # a névoa de guerra: 0 desligada, 1 revela ao explorar, 2 só em volta (fog_of_war)
 
     # ---- estado ----
     def to_dict(self) -> Dict[str, Any]:
@@ -70,6 +71,7 @@ class Ambience:
         self.fog = max(0, min(100, self.fog))
         self.saturation = max(0, min(200, self.saturation))
         self.torch = max(0, min(100, self.torch))
+        self.fog_war = max(0, min(2, self.fog_war))
 
     def reset(self) -> None:
         self.load(None)
@@ -133,14 +135,30 @@ class Ambience:
         return tuple(d * t * bright for d, t in zip(self.daylight(), temperature))
 
     def fog_color(self) -> Vec3:
-        return tuple(min(1.0, 0.64 * c) for c in self.tint())
+        """A cor da névoa: a luz da hora, e com muita névoa um cinza claro e frio (de dia quase branco; à noite, um
+        cinza escuro), sem a cor forte do entardecer."""
+        tint = self.tint()
+        thin = tuple(min(1.0, 0.64 * c) for c in tint)
+        luma = 0.299 * tint[0] + 0.587 * tint[1] + 0.114 * tint[2]
+        grey = tuple(min(1.0, luma * c) for c in (0.80, 0.82, 0.82))
+        t = max(0.0, min(1.0, (self.fog / 100.0 - 0.35) / 0.45))
+        t = t * t * (3 - 2 * t)
+        return tuple(a + (b - a) * t for a, b in zip(thin, grey))
+
+    def war_color(self) -> Vec3:
+        """A cor da névoa de guerra: o cinza claro e frio da névoa densa, na luz da hora."""
+        tint = self.tint()
+        luma = 0.299 * tint[0] + 0.587 * tint[1] + 0.114 * tint[2]
+        return tuple(min(1.0, luma * c) for c in (0.80, 0.82, 0.82))
 
     def background(self) -> Vec3:
         """A cor de fundo da tela (o vazio em volta do terreno), no tom da hora e da névoa."""
         tint = self.tint()
         base = tuple(b * min(t, 1.4) for b, t in zip(BACKGROUND, tint))
-        f = self.fog / 100.0
-        return tuple(a + (b - a) * f * 0.85 for a, b in zip(base, self.fog_color()))
+        if self.fog_war:                           # o vazio em volta é a névoa de guerra
+            return tuple(c * 0.96 for c in self.war_color())
+        f = min(1.0, self.fog / 100.0 * 1.4)      # com muita névoa o vazio em volta é a própria névoa
+        return tuple(a + (b - a) * f for a, b in zip(base, self.fog_color()))
 
     def clock_text(self) -> str:
         minutes = int(round(self.hour * 60)) % (24 * 60)
@@ -163,6 +181,7 @@ class Ambience:
         shader.set_float("u_EnvSaturation", 1.0)
         shader.set_float("u_FogAmount", 0.0)
         shader.set_float("u_TorchAmount", 0.0)
+        shader.set_int("u_FogWar", 0)
 
 
 # (nome, valores): o mestre aplica de uma vez
@@ -173,4 +192,6 @@ PRESETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     ('Noite', dict(hour=23.0, brightness=100, temperature=-20, fog=10, saturation=80, torch=60)),
     ('Tempestade', dict(hour=14.0, brightness=62, temperature=-40, fog=55, saturation=45, torch=0)),
     ('Sombrio', dict(hour=20.0, brightness=70, temperature=-10, fog=40, saturation=35, torch=45)),
+    ('Névoa densa', dict(hour=13.0, brightness=92, temperature=-15, fog=88, saturation=28, torch=0)),
+    ('Pesadelo', dict(hour=0.5, brightness=110, temperature=-25, fog=80, saturation=20, torch=70)),
 )

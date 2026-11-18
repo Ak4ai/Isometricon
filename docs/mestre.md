@@ -13,9 +13,12 @@ Esc ou o X fecha; o chat passa para a direita do painel enquanto ele está abert
 | Névoa | Engole o que está longe do jogador, na cor da hora. |
 | Cores | A saturação, de cinza a 200%. |
 | Luz do grupo | Uma luz quente em volta do personagem (uma tocha), que não escurece com a noite. |
-| Cenas prontas | Amanhecer, Meio-dia, Entardecer, Noite, Tempestade e Sombrio. |
+| Névoa de guerra | Sem; Revela (andando, a névoa se abre em volta do personagem e o explorado fica limpo, guardado no mundo); Em volta (limpo só perto dele: fecha atrás). Recobrir cobre de novo o explorado. |
+| Cenas prontas | Amanhecer, Meio-dia, Entardecer, Noite, Tempestade, Sombrio, Névoa densa (cinza claro, vê-se só perto) e Pesadelo (névoa escura à noite, com a luz do grupo). |
 
-Pelo chat: `/mestre hora 18:30`, `/mestre cena noite`, `/mestre padrao`, `/mestre fechar`.
+Pelo chat: `/mestre hora 18:30`, `/mestre cena noite`, `/mestre guerra revela|volta|sem`, `/mestre recobrir`, `/mestre padrao`, `/mestre fechar`.
+
+A névoa é densa e viva: rente ao chão (os vales enchem primeiro), com tufos que derivam com o tempo e grão de filme quando é muita; as linhas do contorno do relevo somem nela. A névoa de guerra usa o mesmo ruído na borda, então se abre como névoa e não como um recorte (`src/rendering/fog_of_war.py`). Numa janela baixa, o painel encolhe para caber.
 
 Nos padrões nada muda: a hora padrão (16:30) dá exatamente o sol de sempre do terreno e o tom é branco.
 

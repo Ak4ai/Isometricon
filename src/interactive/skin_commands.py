@@ -828,10 +828,22 @@ class SkinCommandHandler:
                 return False, "[Mestre] Cenas: " + ", ".join(n for n, _ in PRESETS) + ".", RED
             panel.activate("preset:" + name)
             return True, f"[Mestre] Cena: {name}.", CYAN
+        if word in ("guerra", "war"):
+            modes = {"sem": 0, "off": 0, "desligada": 0, "revela": 1, "on": 1, "volta": 2, "em": 2}
+            mode = modes.get(_fold(args[1]) if len(args) > 1 else "", None)
+            if mode is None:
+                return False, "[Mestre] Use /mestre guerra sem | revela | volta.", RED
+            panel.activate(f"war:{mode}")
+            return True, "[Mestre] Névoa de guerra: " + ("desligada", "o explorado fica limpo",
+                                                         "só em volta do grupo")[mode] + ".", CYAN
+        if word in ("recobrir", "cobrir"):
+            panel.activate("recover")
+            return True, "[Mestre] A névoa cobriu de novo o que foi explorado.", CYAN
         if word in ("padrao", "padrão", "reset"):
             panel.activate("reset")
             return True, "[Mestre] Ambientação de volta ao padrão.", CYAN
-        return False, "[Mestre] Use /mestre, /mestre hora <hh:mm>, /mestre cena <nome> ou /mestre padrao.", RED
+        return False, ("[Mestre] Use /mestre, /mestre hora <hh:mm>, /mestre cena <nome>, /mestre guerra "
+                       "<sem|revela|volta>, /mestre recobrir ou /mestre padrao."), RED
 
     def seed(self, args: List[str]) -> Result:
         """/seed: mostra a seed do mundo aberto e a copia para a área de transferência."""
@@ -1911,9 +1923,9 @@ ROOT_COMMANDS: List[Command] = [
             "os NPCs do mundo", SkinCommandHandler.npc, None),
     Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
             "muda a ficha de combate", SkinCommandHandler.attribute, None),
-    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | padrao | fechar]",
+    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | recobrir | padrao]",
             "o painel do mestre: hora do dia, claridade, névoa e outras ambientações", SkinCommandHandler.master,
-            ["hora", "cena", "padrao", "fechar"]),
+            ["hora", "cena", "guerra", "recobrir", "padrao", "fechar"]),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),
