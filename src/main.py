@@ -90,6 +90,7 @@ from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
 from src.interactive.coordinate_overlay import CoordinateOverlayRenderer
 from src.interactive.fps_overlay import FpsOverlay
+from src.interactive.loading_indicator import LoadingIndicator
 from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
@@ -1257,9 +1258,12 @@ def main() -> None:
 
 
     fps_overlay = FpsOverlay()
+    # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
+    loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)
     while not window.should_close():
         dt = window.update_delta_time()
         fps_overlay.update(dt)
+        loading_indicator.update(dt)
         if frametimes_path:
             if frame_marks:
                 frame_sections.append({n: (t - frame_marks[i - 1][1]) * 1000.0
@@ -1958,6 +1962,7 @@ def main() -> None:
         character_editor.render(window.width, window.height)
         if map_editor is None or chat_console.is_open:
             chat_console.render(window.width, window.height)
+        loading_indicator.render(window.width, window.height)
         if context_cursor is not None:
             # No terreno, jogando, a seta do sistema dá lugar ao cursor de contexto
             playing = not (menus.active or chat_console.is_open or character_editor.is_open or pan_state["active"])
@@ -2042,6 +2047,7 @@ def main() -> None:
     if selection_box is not None:
         selection_box.delete()
     fps_overlay.delete()
+    loading_indicator.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()
