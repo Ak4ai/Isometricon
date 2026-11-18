@@ -1,4 +1,4 @@
-"""As miniaturas dos inimigos no tabuleiro e os anéis do combate (alvo, vez, movimento que sobra).
+"""As miniaturas dos inimigos no tabuleiro, os anéis do combate (alvo, vez, movimento que sobra) e o rastro do personagem.
 
 Cada criatura vira uma peça de mesa como a do personagem (``create_token_mesh``): base de ardósia, corpo na cor da
 criatura, cabeça e dois olhos virados para onde ela olha; a altura e a largura vêm da ficha. Ao levar um golpe a peça
@@ -77,6 +77,25 @@ def ring_vertices(radius: float, thickness: float, color: Tuple[float, float, fl
     return np.array(v, dtype=np.float32), np.array(idx, dtype=np.uint32)
 
 
+TRAIL_COLOR = (0.35, 0.85, 1.0)
+TRAIL_SMALL, TRAIL_BIG = 0.07, 0.15    # raio do ponto mais antigo e do mais novo do rastro
+
+
+def dot_vertices(radius: float, color: Tuple[float, float, float]) -> Tuple[np.ndarray, np.ndarray]:
+    """Um disco deitado no chão (y = 0): um ponto do rastro."""
+    v: List[list] = []
+    i: List[int] = []
+    _build_disc(radius, 0.0, 10, 1.0, color, v, i)
+    return np.array(v, dtype=np.float32), np.array(i, dtype=np.uint32)
+
+
+def trail_sizes(count: int) -> List[float]:
+    """O raio de cada ponto do rastro, do mais antigo (pequeno) ao mais novo (grande)."""
+    if count <= 1:
+        return [TRAIL_BIG] * count
+    return [TRAIL_SMALL + (TRAIL_BIG - TRAIL_SMALL) * k / (count - 1) for k in range(count)]
+
+
 def token_matrix(position: Sequence[float], yaw: float, sink: float = 0.0) -> np.ndarray:
     return mat4_translate(float(position[0]), float(position[1]) - sink, float(position[2])) @ mat4_rotate_y(yaw)
 
@@ -87,6 +106,7 @@ class EnemyTokenRenderer:
     def __init__(self) -> None:
         self._meshes: Dict[Tuple[str, bool], Any] = {}
         self._rings: Dict[Tuple[int, str], Any] = {}
+        self._dots: Dict[int, Any] = {}
 
     def _mesh(self, creature: Creature, flash: bool):
         key = (creature.key, flash)
@@ -106,11 +126,26 @@ class EnemyTokenRenderer:
             self._rings[key] = TexturedMesh(*ring_vertices(key[0] / 4.0, thickness, color))
         return self._rings[key]
 
+    def _dot(self, radius: float):
+        key = int(round(radius * 100))
+        if key not in self._dots:
+            from src.rendering.mesh import TexturedMesh
+            self._dots[key] = TexturedMesh(*dot_vertices(key / 100.0, TRAIL_COLOR))
+        return self._dots[key]
+
+    def draw_trail(self, shader: Any, model: np.ndarray, trail: Sequence[Sequence[float]]) -> None:
+        """O rastro do personagem na vez dele: um ponto a cada passo, os mais antigos menores."""
+        for point, radius in zip(trail, trail_sizes(len(trail))):
+            shader.set_mat4("u_Model", model @ mat4_translate(point[0], point[1] + 0.035, point[2]))
+            self._dot(radius).draw()
+
     def draw(self, shader: Any, model: np.ndarray, controller) -> None:
         import OpenGL.GL as gl
         from src.interactive.combat_controller import FALL_SECONDS
         session = controller.session
         gl.glDisable(gl.GL_CULL_FACE)
+        if session is not None and controller.trail:
+            self.draw_trail(shader, model, controller.trail[:-1])   # o último ponto fica sob os pés
         for enemy in controller.enemies:
             sink = enemy.creature.height * min(1.0, enemy.fallen / FALL_SECONDS) if enemy.fallen else 0.0
             shader.set_mat4("u_Model", model @ token_matrix(enemy.shown, enemy.yaw, sink))
@@ -141,7 +176,8 @@ class EnemyTokenRenderer:
         gl.glEnable(gl.GL_CULL_FACE)
 
     def delete(self) -> None:
-        for mesh in list(self._meshes.values()) + list(self._rings.values()):
+        for mesh in list(self._meshes.values()) + list(self._rings.values()) + list(self._dots.values()):
             mesh.delete()
         self._meshes.clear()
         self._rings.clear()
+        self._dots.clear()

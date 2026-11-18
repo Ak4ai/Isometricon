@@ -1,12 +1,13 @@
-"""A tela do combate: ordem dos turnos, menu de ações, registro, vida sobre as cabeças e números que sobem.
+"""A tela do combate: ordem dos turnos, menu de ações, vida sobre as cabeças e números que sobem.
 
 ``compose`` monta a lista do que desenhar (imagens PIL e onde), sem OpenGL, para os testes olharem; ``render`` a
 desenha com um ``HudQuad`` por peça, refazendo a textura só quando a imagem daquela peça muda.
 
 - em cima, no meio: a ordem da iniciativa (quem está agindo com borda dourada, o alvo com borda vermelha) e a rodada;
-- embaixo, à direita (o chat fica à esquerda), na vez do personagem: movimento que sobra, o alvo (vida, CA, distância e alcance) e o menu
+- embaixo, à direita, na vez do personagem: movimento que sobra, o alvo (vida, CA, distância e alcance) e o menu
   (1-6; o que não pode agora aparece apagado com o porquê); fora da vez dele: de quem é a vez;
-- em cima, à direita, sob a ordem: as últimas linhas do registro e, abaixo da última, a conta da rolagem dela;
+- o registro da luta vai para a caixa do chat do jogo (``chat_log_view``), que no combate muda de estilo e se estica
+  da margem esquerda até a borda do menu (``CombatHud.menu_left``), aproveitando a largura da janela;
 - sobre cada inimigo na luta: o nome e a barra de vida; os números de dano/cura sobem e somem.
 """
 
@@ -17,7 +18,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from src.interactive.combat_controller import PLAYER_ID, CombatController, ascii_text
+from src.interactive.chat_console import CombatLogView
+from src.interactive.combat_controller import PLAYER_ID, CombatController, ascii_text, plain_symbols
 from src.rendering.mc_font import default_font
 
 Color = Tuple[int, int, int]
@@ -30,6 +32,7 @@ WHITE = (235, 235, 235)
 SCALE = 2
 LINE = 9 * SCALE + 4
 MARGIN = 12
+LOG_GAP = 8          # espaço entre a caixa do registro (o chat) e o menu
 
 DrawItem = Tuple[str, Image.Image, float, float, float]   # (chave, imagem, x, y, opacidade)
 
@@ -157,14 +160,20 @@ def menu_image(controller: CombatController) -> Optional[Image.Image]:
     return panel_image(rows, min_width=300)
 
 
-def log_image(controller: CombatController) -> Optional[Image.Image]:
-    if not controller.log:
+def chat_log_view(controller: CombatController, right: Optional[float]) -> Optional[CombatLogView]:
+    """O registro da luta para a caixa do chat (até ``right``), enquanto há combate ou a faixa do fim está na tela."""
+    if not controller.log or not (controller.in_combat or controller.banner is not None):
         return None
-    rows = [row_image(line.segments) for line in controller.log]
+    session = controller.session
+    if session is None:
+        title = "Combate encerrado"
+    elif controller.is_player_turn:
+        title = f"Combate  -  Rodada {session.round}  -  sua vez"
+    else:
+        title = f"Combate  -  Rodada {session.round}  -  vez de {controller.name_of(session.current.id)}"
+    lines = [[(plain_symbols(text), color) for text, color in line.segments] for line in controller.log]
     detail = controller.log[-1].detail
-    if detail:
-        rows.append(row_image([(detail, DIM)], scale=1))
-    return panel_image(rows, gap=3)
+    return CombatLogView(title, lines, detail, None if right is None else int(right) - LOG_GAP)
 
 
 def overhead_image(name: str, hp: float, max_hp: float, targeted: bool, acting: bool) -> Image.Image:
@@ -211,19 +220,13 @@ def compose(controller: CombatController, width: int, height: int, mvp: Optional
     from src.interactive.interact_prompt import project
     items: List[DrawItem] = []
     session = controller.session
-    bottom = height - MARGIN          # o chat fica embaixo à esquerda: o menu e o registro vão para a direita
     if session is not None:
         order = _cached(cache, "ordem", _order_key(controller), lambda: turn_order_image(controller))
         items.append(("ordem", order, (width - order.width) / 2, MARGIN, 1.0))
         if session.active:
             menu = _cached(cache, "menu", _menu_key(controller), lambda: menu_image(controller))
             if menu is not None:
-                bottom = height - menu.height - MARGIN
-                items.append(("menu", menu, width - menu.width - MARGIN, bottom, 1.0))
-    if controller.log and (controller.in_combat or controller.banner is not None):
-        log = _cached(cache, "registro", (len(controller.log), id(controller.log[-1])), lambda: log_image(controller))
-        top = MARGIN + (order.height + 8 if session is not None else 0)
-        items.append(("registro", log, width - log.width - MARGIN, top, 1.0))
+                items.append(("menu", menu, width - menu.width - MARGIN, height - menu.height - MARGIN, 1.0))
     if controller.banner is not None:
         text, color, left = controller.banner
         banner = _cached(cache, "faixa", (text, color),
@@ -265,14 +268,18 @@ class CombatHud:
     def __init__(self) -> None:
         self._quads: Dict[str, Tuple[object, object]] = {}   # peça -> (HudQuad, imagem enviada)
         self._cache: dict = {}
+        self.menu_left: Optional[float] = None   # a borda esquerda do menu no último quadro (None: sem menu)
 
     def render(self, controller: CombatController, width: int, height: int, mvp: Optional[np.ndarray]) -> None:
+        self.menu_left = None
         if not controller.in_combat and controller.banner is None and not controller.floaters:
             self._prune(set())
             return
         from src.rendering.hud_quad import HudQuad
         used = set()
         for slot, image, x, y, opacity in compose(controller, width, height, mvp, self._cache):
+            if slot == "menu":
+                self.menu_left = x
             used.add(slot)
             quad, sent = self._quads.get(slot, (None, None))
             if quad is None:

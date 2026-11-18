@@ -1276,7 +1276,7 @@ def main() -> None:
 
 
     fps_overlay = FpsOverlay()
-    from src.interactive.combat_hud import CombatHud
+    from src.interactive.combat_hud import CombatHud, chat_log_view
     from src.interactive.enemy_tokens import EnemyTokenRenderer
     enemy_renderer = EnemyTokenRenderer()
     combat_hud = CombatHud()
@@ -1962,6 +1962,8 @@ def main() -> None:
                 prompt_label)
             interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
             combat_hud.render(combat, window.width, window.height, projection @ view @ model)
+            # o registro da luta vai na caixa do chat, que se estica até a borda do menu de combate
+            chat_console.set_combat_log(chat_log_view(combat, combat_hud.menu_left))
             context_cursor.update(dt, cursor_mode)
             shader.use()
             if construction_panel is not None:

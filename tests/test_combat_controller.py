@@ -185,10 +185,10 @@ def test_resting_heals_out_of_combat():
 
 # ---------------------------------------------------------------- HUD e miniaturas
 
-def test_hud_composes_order_menu_and_log():
+def test_hud_composes_order_and_menu_and_leaves_the_log_to_the_chat():
     c, zombie = _player_first()
     items = {key: (image, x, y) for key, image, x, y, _ in compose(c, 1280, 720)}
-    assert {"ordem", "menu", "registro"} <= set(items)
+    assert {"ordem", "menu"} <= set(items) and "registro" not in items
     assert items["menu"][2] + items["menu"][0].height <= 720
     assert turn_order_image(c).width > 0 and menu_image(c).height > 0
 
@@ -242,3 +242,70 @@ def test_enemy_sheet_and_attribute_commands():
     assert h.execute("/atributo arma espada", run_async=False)[0] and h.combat.sheet.weapon == "espada"
     assert not h.execute("/atributo for 99", run_async=False)[0]
     assert "2 inimigo" in h.execute("/inimigo limpar", run_async=False)[1] and h.combat.enemies == []
+
+
+# ---------------------------------------------------------------- registro no chat, ao lado do menu, e rastro
+
+def test_chat_becomes_the_combat_log_up_to_the_menu():
+    from src.interactive.chat_console import ChatConsole
+    from src.interactive.combat_hud import chat_log_view
+    c, _ = _player_first()
+    assert chat_log_view(controller(), 900) is None                    # sem combate, o chat é o de sempre
+    chat = ChatConsole(create_gl=False)
+    normal = chat._box_width(1920)
+    boxes = {}
+    for width in (1920, 900):
+        menu_left = width - menu_image(c).width - 12
+        view = chat_log_view(c, menu_left)
+        assert view.title.startswith("Combate") and view.lines and "★" not in str(view.lines)
+        chat.set_combat_log(view)
+        box = boxes[width] = chat._box_width(width)
+        assert 16 + box + 6 <= menu_left                              # a caixa para antes do menu
+        assert box >= menu_left - 16 - 6 - 8 - 20                     # e aproveita a largura até ele
+        image = chat._generate_hud_image(width, 720, [])
+        assert image.getbbox() is not None
+        assert image.getbbox()[2] <= menu_left
+    assert boxes[1920] > normal > boxes[900]                             # na janela larga cresce além dos 740
+    chat.set_combat_log(None)
+    assert chat._box_width(1920) == normal and chat.combat_log is None
+
+
+def test_chat_log_wraps_long_lines_by_word():
+    from PIL import Image, ImageDraw
+    from src.interactive.chat_console import ChatConsole
+    chat = ChatConsole(create_gl=False)
+    draw = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    rows = chat._wrap_segments(draw, [("Zumbi ataca ", (255, 0, 0)), ("o jogador " * 20, (255, 255, 255))], 200)
+    assert len(rows) > 2
+    assert all(chat._measure(draw, "".join(t for t, _ in row)) <= 200 + chat._measure(draw, "  ") for row in rows)
+
+
+def test_trail_marks_the_walk_and_restarts_each_turn():
+    from src.interactive.enemy_tokens import TRAIL_BIG, TRAIL_SMALL, dot_vertices, trail_sizes
+    c, _ = _player_first()
+    pos = [0.0, 0.0, 0.0]
+    c.update(0.01, pos)
+    for _ in range(10):
+        pos = c.limit_step(pos, [pos[0] - 0.2, 0.0, 0.0])
+        c.update(0.01, pos)
+    assert len(c.trail) == 6 and c.trail[0] == [0.0, 0.0, 0.0]
+    assert all(abs(b[0] - a[0]) >= cc.TRAIL_STEP - 1e-9 for a, b in zip(c.trail, c.trail[1:]))
+    c.end_turn()
+    c.update(0.01, pos)
+    assert len(c.trail) == 6                                   # na vez dos inimigos o rastro continua lá
+    c.session.end_turn() if not c.session.is_player_turn else None
+    c.update(0.01, pos)
+    assert c.trail == [pos]                                    # a vez voltou: rastro novo
+    sizes = trail_sizes(5)
+    assert sizes[0] == TRAIL_SMALL and sizes[-1] == TRAIL_BIG and sizes == sorted(sizes)
+    v, i = dot_vertices(0.1, (0, 0, 1))
+    assert np.hypot(v[:, 0], v[:, 2]).max() <= 0.1 + 1e-6 and (v[:, 1] == 0).all()
+    c.clear()
+    assert c.trail == []
+
+
+def test_submenus_dim_after_the_action_is_used():
+    c, _ = _player_first()
+    assert c.blocked(None) is None
+    c.choose("4")
+    assert "já foi usada" in c.blocked(None)

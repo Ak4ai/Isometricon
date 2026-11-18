@@ -8,7 +8,8 @@ A regra está em ``src.combat``; aqui fica o que liga a regra ao jogo:
   Furtivo) ou quando um inimigo o vê a até ``AGGRO_RADIUS`` blocos. Outros inimigos a até ``JOIN_RADIUS`` entram junto,
   e quem chegar perto depois entra no começo de uma rodada;
 - na vez do personagem o WASD anda só o que sobra do movimento (``limit_step``) e trava quando acaba; fora da vez dele
-  também trava. As teclas 1-6 escolhem a ação, Tab troca o alvo, Enter encerra a vez;
+  também trava. Por onde ele passa na vez fica um rastro (``trail``), que some quando a vez dele volta. As teclas
+  1-6 escolhem a ação, Tab troca o alvo, Enter encerra a vez;
 - a vez de cada inimigo espera a anterior terminar de andar na tela e mais ``ENEMY_DELAY`` segundos;
 - no fim: vitória tira os inimigos caídos; derrota faz o personagem acordar com 1 de vida e os inimigos irem embora;
   fuga deixa os inimigos onde estão, sem perseguir por ``AFTER_ESCAPE`` segundos.
@@ -33,7 +34,9 @@ ENEMY_DELAY = 0.7        # segundos entre a vez de um inimigo e a do próximo
 WALK_SPEED = 5.0         # blocos por segundo dos inimigos andando na tela
 AFTER_ESCAPE = 8.0       # segundos sem perseguir depois de uma fuga
 FALL_SECONDS = 1.0       # o inimigo caído afunda no chão por tanto tempo e some
-LOG_SIZE = 7
+LOG_SIZE = 12       # linhas guardadas para o registro (a caixa do chat mostra as últimas que cabem)
+TRAIL_STEP = 0.35        # o rastro marca um ponto a cada tanto que o personagem anda
+TRAIL_MAX = 160
 REST_HEAL_SECONDS = 3.0  # fora de combate, 1 de vida a cada tanto
 PLAYER_ID = "jogador"
 
@@ -67,11 +70,19 @@ class WorldTerrain:
         return True
 
 
+SYMBOLS = (("★", "*"), ("⚔", "!"), ("➜", ">"), ("✖", "x"), ("—", "-"), ("→", "->"), ("…", "..."))
+
+
+def plain_symbols(text: str) -> str:
+    """O texto com os símbolos trocados por sinais simples (mantém os acentos, que a fonte do chat tem)."""
+    for old, new in SYMBOLS:
+        text = text.replace(old, new)
+    return text
+
+
 def ascii_text(text: str) -> str:
     """O texto só com letras que a fonte do jogo tem (sem acento nem símbolos)."""
-    for old, new in (("★", "*"), ("⚔", "!"), ("➜", ">"), ("✖", "x"), ("—", "-"), ("→", "->"), ("…", "...")):
-        text = text.replace(old, new)
-    text = unicodedata.normalize("NFKD", text)
+    text = unicodedata.normalize("NFKD", plain_symbols(text))
     return "".join(c for c in text if ord(c) < 128 and not unicodedata.combining(c))
 
 
@@ -151,6 +162,8 @@ class CombatController:
         self.banner: Optional[Tuple[str, Tuple[int, int, int], float]] = None   # texto do fim, cor, tempo
         self.messages: List[Tuple[str, Tuple[int, int, int]]] = []              # para o chat
         self.player_position: Optional[List[float]] = None
+        self.trail: List[List[float]] = []   # por onde o personagem passou na vez dele (some na próxima vez)
+        self._trail_turn = None
         self._serial = 0
 
     # ------------------------------------------------------------------ consultas
@@ -216,6 +229,8 @@ class CombatController:
         """Tira todos os inimigos (e encerra um combate sem resultado)."""
         count = len(self.enemies)
         self.enemies.clear()
+        self.trail = []
+        self._trail_turn = None
         self.session = None
         self.player = None
         self.menu = "main"
@@ -288,6 +303,8 @@ class CombatController:
         self.session = None
         self.player = None
         self.menu = "main"
+        self.trail = []
+        self._trail_turn = None
 
     # ------------------------------------------------------------------ o quadro
 
@@ -323,6 +340,7 @@ class CombatController:
             return
         session = self.session
         session.set_position(PLAYER_ID, player_position)
+        self._track_trail(player_position)
         if not session.active:
             if not self.animating:
                 self._finish()
@@ -338,6 +356,21 @@ class CombatController:
         session.run_ai_turn()
         self._consume_events()
         self.wait = ENEMY_DELAY
+
+    def _track_trail(self, position: Sequence[float]) -> None:
+        """Na vez do personagem, marca um ponto a cada ``TRAIL_STEP`` andados; a vez nova começa um rastro novo."""
+        session = self.session
+        if session is None or not session.is_player_turn:
+            return
+        turn = (session.round, session.index)
+        point = [float(v) for v in position]
+        if turn != self._trail_turn:
+            self._trail_turn = turn
+            self.trail = [point]
+            return
+        if not self.trail or flat_distance(self.trail[-1], point) >= TRAIL_STEP:
+            self.trail.append(point)
+            del self.trail[:-TRAIL_MAX]
 
     def _rest(self, dt: float) -> None:
         if self.sheet.hp is None or self.sheet.hp >= self.sheet.max_hp:
@@ -459,8 +492,10 @@ class CombatController:
                 ("6", "Fugir", "fugir", None)]
 
     def blocked(self, action: Optional[str], item: Optional[str] = None) -> Optional[str]:
-        if self.session is None or action in (None, "voltar"):
+        if self.session is None or action == "voltar":
             return None
+        if action is None:                       # submenu: só apaga quando a ação da vez já foi usada
+            return "a ação desta vez já foi usada" if self.session.action_used else None
         return self.session.block_reason(action, item=item)
 
     def choose(self, key: str) -> bool:

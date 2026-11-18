@@ -3,6 +3,11 @@
 Permite abrir a barra de chat com [T] ou [/], digitar comandos de personalização
 em tempo real (ex: '/skin olhos vermelho', '/skin top sweater', '/skin vestir <id>')
 e visualizar o feedback colorido na interface gráfica. Os comandos ficam em skin_commands.
+
+Durante um combate (``set_combat_log``) a mesma caixa vira o registro do combate: com o chat fechado ela mostra as
+linhas da luta (coloridas por pedaço, com título, borda dourada e a conta da última rolagem embaixo) no lugar das
+mensagens, e se estica para a direita até ``right`` (a borda do menu de combate), aproveitando a largura da janela.
+Aberto com [T], volta a ser o chat de sempre, também sem passar de ``right``.
 """
 
 from dataclasses import dataclass
@@ -27,6 +32,22 @@ class ChatMessage:
     text: str
     color: Tuple[int, int, int] = (255, 255, 255)
     timestamp: float = 0.0
+
+
+Segment = Tuple[str, Tuple[int, int, int]]
+
+
+@dataclass
+class CombatLogView:
+    """O que a caixa do chat mostra no lugar das mensagens durante um combate."""
+    title: str
+    lines: List[List[Segment]]
+    detail: str = ""
+    right: Optional[int] = None   # até onde (x, em pixels) a caixa pode ir; None: a largura de sempre
+
+
+COMBAT_LINES = 9            # linhas do registro que cabem na caixa
+COMBAT_MIN_WIDTH = 240
 
 
 # Os comandos (execução, autocompletar e ajuda) vêm de um quadro único em skin_commands.
@@ -77,6 +98,9 @@ class ChatConsole:
         self._tab_cycle_active: bool = False
         self._tab_base_text: str = ""
         self._ignore_chars: set = set()
+
+        self.combat_log: Optional[CombatLogView] = None
+        self._combat_key: Any = None
 
         self.hud_dirty: bool = True
         self.hud_tex_id: Optional[int] = None
@@ -708,6 +732,22 @@ class ChatConsole:
                 self.cursor_visible = not self.cursor_visible
                 self.hud_dirty = True
 
+    def set_combat_log(self, view: Optional[CombatLogView]) -> None:
+        """Liga (``view``) ou desliga (``None``) o modo registro de combate; só redesenha quando algo mudou."""
+        key = None if view is None else (view.title, tuple(tuple(line) for line in view.lines), view.detail,
+                                         view.right)
+        if key != self._combat_key:
+            self._combat_key = key
+            self.combat_log = view
+            self.hud_dirty = True
+
+    def _box_width(self, width: int) -> int:
+        """A largura da caixa: a de sempre; no combate, da margem esquerda até a borda do menu de combate."""
+        if self.combat_log is None:
+            return min(740, width - 32)
+        right = self.combat_log.right if self.combat_log.right is not None else width - 16
+        return max(COMBAT_MIN_WIDTH, min(width - 32, int(right) - 16 - 6 - 10))
+
     def render(self, window_width: int, window_height: int) -> None:
         """Renderiza a caixa de chat e mensagens na tela usando OpenGL 3.3 Core."""
         if not self.create_gl or self.hud_shader is None:
@@ -721,7 +761,7 @@ class ChatConsole:
         ]
 
         is_importing = bool(self.command_handler and self.command_handler.busy_status)
-        if not self.is_open and not visible_messages and not is_importing:
+        if not self.is_open and not visible_messages and not is_importing and self.combat_log is None:
             return
 
         import OpenGL.GL as gl
@@ -796,6 +836,74 @@ class ChatConsole:
             lines.append(current)
         return lines
 
+    def _measure(self, draw: Any, text: str, font: Any = None) -> float:
+        try:
+            return draw.textlength(text, font=font or self.font)
+        except AttributeError:
+            return len(text) * 9
+
+    def _wrap_segments(self, draw: Any, segments: List[Segment], width: int) -> List[List[Segment]]:
+        """Quebra uma linha colorida (pedaços de texto e cor) em linhas que cabem em ``width``, palavra por palavra."""
+        words: List[Segment] = []
+        for text, color in segments:
+            for i, word in enumerate(text.split(" ")):
+                if i > 0:
+                    words.append((" ", color))
+                if word:
+                    words.append((word, color))
+        lines: List[List[Segment]] = [[]]
+        used = 0.0
+        for word, color in words:
+            if word == " " and not lines[-1]:
+                continue
+            size = self._measure(draw, word)
+            if word != " " and used + size > width and lines[-1]:
+                while lines[-1] and lines[-1][-1][0] == " ":
+                    lines[-1].pop()
+                lines.append([("  ", color)])           # a continuação entra recuada, como no chat
+                used = self._measure(draw, "  ")
+            lines[-1].append((word, color))
+            used += size
+        return lines
+
+    def _draw_combat_log(self, draw: Any, width: int, height: int) -> None:
+        """A caixa do chat como registro do combate (com o chat fechado)."""
+        view = self.combat_log
+        box_x = 16
+        box_w = self._box_width(width)
+        line_height = 20
+        rows: List[List[Segment]] = []
+        for line in view.lines:
+            rows.extend(self._wrap_segments(draw, line, box_w - 8))
+        rows = rows[-COMBAT_LINES:]
+        title_h = 24
+        detail_h = 18 if view.detail else 0
+        hint_h = 18
+        total_h = title_h + len(rows) * line_height + detail_h + hint_h + 10
+        box_y = height - total_h - 16
+        left, right = box_x - 6, box_x + box_w + 6
+        draw.rectangle([left, box_y - 4, right, box_y + total_h + 2], fill=(14, 11, 8, 205),
+                       outline=(200, 160, 60, 230), width=2)
+        draw.rectangle([left, box_y - 4, right, box_y + title_h - 2], fill=(60, 44, 16, 215))
+        draw.text((box_x + 1, box_y + 1), view.title, font=self.font, fill=(20, 20, 20, 220))
+        draw.text((box_x, box_y), view.title, font=self.font, fill=(255, 205, 70, 255))
+        y = box_y + title_h + 2
+        for row in rows:
+            x = float(box_x)
+            for text, (r, g, b) in row:
+                draw.text((x + 1, y + 1), text, font=self.font, fill=(20, 20, 20, 220))
+                draw.text((x, y), text, font=self.font, fill=(r, g, b, 255))
+                x += self._measure(draw, text)
+            y += line_height
+        if view.detail:
+            detail = view.detail
+            while len(detail) > 4 and self._measure(draw, detail, self.font_small) > box_w:
+                detail = detail[:-4] + "..."
+            draw.text((box_x, y + 1), detail, font=self.font_small, fill=(165, 160, 150, 235))
+            y += detail_h
+        draw.text((box_x, y + 3), "[T] abre o chat durante o combate", font=self.font_small,
+                  fill=(140, 130, 110, 190))
+
     def _generate_hud_image(
         self,
         width: int,
@@ -806,9 +914,13 @@ class ChatConsole:
         img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # Dimensões da caixa de chat (canto inferior esquerdo)
+        if self.combat_log is not None and not self.is_open:
+            self._draw_combat_log(draw, width, height)
+            return img
+
+        # Dimensões da caixa de chat (canto inferior esquerdo; no combate, até a borda do menu de combate)
         box_x = 16
-        box_w = min(740, width - 32)
+        box_w = self._box_width(width)
         line_height = 20
         max_lines = 8
         # Each message takes as many lines as it has (and its long lines wrap): the newest lines show.

@@ -65,6 +65,8 @@ Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um ch
 - Os inimigos têm ficha própria (no mod o acerto era metade do dano do mob) e IA por situação (no mod, 70/30).
 - Os dados aceitam semente: o mesmo combate se repete igual (testes e replays).
 - O registro explica cada rolagem (a dica que o mod mostrava ao passar o mouse vira a linha de baixo do registro).
+- O registro mora no chat do jogo: durante a luta a caixa do chat muda de estilo (título com a rodada, borda dourada, linhas coloridas) e se estica da margem esquerda até o menu de combate; [T] abre o chat normal sem sair da luta.
+- Ao andar na sua vez fica um rastro de pontos no chão, que recomeça a cada turno; com a ação gasta, os submenus ficam apagados.
 
 ## Para depois
 
