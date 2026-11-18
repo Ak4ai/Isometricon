@@ -2020,12 +2020,6 @@ def main() -> None:
                 gl.glDepthMask(gl.GL_TRUE)
                 mark("water_pass")
             gl.glDisable(gl.GL_BLEND)
-            if cloud_fog is not None and (clouds_on or cloud_fog.field.cover):
-                # 2d. A névoa de guerra: a manta de nuvens sobre o que ninguém viu (esconde também quem está debaixo)
-                cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
-                                 float(player_token.position[2]), dt)
-                cloud_fog.render(projection, view, model, ambience.tint(), window.time)
-                shader.use()
             shader.set_int("u_WaterPass", 0)
             shader.set_float("u_SightActive", 0.0)
             room_renderer.disable(shader)
@@ -2120,6 +2114,14 @@ def main() -> None:
                 shader.set_int("u_TextureAtlas", 0)
                 enemy_renderer.draw(shader, model, combat)
                 mark("enemy_draw")
+            if cloud_fog is not None and (clouds_on or cloud_fog.field.cover):
+                # a névoa de guerra: a manta de nuvens translúcida sobre o que ninguém viu, por último (quem está
+                # debaixo da beira rala aparece através dela)
+                cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
+                                 float(player_token.position[2]), dt)
+                cloud_fog.render(projection, view, model, ambience.tint(), window.time)
+                shader.use()
+                mark("clouds")
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
             scene_target.finish()
 

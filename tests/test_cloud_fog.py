@@ -58,3 +58,24 @@ def test_reset_recomeca():
     field.update(REVEAL, 0.5, 0.5, 0.016)
     field.reset()
     assert not field.cover and field.origin is None
+
+
+def test_campo_de_distancia_ralo_na_beira_denso_no_miolo():
+    field = _field()
+    field.update(REVEAL, 0.5, 0.5, 0.016)
+    distance = field.distance_map()                         # [iz, ix]
+    ox, oz = field.origin
+    assert distance.shape == (WINDOW, WINDOW)
+    assert distance[0 - oz, 0 - ox] == 0.0                  # onde o personagem está, aberto
+    edge = distance[0 - oz, 3 - ox]                         # a primeira nuvem depois do raio aberto
+    assert 0.0 < edge < 0.5 and distance[30 - oz, 30 - ox] == 1.0
+
+
+def test_malha_vetorizada_tem_os_lados_virados_para_fora():
+    field = _field()
+    field.update(REVEAL, 0.5, 0.5, 0.016)
+    mesh = field.full_mesh()
+    below = mesh[:, 5]
+    assert below.min() == 0.0 and below.max() > 0.0       # o topo (0) e o pé dos lados (abaixo do topo)
+    tops = mesh[mesh[:, 3] == 1.0]
+    assert (tops[:, 5] == 0.0).all()

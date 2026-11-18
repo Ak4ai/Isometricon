@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import os
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -27,7 +27,9 @@ RECENTER = 12       # células: recentra quando o jogador se afasta isto do cent
 CLEARANCE = 2       # o topo fica isto acima do bloco mais alto da célula (cobre o capim e as flores)
 FADE_SECONDS = 0.55
 SHADES = {'top': 1.0, 'x': 0.86, 'z': 0.74}   # o sombreado chapado das nuvens do Minecraft
-FLOATS = 5          # x, y, z, sombra, opacidade
+FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
+FAR = 4             # células: daqui para dentro da manta a nuvem é densa
+UNIT = 8            # a unidade de textura do campo de distância (7 é a do cursor)
 
 Cell = Tuple[int, int]
 
@@ -50,6 +52,7 @@ class CloudField:
         self._columns: Dict[Cell, Tuple[int, int]] = {}   # (fundo, topo) de cada célula
         self._key = None
         self.revision = 0                            # muda quando a malha das células inteiras precisa ser refeita
+        self._distance = None                        # (revisão, distance_map)
 
     def reset(self) -> None:
         """Outro relevo (outro mundo ou outra seed): as alturas e a manta são refeitas."""
@@ -139,71 +142,119 @@ class CloudField:
             and previous[1] <= cell[1] < previous[1] + WINDOW
 
     # ---- as malhas ----
+    def _full_grid(self):
+        """As células inteiras da manta como grades [ix, iz]: máscara, fundo e topo."""
+        full = np.zeros((WINDOW, WINDOW), dtype=bool)
+        bottom = np.zeros((WINDOW, WINDOW), dtype=np.float32)
+        top = np.zeros((WINDOW, WINDOW), dtype=np.float32)
+        if self.origin is None:
+            return full, bottom, top
+        ox, oz = self.origin
+        for (cx, cz), value in self.cover.items():
+            ix, iz = cx - ox, cz - oz
+            if value >= 1.0 and 0 <= ix < WINDOW and 0 <= iz < WINDOW:
+                full[ix, iz] = True
+                bottom[ix, iz], top[ix, iz] = self.column((cx, cz))
+        return full, bottom, top
+
     def full_mesh(self) -> np.ndarray:
         """As células inteiras: o topo e só os lados que dão para fora (ou para uma célula mais baixa)."""
-        full = {cell for cell, value in self.cover.items() if value >= 1.0}
-        out: List[float] = []
-        for cell in full:
-            bottom, top = self.column(cell)
-            x0, z0 = cell[0] * CELL, cell[1] * CELL
-            _top(out, x0, z0, top, 1.0)
-            for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                near = (cell[0] + dx, cell[1] + dz)
-                floor = self.column(near)[1] if near in full else bottom
-                if floor < top:
-                    _side(out, x0, z0, dx, dz, max(floor, bottom), top, 1.0)
-        return np.asarray(out, dtype=np.float32).reshape(-1, FLOATS)
+        full, bottom, top = self._full_grid()
+        if not full.any():
+            return np.zeros((0, FLOATS), dtype=np.float32)
+        ox, oz = self.origin
+        ix, iz = np.nonzero(full)
+        x0, z0 = ((ix + ox) * CELL).astype(np.float32), ((iz + oz) * CELL).astype(np.float32)
+        parts = [_quads('top', x0, z0, CELL, bottom[ix, iz], top[ix, iz], 1.0)]
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            near_full = np.zeros_like(full)
+            near_top = np.zeros_like(top)
+            src = (slice(max(dx, 0), WINDOW + min(dx, 0)), slice(max(dz, 0), WINDOW + min(dz, 0)))
+            dst = (slice(max(-dx, 0), WINDOW + min(-dx, 0)), slice(max(-dz, 0), WINDOW + min(-dz, 0)))
+            near_full[dst], near_top[dst] = full[src], top[src]
+            floor = np.where(near_full, near_top, bottom)
+            show = full & (floor < top)
+            sx, sz = np.nonzero(show)
+            if len(sx):
+                parts.append(_quads((dx, dz), ((sx + ox) * CELL).astype(np.float32),
+                                    ((sz + oz) * CELL).astype(np.float32), CELL,
+                                    np.maximum(floor, bottom)[sx, sz], top[sx, sz], 1.0))
+        return np.concatenate(parts)
 
     def moving_mesh(self) -> np.ndarray:
         """As células que estão se desfazendo ou se formando: caixas menores, mais altas e transparentes."""
-        out: List[float] = []
-        for cell, value in self.cover.items():
-            if value >= 1.0:
-                continue
-            bottom, top = self.column(cell)
-            ease = value * value * (3 - 2 * value)
-            size = CELL * (0.35 + 0.65 * ease)
-            lift = (1.0 - ease) * 1.6
-            x0 = cell[0] * CELL + (CELL - size) / 2
-            z0 = cell[1] * CELL + (CELL - size) / 2
-            height = (top - bottom) * (0.4 + 0.6 * ease)
-            _box(out, x0, z0, size, top - height + lift, top + lift, ease)
-        return np.asarray(out, dtype=np.float32).reshape(-1, FLOATS)
+        moving = [(cell, value) for cell, value in self.cover.items() if value < 1.0]
+        if not moving:
+            return np.zeros((0, FLOATS), dtype=np.float32)
+        cells = np.array([cell for cell, _ in moving], dtype=np.float32)
+        value = np.array([v for _, v in moving], dtype=np.float32)
+        columns = np.array([self.column(cell) for cell, _ in moving], dtype=np.float32)
+        ease = value * value * (3 - 2 * value)
+        size = CELL * (0.35 + 0.65 * ease)
+        lift = (1.0 - ease) * 1.6
+        x0 = cells[:, 0] * CELL + (CELL - size) / 2
+        z0 = cells[:, 1] * CELL + (CELL - size) / 2
+        height = (columns[:, 1] - columns[:, 0]) * (0.4 + 0.6 * ease)
+        bottom, top = columns[:, 1] - height + lift, columns[:, 1] + lift
+        return np.concatenate([_quads(face, x0, z0, size, bottom, top, ease)
+                               for face in ('top', (1, 0), (-1, 0), (0, 1), (0, -1))])
+
+    def distance_map(self) -> np.ndarray:
+        """Quantas células cada nuvem inteira está da beira (do aberto), como imagem [iz, ix] de 0 a 1 (``FAR``
+        células ou mais é 1). O shader lê com filtro linear: a beira da manta fica rala e o miolo, denso."""
+        if self._distance is not None and self._distance[0] == self.revision:
+            return self._distance[1]
+        full = self._full_grid()[0]
+        if full.all() or not full.any():
+            out = np.full((WINDOW, WINDOW), 1.0 if full.any() else 0.0, dtype=np.float32)
+        else:
+            from scipy.ndimage import distance_transform_edt
+            # fora da manta conta como coberto (a beira dela não é uma beira de verdade, é o vazio da névoa)
+            padded = np.pad(full, FAR, mode='constant', constant_values=True)
+            out = distance_transform_edt(padded)[FAR:-FAR, FAR:-FAR].astype(np.float32)
+            out = np.minimum(out, FAR) / FAR
+        out = np.ascontiguousarray(out.T)
+        self._distance = (self.revision, out)
+        return out
 
 
-def _quad(out: List[float], corners, shade: float, alpha: float) -> None:
-    a, b, c, d = corners
-    for p in (a, b, c, a, c, d):
-        out.extend((p[0], p[1], p[2], shade, alpha))
+# os cantos de cada face numa caixa unitária (x, y, z): y 0 é o fundo e 1 o topo; anti-horário visto de fora
+_FACES = {
+    'top': ((0, 1, 0), (0, 1, 1), (1, 1, 1), (1, 1, 0)),
+    (1, 0): ((1, 0, 0), (1, 1, 0), (1, 1, 1), (1, 0, 1)),
+    (-1, 0): ((0, 0, 1), (0, 1, 1), (0, 1, 0), (0, 0, 0)),
+    (0, 1): ((1, 0, 1), (1, 1, 1), (0, 1, 1), (0, 0, 1)),
+    (0, -1): ((0, 0, 0), (0, 1, 0), (1, 1, 0), (1, 0, 0)),
+}
+_TRIANGLES = (0, 1, 2, 0, 2, 3)
 
 
-def _top(out, x0, z0, top, alpha, size=CELL) -> None:
-    _quad(out, ((x0, top, z0), (x0, top, z0 + size), (x0 + size, top, z0 + size), (x0 + size, top, z0)),
-          SHADES['top'], alpha)
-
-
-def _side(out, x0, z0, dx, dz, bottom, top, alpha, size=CELL) -> None:
-    """O lado da célula que dá para (dx, dz), virado para fora (sentido anti-horário visto de fora)."""
-    x1, z1 = x0 + size, z0 + size
-    if dx == 1:
-        corners = ((x1, bottom, z0), (x1, top, z0), (x1, top, z1), (x1, bottom, z1))
-    elif dx == -1:
-        corners = ((x0, bottom, z1), (x0, top, z1), (x0, top, z0), (x0, bottom, z0))
-    elif dz == 1:
-        corners = ((x1, bottom, z1), (x1, top, z1), (x0, top, z1), (x0, bottom, z1))
-    else:
-        corners = ((x0, bottom, z0), (x0, top, z0), (x1, top, z0), (x1, bottom, z0))
-    _quad(out, corners, SHADES['x'] if dx else SHADES['z'], alpha)
-
-
-def _box(out, x0, z0, size, bottom, top, alpha) -> None:
-    _top(out, x0, z0, top, alpha, size)
-    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        _side(out, x0, z0, dx, dz, bottom, top, alpha, size)
+def _quads(face, x0, z0, size, bottom, top, alpha) -> np.ndarray:
+    """Uma face por célula (arrays de mesmo tamanho), em triângulos: x, y, z, sombra, opacidade e quanto o vértice
+    está abaixo do topo da nuvem (o shader escurece o lado para baixo)."""
+    count = len(x0)
+    corners = np.array(_FACES[face], dtype=np.float32)[list(_TRIANGLES)]          # (6, 3)
+    shade = SHADES['top'] if face == 'top' else SHADES['x'] if face[0] else SHADES['z']
+    out = np.empty((count, 6, FLOATS), dtype=np.float32)
+    size = np.broadcast_to(np.asarray(size, dtype=np.float32), (count,))
+    bottom = np.broadcast_to(np.asarray(bottom, dtype=np.float32), (count,))
+    top = np.broadcast_to(np.asarray(top, dtype=np.float32), (count,))
+    out[..., 0] = x0[:, None] + corners[None, :, 0] * size[:, None]
+    out[..., 1] = np.where(corners[None, :, 1] > 0, top[:, None], bottom[:, None])
+    out[..., 2] = z0[:, None] + corners[None, :, 2] * size[:, None]
+    out[..., 3] = shade
+    out[..., 4] = np.broadcast_to(np.asarray(alpha, dtype=np.float32), (count,))[:, None]
+    out[..., 5] = np.where(corners[None, :, 1] > 0, 0.0, (top - bottom)[:, None])
+    return out.reshape(-1, FLOATS)
 
 
 class CloudFog:
-    """Desenha a manta de nuvens (o shader ``cloud``) no lugar da névoa de guerra plana."""
+    """Desenha a manta de nuvens (o shader ``cloud``) no lugar da névoa de guerra plana.
+
+    As nuvens são translúcidas: primeiro só a profundidade delas, depois a cor por cima com mistura, só na face da
+    frente (``GL_LEQUAL``), para que uma nuvem não se some à de trás e fique em degraus. A opacidade vem do campo de
+    distância (``CloudField.distance_map``), uma textura pequena: rala na beira, densa no miolo.
+    """
 
     def __init__(self, height: Callable[[int, int], int], explored: ExploredMap) -> None:
         from src.rendering.shader import Shader
@@ -213,21 +264,38 @@ class CloudFog:
                              os.path.join(root, 'assets', 'shaders', 'cloud.frag'))
         self._meshes = {'full': self._new_mesh(), 'moving': self._new_mesh()}
         self._built = None
+        self._origin = (0, 0)
+        self.texture_id = self._new_texture()
 
     @staticmethod
     def _new_mesh():
+        import ctypes
         import OpenGL.GL as gl
         vao, vbo = gl.glGenVertexArrays(1), gl.glGenBuffers(1)
         gl.glBindVertexArray(vao)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)
         stride = FLOATS * 4
-        import ctypes
         gl.glEnableVertexAttribArray(0)
         gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, stride, None)
         gl.glEnableVertexAttribArray(1)
         gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(12))
+        gl.glEnableVertexAttribArray(2)
+        gl.glVertexAttribPointer(2, 1, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(20))
         gl.glBindVertexArray(0)
         return {'vao': vao, 'vbo': vbo, 'count': 0}
+
+    @staticmethod
+    def _new_texture() -> int:
+        import OpenGL.GL as gl
+        texture = gl.glGenTextures(1)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
+        for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
+                            (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_R16F, WINDOW, WINDOW, 0, gl.GL_RED, gl.GL_FLOAT, None)
+        gl.glActiveTexture(gl.GL_TEXTURE0)
+        return texture
 
     @staticmethod
     def _upload(mesh, data: np.ndarray) -> None:
@@ -238,9 +306,17 @@ class CloudFog:
             gl.glBufferData(gl.GL_ARRAY_BUFFER, data.nbytes, data, gl.GL_DYNAMIC_DRAW)
 
     def update(self, mode: int, x: float, z: float, dt: float) -> None:
+        import OpenGL.GL as gl
         self.field.update(mode, x, z, dt)
         if self._built != self.field.revision:
             self._upload(self._meshes['full'], self.field.full_mesh())
+            distance = np.ascontiguousarray(self.field.distance_map(), dtype=np.float32)
+            gl.glActiveTexture(gl.GL_TEXTURE0 + UNIT)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture_id)
+            gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
+            gl.glTexSubImage2D(gl.GL_TEXTURE_2D, 0, 0, 0, WINDOW, WINDOW, gl.GL_RED, gl.GL_FLOAT, distance)
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            self._origin = self.field.origin or (0, 0)
             self._built = self.field.revision
         self._upload(self._meshes['moving'], self.field.moving_mesh())
 
@@ -254,18 +330,35 @@ class CloudFog:
         self.shader.set_mat4('u_MVP', projection @ view @ model)
         self.shader.set_vec3('u_Tint', *(float(c) for c in tint))
         self.shader.set_float('u_Time', float(time))
+        self.shader.set_vec2('u_Origin', float(self._origin[0]), float(self._origin[1]))
+        self.shader.set_float('u_Window', float(WINDOW))
+        self.shader.set_float('u_Cell', float(CELL))
+        gl.glActiveTexture(gl.GL_TEXTURE0 + UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture_id)
+        gl.glActiveTexture(gl.GL_TEXTURE0)
+        self.shader.set_int('u_Distance', UNIT)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_CULL_FACE)
+        gl.glEnable(gl.GL_BLEND)
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         if full['count']:
             gl.glBindVertexArray(full['vao'])
+            # 1. só a profundidade: a face da frente de cada ponto da manta
+            gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
             gl.glDrawArrays(gl.GL_TRIANGLES, 0, full['count'])
-        if moving['count']:
-            gl.glEnable(gl.GL_BLEND)
-            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            gl.glColorMask(gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE)
+            # 2. a cor, misturada uma vez só, nessa face
+            gl.glDepthFunc(gl.GL_LEQUAL)
             gl.glDepthMask(gl.GL_FALSE)
+            self.shader.set_bool('u_Moving', False)
+            gl.glDrawArrays(gl.GL_TRIANGLES, 0, full['count'])
+            gl.glDepthFunc(gl.GL_LESS)
+        if moving['count']:
+            gl.glDepthMask(gl.GL_FALSE)
+            self.shader.set_bool('u_Moving', True)
             gl.glBindVertexArray(moving['vao'])
             gl.glDrawArrays(gl.GL_TRIANGLES, 0, moving['count'])
-            gl.glDepthMask(gl.GL_TRUE)
+        gl.glDepthMask(gl.GL_TRUE)
         gl.glBindVertexArray(0)
         (gl.glEnable if culling else gl.glDisable)(gl.GL_CULL_FACE)
         (gl.glEnable if blending else gl.glDisable)(gl.GL_BLEND)
@@ -275,4 +368,7 @@ class CloudFog:
         for mesh in self._meshes.values():
             gl.glDeleteVertexArrays(1, [mesh['vao']])
             gl.glDeleteBuffers(1, [mesh['vbo']])
+        if self.texture_id:
+            gl.glDeleteTextures([self.texture_id])
+            self.texture_id = 0
         self.shader.delete()
