@@ -646,6 +646,15 @@ def main() -> None:
         saved = (selected_world.get("structures") or []) if selected_world else             SeedStore(seed_store_path(active_seed["value"])).read()
         for warning in restore_structures(schematic_tool, saved):
             chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+    # Combate por turnos (src/combat): /inimigo põe criaturas no tabuleiro; clicar numa ou chegar perto abre a luta
+    from src.combat.bestiary import PlayerSheet
+    from src.interactive.combat_controller import CombatController, WorldTerrain
+    from src.world.block import is_solid
+    combat = CombatController(PlayerSheet.from_dict(selected_world.get("combat")
+                                                    if isinstance(selected_world, dict) else None))
+    combat.terrain = WorldTerrain(lambda x, y, z: is_solid(voxel_provider.get_block_at(x, y, z)))
+    if terrain_demo:
+        skin_command_handler.combat = combat
     if initial_cmd:
         for single_cmd in initial_cmd.split(";"):
             single_cmd = single_cmd.strip()
@@ -860,6 +869,7 @@ def main() -> None:
             menus.world['structures'] = to_data(schematic_tool.layer)
         if character_model is not None and not getattr(character_model, 'is_loading', False):
             menus.world['character'] = character_save.to_dict(character_model)
+        menus.world['combat'] = combat.sheet.to_dict()
         menus.library.save(menus.world)
         if not menus.active:
             menus.capture_scene(window.width,window.height)
@@ -898,6 +908,8 @@ def main() -> None:
         grid_renderer.sync_chunks({}, -1)
         if world.get('character') and character_model is not None:
             character_save.apply(character_model, world['character'])
+        combat.clear()
+        combat.sheet = PlayerSheet.from_dict(world.get('combat'))
         menus.world = world
 
 
@@ -940,6 +952,10 @@ def main() -> None:
         if character_editor.handle_key(key, action, mods):
             return True
 
+        # no combate, 1-6 escolhem a ação, Tab troca o alvo e Enter encerra a vez (o WASD continua andando)
+        if terrain_demo and combat.in_combat and combat.handle_key(menus.preferences.canonical(key), action):
+            return True
+
         if schematic_tool is not None and schematic_tool.handle_key(key, action, mods):
             keys_pressed.clear()
             return True
@@ -959,7 +975,9 @@ def main() -> None:
             if action == glfw.PRESS:
                 kind, target = (None, None) if (player_token.ladder_grip is not None
                                                 and not chest_session.is_open) else pick_interactable()
-                if kind == "chest":
+                if kind == "chest" and combat.in_combat and not chest_session.is_open:
+                    pass                               # no meio da luta não se mexe em baú
+                elif kind == "chest":
                     chest_session.toggle(target)       # abre o baú ao alcance, ou fecha o que está aberto
                 elif kind == "door":
                     toggle_door_for_player(target)
@@ -979,6 +997,7 @@ def main() -> None:
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+            combat.clear()                     # os inimigos ficavam no relevo antigo
             # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
             from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
             saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else []
@@ -1257,6 +1276,10 @@ def main() -> None:
 
 
     fps_overlay = FpsOverlay()
+    from src.interactive.combat_hud import CombatHud
+    from src.interactive.enemy_tokens import EnemyTokenRenderer
+    enemy_renderer = EnemyTokenRenderer()
+    combat_hud = CombatHud()
     while not window.should_close():
         dt = window.update_delta_time()
         fps_overlay.update(dt)
@@ -1366,13 +1389,21 @@ def main() -> None:
             lid_update = chest_session.take_lid_update()
             if lid_update is not None:
                 schematic_tool.set_chest_lid(*lid_update)   # a tampa do baú gira: refaz a malha dos baús
+            step_from = [float(v) for v in player_token.position]
             player_token.update(
                 dt,
-                {} if chest_session.locks_movement else keys_pressed,   # baú aberto: o teclado de movimento fica mudo
+                # baú aberto, ou no combate fora da vez (ou sem movimento): o teclado de movimento fica mudo
+                {} if (chest_session.locks_movement or combat.locks_movement) else keys_pressed,
                 movement_forward,
                 movement_right,
                 voxel_provider,
             )
+            if combat.in_combat:
+                # na vez do personagem o passo gasta o movimento da vez; o que passa da reserva não anda
+                player_token.position[:] = combat.limit_step(step_from, player_token.position)
+            combat.update(dt, player_token.position)
+            for combat_text, combat_color in combat.take_messages():
+                chat_console.add_message(combat_text, combat_color)
             if picking_state["aim"] is not None and player_token.ladder_grip is None:
                 # com o cursor na cena, o personagem olha para ele (andando ou parado), não para onde anda
                 # (agarrado à escada, olha para ela)
@@ -1517,6 +1548,12 @@ def main() -> None:
             hovered_door = None if hit is None else door_at(schematic_tool.layer.structures, hit.block)
             picking_state.update(aim=aim_point(hit, mouse_ray, float(player_token.position[1])), door=hovered_door,
                                  door_in_reach=door_in_reach(hovered_door, player_token.position))
+            if picking_state["click_pending"]:
+                # um clique num inimigo começa a luta (de surpresa), ou mira e ataca nela
+                clicked_enemy = combat.pick(mouse_ray.origin, mouse_ray.direction)
+                if clicked_enemy is not None:
+                    combat.click_enemy(clicked_enemy, player_token.position)
+                    picking_state["click_pending"] = False
             if picking_state["click_pending"]:
                 picking_state["clicked_hit"] = picking_state["hover_hit"]
                 clicked_hit = picking_state["clicked_hit"]
@@ -1886,6 +1923,18 @@ def main() -> None:
             shader.set_int("u_TextureAtlas", 0)
             player_token.draw(shader=shader, base_model=base_model)
             mark("player_draw")
+            if combat.enemies:
+                # as miniaturas dos inimigos (e os anéis de alvo, vez e movimento), com a textura branca da miniatura
+                shader.set_bool("u_WaterMode", False)
+                shader.set_bool("u_Skinned", False)
+                shader.set_float("u_Alpha", 1.0)
+                shader.set_float("u_Vitiligo", 0.0)
+                shader.set_int("u_Underwear", 0)
+                gl.glActiveTexture(gl.GL_TEXTURE0)
+                gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
+                shader.set_int("u_TextureAtlas", 0)
+                enemy_renderer.draw(shader, model, combat)
+                mark("enemy_draw")
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
             scene_target.finish()
 
@@ -1912,6 +1961,7 @@ def main() -> None:
                 dt, near_chest or (near_door is not None and hovered_door_in_reach() is None) or near_ladder,
                 prompt_label)
             interact_prompt.render(player_token.position, projection @ view @ model, window.width, window.height)
+            combat_hud.render(combat, window.width, window.height, projection @ view @ model)
             context_cursor.update(dt, cursor_mode)
             shader.use()
             if construction_panel is not None:
@@ -2042,6 +2092,8 @@ def main() -> None:
     if selection_box is not None:
         selection_box.delete()
     fps_overlay.delete()
+    enemy_renderer.delete()
+    combat_hud.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

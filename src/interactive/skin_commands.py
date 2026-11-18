@@ -199,6 +199,7 @@ class SkinCommandHandler:
         self.place_block = None  # (x, y, z, BlockType) -> BlockType posto ou None (/bloco); None fora do terreno
         self.player_cell = None
         self.player_token = None  # PlayerToken do terreno, que recebe o modelo de /skin modelo
+        self.combat = None  # CombatController do terreno (/inimigo, /ficha, /atributo); None fora dele
         self.model_choice: Optional[Dict[str, Any]] = None  # o modelo .glb em uso (ver custom_model_store)
         self.custom_model_dir: Optional[str] = None  # pasta dos modelos (a padrão quando None)
         self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
@@ -592,6 +593,72 @@ class SkinCommandHandler:
         return True, f"[Revelar] {'ligado' if renderer.enabled else 'desligado'}.", CYAN
 
     # ------------------------------------------------------------------ /seed
+    # ------------------------------------------------------------------ combate
+    def enemy(self, args: List[str]) -> Result:
+        """/inimigo <tipo> [quantidade] | lista | limpar: põe inimigos perto do personagem (o combate é por turnos)."""
+        from src.combat.bestiary import BESTIARY, find_creature
+        if self.combat is None or self.player_token is None:
+            return False, "[Combate] Só funciona no terreno (--terrain).", RED
+        kinds = ", ".join(BESTIARY)
+        if not args or args[0].lower() in ("lista", "list"):
+            return True, f"[Combate] Inimigos: {kinds}. Use /inimigo <tipo> [quantidade].", CYAN
+        if args[0].lower() in ("limpar", "clear"):
+            return True, f"[Combate] {self.combat.clear()} inimigo(s) removido(s).", CYAN
+        creature = find_creature(args[0])
+        if creature is None:
+            return False, f"[Combate] Não conheço '{args[0]}'. Inimigos: {kinds}.", RED
+        count = 1
+        if len(args) > 1:
+            try:
+                count = max(1, min(8, int(args[1])))
+            except ValueError:
+                return False, "[Combate] Use /inimigo <tipo> [quantidade 1-8].", RED
+        made = self.combat.spawn(creature.key, count, [float(v) for v in self.player_token.position])
+        return True, (f"[Combate] {len(made)} {creature.name}(s) por perto. Clique num deles para atacar de surpresa, "
+                      "ou chegue perto e ele te ataca."), GREEN
+
+    def sheet(self, args: List[str]) -> Result:
+        """/ficha: os atributos, a vida, a CA, a arma e os itens do personagem."""
+        if self.combat is None:
+            return False, "[Combate] Só funciona no terreno (--terrain).", RED
+        from src.combat.actions import ITEMS
+        from src.combat.stats import ABILITY_NAMES
+        sheet = self.combat.sheet
+        c = sheet.combatant((0.0, 0.0, 0.0))
+        scores = "  ".join(f"{k.upper()} {sheet.scores[k]} ({c.mod(k):+d})" for k in ABILITY_NAMES)
+        items = ", ".join(f"{ITEMS[k].name} x{n}" for k, n in sheet.items.items() if k in ITEMS) or "nenhum"
+        return True, (f"[Ficha] Nível {sheet.level}  Vida {int(c.hp)}/{c.max_hp}  CA {c.armor_class}  {scores}  |  "
+                      f"{c.weapon.name} {c.weapon.damage} (acerto {c.attack_bonus:+d})  {c.armor.name}  |  "
+                      f"Itens: {items}"), CYAN
+
+    def attribute(self, args: List[str]) -> Result:
+        """/atributo <for|des|con|sab> <1-30> | arma <nome> | armadura <nome> | nivel <1-20>."""
+        if self.combat is None:
+            return False, "[Combate] Só funciona no terreno (--terrain).", RED
+        if self.combat.in_combat:
+            return False, "[Combate] Não dá para mudar a ficha no meio de um combate.", RED
+        from src.combat.stats import ABILITIES, ARMORS, WEAPONS
+        sheet = self.combat.sheet
+        usage = ("[Ficha] Use /atributo <for|des|con|sab> <1-30>, /atributo arma <" + "|".join(WEAPONS) + ">, "
+                 "/atributo armadura <" + "|".join(ARMORS) + "> ou /atributo nivel <1-20>.")
+        if len(args) < 2:
+            return False, usage, RED
+        key, value = args[0].lower(), args[1].lower()
+        if key in ABILITIES:
+            if not value.isdigit() or not 1 <= int(value) <= 30:
+                return False, usage, RED
+            sheet.scores[key] = int(value)
+        elif key == "arma" and value in WEAPONS:
+            sheet.weapon = value
+        elif key == "armadura" and value in ARMORS:
+            sheet.armor = value
+        elif key in ("nivel", "nível") and value.isdigit() and 1 <= int(value) <= 20:
+            sheet.level = int(value)
+        else:
+            return False, usage, RED
+        sheet.hp = None
+        return self.sheet([])
+
     def seed(self, args: List[str]) -> Result:
         """/seed: mostra a seed do mundo aberto e a copia para a área de transferência."""
         getter = self.world_seed
@@ -1661,6 +1728,11 @@ ROOT_COMMANDS: List[Command] = [
     Command(("skin",), "/skin <comando>", "muda o personagem", SkinCommandHandler.skin, None),
     Command(("ajuda", "help", "?"), "/ajuda [comando]", "lista os comandos", SkinCommandHandler.help, None),
     Command(("girar", "spin"), "/girar [on|off]", "rotação automática no visualizador", SkinCommandHandler.spin, ["on", "off"]),
+    Command(("inimigo", "enemy", "spawn"), "/inimigo <tipo> [quantidade] | lista | limpar",
+            "põe inimigos perto do personagem (combate por turnos)", SkinCommandHandler.enemy, None),
+    Command(("ficha", "sheet"), "/ficha", "mostra a ficha de combate do personagem", SkinCommandHandler.sheet, None),
+    Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
+            "muda a ficha de combate", SkinCommandHandler.attribute, None),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),
@@ -1731,6 +1803,9 @@ COMMAND_TREE: Dict[str, Any] = {
     "revelar": ["on", "off", "escuro", "teto"],
     "sombras": ["on", "off", "forca"],
     "seed": [],
+    "inimigo": ["lista", "limpar", "zumbi", "esqueleto", "aranha", "slime", "bandido", "ogro"],
+    "ficha": [],
+    "atributo": ["for", "des", "con", "sab", "arma", "armadura", "nivel"],
     "agua": [],
     "bloco": list(BLOCK_NAMES),
     "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},
