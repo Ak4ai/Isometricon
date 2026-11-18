@@ -65,7 +65,7 @@ Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um ch
 - Os inimigos têm ficha própria (no mod o acerto era metade do dano do mob) e IA por situação (no mod, 70/30).
 - Os dados aceitam semente: o mesmo combate se repete igual (testes e replays).
 - O registro explica cada rolagem (a dica que o mod mostrava ao passar o mouse vira a linha de baixo do registro).
-- A interface do combate usa o visual das telas de entrada e de configurações (``combat_style``): pergaminho com cantos de metal, títulos em Georgia, texto em Segoe UI, ações em botões com a tecla num selo dourado e quem está agindo em verde-escuro.
+- A interface do combate usa o visual das telas de entrada e de configurações (``combat_style``): pergaminho com cantos de metal, títulos em Georgia, texto em Segoe UI, quem está agindo em verde-escuro. O menu da vez é deitado: à esquerda o estado (movimento, ação, alvo), à direita as ações numa grade de ladrilhos com ícone, a tecla num selo pequeno no canto de cima e o motivo quando não pode agora (o motivo inteiro vai no rodapé).
 - O registro mora no chat do jogo: durante a luta a caixa do chat vira um pergaminho (título com a rodada, linhas com as cores da luta em tinta) e se estica da margem esquerda até o menu de combate; [T] abre o chat normal sem sair da luta.
 - Com o mouse em cima de um inimigo, o cursor vira o de ataque (cantos vermelhos pulsando), o inimigo ganha um anel claro e uma dica em cima da cabeça mostra nome, vida, CA e o que o clique faria (atacar de surpresa, mirar, atacar com a chance de acerto, ou por que não dá).
 - Ao andar na sua vez fica um rastro de pontos no chão, que recomeça a cada turno; com a ação gasta, os submenus ficam apagados.

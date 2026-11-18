@@ -174,8 +174,104 @@ def badge(draw: ImageDraw.ImageDraw, x: int, y: int, key: str, enabled: bool = T
     """A tecla da opção: um quadrado dourado com o número."""
     draw.rounded_rectangle((x, y, x + size, y + size), 5, fill=(*(GOLD if enabled else LINE), 255),
                            outline=(*((161, 122, 52) if enabled else BUTTON_EDGE), 255))
-    w = measure(key, 13, bold=True)
-    write(draw, (x + (size - w) / 2, y + (size - 10) / 2 - 1), key, 13, INK if enabled else MUTED, bold=True)
+    fs = max(9, round(size * 0.6))
+    w = measure(key, fs, bold=True)
+    write(draw, (x + (size - w) / 2, y + (size - fs * 0.72) / 2 - 1), key, fs, INK if enabled else MUTED, bold=True)
+
+
+# ------------------------------------------------------------------------------------------------ ícones das ações
+
+def action_icon(draw: ImageDraw.ImageDraw, kind: str, x: float, y: float, size: float = 28,
+                enabled: bool = True) -> None:
+    """O ícone de uma ação do combate, no traço dos ícones das telas (``menu_style.icon``), num quadrado de
+    ``size`` com o canto em (x, y). Apagado (cinza) quando a ação não pode agora."""
+    line_c = (*(INK if enabled else (150, 150, 135)), 255)
+
+    def tone(color):
+        return (*(color if enabled else (205, 200, 185)), 255)
+
+    def P(a, b):
+        return (x + a * size, y + b * size)
+
+    def pts(values):
+        return [P(a, b) for a, b in values]
+
+    def line(values, width=2):
+        draw.line(pts(values), fill=line_c, width=width, joint="curve")
+
+    def flask(liquid, plus=False):
+        draw.ellipse((*P(.2, .38), *P(.8, .95)), fill=tone(liquid), outline=line_c, width=2)
+        draw.rectangle((*P(.4, .12), *P(.6, .42)), fill=tone(CARD), outline=line_c, width=2)
+        draw.rectangle((*P(.35, .06), *P(.65, .14)), fill=tone(METAL_LIGHT), outline=line_c)
+        draw.ellipse((*P(.3, .52), *P(.42, .64)), fill=(255, 255, 255, 150 if enabled else 60))
+        if plus:
+            line([(.5, .58), (.5, .84)], 2)
+            line([(.37, .71), (.63, .71)], 2)
+
+    def shield(fill, cross=False):
+        outline = [(.5, .06), (.88, .2), (.82, .6), (.5, .94), (.18, .6), (.12, .2)]
+        draw.polygon(pts(outline), fill=tone(fill), outline=line_c)
+        draw.line(pts(outline + [outline[0]]), fill=line_c, width=2, joint="curve")
+        if cross:
+            line([(.5, .24), (.5, .74)], 3)
+            line([(.32, .42), (.68, .42)], 3)
+        else:
+            line([(.5, .16), (.5, .82)], 1)
+
+    def blade(x0, y0, x1, y1, guard=.14):
+        draw.line((*P(x0, y0), *P(x1, y1)), fill=tone((214, 218, 222)), width=max(3, int(size * .12)))
+        draw.line((*P(x0, y0), *P(x1, y1)), fill=line_c, width=1)
+        dx, dy = x1 - x0, y1 - y0
+        gx, gy = x0 + dx * .22, y0 + dy * .22
+        line([(gx - guard, gy - guard), (gx + guard, gy + guard)], 3)
+        line([(x0, y0), (x0 - dx * .12, y0 - dy * .12)], 3)
+
+    if kind == "atacar":
+        blade(.2, .8, .86, .14)
+    elif kind == "skills":
+        star = [(.5, .04), (.62, .38), (.96, .5), (.62, .62), (.5, .96), (.38, .62), (.04, .5), (.38, .38)]
+        draw.polygon(pts(star), fill=tone(GOLD), outline=line_c)
+        draw.ellipse((*P(.72, .08), *P(.86, .22)), fill=tone(GOLD))
+    elif kind == "items":
+        draw.rounded_rectangle((*P(.14, .32), *P(.86, .92)), max(2, int(size * .12)), fill=tone((176, 122, 72)),
+                               outline=line_c, width=2)
+        line([(.34, .32), (.34, .14), (.66, .14), (.66, .32)], 2)
+        draw.rectangle((*P(.42, .5), *P(.58, .62)), fill=tone(METAL_LIGHT), outline=line_c)
+    elif kind == "defender":
+        shield((118, 146, 119))
+    elif kind == "disparada":
+        for dx in (0.0, .3):
+            line([(.12 + dx, .2), (.42 + dx, .5), (.12 + dx, .8)], 3)
+        line([(.0, .5), (.08, .5)], 2)
+    elif kind == "fugir":
+        line([(.6, .1), (.18, .1), (.18, .9), (.6, .9)], 2)
+        line([(.42, .5), (.94, .5)], 2)
+        line([(.76, .32), (.94, .5), (.76, .68)], 2)
+    elif kind == "voltar":
+        line([(.85, .7), (.85, .4), (.2, .4)], 2)
+        line([(.38, .2), (.16, .4), (.38, .6)], 2)
+    elif kind == "golpe_pesado":
+        line([(.2, .9), (.62, .38)], 3)
+        draw.polygon(pts([(.44, .2), (.72, .06), (.94, .34), (.8, .5)]), fill=tone((150, 156, 160)), outline=line_c)
+    elif kind == "ataque_furtivo":
+        blade(.3, .76, .74, .2, guard=.1)
+        draw.chord((*P(.02, .02), *P(.42, .42)), 60, 300, fill=tone((90, 96, 140)))
+    elif kind == "escudo_divino":
+        shield(GOLD, cross=True)
+    elif kind == "foco_espiritual":
+        draw.ellipse((*P(.06, .26), *P(.94, .74)), fill=tone(CARD), outline=line_c, width=2)
+        draw.ellipse((*P(.34, .3), *P(.66, .7)), fill=tone((90, 140, 170)), outline=line_c)
+        draw.ellipse((*P(.45, .42), *P(.55, .58)), fill=line_c)
+    elif kind == "pocao_cura":
+        flask((196, 70, 60))
+    elif kind == "pocao_regeneracao":
+        flask((90, 160, 90), plus=True)
+    elif kind == "maca_dourada":
+        draw.ellipse((*P(.14, .28), *P(.86, .94)), fill=tone(GOLD), outline=line_c, width=2)
+        line([(.5, .3), (.56, .1)], 2)
+        draw.ellipse((*P(.56, .06), *P(.82, .22)), fill=tone((90, 150, 80)), outline=line_c)
+    else:
+        diamond(draw, x + size / 2, y + size / 2, size * .3, GOLD if enabled else LINE)
 
 
 def diamond(draw: ImageDraw.ImageDraw, x: float, y: float, r: float = 4, color: Color = GOLD) -> None:

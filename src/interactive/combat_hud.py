@@ -29,7 +29,6 @@ from src.interactive.combat_controller import PLAYER_ID, CombatController
 Color = Tuple[int, int, int]
 MARGIN = 12
 LOG_GAP = 8          # espaço entre a caixa do registro (o chat) e o menu
-MENU_WIDTH = 330
 CHIP_WIDTH = 118
 
 DrawItem = Tuple[str, Image.Image, float, float, float]   # (chave, imagem, x, y, opacidade)
@@ -91,8 +90,8 @@ def turn_order_image(controller: CombatController) -> Optional[Image.Image]:
     return image
 
 
-def _waiting_image(name: str) -> Image.Image:
-    text = f"Vez de {name}"
+def _waiting_image(name: str, mine: bool = False) -> Image.Image:
+    text = "Sua vez" if mine else f"Vez de {name}"
     w = st.measure(text, 17, heading=True)
     image, pad = st.card(w + 60, 44, radius=10, corners=False)
     d = ImageDraw.Draw(image)
@@ -103,79 +102,142 @@ def _waiting_image(name: str) -> Image.Image:
     return image
 
 
+STATUS_WIDTH = 214      # a coluna da esquerda (estado da vez e alvo)
+TILE_W, TILE_H, TILE_GAP = 92, 70, 8
+GRID_COLUMNS = 3
+
+
+def _icon_kind(action: Optional[str], extra: Optional[str]) -> str:
+    if action is None:
+        return extra or ""
+    if action == "usar_item":
+        return extra or "items"
+    return action
+
+
+def _two_lines(text: str, size: int, width: int) -> List[str]:
+    """O nome em uma linha, ou quebrado em duas (na fonte um pouco menor) quando não cabe."""
+    if st.measure(text, size, bold=True) <= width:
+        return [text]
+    words = text.split(" ")
+    for cut in range(len(words) - 1, 0, -1):
+        first, second = " ".join(words[:cut]), " ".join(words[cut:])
+        if st.measure(first, size - 1, bold=True) <= width:
+            return [first, st.fit(second, size - 1, width, bold=True)]
+    return [st.fit(text, size - 1, width, bold=True)]
+
+
+def _short_reason(reason: str) -> str:
+    """O motivo cabe no ladrilho: sem o detalhe entre parênteses (que vai na linha de baixo)."""
+    return reason.split(" (")[0].split(":")[0]
+
+
 def menu_image(controller: CombatController) -> Optional[Image.Image]:
-    """O painel da vez do personagem: estado, alvo, as ações em botões e os atalhos."""
+    """O painel da vez do personagem, deitado: à esquerda o estado (movimento, ação, alvo), à direita as ações numa
+    grade de ladrilhos com ícone, a tecla num selo pequeno no canto de cima e o motivo quando não pode agora."""
     session = controller.session
     if session is None or not session.active:
         return None
     if not controller.is_player_turn:
-        return _waiting_image(controller.name_of(session.current.id))
+        return _waiting_image(controller.name_of(session.current.id), session.current.id == PLAYER_ID)
     entries = controller.menu_entries()
     target = session.target
     me = session.current
-    w = MENU_WIDTH
-    row_h, row_gap = 30, 6
-    target_h = 64 if target is not None else 0
-    h = 22 + 26 + 34 + (target_h + 10 if target_h else 0) + len(entries) * (row_h + row_gap) + 62
+    rows = max(2, -(-len(entries) // GRID_COLUMNS))
+    grid_w = GRID_COLUMNS * TILE_W + (GRID_COLUMNS - 1) * TILE_GAP
+    grid_h = rows * TILE_H + (rows - 1) * TILE_GAP
+    w = 22 + STATUS_WIDTH + 18 + grid_w + 30
+    status_h = 18 + 28 + 40 + (78 if target is not None else 0)
+    h = 24 + max(grid_h, status_h) + 14 + 22 + 10
     image, pad = st.card(w, h, radius=14)
     d = ImageDraw.Draw(image)
-    x0, x1 = pad + 20, pad + w - 20
-    y = pad + 20
+
+    # ---- coluna do estado
+    x0 = pad + 22
+    x1 = x0 + STATUS_WIDTH
+    y = pad + 18
     kicker = {"skills": "HABILIDADES", "items": "ITENS"}.get(controller.menu, "SUA VEZ")
     st.write(d, (x0, y), f"{kicker} · RODADA {session.round}", 11, (126, 103, 58))
     y += 18
-    st.write(d, (x0, y), "Escolha sua ação" if not session.action_used else "Ação usada", 20, st.INK, heading=True)
+    st.write(d, (x0, y), "Escolha sua ação" if not session.action_used else "Ação usada", 19, st.INK, heading=True)
     y += 32
-    # movimento (barra) e ação (pílula)
     left, speed = session.movement_left, me.speed
     st.write(d, (x0, y), "Movimento", 11, st.MUTED)
     mv = f"{left:.1f} / {speed:.0f}"
-    st.write(d, (x0 + 150 - st.measure(mv, 11, bold=True), y), mv, 11, st.INK if left > 0 else st.MUTED, bold=True)
-    st.bar(d, (x0, y + 16, x0 + 150, y + 22), left / speed if speed else 0, color=(70, 140, 160))
+    st.write(d, (x0 + 118 - st.measure(mv, 11, bold=True), y), mv, 11, st.INK if left > 0 else st.MUTED, bold=True)
+    st.bar(d, (x0, y + 16, x0 + 118, y + 22), left / speed if speed else 0, color=(70, 140, 160))
     free = not session.action_used
     pill = "Ação livre" if free else "Ação usada"
-    pw = st.measure(pill, 12, bold=True) + 22
+    pw = st.measure(pill, 12, bold=True) + 24
     d.rounded_rectangle((x1 - pw, y + 1, x1, y + 23), 11, fill=(*(st.FOREST if free else (182, 184, 165)), 255))
     d.ellipse((x1 - pw + 8, y + 9, x1 - pw + 14, y + 15), fill=(*(st.GOLD if free else st.CREAM), 255))
-    st.write(d, (x1 - pw + 17, y + 6), pill[0:], 12, st.CREAM if free else st.INK, bold=True)
-    y += 34
+    st.write(d, (x1 - pw + 18, y + 6), pill, 12, st.CREAM if free else st.INK, bold=True)
+    y += 38
     if target is not None:
         gap = me.distance_to(target)
         reach = me.reach
-        d.rounded_rectangle((x0, y, x1, y + target_h), 8, fill=(*st.CARD, 255), outline=(*st.LINE, 255))
-        d.rounded_rectangle((x0 + 2, y + 10, x0 + 5, y + target_h - 10), 2, fill=(*st.FOE_INK, 255))
+        th = 70
+        d.rounded_rectangle((x0, y, x1, y + th), 8, fill=(*st.CARD, 255), outline=(*st.LINE, 255))
+        d.rounded_rectangle((x0 + 2, y + 10, x0 + 5, y + th - 10), 2, fill=(*st.FOE_INK, 255))
         st.write(d, (x0 + 14, y + 8), "ALVO", 10, st.MUTED)
-        st.write(d, (x0 + 14, y + 22), st.fit(target.name, 16, 120, heading=True), 16, st.FOE_INK, heading=True)
+        st.write(d, (x0 + 14, y + 21), st.fit(target.name, 16, 110, heading=True), 16, st.FOE_INK, heading=True)
         info = f"CA {target.armor_class}"
         st.write(d, (x1 - 12 - st.measure(info, 12, bold=True), y + 9), info, 12, st.INK, bold=True)
-        hp = f"{int(target.hp)}/{target.max_hp} vida"
-        st.write(d, (x1 - 12 - st.measure(hp, 11), y + 26), hp, 11, st.MUTED)
-        st.bar(d, (x0 + 14, y + 46, x0 + 150, y + 52), target.hp_ratio)
+        hp = f"{int(target.hp)}/{target.max_hp}"
+        st.write(d, (x1 - 12 - st.measure(hp, 11), y + 25), hp, 11, st.MUTED)
+        st.bar(d, (x0 + 14, y + 44, x1 - 12, y + 50), target.hp_ratio)
         dist = f"{gap:.1f} de {reach:.1f} blocos"
-        in_reach = gap <= reach
-        st.write(d, (x1 - 12 - st.measure(dist, 11, bold=True), y + 43), dist, 11,
-                 st.ALLY_INK if in_reach else st.FOE_INK, bold=True)
-        y += target_h + 10
-    for key, label, action, extra in entries:
+        st.write(d, (x0 + 14, y + 54), dist, 11, st.ALLY_INK if gap <= reach else st.FOE_INK, bold=True)
+
+    # ---- divisória
+    sx = x1 + 9
+    d.line((sx, pad + 22, sx, pad + 20 + max(grid_h, status_h) - 4), fill=(*st.LINE, 255))
+    st.diamond(d, sx, pad + 20 + max(grid_h, status_h) / 2, 3)
+
+    # ---- grade das ações
+    gx0 = x1 + 18
+    gy0 = pad + 24
+    detail = ""
+    for i, (key, label, action, extra) in enumerate(entries):
         reason = controller.blocked(action, extra)
         enabled = reason is None
-        box = (x0, y, x1, y + row_h)
-        st.button(d, box, enabled=enabled)
-        if enabled and action is None:   # submenu: a setinha das telas
-            d.line((x1 - 16, y + 10, x1 - 11, y + 15, x1 - 16, y + 20), fill=(*st.MUTED, 255), width=2)
-        st.badge(d, x0 + 6, y + 4, key, enabled)
-        label_color = st.INK if enabled else st.MUTED
+        col, row = i % GRID_COLUMNS, i // GRID_COLUMNS
+        tx = gx0 + col * (TILE_W + TILE_GAP)
+        ty = gy0 + row * (TILE_H + TILE_GAP)
+        st.button(d, (tx, ty, tx + TILE_W, ty + TILE_H), enabled=enabled)
+        st.badge(d, tx + 5, ty + 5, key, enabled, size=15)
+        if enabled and action is None:     # abre um submenu: a setinha das telas no canto
+            d.line((tx + TILE_W - 12, ty + 7, tx + TILE_W - 8, ty + 11, tx + TILE_W - 12, ty + 15),
+                   fill=(*st.MUTED, 255), width=2)
+        st.action_icon(d, _icon_kind(action, extra), tx + (TILE_W - 26) / 2, ty + 8, 26, enabled)
+        color = st.INK if enabled else st.MUTED
         if action == "fugir" and enabled:
-            label_color = st.DANGER
-        lw = st.write(d, (x0 + 38, y + 7), label, 15, label_color)
+            color = st.DANGER
+        name, count = label, ""
+        if " x" in label and label.rsplit(" x", 1)[1].isdigit():      # "Poção de cura x2": a conta vai no canto
+            name, count = label.rsplit(" x", 1)
+            count = f"×{count}"
+            st.write(d, (tx + TILE_W - 8 - st.measure(count, 11, bold=True), ty + 6), count, 11, st.GOLD_DARK,
+                     bold=True)
+        lines = _two_lines(name, 12, TILE_W - 8) if not reason else [st.fit(name, 12, TILE_W - 8, bold=True)]
+        size = 12 if len(lines) == 1 else 11
+        for n, text in enumerate(lines):
+            st.write(d, (tx + (TILE_W - st.measure(text, size, bold=True)) / 2, ty + 38 + n * 14), text, size,
+                     color, bold=True)
         if reason:
-            room = x1 - 10 - (x0 + 38 + lw + 10)
-            st.write(d, (x0 + 38 + lw + 10, y + 10), st.fit(reason, 11, room), 11, (150, 110, 90))
-        y += row_h + row_gap
-    y += 6
+            short = st.fit(_short_reason(reason), 10, TILE_W - 8)
+            st.write(d, (tx + (TILE_W - st.measure(short, 10)) / 2, ty + 55), short, 10, (150, 110, 90))
+            if not detail and not session.action_used:
+                detail = f"{label}: {reason}"
+
+    # ---- rodapé: o motivo inteiro do primeiro bloqueio e os atalhos
+    y = pad + 20 + max(grid_h, status_h) + 14
+    d.line((x0, y - 6, pad + w - 22, y - 6), fill=(*st.LINE, 255))
+    if detail:
+        st.write(d, (x0, y), st.fit(detail, 11, STATUS_WIDTH + 30), 11, (150, 110, 90))
     hints = (("Enter", " encerra a vez"), ("Tab", " troca o alvo"), ("Clique", " mira e ataca"))
     total = sum(st.measure(k, 11, bold=True) + st.measure(r, 11) for k, r in hints) + 14 * (len(hints) - 1)
-    hint_x = pad + (w - total) / 2      # centrado, longe dos cantos de metal
+    hint_x = pad + w - 30 - total
     for word, rest in hints:
         hint_x += st.write(d, (hint_x, y), word, 11, st.GOLD_DARK, bold=True)
         hint_x += st.write(d, (hint_x, y), rest, 11, st.MUTED) + 14
@@ -196,7 +258,7 @@ def chat_log_view(controller: CombatController, right: Optional[float]) -> Optio
     session = controller.session
     if session is None:
         title = "Combate encerrado"
-    elif controller.is_player_turn:
+    elif controller.is_player_turn or session.current.id == PLAYER_ID:
         title = f"Combate · Rodada {session.round} · sua vez"
     else:
         title = f"Combate · Rodada {session.round} · vez de {controller.name_of(session.current.id)}"
