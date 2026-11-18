@@ -68,6 +68,7 @@ Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um ch
   existe ganha um número (`Lia 2`).
 - A ficha de combate vem do molde do bestiário (`/inimigo lista`); sem molde, o hostil usa a do `bandido` e o
   amigável a do `guarda`. Trocar o lado na aba troca junto a ficha padrão; uma escolhida à mão fica.
+- Na etapa Modelo, "Personalizado" dá ao NPC um modelo .glb (os mesmos do `/skin modelo`, com perfil de andar, altura, giro e ossos) no lugar do corpo montado. A escolha é do NPC e fica salva com ele (`npc["modelo"]`); a do personagem não muda. Se o arquivo some, o NPC volta ao corpo montado.
 - A etapa Identidade usa `/npc definir <nome|lado|molde|fala> <valor>`, que também funciona pelo chat com a tela aberta.
 - O hostil é um inimigo como os outros: te vê a 6 blocos, luta e, vencido, sai do mundo.
 - O amigável nunca começa a luta. Um clique nele (a até 4 blocos) faz ele dizer a fala, num balão e no chat. Numa

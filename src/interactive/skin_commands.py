@@ -182,6 +182,42 @@ class Command:
     group: str = ""
 
 
+def build_custom_model(choice: Dict[str, Any], directory: Optional[str] = None,
+                       create_gl: bool = True) -> Tuple[Any, str]:
+    """O modelo .glb da ``choice`` (ver custom_model_store), animado: (modelo, nota) ou (None, o erro)."""
+    from src.clothing import custom_model_store as store
+    from src.clothing.custom_model import CustomModel
+    from src.clothing.glb import ModelError
+    from src.clothing.procedural import Roles, RolesError
+    directory = directory or store.MODELS_DIR
+    path = store.path_of(choice["arquivo"], directory)
+    if path is None:
+        return None, f"[Modelo] Não achei o modelo '{choice['arquivo']}'. /skin modelo lista mostra os guardados."
+    try:
+        model = CustomModel.from_file(path, choice["altura"], choice["giro"], create_gl=create_gl)
+    except ModelError as exc:
+        return None, f"[Modelo] {exc}"
+    if choice.get("perfil") == "clipes" and not model.clips_available:
+        model.delete()
+        return None, "[Modelo] Este arquivo não traz clipes de animação para os ossos dele; escolha outro perfil."
+    if model.rig is not None:
+        try:
+            roles, roles_file = None, store.roles_path(choice["arquivo"], directory)
+            if choice.get("perfil") != "clipes" and os.path.isfile(roles_file):
+                roles = Roles.load(model.rig, roles_file)   # os papéis ajustados à mão (/skin modelo papeis)
+            model.animate(roles, choice.get("perfil"))
+            note = f" Anda como '{model.animator.profile}'." + (" (papéis do arquivo .papeis.json)" if roles else "")
+        except (ModelError, RolesError) as exc:
+            note = f" Sem animação: {exc}"
+    else:
+        note = " Sem esqueleto: fica parado, na pose do arquivo."
+    if model.animator is not None and choice.get("reparar", True):
+        cut = model.repair_stretch()
+        if cut:
+            note += f" Cortei {cut} triângulos que esticavam ao andar."
+    return model, note
+
+
 class SkinCommandHandler:
     """Executa os comandos do chat sobre um CharacterModel."""
 
@@ -213,6 +249,7 @@ class SkinCommandHandler:
         self._labels = None
         self._labels_model = None
         self.want_custom = False  # a aba Modelo está em "Personalizado", ainda que nenhum modelo tenha sido escolhido
+        self.model_target: Any = None  # quem recebe o modelo .glb no lugar do personagem (o NPC na tela de criação)
         self.pick_file: Callable[[], Optional[str]] = _pick_model_file  # a janela de escolher o .glb (trocada nos testes)
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
@@ -321,40 +358,18 @@ class SkinCommandHandler:
         return ("Uso: /skin modelo <nome|caminho.glb> | lista | off | perfil <bipede|quadrupede|rastejante|flutuante|clipes|auto> "
                 "| altura <metros> | giro <0-3> | papeis <salvar|off|arquivo> | importar")
 
+    def model_holder(self) -> Any:
+        """Quem recebe o modelo .glb: o personagem, ou o NPC que está na tela de criação (``model_target``)."""
+        return self.model_target if self.model_target is not None else self.player_token
+
     def apply_custom_model(self, choice: Dict[str, Any]) -> Result:
         """Constrói o modelo da ``choice`` (ver custom_model_store) e o põe no token. Roda na thread principal."""
-        from src.clothing import custom_model_store as store
-        from src.clothing.custom_model import CustomModel
-        from src.clothing.glb import ModelError
-        from src.clothing.procedural import Roles, RolesError
-        token = self.player_token
-        if token is None:
+        token = self.model_holder()
+        if self.player_token is None or token is None:
             return False, "[Modelo] Só funciona no terreno (--terrain).", RED
-        path = store.path_of(choice["arquivo"], self.custom_model_dir or store.MODELS_DIR)
-        if path is None:
-            return False, f"[Modelo] Não achei o modelo '{choice['arquivo']}'. /skin modelo lista mostra os guardados.", RED
-        try:
-            model = CustomModel.from_file(path, choice["altura"], choice["giro"], create_gl=self.model_gl)
-        except ModelError as exc:
-            return False, f"[Modelo] {exc}", RED
-        if choice.get("perfil") == "clipes" and not model.clips_available:
-            model.delete()
-            return False, "[Modelo] Este arquivo não traz clipes de animação para os ossos dele; escolha outro perfil.", RED
-        if model.rig is not None:
-            try:
-                roles, roles_file = None, store.roles_path(choice["arquivo"], self.custom_model_dir or store.MODELS_DIR)
-                if choice.get("perfil") != "clipes" and os.path.isfile(roles_file):
-                    roles = Roles.load(model.rig, roles_file)   # os papéis ajustados à mão (/skin modelo papeis)
-                model.animate(roles, choice.get("perfil"))
-                note = f" Anda como '{model.animator.profile}'." + (" (papéis do arquivo .papeis.json)" if roles else "")
-            except (ModelError, RolesError) as exc:
-                note = f" Sem animação: {exc}"
-        else:
-            note = " Sem esqueleto: fica parado, na pose do arquivo."
-        if model.animator is not None and choice.get("reparar", True):
-            cut = model.repair_stretch()
-            if cut:
-                note += f" Cortei {cut} triângulos que esticavam ao andar."
+        model, note = build_custom_model(choice, self.custom_model_dir, self.model_gl)
+        if model is None:
+            return False, note, RED
         previous = token.set_custom_model(model)
         if previous is not None:
             previous.delete()
@@ -369,7 +384,7 @@ class SkinCommandHandler:
 
     def clear_custom_model(self) -> None:
         self.want_custom = False
-        token = self.player_token
+        token = self.model_holder()
         if token is not None:
             previous = token.set_custom_model(None)
             if previous is not None:
@@ -388,7 +403,7 @@ class SkinCommandHandler:
         """Um rótulo de papel por osso do modelo em uso (None sem modelo ou sem esqueleto)."""
         from src.clothing.procedural import auto_roles
         from src.clothing.role_editor import labels_from_roles
-        model = self.player_token.custom_model if self.player_token is not None else None
+        model = getattr(self.model_holder(), "custom_model", None)
         if model is None or model.rig is None:
             return None
         if self._labels_model is not model:
@@ -402,7 +417,7 @@ class SkinCommandHandler:
         from src.clothing.procedural import auto_roles
         from src.clothing.role_editor import LABELS, TITLES, roles_from_labels
         labels = self.bone_labels()
-        model = self.player_token.custom_model if labels is not None else None
+        model = getattr(self.model_holder(), "custom_model", None) if labels is not None else None
         if model is None or label not in LABELS or not 0 <= bone < len(labels):
             return False, "[Modelo] Sem esqueleto para ajustar.", RED
         labels[bone] = label
@@ -424,9 +439,9 @@ class SkinCommandHandler:
         import shutil
         from src.clothing import custom_model_store as store
         from src.clothing.procedural import Roles, RolesError, auto_roles
-        if self.model_choice is None or self.player_token.custom_model is None:
+        model = getattr(self.model_holder(), "custom_model", None)
+        if self.model_choice is None or model is None:
             return False, "[Modelo] Escolha um modelo antes: /skin modelo <nome>.", RED
-        model = self.player_token.custom_model
         if model.rig is None:
             return False, "[Modelo] Este modelo não tem esqueleto.", RED
         directory = self.custom_model_dir or store.MODELS_DIR

@@ -1336,14 +1336,19 @@ def main() -> None:
             # /criar npc (um corpo novo do sexo pedido) ou /npc editar (o corpo que ele já tem): a tela do /skin
             # passa a vestir o NPC; o personagem volta para ela quando a tela fecha
             from src.clothing.character_animation import CharacterAnimator
-            from src.interactive.npc_models import build_model
+            from src.interactive.npc_models import CustomHolder, build_model
             request, skin_command_handler.npc_request = skin_command_handler.npc_request, None
             editing_token = combat.token(request["editar"]) if "editar" in request else None
+            holder = CustomHolder()   # o modelo .glb do NPC (o /skin modelo põe nele enquanto a tela veste o NPC)
             if editing_token is not None:
                 spec = dict(editing_token.npc)        # a aba NPC muda uma cópia; o NPC é refeito ao fechar
                 body = npc_models.release(editing_token.id)
-                npc_model = body.model if body is not None else build_model(spec["id"], spec.get("personagem"))
-                npc_animator = body.animator if body is not None else CharacterAnimator(npc_model, walking=False)
+                if body is not None and body.model is not None:
+                    npc_model, npc_animator = body.model, body.animator
+                else:                                 # o NPC só tinha o modelo .glb: o corpo montado vem agora
+                    npc_model = build_model(spec["id"], spec.get("personagem"))
+                    npc_animator = CharacterAnimator(npc_model, walking=False)
+                holder.custom_model = body.custom if body is not None else None
             elif "editar" not in request:
                 spec = dict(request, id=combat.new_npc_id())
                 npc_model = build_model(spec["id"], None, spec.pop("corpo", "masculino"))
@@ -1352,7 +1357,14 @@ def main() -> None:
                 spec = None
             if spec is not None:
                 npc_edit.update(spec=spec, model=npc_model, animator=npc_animator, token=editing_token,
-                                player_model=skin_command_handler.character_model)
+                                player_model=skin_command_handler.character_model, holder=holder,
+                                player_choice=(skin_command_handler.model_choice, skin_command_handler.want_custom,
+                                               skin_command_handler.save_model_choice))
+                # a escolha do modelo .glb passa a ser a do NPC, sem gravar por cima da do personagem
+                skin_command_handler.model_choice = dict(spec["modelo"]) if spec.get("modelo") else None
+                skin_command_handler.want_custom = False
+                skin_command_handler.save_model_choice = False
+                skin_command_handler.model_target = holder
                 skin_command_handler.character_model = npc_model
                 skin_command_handler.npc_editing = spec  # a aba NPC da tela muda nome, lado, ficha e fala
                 character_editor.autosave = False      # fechar a tela não grava o NPC como o personagem
@@ -1361,7 +1373,17 @@ def main() -> None:
             # a tela fechou: o NPC leva a aparência e aparece (ou volta) no mundo; a tela volta a vestir o personagem
             spec, npc_model = npc_edit["spec"], npc_edit["model"]
             spec["personagem"] = character_save.to_dict(npc_model)
+            custom = npc_edit["holder"].custom_model if skin_command_handler.model_choice is not None else None
+            if custom is not None:
+                spec["modelo"] = dict(skin_command_handler.model_choice)
+            else:
+                spec.pop("modelo", None)
+                if npc_edit["holder"].custom_model is not None:
+                    npc_edit["holder"].custom_model.delete()
             skin_command_handler.character_model = npc_edit["player_model"]
+            (skin_command_handler.model_choice, skin_command_handler.want_custom,
+             skin_command_handler.save_model_choice) = npc_edit["player_choice"]
+            skin_command_handler.model_target = None
             skin_command_handler.npc_editing = None
             character_editor.autosave = True
             token = npc_edit["token"]
@@ -1376,7 +1398,8 @@ def main() -> None:
                 token = combat.add_npc(spec, spot, yaw + math.pi)
                 chat_console.add_message(f"[NPC] {token.combatant.name} chegou "
                                          f"({'amigável' if ally else 'hostil'}).", (85, 255, 85))
-            npc_models.adopt(token.id, npc_model, npc_edit["animator"], spec.get("personagem"))
+            npc_models.adopt(token.id, npc_model, npc_edit["animator"], spec.get("personagem"),
+                             custom=custom, choice=spec.get("modelo"))
             npc_edit.clear()
         edited_model = npc_edit["model"] if npc_edit else character_model   # quem a tela de criação mostra
         editing = character_editor.is_open and character_model is not None
@@ -1413,6 +1436,8 @@ def main() -> None:
                 character_animator.update(dt)
             if terrain_demo and player_token.custom_model is not None:
                 player_token.custom_model.update(dt, player_token.speed if character_editor.walk_preview else 0.0)  # W anda
+            if npc_edit and npc_edit["holder"].custom_model is not None:
+                npc_edit["holder"].custom_model.update(dt, player_token.speed if character_editor.walk_preview else 0.0)
             # Nas seções do rosto a câmera vai para o rosto: na altura da cabeça, de perto, na
             # horizontal e com o personagem parado de frente para ela. Ao sair, volta ao que era.
             if character_editor.focus != editor_camera.get("focus", "body"):
@@ -1661,15 +1686,16 @@ def main() -> None:
                 editor_animator.sync()  # a pele recortada por um clique deste quadro já entra na pose
             shown_body = player_token.custom_model if terrain_demo and player_token.custom_model is not None \
                 else character_model
-            if npc_edit:
-                shown_body = edited_model
+            if npc_edit:   # o NPC na tela: o modelo .glb dele, se escolheu um, ou o corpo montado
+                shown_body = npc_edit["holder"].custom_model or edited_model
             shown_body.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
             gl.glEnable(gl.GL_CULL_FACE)
             gl.glViewport(0, 0, fb_w, fb_h)
             # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
             character_editor.picker = character_editor.overlay = None
             character_editor.bones_view = None
-            shown_custom = player_token.custom_model if terrain_demo and not npc_edit else None
+            shown_custom = (npc_edit["holder"].custom_model if npc_edit else player_token.custom_model) \
+                if terrain_demo else None
             if shown_custom is not None and shown_custom.rig is not None:
                 # os ossos do modelo personalizado na tela, para a aba Modelo mostrar e deixar clicar
                 from src.clothing import role_editor
@@ -1991,7 +2017,8 @@ def main() -> None:
             player_token.draw(shader=shader, base_model=base_model)
             mark("player_draw")
             if npc_models.bodies:
-                npc_models.draw(shader, model, combat)       # os NPCs com o corpo montado no /skin
+                npc_models.draw(shader, model, combat)       # os NPCs com o corpo montado no /skin (ou o .glb)
+                gl.glEnable(gl.GL_CULL_FACE)                  # o modelo .glb desenha com as duas faces
             if combat.enemies:
                 # as miniaturas dos inimigos (e os anéis de alvo, vez e movimento), com a textura branca da miniatura
                 shader.set_bool("u_WaterMode", False)
@@ -2169,6 +2196,8 @@ def main() -> None:
     npc_models.delete()
     if npc_edit:
         npc_edit["model"].delete()
+        if npc_edit["holder"].custom_model is not None:
+            npc_edit["holder"].custom_model.delete()
     combat_hud.delete()
     if terrain_demo:
         if atlas is not None:

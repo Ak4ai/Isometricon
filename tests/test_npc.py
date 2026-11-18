@@ -373,3 +373,61 @@ def test_fallen_npc_lies_down():
     lying = npc_matrix([0, 0, 0], 0.0, fallen=1.0)
     up = np.array([0.0, 1.0, 0.0, 0.0])
     assert np.allclose(standing @ up, up) and abs((lying @ up)[1]) < 0.2
+
+
+class FakeCustom:
+    def __init__(self, choice):
+        self.choice, self.deleted, self.drawn, self.speeds = choice, False, [], []
+
+    def update(self, dt, speed):
+        self.speeds.append(speed)
+
+    def draw(self, shader, matrix):
+        self.drawn.append(matrix)
+
+    def delete(self):
+        self.deleted = True
+
+
+def test_npc_with_a_custom_model_uses_the_glb_in_the_world():
+    import numpy as np
+    c = controller()
+    choice = {"arquivo": "dragao.glb", "altura": 2.2, "giro": 0, "perfil": None}
+    foe = c.add_npc(hostile(personagem={"a": 1}, modelo=choice), [8.0, 0.0, 0.0])
+    models = NpcModels(FakeModel, FakeAnimator, custom_factory=FakeCustom)
+    models.sync(c, 0.1)
+    body = models.bodies[foe.id]
+    assert body.custom.choice == choice and body.model is None   # o corpo montado nem é montado
+    assert models.ready(foe.id) and body.custom.speeds == [0.0]
+    foe.path = [[9.0, 0.0, 0.0]]                                  # tem para onde andar
+    models.sync(c, 0.1)
+    assert body.custom.speeds[-1] == foe.creature.speed           # anda com a passada da ficha
+    models.draw(None, np.eye(4), c)
+    assert np.allclose(body.custom.drawn[0][:3, 3], [8.0, 0.0, 0.0])
+    foe.npc["modelo"] = dict(choice, altura=3.0)                  # outra escolha: monta de novo
+    models.sync(c, 0.1)
+    assert body.custom.deleted and models.bodies[foe.id].custom.choice["altura"] == 3.0
+    assert c.npc_list()[0]["modelo"]["altura"] == 3.0             # e o mundo grava a escolha
+
+
+def test_npc_whose_glb_is_gone_falls_back_to_the_assembled_body():
+    c = controller()
+    pal = c.add_npc(friendly(personagem={"b": 1}, modelo={"arquivo": "sumiu.glb"}), [-3.0, 0.0, 0.0])
+    models = NpcModels(FakeModel, FakeAnimator, custom_factory=lambda choice: None)
+    models.sync(c, 0.1)
+    assert models.bodies[pal.id].custom is None and models.bodies[pal.id].model.look == {"b": 1}
+
+
+def test_custom_model_commands_go_to_the_npc_on_the_editor():
+    from src.interactive.npc_models import CustomHolder
+    h = handler()
+    mine, theirs = FakeCustom({}), FakeCustom({})
+    h.player_token = SimpleNamespace(position=[0.0, 0.0, 0.0], yaw=0.0, custom_model=mine,
+                                     set_custom_model=lambda m: None)
+    h.model_target = CustomHolder(theirs)
+    assert h.model_holder() is h.model_target
+    h.clear_custom_model()                                        # /skin modelo off com o NPC na tela
+    assert theirs.deleted and h.model_target.custom_model is None
+    assert not mine.deleted and h.player_token.custom_model is mine   # o do personagem fica
+    h.model_target = None
+    assert h.model_holder() is h.player_token
