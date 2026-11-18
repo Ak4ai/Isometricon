@@ -660,8 +660,14 @@ def main() -> None:
     combat = CombatController(PlayerSheet.from_dict(selected_world.get("combat")
                                                     if isinstance(selected_world, dict) else None))
     combat.terrain = WorldTerrain(lambda x, y, z: is_solid(voxel_provider.get_block_at(x, y, z)))
+    # A ambientação do mestre (/mestre): hora do dia, claridade, névoa... guardada no mundo
+    from src.rendering.ambience import Ambience
+    from src.interactive.master_panel import MasterPanel
+    ambience = Ambience.from_dict(selected_world.get("ambiente") if isinstance(selected_world, dict) else None)
+    master_panel = MasterPanel(ambience) if terrain_demo else None
     if terrain_demo:
         skin_command_handler.combat = combat
+        skin_command_handler.master_panel = master_panel
         combat.load_npcs(selected_world.get("npcs") if isinstance(selected_world, dict) else None)
     if initial_cmd:
         for single_cmd in initial_cmd.split(";"):
@@ -880,6 +886,7 @@ def main() -> None:
             menus.world['character'] = character_save.to_dict(character_model)
         menus.world['combat'] = combat.sheet.to_dict()
         menus.world['npcs'] = combat.npc_list()
+        menus.world['ambiente'] = ambience.to_dict()
         menus.library.save(menus.world)
         if not menus.active:
             menus.capture_scene(window.width,window.height)
@@ -922,6 +929,7 @@ def main() -> None:
         combat.clear()
         combat.sheet = PlayerSheet.from_dict(world.get('combat'))
         combat.load_npcs(world.get('npcs'))
+        ambience.load(world.get('ambiente'))
         menus.world = world
 
 
@@ -943,6 +951,11 @@ def main() -> None:
         if map_editor is not None and not chat_console.is_open:
             if map_editor.handle_key(key, action, mods):
                 return True
+
+        if (master_panel is not None and master_panel.is_open and not chat_console.is_open
+                and key == glfw.KEY_ESCAPE and action == glfw.PRESS):
+            master_panel.close()
+            return True
 
         if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
             if construction_panel.handle_key(key, action, mods):
@@ -1085,6 +1098,11 @@ def main() -> None:
             if map_editor.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
                 return
 
+        if (master_panel is not None and master_panel.is_open and not character_editor.is_open
+                and button == glfw.MOUSE_BUTTON_LEFT and action in (glfw.PRESS, glfw.RELEASE)):
+            if master_panel.handle_mouse_button(*window.get_cursor_pos(), action == glfw.PRESS):
+                return
+
         if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
             if construction_panel.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT),
                                                       window.get_cursor_pos(), window.width):
@@ -1123,6 +1141,8 @@ def main() -> None:
             menus.hover(*window.get_cursor_pos_framebuffer())
             return
         if chat_console.is_open:
+            return
+        if master_panel is not None and not character_editor.is_open and master_panel.handle_cursor(*window.get_cursor_pos()):
             return
         character_editor.handle_cursor(x, y)
         if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
@@ -1691,6 +1711,7 @@ def main() -> None:
             shader.set_vec3("u_LightDir", 0.5, 1.2, 0.8)
             shader.set_vec3("u_LightColor", 0.70, 0.70, 0.70)
             shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
+            Ambience.neutral(shader)
             if editor_animator is not None:
                 editor_animator.sync()  # a pele recortada por um clique deste quadro já entra na pose
             shown_body = player_token.custom_model if terrain_demo and player_token.custom_model is not None \
@@ -1792,6 +1813,14 @@ def main() -> None:
             shader.set_int("u_CutawayPass", 0)
 
             # 0. A sombra dos personagens: eles vistos do sol num mapa de profundidade que o terreno lê a seguir
+            # a ambientação do mestre: a hora move o sol (e as sombras), o resto é a correção no fim do shader
+            ambience.update(dt)
+            sun_now = ambience.light_direction()
+            shader.set_vec3("u_LightDir", *sun_now)
+            if shadow_renderer is not None:
+                shadow_renderer.sun_direction = sun_now
+            ambience.apply(shader, (model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3])
+            gl.glClearColor(*ambience.background(), 1.0)
             if character_shadows is not None:
                 shadow_casters = []
                 if shadow_renderer.enabled and not character_editor.is_open:
@@ -2063,8 +2092,8 @@ def main() -> None:
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
             scene_target.finish()
 
-            if coordinate_overlay is not None:
-                coordinate_overlay.render(window.width, window.height, player_token.position)
+            if coordinate_overlay is not None and not (master_panel is not None and master_panel.is_open):
+                coordinate_overlay.render(window.width, window.height, player_token.position)   # o painel fica ali
                 shader.use()
 
             # 7. A tecla F ao lado do personagem, se há uma porta ou uma escada de mão ao alcance
@@ -2093,6 +2122,8 @@ def main() -> None:
             shader.use()
             if construction_panel is not None:
                 construction_panel.render(window.width, window.height)
+            if master_panel is not None and not character_editor.is_open:
+                master_panel.render(window.width, window.height)
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
@@ -2134,7 +2165,9 @@ def main() -> None:
                                FpsOverlay.MARGIN + (22 if coordinate_overlay is not None else 0))
         character_editor.render(window.width, window.height)
         # com a tela de criação aberta, o chat fica ao lado do painel dela (por cima, tapava os botões do rodapé)
-        chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open else 16)
+        chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open
+                              else master_panel.right + 16 if master_panel is not None and master_panel.is_open
+                              else 16)
         if map_editor is None or chat_console.is_open:
             chat_console.render(window.width, window.height)
         if context_cursor is not None:
@@ -2220,6 +2253,8 @@ def main() -> None:
         map_world.delete()
     if construction_panel is not None:
         construction_panel.delete()
+    if master_panel is not None:
+        master_panel.delete()
     if selection_box is not None:
         selection_box.delete()
     fps_overlay.delete()

@@ -238,6 +238,7 @@ class SkinCommandHandler:
         self.combat = None  # CombatController do terreno (/inimigo, /ficha, /atributo); None fora dele
         # /criar npc e /npc editar: o NPC que o jogo deve abrir na tela de criação (o laço principal atende)
         self.npc_request: Optional[Dict[str, Any]] = None
+        self.master_panel = None  # o painel do /mestre (ambientação); None fora do terreno
         self.npc_editing: Optional[Dict[str, Any]] = None   # a ficha do NPC na tela de criação (o jogo põe e tira)
         self.model_choice: Optional[Dict[str, Any]] = None  # o modelo .glb em uso (ver custom_model_store)
         self.custom_model_dir: Optional[str] = None  # pasta dos modelos (a padrão quando None)
@@ -788,6 +789,49 @@ class SkinCommandHandler:
             return False, usage, RED
         sheet.hp = None
         return self.sheet([])
+
+    def master(self, args: List[str]) -> Result:
+        """/mestre [fechar | hora <hh[:mm]> | cena <nome> | padrao]: o painel de ambientação do mestre, à esquerda."""
+        import unicodedata
+        from src.rendering.ambience import PRESETS
+
+        def _fold(text: str) -> str:
+            return "".join(c for c in unicodedata.normalize("NFD", text.lower().strip()) if not unicodedata.combining(c))
+        panel = self.master_panel
+        if panel is None:
+            return False, "[Mestre] Só funciona no terreno (--terrain).", RED
+        word = args[0].lower() if args else ""
+        if not word:
+            opened = panel.toggle()
+            return True, "[Mestre] Ambientação aberta." if opened else "[Mestre] Ambientação fechada.", CYAN
+        if word in ("fechar", "close", "off"):
+            panel.close()
+            return True, "[Mestre] Ambientação fechada.", CYAN
+        if word in ("abrir", "open", "on"):
+            panel.open()
+            return True, "[Mestre] Ambientação aberta.", CYAN
+        if word in ("hora", "hour") and len(args) > 1:
+            try:
+                hours, _, minutes = args[1].replace("h", ":").partition(":")
+                value = int(hours) + (int(minutes) if minutes else 0) / 60.0
+            except ValueError:
+                return False, "[Mestre] Use /mestre hora 18:30.", RED
+            if not 0 <= value < 24:
+                return False, "[Mestre] A hora vai de 0 a 23:59.", RED
+            panel.ambience.hour = value
+            panel.activate("set")
+            return True, f"[Mestre] Agora são {panel.ambience.clock_text()}.", CYAN
+        if word in ("cena", "scene") and len(args) > 1:
+            wanted = _fold(" ".join(args[1:]))
+            name = next((n for n, _ in PRESETS if _fold(n) == wanted or _fold(n).startswith(wanted)), None)
+            if name is None:
+                return False, "[Mestre] Cenas: " + ", ".join(n for n, _ in PRESETS) + ".", RED
+            panel.activate("preset:" + name)
+            return True, f"[Mestre] Cena: {name}.", CYAN
+        if word in ("padrao", "padrão", "reset"):
+            panel.activate("reset")
+            return True, "[Mestre] Ambientação de volta ao padrão.", CYAN
+        return False, "[Mestre] Use /mestre, /mestre hora <hh:mm>, /mestre cena <nome> ou /mestre padrao.", RED
 
     def seed(self, args: List[str]) -> Result:
         """/seed: mostra a seed do mundo aberto e a copia para a área de transferência."""
@@ -1867,6 +1911,9 @@ ROOT_COMMANDS: List[Command] = [
             "os NPCs do mundo", SkinCommandHandler.npc, None),
     Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
             "muda a ficha de combate", SkinCommandHandler.attribute, None),
+    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | padrao | fechar]",
+            "o painel do mestre: hora do dia, claridade, névoa e outras ambientações", SkinCommandHandler.master,
+            ["hora", "cena", "padrao", "fechar"]),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),

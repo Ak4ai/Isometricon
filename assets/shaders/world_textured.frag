@@ -565,6 +565,36 @@ float characterShadow(vec3 drawnPos, vec3 drawnNormal)
     return hidden / 9.0 * mix(1.0, 0.15, along);
 }
 
+// A ambientação do mestre (/mestre, src/rendering/ambience.py), no fim de tudo: um tom por cima (a luz da hora, a
+// claridade e a cor), a saturação, a luz quente do grupo em volta do jogador (não escurece com a noite) e a névoa.
+// Nos padrões não muda nada.
+uniform vec3 u_EnvTint = vec3(1.0);
+uniform float u_EnvSaturation = 1.0;
+uniform float u_FogAmount = 0.0;      // 0 sem névoa
+uniform vec3 u_FogColor;
+uniform vec3 u_FogCenter;             // os pés do jogador, no espaço desenhado
+uniform float u_TorchAmount = 0.0;    // 0 sem a luz do grupo
+vec3 envGrade(vec3 color, vec3 albedo)
+{
+    color *= u_EnvTint;
+    vec3 offset = v_FragPos - u_FogCenter;
+    if (u_TorchAmount > 0.001)
+    {
+        float radius = 3.0 + 7.0 * u_TorchAmount;
+        float near = 1.0 - smoothstep(0.0, radius, length(offset * vec3(1.0, 1.6, 1.0)));
+        color += albedo * vec3(1.0, 0.70, 0.40) * near * near * (0.35 + 0.65 * u_TorchAmount);
+    }
+    float luma = dot(color, vec3(0.299, 0.587, 0.114));
+    color = max(mix(vec3(luma), color, u_EnvSaturation), 0.0);
+    if (u_FogAmount > 0.001)
+    {
+        float distance_ = max(length(offset.xz) - 2.5, 0.0);
+        float f = u_FogAmount * (1.0 - exp(-distance_ * (0.04 + 0.16 * u_FogAmount)));
+        color = mix(color, u_FogColor, clamp(f, 0.0, 1.0));
+    }
+    return color;
+}
+
 void main()
 {
     vec4 texColor = texture(u_TextureAtlas, v_TexCoord);
@@ -798,10 +828,10 @@ void main()
         float glint = pow(max(dot(r, lightDir), 0.0), 140.0) * 1.8 * sunVis;
         vec3 color = mix(body * lighting, sky * mix(0.55, 1.0, sunVis), fresnel) + vec3(1.0, 0.95, 0.82) * glint;
         float alpha = clamp(mix(0.22, 0.90, deep) + fresnel * 0.40 + glint, 0.0, 1.0);
-        FragColor = vec4(color * roomFactor, alpha * u_Alpha);
+        FragColor = vec4(envGrade(color * roomFactor, body), alpha * u_Alpha);
         return;
     }
 
-    vec3 result = lighting * albedo * roomFactor;
+    vec3 result = envGrade(lighting * albedo * roomFactor, albedo * roomFactor);
     FragColor = vec4(result, texColor.a * u_Alpha);
 }
