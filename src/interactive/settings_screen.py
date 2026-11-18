@@ -42,6 +42,7 @@ CHOICES = {
     'vsync': (True, (False, True)),
     'invert_rotation': (False, (False, True)),
     'reduce_motion': (False, (False, True)),
+    'show_fps': (False, (False, True)),
 }
 
 LIST = (72, 202, 790, 690)     # a coluna das linhas
@@ -107,6 +108,11 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Acompanha a frequência do monitor e evita o "rasgo" na imagem. Com ela ligada, o FPS fica preso à '
                 'tela (60, 120, 144…).',
                 [('Custo', 'Nenhum'), ('Com ela ligada', 'o limite de FPS só vale abaixo da tela')]),
+            Row('show_fps', 'Mostrar FPS', 'Contador de quadros sob as coordenadas', 'gauge', 'toggle', None,
+                'show_fps',
+                'Mostra no canto superior esquerdo quantos quadros por segundo o jogo está desenhando, lido a cada '
+                'meio segundo.',
+                [('Custo', 'Nenhum')]),
             Row('fps_limit', 'Limite de FPS', 'Teto de quadros por segundo', 'gauge', 'choice', None, 'fps_limit',
                 'Segura o jogo num número fixo de quadros por segundo. Economiza bateria e deixa a placa mais fria, '
                 'e o ritmo dos quadros fica mais estável.',

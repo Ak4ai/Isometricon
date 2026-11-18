@@ -89,6 +89,7 @@ from src.integration import VoxelGridProvider
 from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
 from src.interactive.coordinate_overlay import CoordinateOverlayRenderer
+from src.interactive.fps_overlay import FpsOverlay
 from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
@@ -1254,8 +1255,11 @@ def main() -> None:
             shadow_renderer.steps = int(prefs["shadow_range"])
             shadow_renderer.strength = float(prefs["shadow_strength"])
 
+
+    fps_overlay = FpsOverlay()
     while not window.should_close():
         dt = window.update_delta_time()
+        fps_overlay.update(dt)
         if frametimes_path:
             if frame_marks:
                 frame_sections.append({n: (t - frame_marks[i - 1][1]) * 1000.0
@@ -1947,6 +1951,10 @@ def main() -> None:
                 chest_dim["quad"].set_image(Image.new("RGBA", (1, 1), (0, 0, 0, 255)))
             chest_dim["quad"].draw(0, 0, window.width, window.height, size=(window.width, window.height),
                                    opacity=chest_session.dim)
+        if menus.preferences.data.get('show_fps'):   # Configurações > Mostrar FPS (desligado por padrão)
+            # sob as coordenadas, quando elas estão na tela (uma linha de 18 pixels mais a folga)
+            fps_overlay.render(window.width, window.height,
+                               FpsOverlay.MARGIN + (22 if coordinate_overlay is not None else 0))
         character_editor.render(window.width, window.height)
         if map_editor is None or chat_console.is_open:
             chat_console.render(window.width, window.height)
@@ -2033,6 +2041,7 @@ def main() -> None:
         construction_panel.delete()
     if selection_box is not None:
         selection_box.delete()
+    fps_overlay.delete()
     if terrain_demo:
         if atlas is not None:
             atlas.delete()

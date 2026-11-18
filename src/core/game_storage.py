@@ -32,7 +32,7 @@ GRAPHICS = {
 }
 DEFAULTS = {'bindings': {k: v[1] for k, v in ACTIONS.items()}, 'vsync': True,
             'sensitivity': 1.0, 'invert_rotation': False, 'reduce_motion': False,
-            'text_scale': 1.0, **{key: default for key, (default, _) in GRAPHICS.items()}}
+            'text_scale': 1.0, 'show_fps': False, **{key: default for key, (default, _) in GRAPHICS.items()}}
 
 
 def cycle(key, value, step):
@@ -77,7 +77,7 @@ class Preferences:
         self.reset()
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
-            for key in ('vsync', 'invert_rotation', 'reduce_motion'):
+            for key in ('vsync', 'invert_rotation', 'reduce_motion', 'show_fps'):
                 if isinstance(data.get(key), bool):
                     self.data[key] = data[key]
             for key, low, high in [('sensitivity', .25, 2), ('text_scale', 1, 1.25)]:
