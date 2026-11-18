@@ -311,18 +311,18 @@ class CombatController:
         session, player = self.session, self.player
         outcome = session.outcome
         if outcome == VICTORY:
-            self.banner = ("Vitoria!", (255, 200, 60), 3.0)
+            self.banner = ("Vitória!", (255, 200, 60), 3.0)
         elif outcome == DEFEAT:
             player.hp = 1.0
             for e in self.enemies:
                 if e.combatant in session.order or e.combatant in session.left:
                     e.fallen = max(e.fallen, 1e-3)             # vão embora (somem afundando)
-            self.banner = ("Voce desmaiou... e acordou com 1 de vida", (255, 85, 85), 4.0)
+            self.banner = ("Você desmaiou… e acordou com 1 de vida", (255, 85, 85), 4.0)
             self.messages.append(("[Combate] Você desmaiou. Os inimigos foram embora e você acordou com 1 de vida.",
                                   (255, 85, 85)))
         elif outcome == ESCAPED:
             self.calm = AFTER_ESCAPE
-            self.banner = ("Voce fugiu", (110, 170, 255), 2.5)
+            self.banner = ("Você fugiu", (110, 170, 255), 2.5)
         for e in self.enemies:
             if e.combatant in session.left:
                 e.fallen = max(e.fallen, 1e-3)

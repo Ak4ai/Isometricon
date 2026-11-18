@@ -842,7 +842,7 @@ class ChatConsole:
         except AttributeError:
             return len(text) * 9
 
-    def _wrap_segments(self, draw: Any, segments: List[Segment], width: int) -> List[List[Segment]]:
+    def _wrap_segments(self, draw: Any, segments: List[Segment], width: int, font: Any = None) -> List[List[Segment]]:
         """Quebra uma linha colorida (pedaços de texto e cor) em linhas que cabem em ``width``, palavra por palavra."""
         words: List[Segment] = []
         for text, color in segments:
@@ -856,53 +856,57 @@ class ChatConsole:
         for word, color in words:
             if word == " " and not lines[-1]:
                 continue
-            size = self._measure(draw, word)
+            size = self._measure(draw, word, font)
             if word != " " and used + size > width and lines[-1]:
                 while lines[-1] and lines[-1][-1][0] == " ":
                     lines[-1].pop()
                 lines.append([("  ", color)])           # a continuação entra recuada, como no chat
-                used = self._measure(draw, "  ")
+                used = self._measure(draw, "  ", font)
             lines[-1].append((word, color))
             used += size
         return lines
 
-    def _draw_combat_log(self, draw: Any, width: int, height: int) -> None:
-        """A caixa do chat como registro do combate (com o chat fechado)."""
+    def _draw_combat_log(self, img: Image.Image, width: int, height: int) -> None:
+        """A caixa do chat como registro do combate (com o chat fechado): um pergaminho como o das telas do jogo,
+        título em Georgia, as linhas em Segoe com as cores da luta passadas para tinta."""
+        from src.interactive import combat_style as st
         view = self.combat_log
+        draw = ImageDraw.Draw(img)
+        body = st.font(14)
         box_x = 16
         box_w = self._box_width(width)
         line_height = 20
         rows: List[List[Segment]] = []
         for line in view.lines:
-            rows.extend(self._wrap_segments(draw, line, box_w - 8))
+            rows.extend(self._wrap_segments(draw, line, box_w - 32, body))
         rows = rows[-COMBAT_LINES:]
-        title_h = 24
+        title_h = 34
         detail_h = 18 if view.detail else 0
-        hint_h = 18
-        total_h = title_h + len(rows) * line_height + detail_h + hint_h + 10
-        box_y = height - total_h - 16
-        left, right = box_x - 6, box_x + box_w + 6
-        draw.rectangle([left, box_y - 4, right, box_y + total_h + 2], fill=(14, 11, 8, 205),
-                       outline=(200, 160, 60, 230), width=2)
-        draw.rectangle([left, box_y - 4, right, box_y + title_h - 2], fill=(60, 44, 16, 215))
-        draw.text((box_x + 1, box_y + 1), view.title, font=self.font, fill=(20, 20, 20, 220))
-        draw.text((box_x, box_y), view.title, font=self.font, fill=(255, 205, 70, 255))
-        y = box_y + title_h + 2
+        hint_h = 28
+        total_h = 14 + title_h + len(rows) * line_height + detail_h + hint_h + 8
+        box_y = height - total_h - 14
+        left = box_x - 6
+        card, pad = st.card(box_w + 12, total_h, radius=12)
+        img.alpha_composite(card, (left - pad, box_y - pad))
+        draw = ImageDraw.Draw(img)
+        x0, x1 = box_x + 18, box_x + box_w - 14     # longe dos cantos de metal
+        y = box_y + 14
+        st.write(draw, (x0, y), st.fit(view.title, 16, box_w - 40, heading=True), 16, st.INK, heading=True)
+        y += 26
+        draw.line((x0, y, x1 - 10, y), fill=(*st.LINE, 255))
+        st.diamond(draw, x1 - 4, y, 3)
+        y += 8
         for row in rows:
-            x = float(box_x)
-            for text, (r, g, b) in row:
-                draw.text((x + 1, y + 1), text, font=self.font, fill=(20, 20, 20, 220))
-                draw.text((x, y), text, font=self.font, fill=(r, g, b, 255))
-                x += self._measure(draw, text)
+            x = float(x0)
+            for text, color in row:
+                x += st.write(draw, (x, y), text, 14, st.ink(color))
             y += line_height
         if view.detail:
-            detail = view.detail
-            while len(detail) > 4 and self._measure(draw, detail, self.font_small) > box_w:
-                detail = detail[:-4] + "..."
-            draw.text((box_x, y + 1), detail, font=self.font_small, fill=(165, 160, 150, 235))
+            st.write(draw, (x0, y + 2), st.fit(view.detail, 11, x1 - x0), 11, st.MUTED)
             y += detail_h
-        draw.text((box_x, y + 3), "[T] abre o chat durante o combate", font=self.font_small,
-                  fill=(140, 130, 110, 190))
+        y += 4
+        st.badge(draw, x0, y, "T", True, size=18)
+        st.write(draw, (x0 + 25, y + 3), "abre o chat durante o combate", 11, st.MUTED)
 
     def _generate_hud_image(
         self,
@@ -915,7 +919,7 @@ class ChatConsole:
         draw = ImageDraw.Draw(img)
 
         if self.combat_log is not None and not self.is_open:
-            self._draw_combat_log(draw, width, height)
+            self._draw_combat_log(img, width, height)
             return img
 
         # Dimensões da caixa de chat (canto inferior esquerdo; no combate, até a borda do menu de combate)
