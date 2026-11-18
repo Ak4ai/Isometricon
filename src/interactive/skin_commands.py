@@ -202,6 +202,7 @@ class SkinCommandHandler:
         self.combat = None  # CombatController do terreno (/inimigo, /ficha, /atributo); None fora dele
         # /criar npc e /npc editar: o NPC que o jogo deve abrir na tela de criação (o laço principal atende)
         self.npc_request: Optional[Dict[str, Any]] = None
+        self.npc_editing: Optional[Dict[str, Any]] = None   # a ficha do NPC na tela de criação (o jogo põe e tira)
         self.model_choice: Optional[Dict[str, Any]] = None  # o modelo .glb em uso (ver custom_model_store)
         self.custom_model_dir: Optional[str] = None  # pasta dos modelos (a padrão quando None)
         self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
@@ -620,48 +621,86 @@ class SkinCommandHandler:
                       "ou chegue perto e ele te ataca."), GREEN
 
     # ------------------------------------------------------------------ /criar npc e /npc
-    NPC_USAGE = "Uso: /criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde do bestiário]"
+    NPC_USAGE = "Uso: /criar npc [nome] [hostil|amigavel] [masculino|feminino] [molde do bestiário]"
+    NPC_FIELDS = ("nome", "lado", "molde", "fala")
 
     def create(self, args: List[str]) -> Result:
-        """/criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde]: abre a tela do /skin para o NPC; ao
-        fechá-la, ele aparece na frente do personagem e fica salvo no mundo."""
+        """/criar npc [nome] [hostil|amigavel] [masculino|feminino] [molde]: abre a tela do /skin para o NPC, com a
+        aba NPC onde tudo isso se muda; ao fechá-la, ele aparece na frente do personagem e fica salvo no mundo.
+        Nada é obrigatório e a ordem não importa: o que não é lado, corpo nem molde vira o nome."""
         from src.combat.bestiary import BESTIARY, find_creature
         from src.interactive.combat_controller import DEFAULT_LINE, NPC_SIDES, NPC_TEMPLATES
         if self.combat is None or self.player_token is None:
             return False, "[NPC] Só funciona no terreno (--terrain).", RED
         if not args or args[0].lower() != "npc":
             return False, self.NPC_USAGE, GOLD
-        rest = args[1:]
-        if len(rest) < 3:
-            return False, self.NPC_USAGE, GOLD
-        name = rest[0].replace("_", " ").strip()
-        side = rest[1].lower()
-        if side not in NPC_SIDES:
-            return False, f"[NPC] O lado é hostil ou amigavel, não '{rest[1]}'.", RED
-        body = rest[2].lower()
-        if body not in BODIES:
-            return False, f"[NPC] O corpo é masculino ou feminino, não '{rest[2]}'.", RED
-        ally = NPC_SIDES[side]
-        creature = find_creature(rest[3]) if len(rest) > 3 else BESTIARY[NPC_TEMPLATES[ally]]
-        if creature is None:
-            return False, f"[NPC] Não conheço o molde '{rest[3]}'. Moldes: {', '.join(BESTIARY)}.", RED
-        if self.combat.find_npc(name) is not None:
-            return False, f"[NPC] Já existe um NPC chamado {name}. Use /npc editar {rest[0]}.", RED
-        if self.npc_request is not None:
+        if self.npc_request is not None or self.npc_editing is not None:
             return False, "[NPC] Termine o NPC que está na tela de criação antes.", RED
-        female = BODIES[body] == BodyType.FEMALE
+        side, body, creature, words = None, None, None, []
+        for word in args[1:]:
+            low = word.lower()
+            if side is None and low in NPC_SIDES:
+                side = NPC_SIDES[low]
+            elif body is None and low in BODIES:
+                body = low
+            elif creature is None and find_creature(low) is not None:
+                creature = find_creature(low)
+            else:
+                words.append(word.replace("_", " "))
+        ally = True if side is None else side
+        creature = creature or BESTIARY[NPC_TEMPLATES[ally]]
+        female = body is not None and BODIES[body] == BodyType.FEMALE
+        name = self.combat.unique_npc_name(" ".join(words).strip() or "Novo NPC")
         self.npc_request = {"nome": name, "lado": "amigavel" if ally else "hostil", "molde": creature.key,
                             "fala": DEFAULT_LINE, "corpo": "feminino" if female else "masculino"}
-        kind = "amigável" if ally else "hostil"
-        return True, (f"[NPC] Criando {name} ({kind}, {'feminino' if female else 'masculino'}, ficha de "
-                      f"{creature.name}). Monte a aparência e feche a tela: o NPC aparece na sua frente."), GREEN
+        return True, (f"[NPC] Criando {name}. Na aba NPC da tela: nome, lado, ficha e fala. Monte a aparência e "
+                      "feche a tela: o NPC aparece na sua frente."), GREEN
+
+    def npc_set(self, field: str, value: str) -> Result:
+        """/npc definir <nome|lado|molde|fala> <valor>: muda o NPC que está na tela de criação."""
+        from src.combat.bestiary import BESTIARY, find_creature
+        from src.interactive.combat_controller import NPC_SIDES, NPC_TEMPLATES
+        spec = self.npc_editing
+        if spec is None:
+            return False, "[NPC] Nenhum NPC na tela de criação. Use /criar npc ou /npc editar <nome>.", RED
+        field, value = field.lower(), value.strip()
+        if field not in self.NPC_FIELDS:
+            return False, f"[NPC] Campos: {', '.join(self.NPC_FIELDS)}.", GOLD
+        if field == "nome":
+            if not value:
+                return False, "[NPC] O nome não pode ficar vazio.", RED
+            keep = spec.get("id") if self.combat is not None and self.combat.token(spec.get("id")) else None
+            spec["nome"] = self.combat.unique_npc_name(value, keep) if self.combat is not None else value
+            return True, f"[NPC] Nome: {spec['nome']}.", GREEN
+        if field == "lado":
+            if value.lower() not in NPC_SIDES:
+                return False, f"[NPC] O lado é hostil ou amigavel, não '{value}'.", RED
+            ally, was = NPC_SIDES[value.lower()], spec.get("lado") == "amigavel"
+            if spec.get("molde") == NPC_TEMPLATES[was]:   # a ficha padrão do lado acompanha a troca
+                spec["molde"] = NPC_TEMPLATES[ally]
+            spec["lado"] = "amigavel" if ally else "hostil"
+            return True, f"[NPC] {spec.get('nome')} agora é {'amigável' if ally else 'hostil'}.", GREEN
+        if field == "molde":
+            creature = find_creature(value)
+            if creature is None:
+                return False, f"[NPC] Não conheço o molde '{value}'. Moldes: {', '.join(BESTIARY)}.", RED
+            spec["molde"] = creature.key
+            return True, f"[NPC] Ficha de combate: {creature.name}.", GREEN
+        if not value:
+            return False, "[NPC] Escreva o que ele diz.", RED
+        spec["fala"] = value
+        return True, f"[NPC] {spec.get('nome')} diz: {value}", GREEN
 
     def npc(self, args: List[str]) -> Result:
         """/npc lista | editar <nome> | fala <nome> <texto> | remover <nome>."""
-        usage = "Uso: /npc lista | editar <nome> | fala <nome> <texto> | remover <nome>"
+        usage = "Uso: /npc lista | editar <nome> | fala <nome> <texto> | remover <nome> | definir <campo> <valor>"
         if self.combat is None:
             return False, "[NPC] Só funciona no terreno (--terrain).", RED
         sub = args[0].lower() if args else "lista"
+        if sub in ("definir", "set"):
+            if len(args) < 2:
+                return False, f"Uso: /npc definir <{'|'.join(self.NPC_FIELDS)}> <valor>", GOLD
+            return self.npc_set(args[1], " ".join(args[2:]))
         if sub in ("lista", "list"):
             npcs = self.combat.npcs()
             if not npcs:
@@ -685,12 +724,12 @@ class SkinCommandHandler:
             token.npc["fala"] = " ".join(args[2:])
             return True, f"[NPC] {name} agora diz: {token.npc['fala']}", GREEN
         if sub in ("editar", "edit"):
-            if self.npc_request is not None:
+            if self.npc_request is not None or self.npc_editing is not None:
                 return False, "[NPC] Termine o NPC que está na tela de criação antes.", RED
             if self.combat.session is not None and self.combat.session.get(token.id) is not None:
                 return False, f"[NPC] {name} está numa luta agora.", RED
             self.npc_request = {"editar": token.id}
-            return True, f"[NPC] Editando a aparência de {name}. Feche a tela para voltar.", GREEN
+            return True, f"[NPC] Editando {name}: a aparência e, na aba NPC, nome, lado, ficha e fala. Feche a tela para voltar.", GREEN
         return False, usage, GOLD
 
     def sheet(self, args: List[str]) -> Result:
@@ -1886,7 +1925,7 @@ COMMAND_TREE: Dict[str, Any] = {
     "inimigo": ["lista", "limpar", "zumbi", "esqueleto", "aranha", "slime", "bandido", "guarda", "ogro"],
     "ficha": [],
     "criar": {"npc": []},
-    "npc": {"lista": [], "editar": [], "fala": [], "remover": []},
+    "npc": {"lista": [], "editar": [], "fala": [], "remover": [], "definir": ["nome", "lado", "molde", "fala"]},
     "atributo": ["for", "des", "con", "sab", "arma", "armadura", "nivel"],
     "agua": [],
     "bloco": list(BLOCK_NAMES),

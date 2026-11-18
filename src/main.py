@@ -1340,7 +1340,7 @@ def main() -> None:
             request, skin_command_handler.npc_request = skin_command_handler.npc_request, None
             editing_token = combat.token(request["editar"]) if "editar" in request else None
             if editing_token is not None:
-                spec = editing_token.npc
+                spec = dict(editing_token.npc)        # a aba NPC muda uma cópia; o NPC é refeito ao fechar
                 body = npc_models.release(editing_token.id)
                 npc_model = body.model if body is not None else build_model(spec["id"], spec.get("personagem"))
                 npc_animator = body.animator if body is not None else CharacterAnimator(npc_model, walking=False)
@@ -1354,6 +1354,7 @@ def main() -> None:
                 npc_edit.update(spec=spec, model=npc_model, animator=npc_animator, token=editing_token,
                                 player_model=skin_command_handler.character_model)
                 skin_command_handler.character_model = npc_model
+                skin_command_handler.npc_editing = spec  # a aba NPC da tela muda nome, lado, ficha e fala
                 character_editor.autosave = False      # fechar a tela não grava o NPC como o personagem
                 character_editor.open()
         elif npc_edit and not character_editor.is_open:
@@ -1361,9 +1362,12 @@ def main() -> None:
             spec, npc_model = npc_edit["spec"], npc_edit["model"]
             spec["personagem"] = character_save.to_dict(npc_model)
             skin_command_handler.character_model = npc_edit["player_model"]
+            skin_command_handler.npc_editing = None
             character_editor.autosave = True
             token = npc_edit["token"]
-            if token is None:
+            if token is not None:
+                token = combat.replace_npc(token.id, spec) or token
+            else:
                 ally = spec.get("lado") == "amigavel"
                 ahead = 2.5 if ally else 7.0           # o hostil aparece fora do alcance de vista dele
                 px, py, pz = (float(v) for v in player_token.position)

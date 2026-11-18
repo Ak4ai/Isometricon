@@ -286,6 +286,30 @@ class CombatController:
         self.enemies.remove(token)
         return True
 
+    def unique_npc_name(self, name: str, keep: Optional[str] = None) -> str:
+        """``name``, ou ``name 2``, ``name 3``... se outro NPC (que não ``keep``) já se chama assim."""
+        base = name.strip() or "Novo NPC"
+        shown, n = base, 1
+        while True:
+            other = self.find_npc(shown)
+            if other is None or other.id == keep:
+                return shown
+            n += 1
+            shown = f"{base} {n}"
+
+    def replace_npc(self, npc_id: str, spec: Dict[str, Any]) -> Optional[EnemyToken]:
+        """Refaz o NPC ``npc_id`` com a ficha nova (nome, lado, molde, fala) no mesmo lugar e na mesma posição da
+        lista; o corpo (``personagem``) vem junto na ficha."""
+        old = self.token(npc_id)
+        if old is None or old.npc is None:
+            return None
+        index = self.enemies.index(old)
+        self.enemies.remove(old)
+        token = self.add_npc(dict(spec, id=npc_id), old.shown, old.yaw)
+        self.enemies.remove(token)
+        self.enemies.insert(index, token)
+        return token
+
     def npc_list(self) -> List[Dict[str, Any]]:
         """Os NPCs como o mundo os salva (a ficha, onde estão e para onde olham)."""
         return [dict(e.npc, posicao=[round(float(v), 3) for v in e.shown], yaw=round(float(e.yaw), 4))

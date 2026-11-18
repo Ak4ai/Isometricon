@@ -167,13 +167,92 @@ def test_criar_npc_asks_the_game_to_open_the_editor():
                                     "corpo": "feminino"}
     assert not h.execute("/criar npc Outro amigavel masculino", run_async=False)[0]   # um de cada vez
     h.npc_request = None
-    assert h.execute("/criar npc Velho_Joao amigavel masculino ogro", run_async=False)[0]
+    assert h.execute("/criar npc ogro Velho_Joao masculino", run_async=False)[0]     # a ordem não importa
     assert h.npc_request["nome"] == "Velho Joao" and h.npc_request["molde"] == "ogro"
     h.npc_request = None
-    for bad in ("/criar npc Rafa", "/criar npc Rafa neutro masculino", "/criar npc Rafa hostil robo",
-                "/criar npc Rafa hostil masculino dragao", "/criar casa"):
-        assert not h.execute(bad, run_async=False)[0], bad
+    assert not h.execute("/criar casa", run_async=False)[0]
     assert h.npc_request is None
+
+
+def test_criar_npc_needs_nothing_and_the_name_never_repeats():
+    h = handler()
+    assert h.execute("/criar npc", run_async=False)[0]
+    assert h.npc_request == {"nome": "Novo NPC", "lado": "amigavel", "molde": "guarda", "fala": DEFAULT_LINE,
+                             "corpo": "masculino"}
+    h.npc_request = None
+    h.combat.add_npc(friendly(), [-3.0, 0.0, 0.0])
+    assert h.execute("/criar npc Lia", run_async=False)[0] and h.npc_request["nome"] == "Lia 2"
+
+
+def test_npc_definir_changes_the_npc_on_the_editor():
+    h = handler()
+    assert not h.execute("/npc definir nome Bia", run_async=False)[0]   # nenhum NPC na tela
+    h.npc_editing = {"id": "npcx", "nome": "Novo NPC", "lado": "amigavel", "molde": "guarda", "fala": DEFAULT_LINE}
+    assert h.execute("/npc definir nome Bia Ferreira", run_async=False)[0]
+    assert h.npc_editing["nome"] == "Bia Ferreira"
+    assert h.execute("/npc definir lado hostil", run_async=False)[0]
+    assert h.npc_editing["lado"] == "hostil" and h.npc_editing["molde"] == "bandido"   # a ficha padrão acompanha
+    assert h.execute("/npc definir molde ogro", run_async=False)[0] and h.npc_editing["molde"] == "ogro"
+    assert h.execute("/npc definir lado amigavel", run_async=False)[0]
+    assert h.npc_editing["molde"] == "ogro"                     # a escolhida à mão fica
+    assert h.execute("/npc definir fala Bom dia, viajante.", run_async=False)[0]
+    assert h.npc_editing["fala"] == "Bom dia, viajante."
+    for bad in ("/npc definir lado neutro", "/npc definir molde dragao", "/npc definir idade 30",
+                "/npc definir nome", "/npc definir"):
+        assert not h.execute(bad, run_async=False)[0], bad
+    h.combat.add_npc(friendly(), [-3.0, 0.0, 0.0])
+    assert h.execute("/npc definir nome Lia", run_async=False)[0] and h.npc_editing["nome"] == "Lia 2"
+
+
+def test_replace_npc_keeps_its_place_and_id():
+    c = controller()
+    token = c.add_npc(friendly(), [-3.0, 0.0, 2.0], yaw=1.5)
+    other = c.add_npc(hostile(), [9.0, 0.0, 0.0])
+    changed = c.replace_npc(token.id, dict(token.npc, nome="Lia Brava", lado="hostil", molde="bandido"))
+    assert changed.id == token.id and c.enemies.index(changed) == 0 and c.enemies[1] is other
+    assert changed.combatant.name == "Lia Brava" and not changed.friendly and changed.creature.key == "bandido"
+    assert changed.shown[0] == -3.0 and changed.shown[2] == 2.0 and changed.yaw == 1.5
+    assert c.unique_npc_name("Lia Brava") == "Lia Brava 2" and c.unique_npc_name("Lia Brava", keep=token.id) == "Lia Brava"
+    assert c.replace_npc("ninguem", {}) is None
+
+
+def test_editor_has_an_npc_tab_while_an_npc_is_on_it():
+    from src.interactive.character_editor import NPC_SECTION, CharacterEditor
+    sent = []
+    h = SimpleNamespace(character_model=SimpleNamespace(body="male", customization=None), busy_status="",
+                        npc_editing={"nome": "Bia", "lado": "amigavel", "molde": "guarda", "fala": "Oi"},
+                        execute=lambda command: (sent.append(command), (True, "feito", (0, 0, 0)))[1])
+    editor = CharacterEditor(h, {"active": False, "yaw": 0.0}, create_gl=False)
+    editor.open()
+    assert editor.sections[0].title == NPC_SECTION and editor.active == 0
+    hits = editor.layout(1280, 720)
+    option = lambda label: next((r, p) for r, k, p in hits if k == "option" and p.label == label)
+
+    def click(rect):
+        x, y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+        editor.handle_mouse_button(x, y, 0, 1)
+        editor.handle_mouse_button(x, y, 0, 0)
+
+    rect, name = option("Nome")
+    click(rect)
+    assert editor.typing and editor.entry == "Bia"          # o campo começa com o nome que ele tem
+    editor.handle_key(259, 1)                                # Backspace
+    for ch in "a Lima":
+        editor.handle_char(ord(ch))
+    editor.handle_key(257, 1)                                # Enter
+    assert sent[-1] == "/npc definir nome Bia Lima" and not editor.typing
+    click(option("Hostil")[0])
+    assert sent[-1] == "/npc definir lado hostil"
+    assert option("Amigável")[1].selected(h.character_model)
+    assert any(p.label.startswith("Ogro") for _, k, p in hits if k == "option")
+    rect, _ = option("Fala")
+    click(rect)
+    editor.handle_key(256, 1)                                # Esc desiste sem mandar nada
+    assert sent[-1] == "/npc definir lado hostil" and not editor.typing and editor.is_open
+    editor.close()
+    h.npc_editing = None
+    editor.open()
+    assert NPC_SECTION not in [x.title for x in editor.sections]
 
 
 def test_npc_commands_list_talk_edit_and_remove():
@@ -185,7 +264,7 @@ def test_npc_commands_list_talk_edit_and_remove():
     assert h.combat.find_npc("Lia").npc["fala"] == "Cuidado com os zumbis!"
     assert h.execute("/npc editar Lia", run_async=False)[0]
     assert h.npc_request == {"editar": h.combat.find_npc("Lia").id}
-    assert not h.execute("/criar npc Lia amigavel feminino", run_async=False)[0]     # o nome já existe
+    assert not h.execute("/criar npc Lia amigavel feminino", run_async=False)[0]     # um NPC já está na tela
     assert h.execute("/npc remover Lia", run_async=False)[0] and h.combat.npcs() == []
     assert not h.execute("/npc remover Lia", run_async=False)[0]
 

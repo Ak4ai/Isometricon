@@ -60,6 +60,8 @@ FOOTER_HEIGHT = 136
 PAD = 12
 CARD = (88, 112)   # a garment: picture and two lines of name
 TEXT_TILE = 34     # height of a named option (two to a row)
+ENTRY_TILE = 40    # height of a field of free text (one to a row)
+NPC_SECTION = "NPC"  # the tab of the NPC on the screen (only while one is made or edited)
 SWATCH = 32        # a colour (seven to a row)
 GAP = 8
 SWATCHES_PER_ROW = 7
@@ -120,9 +122,13 @@ class Option:
     slider: Optional[str] = None                  # an adjustment of body_shape, set from -100 to 100
     check: bool = False                           # drawn with a box that is ticked when selected
     picker: Optional[str] = None                  # a command that takes "#rrggbb": drawn as a picker of any colour
+    entry: Optional[str] = None                   # a field of free text: the command that takes what is typed
+    value: Optional[Callable[[], str]] = None     # what the field shows while nobody types in it
 
     @property
     def kind(self) -> str:
+        if self.entry is not None:
+            return "entry"
         if self.slider is not None:
             return "slider"
         if self.picker is not None:
@@ -261,6 +267,7 @@ class CharacterEditor:
         self.autosave = True  # closing the editor saves the character
         self.typing = False   # the field that adds a Roblox item has the keyboard
         self.entry = ""
+        self._entry_option: Optional[Option] = None  # the field of the grid being typed in (None: the Roblox one)
         self.clipboard: Callable[[], str] = lambda: ""
         self.make_thumbnails = create_gl  # pictures of new items are rendered by a process of their own
         self._thumbnails: Any = None
@@ -321,7 +328,8 @@ class CharacterEditor:
         self._overlay_key: Any = None
         self._ring_quad = None
         self._ring_size = 0
-        self.sections = self._make_sections()
+        self._base_sections = self._make_sections()
+        self.sections = list(self._base_sections)
 
     # ------------------------------------------------------------------ o que há para escolher
     @property
@@ -342,6 +350,25 @@ class CharacterEditor:
             options.append(Option(item.name, f"/skin {command} {item.asset_id}", image=item.image or "",
                                   selected=lambda m, s=slot, i=item.asset_id: _same(getattr(m, s, None), i)))
         return options
+
+    def _npc_groups(self) -> List[Group]:
+        """A aba NPC: o nome, o lado, o corpo, a ficha de combate e a fala do NPC que está na tela."""
+        from src.combat.bestiary import BESTIARY
+        spec = lambda: getattr(self.handler, "npc_editing", None) or {}
+        text = lambda key: lambda: str(spec().get(key, "") or "")
+        return [
+            Group("Nome", [Option("Nome", "", entry="/npc definir nome", value=text("nome"))]),
+            Group("Lado", [Option(label, f"/npc definir lado {side}", selected=lambda m, side=side: spec().get("lado") == side)
+                           for label, side in (("Amigável", "amigavel"), ("Hostil", "hostil"))]),
+            Group("Corpo", [Option(n.capitalize(), f"/skin corpo {n}",
+                                   selected=lambda m, v=BODIES[n]: _value(getattr(m, "body", "")) == _value(v))
+                            for n in ("feminino", "masculino")]),
+            Group("Ficha de combate (do bestiário)", [
+                Option(c.name, f"/npc definir molde {key}",
+                       selected=lambda m, key=key: spec().get("molde") == key)
+                for key, c in BESTIARY.items()]),
+            Group("Fala (o amigável diz ao conversar)", [Option("Fala", "", entry="/npc definir fala", value=text("fala"))]),
+        ]
 
     def _make_sections(self) -> List[Section]:
         custom = self._custom
@@ -675,9 +702,16 @@ class CharacterEditor:
 
     # ------------------------------------------------------------------ abrir, fechar, girar
     def open(self) -> None:
+        # a aba NPC vem primeiro enquanto a tela veste um NPC (o jogo põe a ficha dele em handler.npc_editing)
+        npc = getattr(self.handler, "npc_editing", None) is not None
+        sections = ([Section(NPC_SECTION, self._npc_groups)] if npc else []) + self._base_sections
+        if npc or [x.title for x in sections] != [x.title for x in self.sections]:
+            self.sections, self.active, self.scroll, self._groups = sections, 0, 0, None
+        self.typing, self.entry, self._entry_option = False, "", None
         self.refresh_catalog()
         self.is_open = True
-        self.message = "Arraste para girar e inclinar a vista. W liga o andar. Esc fecha."
+        self.message = ("Dê nome, lado e ficha ao NPC aqui; monte a aparência nas outras abas. Esc fecha."
+                        if npc else "Arraste para girar e inclinar a vista. W liga o andar. Esc fecha.")
         self._was_spinning = True
         self.turntable["active"] = True
         self.dirty = True
@@ -791,6 +825,8 @@ class CharacterEditor:
                 columns, (w, h) = 1, (right - left, SLIDER_TILE)
             elif kind == "picker":
                 columns, (w, h) = 1, (right - left, PICKER_TILE)
+            elif kind == "entry":
+                columns, (w, h) = 1, (right - left, ENTRY_TILE)
             else:
                 columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
             for k, option in enumerate(group.options):
@@ -857,7 +893,9 @@ class CharacterEditor:
             return self.over_panel(x)
         if not self.over_panel(x):
             if self.typing:
-                self.typing, self.dirty = False, True
+                if self._entry_option is not None:
+                    self.entry = ""
+                self.typing, self._entry_option, self.dirty = False, None, True
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
             bone = self.bone_under(x, y)
@@ -876,13 +914,18 @@ class CharacterEditor:
             self._was_spinning = bool(self.turntable.get("active"))
             return True
         found = self.hit(x, y)
-        typing = found is not None and found[1] == "field"
-        if typing != self.typing:
-            self.typing, self.dirty = typing, True
+        field = found[2] if found is not None and found[1] == "option" and found[2].entry is not None else None
+        typing = field is not None or (found is not None and found[1] == "field")
+        if typing != self.typing or field is not self._entry_option:
+            if field is not None and field is not self._entry_option:
+                self.entry = field.value() if field.value else ""   # o campo começa com o que já está lá
+            elif field is None and self._entry_option is not None:
+                self.entry = ""
+            self.typing, self._entry_option, self.dirty = typing, field, True
         if found is None:
             return True
         _, kind, payload = found
-        if kind == "field":
+        if kind == "field" or field is not None:
             pass
         elif kind == "tab":
             self.select_section(payload)
@@ -1067,10 +1110,14 @@ class CharacterEditor:
         return True
 
     def submit(self) -> None:
-        """Baixa e veste o item do campo (id ou link do catálogo do Roblox)."""
-        text = self.entry.strip()
-        self.entry, self.typing, self.dirty = "", False, True
-        if text:
+        """Envia o campo em uso: um da grade (o nome do NPC, por exemplo) roda o comando dele com o texto; o de
+        baixo baixa e veste o item (id ou link do catálogo do Roblox)."""
+        text, field = self.entry.strip(), self._entry_option
+        self.entry, self.typing, self._entry_option, self.dirty = "", False, None, True
+        if field is not None:
+            if text:
+                self.choose(Option(field.label, f"{field.entry} {text}"))
+        elif text:
             self.choose(Option(text, f"/skin vestir {text}"))
 
     def handle_key(self, key: int, action: int, mods: int = 0) -> bool:
@@ -1083,7 +1130,7 @@ class CharacterEditor:
                 if key in (257, 335):   # Enter
                     self.submit()
                 elif key == 256:        # Esc
-                    self.entry, self.typing = "", False
+                    self.entry, self.typing, self._entry_option = "", False, None
                 elif key == 259:        # Backspace
                     self.entry = self.entry[:-1]
                 elif key == 86 and mods & 2:  # Ctrl+V
@@ -1168,6 +1215,19 @@ class CharacterEditor:
                 pen.text((x0, y0 + 4), payload.upper(), font=small, fill=MUTED)
                 continue
             draw_rect = (x0, y0, x1 - 1, y1 - 1)
+            if payload.kind == "entry":
+                editing = self.typing and self._entry_option is payload
+                hovered = self.hover == ("option", id(payload))
+                pen.rounded_rectangle(draw_rect, 6, fill=(14, 15, 19, 255),
+                                      outline=ACCENT if editing else (MUTED if hovered else TILE_HOVER),
+                                      width=2 if editing else 1)
+                shown = (self.entry + "|") if editing else (payload.value() if payload.value else "")
+                room = x1 - x0 - 20
+                while shown and pen.textlength(shown, font=text) > room:
+                    shown = shown[1:] if editing else shown[:-2] + "…"
+                pen.text((x0 + 10, (y0 + y1) // 2), shown or "Clique e escreva",
+                         font=text, fill=TEXT if shown else MUTED, anchor="lm")
+                continue
             pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE)
             if payload.kind == "slider":
                 value = self.slider_value(payload) if self.model is not None else 0
@@ -1235,8 +1295,9 @@ class CharacterEditor:
             if kind == "option":
                 continue
             if kind == "field":
-                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if self.typing else TILE_HOVER)
-                shown = self.entry + ("|" if self.typing else "")
+                mine = self.typing and self._entry_option is None
+                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if mine else TILE_HOVER)
+                shown = (self.entry + "|") if mine else ""
                 while shown and draw.textlength(shown, font=small) > x1 - x0 - 16:
                     shown = shown[1:]
                 draw.text((x0 + 8, (y0 + y1) // 2), shown or "Adicionar do Roblox: cole o id ou o link",
