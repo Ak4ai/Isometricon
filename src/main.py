@@ -444,7 +444,10 @@ def main() -> None:
         water_uv = atlas.uv_table[int(BlockType.WATER)].reshape(-1, 2)
         water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
                       float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
-        generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True, vegetation=True)
+        from src.world.terrain_options import make_generator
+        # as opções de criação do mundo (tela "Uma nova aventura"); sem elas, o relevo de sempre
+        active_terrain = {"options": selected_world.get("terrain") if selected_world else None}
+        generator = make_generator(active_seed["value"], active_terrain["options"])
         world_manager = WorldManager(generator=generator,
                                      render_distance=menus.preferences.data['render_distance'], atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
@@ -866,7 +869,8 @@ def main() -> None:
         if not terrain_demo:
             return
         if menus.world is None:
-            menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'])
+            menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'],
+                                               active_terrain["options"])
         menus.world['seed'] = active_seed['value']
         menus.world['position'] = [float(v) for v in player_token.position]
         if construction_panel is not None:
@@ -891,7 +895,8 @@ def main() -> None:
         nonlocal world_manager, voxel_provider
         world_manager.delete()
         active_seed['value'] = world['seed']
-        world_manager = WorldManager(TerrainGenerator(seed=world["seed"], enable_caves=True, vegetation=True),
+        active_terrain["options"] = world.get("terrain")
+        world_manager = WorldManager(make_generator(world["seed"], active_terrain["options"]),
                                      render_distance=menus.preferences.data['render_distance'], atlas=atlas)
         x, z = .5, .5
         player_token.position[:] = world.get('position') or [x, world_manager.get_height(x, z) + 1., z]
@@ -999,7 +1004,7 @@ def main() -> None:
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
             world_manager.delete()
             room_tracker.reset()
-            world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True, vegetation=True)
+            world_manager.generator = make_generator(new_seed, active_terrain["options"])   # as opções ficam
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0

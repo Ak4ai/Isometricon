@@ -150,11 +150,15 @@ class WorldLibrary:
                 continue
         return sorted(worlds, key=lambda w: str(w.get('saved_at', '')), reverse=True)
 
-    def create(self, name, seed):
+    def create(self, name, seed, terrain=None):
+        """Um mundo novo; ``terrain``: as opções de criação do relevo (``src.world.terrain_options``)."""
         if not name.strip():
             raise ValueError('Dê um nome ao mundo.')
         world = dict(version=1, id=uuid.uuid4().hex, name=name.strip()[:64],
                      seed=seed_value(seed), position=None, played=0.0, character=None)
+        if terrain is not None:
+            from src.world.terrain_options import clean
+            world['terrain'] = clean(terrain)
         self.save(world)
         return world
 
