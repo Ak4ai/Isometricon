@@ -75,7 +75,7 @@ def turn_order_image(controller: CombatController) -> Optional[Image.Image]:
         elif not alive:
             color = st.MUTED
         else:
-            color = st.ALLY_INK if c.is_player else st.FOE_INK
+            color = st.ALLY_INK if c.team == "jogadores" else st.FOE_INK
         st.write(d, (x + 9, y + 7), st.fit(name, 15, CHIP_WIDTH - 18, bold=True), 15, color, bold=True)
         st.bar(d, (x + 9, y + 28, x + CHIP_WIDTH - 9, y + 34), c.hp_ratio if alive else 0.0,
                temp_ratio=c.temp_hp / c.max_hp if c.max_hp else 0,
@@ -268,7 +268,8 @@ def chat_log_view(controller: CombatController, right: Optional[float]) -> Optio
     return CombatLogView(title, lines, detail, None if right is None else int(right) - LOG_GAP)
 
 
-def overhead_image(name: str, hp: float, max_hp: float, targeted: bool, acting: bool) -> Image.Image:
+def overhead_image(name: str, hp: float, max_hp: float, targeted: bool, acting: bool,
+                   ally: bool = False) -> Image.Image:
     """Nome e vida sobre a cabeça: uma etiqueta pequena de pergaminho (verde quando é a vez dele)."""
     w = max(64, st.measure(name, 12, bold=True) + 18)
     image = Image.new("RGBA", (w + 4, 34), (0, 0, 0, 0))
@@ -277,7 +278,7 @@ def overhead_image(name: str, hp: float, max_hp: float, targeted: bool, acting: 
     edge = st.GOLD if acting else (st.FOE_INK if targeted else st.BORDER)
     d.rounded_rectangle((2, 3, w + 1, 33), 6, fill=(20, 30, 25, 90))
     d.rounded_rectangle((2, 1, w + 1, 31), 6, fill=(*fill, 235), outline=(*edge, 255), width=2 if targeted else 1)
-    color = st.CREAM if acting else (st.FOE_INK if targeted else st.INK)
+    color = st.CREAM if acting else (st.FOE_INK if targeted else (st.ALLY_INK if ally else st.INK))
     nw = st.measure(name, 12, bold=True)
     st.write(d, ((w + 4 - nw) / 2, 6), name, 12, color, bold=True)
     ratio = hp / max_hp if max_hp else 0
@@ -308,6 +309,31 @@ def hover_image(controller: CombatController) -> Optional[Image.Image]:
     d.line((x0, pad + 51, x1, pad + 51), fill=(*st.LINE, 255))
     st.diamond(d, x0 + 3, pad + 63, 3, st.GOLD if color != (170, 170, 170) else st.LINE)
     st.write(d, (x0 + 12, pad + 57), st.fit(text, 12, w - 40, bold=True), 12, st.ink(color), bold=True)
+    return image
+
+
+def speech_image(name: str, text: str) -> Image.Image:
+    """O balão da fala de um NPC: um pergaminho com o nome e a fala (quebrada em até três linhas), com a ponta."""
+    words, lines = text.split(), [""]
+    for word in words:
+        trial = (lines[-1] + " " + word).strip()
+        if st.measure(trial, 13) > 240 and lines[-1]:
+            lines.append(word)
+        else:
+            lines[-1] = trial
+    lines = lines[:3]
+    w = max(st.measure(name, 12, bold=True), *(st.measure(l, 13) for l in lines)) + 28
+    h = 26 + 18 * len(lines) + 8
+    card, pad = st.card(w, h, radius=10, corners=False)
+    image = Image.new("RGBA", (card.width, card.height + 10), (0, 0, 0, 0))
+    image.alpha_composite(card, (0, 0))
+    d = ImageDraw.Draw(image)
+    cx = pad + w // 2
+    d.polygon([(cx - 8, pad + h - 2), (cx + 8, pad + h - 2), (cx, pad + h + 9)], fill=(*st.CARD, 255))
+    d.line((cx - 8, pad + h - 1, cx, pad + h + 9, cx + 8, pad + h - 1), fill=(*st.BORDER, 255), width=2)
+    st.write(d, (pad + 14, pad + 9), name, 12, st.ALLY_INK, bold=True)
+    for i, line in enumerate(lines):
+        st.write(d, (pad + 14, pad + 28 + 18 * i), line, 13, st.INK)
     return image
 
 
@@ -400,7 +426,7 @@ def compose(controller: CombatController, width: int, height: int, mvp: Optional
         spot = project(top, mvp, width, height)
         if spot is None:
             continue
-        key = (c.name, int(c.hp), c.max_hp, c.id == session.target_id, c is session.current)
+        key = (c.name, int(c.hp), c.max_hp, c.id == session.target_id, c is session.current, enemy.friendly)
         image = _cached(cache, f"cabeca:{enemy.id}", key, lambda: overhead_image(*key))
         items.append((f"cabeca:{enemy.id}", image, spot[0] - image.width / 2, spot[1] - image.height, 1.0))
     hovered = controller.hovered()
@@ -415,6 +441,17 @@ def compose(controller: CombatController, width: int, height: int, mvp: Optional
             above = 34 if in_fight else 4
             x = min(max(MARGIN, spot[0] - tip.width / 2), width - tip.width - MARGIN)
             items.append(("dica", tip, x, max(MARGIN, spot[1] - above - tip.height), 1.0))
+    if controller.speech is not None:
+        who, text, left = controller.speech
+        token = controller.token(who)
+        if token is not None:
+            spot = project((token.shown[0], token.shown[1] + token.creature.height + 0.3, token.shown[2]), mvp,
+                           width, height)
+            if spot is not None:
+                bubble = _cached(cache, "fala", (token.combatant.name, text),
+                                 lambda: speech_image(token.combatant.name, text))
+                x = min(max(MARGIN, spot[0] - bubble.width / 2), width - bubble.width - MARGIN)
+                items.append(("fala", bubble, x, max(MARGIN, spot[1] - bubble.height), min(1.0, left / 0.4)))
     for i, floater in enumerate(controller.floaters):
         if floater.target == PLAYER_ID:
             base, lift = controller.player_position, 2.1
@@ -443,7 +480,7 @@ class CombatHud:
     def render(self, controller: CombatController, width: int, height: int, mvp: Optional[np.ndarray]) -> None:
         self.menu_left = None
         if (not controller.in_combat and controller.banner is None and not controller.floaters
-                and controller.hover is None):
+                and controller.hover is None and controller.speech is None):
             self._prune(set())
             return
         from src.rendering.hud_quad import HudQuad

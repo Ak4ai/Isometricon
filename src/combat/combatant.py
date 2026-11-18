@@ -53,6 +53,7 @@ class Combatant:
     on_hit: Optional[Effect] = None        # efeito que o golpe deixa no alvo (a picada da aranha)
     ai: str = "agressivo"
     kind: str = ""                          # a ficha do bestiário que gerou este combatente
+    ally: bool = False                      # do lado dos jogadores, mas jogado pela IA (um NPC amigável)
     effects: List[Effect] = field(default_factory=list)
     defending: bool = False
     hidden: bool = False                    # pegou o alvo de surpresa: o Ataque Furtivo vale
@@ -67,7 +68,8 @@ class Combatant:
 
     @property
     def is_player(self) -> bool:
-        return self.team == PLAYERS
+        """Quem a pessoa controla (do time dos jogadores e não um aliado da IA)."""
+        return self.team == PLAYERS and not self.ally
 
     @property
     def alive(self) -> bool:

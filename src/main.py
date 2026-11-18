@@ -655,6 +655,7 @@ def main() -> None:
     combat.terrain = WorldTerrain(lambda x, y, z: is_solid(voxel_provider.get_block_at(x, y, z)))
     if terrain_demo:
         skin_command_handler.combat = combat
+        combat.load_npcs(selected_world.get("npcs") if isinstance(selected_world, dict) else None)
     if initial_cmd:
         for single_cmd in initial_cmd.split(";"):
             single_cmd = single_cmd.strip()
@@ -870,6 +871,7 @@ def main() -> None:
         if character_model is not None and not getattr(character_model, 'is_loading', False):
             menus.world['character'] = character_save.to_dict(character_model)
         menus.world['combat'] = combat.sheet.to_dict()
+        menus.world['npcs'] = combat.npc_list()
         menus.library.save(menus.world)
         if not menus.active:
             menus.capture_scene(window.width,window.height)
@@ -910,6 +912,7 @@ def main() -> None:
             character_save.apply(character_model, world['character'])
         combat.clear()
         combat.sheet = PlayerSheet.from_dict(world.get('combat'))
+        combat.load_npcs(world.get('npcs'))
         menus.world = world
 
 
@@ -1279,6 +1282,10 @@ def main() -> None:
     from src.interactive.combat_hud import CombatHud, chat_log_view
     from src.interactive.enemy_tokens import EnemyTokenRenderer
     enemy_renderer = EnemyTokenRenderer()
+    from src.interactive.npc_models import NpcModels
+    npc_models = NpcModels()
+    # /criar npc e /npc editar: o NPC na tela de criação (a ficha, o corpo e quem a tela editava antes)
+    npc_edit: dict = {}
     combat_hud = CombatHud()
     while not window.should_close():
         dt = window.update_delta_time()
@@ -1324,6 +1331,50 @@ def main() -> None:
         if skin_command_handler.editor_requested:
             skin_command_handler.editor_requested = False
             character_editor.open()
+        if terrain_demo and skin_command_handler.npc_request is not None and not npc_edit \
+                and not character_editor.is_open:
+            # /criar npc (um corpo novo do sexo pedido) ou /npc editar (o corpo que ele já tem): a tela do /skin
+            # passa a vestir o NPC; o personagem volta para ela quando a tela fecha
+            from src.clothing.character_animation import CharacterAnimator
+            from src.interactive.npc_models import build_model
+            request, skin_command_handler.npc_request = skin_command_handler.npc_request, None
+            editing_token = combat.token(request["editar"]) if "editar" in request else None
+            if editing_token is not None:
+                spec = editing_token.npc
+                body = npc_models.release(editing_token.id)
+                npc_model = body.model if body is not None else build_model(spec["id"], spec.get("personagem"))
+                npc_animator = body.animator if body is not None else CharacterAnimator(npc_model, walking=False)
+            elif "editar" not in request:
+                spec = dict(request, id=combat.new_npc_id())
+                npc_model = build_model(spec["id"], None, spec.pop("corpo", "masculino"))
+                npc_animator = CharacterAnimator(npc_model, walking=False)
+            else:
+                spec = None
+            if spec is not None:
+                npc_edit.update(spec=spec, model=npc_model, animator=npc_animator, token=editing_token,
+                                player_model=skin_command_handler.character_model)
+                skin_command_handler.character_model = npc_model
+                character_editor.autosave = False      # fechar a tela não grava o NPC como o personagem
+                character_editor.open()
+        elif npc_edit and not character_editor.is_open:
+            # a tela fechou: o NPC leva a aparência e aparece (ou volta) no mundo; a tela volta a vestir o personagem
+            spec, npc_model = npc_edit["spec"], npc_edit["model"]
+            spec["personagem"] = character_save.to_dict(npc_model)
+            skin_command_handler.character_model = npc_edit["player_model"]
+            character_editor.autosave = True
+            token = npc_edit["token"]
+            if token is None:
+                ally = spec.get("lado") == "amigavel"
+                ahead = 2.5 if ally else 7.0           # o hostil aparece fora do alcance de vista dele
+                px, py, pz = (float(v) for v in player_token.position)
+                yaw = float(player_token.yaw)
+                spot = [px + math.sin(yaw) * ahead, py, pz + math.cos(yaw) * ahead]
+                token = combat.add_npc(spec, spot, yaw + math.pi)
+                chat_console.add_message(f"[NPC] {token.combatant.name} chegou "
+                                         f"({'amigável' if ally else 'hostil'}).", (85, 255, 85))
+            npc_models.adopt(token.id, npc_model, npc_edit["animator"], spec.get("personagem"))
+            npc_edit.clear()
+        edited_model = npc_edit["model"] if npc_edit else character_model   # quem a tela de criação mostra
         editing = character_editor.is_open and character_model is not None
         if not editing:  # os braços a 90 graus são só do ajuste fino da tela de criação
             for posed_animator in (character_animator if char_demo else None, getattr(player_token, "animator", None)):
@@ -1347,6 +1398,8 @@ def main() -> None:
         if editing:
             character_editor.update(dt)
             editor_animator = character_animator if char_demo else getattr(player_token, "animator", None)
+            if npc_edit:
+                editor_animator = npc_edit["animator"]
             if editor_animator is not None:
                 editor_animator.arms_out = character_editor.arms_raised  # braços a 90 graus, no ajuste fino
             if terrain_demo and editor_animator is not None:
@@ -1402,6 +1455,8 @@ def main() -> None:
                 # na vez do personagem o passo gasta o movimento da vez; o que passa da reserva não anda
                 player_token.position[:] = combat.limit_step(step_from, player_token.position)
             combat.update(dt, player_token.position)
+            npc_models.sync(combat, dt, skip=npc_edit["spec"]["id"] if npc_edit else None)
+            enemy_renderer.skip = npc_models.ready_ids()   # quem tem corpo pronto não mostra a miniatura
             for combat_text, combat_color in combat.take_messages():
                 chat_console.add_message(combat_text, combat_color)
             if picking_state["aim"] is not None and player_token.ladder_grip is None:
@@ -1602,13 +1657,15 @@ def main() -> None:
                 editor_animator.sync()  # a pele recortada por um clique deste quadro já entra na pose
             shown_body = player_token.custom_model if terrain_demo and player_token.custom_model is not None \
                 else character_model
+            if npc_edit:
+                shown_body = edited_model
             shown_body.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
             gl.glEnable(gl.GL_CULL_FACE)
             gl.glViewport(0, 0, fb_w, fb_h)
             # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
             character_editor.picker = character_editor.overlay = None
             character_editor.bones_view = None
-            shown_custom = player_token.custom_model if terrain_demo else None
+            shown_custom = player_token.custom_model if terrain_demo and not npc_edit else None
             if shown_custom is not None and shown_custom.rig is not None:
                 # os ossos do modelo personalizado na tela, para a aba Modelo mostrar e deixar clicar
                 from src.clothing import role_editor
@@ -1619,17 +1676,17 @@ def main() -> None:
                     (scene_x, 0, scene_right, window.height))
                 character_editor.bones_view = {"xy": bone_xy, "depth": bone_depth, "parents": shown_custom.rig.parents,
                                                "names": shown_custom.rig.names}
-            skin_cage = getattr(character_model, "hsr_cage", None)
+            skin_cage = getattr(edited_model, "hsr_cage", None)
             if character_editor.brushing and skin_cage is not None:
                 from src.interactive import skin_brush
                 brush_view = skin_brush.BrushView(
                     skin_cage[0], skin_cage[2], model @ mat4_rotate_y(math.radians(turntable_state["yaw"])), view,
                     projection, (scene_x, 0, scene_right, window.height), pose=getattr(editor_animator, "posed", None),
-                    skin=getattr(character_model, "hsr_skin", None))
-                brush_custom = character_model.customization
+                    skin=getattr(edited_model, "hsr_skin", None))
+                brush_custom = edited_model.customization
                 character_editor.picker = brush_view.pick
                 character_editor.overlay = (brush_view.xy, brush_view.facing, skin_brush.states(
-                    getattr(character_model, "hsr_hidden", skin_cage[1]), getattr(brush_custom, "hsr_hide", ()),
+                    getattr(edited_model, "hsr_hidden", skin_cage[1]), getattr(brush_custom, "hsr_hide", ()),
                     getattr(brush_custom, "hsr_show", ())))
             if not char_demo:
                 shader.set_vec3("u_LightDir", 0.5, 1.0, 0.7)
@@ -1929,6 +1986,8 @@ def main() -> None:
             shader.set_int("u_TextureAtlas", 0)
             player_token.draw(shader=shader, base_model=base_model)
             mark("player_draw")
+            if npc_models.bodies:
+                npc_models.draw(shader, model, combat)       # os NPCs com o corpo montado no /skin
             if combat.enemies:
                 # as miniaturas dos inimigos (e os anéis de alvo, vez e movimento), com a textura branca da miniatura
                 shader.set_bool("u_WaterMode", False)
@@ -2101,6 +2160,9 @@ def main() -> None:
         selection_box.delete()
     fps_overlay.delete()
     enemy_renderer.delete()
+    npc_models.delete()
+    if npc_edit:
+        npc_edit["model"].delete()
     combat_hud.delete()
     if terrain_demo:
         if atlas is not None:

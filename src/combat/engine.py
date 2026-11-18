@@ -170,7 +170,8 @@ class CombatSession:
             self.target_id = None
             return
         if players:
-            self.target_id = min(enemies, key=lambda e: e.distance_to(players[0])).id
+            anchor = next((p for p in players if p.is_player), players[0])
+            self.target_id = min(enemies, key=lambda e: e.distance_to(anchor)).id
         else:
             self.target_id = enemies[0].id
 
@@ -223,7 +224,7 @@ class CombatSession:
     def _check_end(self) -> bool:
         if self.outcome is not None:
             return True
-        if not self.team(PLAYERS):
+        if not any(c.is_player for c in self.team(PLAYERS)):   # sem o jogador de pé, os aliados não seguram
             self._finish(DEFEAT)
         elif not self.team(ENEMIES):
             self._finish(VICTORY)
@@ -493,8 +494,8 @@ class CombatSession:
     # ------------------------------------------------------------------ inimigos
 
     def enemy_escape(self, actor: Combatant) -> bool:
-        """O inimigo terminou longe o bastante de todos: sai do combate."""
-        players = self.team(PLAYERS)
+        """Quem a IA joga terminou longe o bastante de todos os do outro lado: sai do combate."""
+        players = self.team(ENEMIES if actor.team == PLAYERS else PLAYERS)
         if players and all(actor.distance_to(p) > ESCAPE_DISTANCE for p in players):
             self._emit("fugiu", actor.id, distance=min(actor.distance_to(p) for p in players))
             self._leave(actor)

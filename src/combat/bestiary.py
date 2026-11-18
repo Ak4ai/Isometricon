@@ -46,6 +46,8 @@ BESTIARY: Dict[str, Creature] = {
                       speed=5.0, width=1.0, color=(110, 200, 90), height=1.0),
     "bandido": Creature("bandido", "Bandido", {"for": 13, "des": 14, "con": 12, "sab": 10}, 18, "espada",
                         armor="couro_batido", ai="covarde", skills=("golpe_pesado",), color=(150, 96, 60)),
+    "guarda": Creature("guarda", "Guarda", {"for": 14, "des": 12, "con": 14, "sab": 10}, 22, "espada",
+                       armor="cota", skills=("golpe_pesado",), color=(90, 110, 150), aliases=("aliado",)),
     "ogro": Creature("ogro", "Ogro", {"for": 18, "des": 8, "con": 16, "sab": 7}, 45, "machado",
                      armor="cota", speed=7.0, width=1.2, skills=("golpe_pesado",), color=(150, 120, 80),
                      height=2.6),
@@ -62,9 +64,12 @@ def find_creature(name: str) -> Optional[Creature]:
     return None
 
 
-def spawn(creature: Creature, combatant_id: str, position: Sequence[float]) -> Combatant:
+def spawn(creature: Creature, combatant_id: str, position: Sequence[float], name: Optional[str] = None,
+          ally: bool = False) -> Combatant:
+    """Um combatente da ficha ``creature``; ``ally`` o põe do lado dos jogadores (jogado pela IA)."""
     return Combatant(
-        id=combatant_id, name=creature.name, team=ENEMIES, abilities=Abilities(dict(creature.scores)),
+        id=combatant_id, name=name or creature.name, team=PLAYERS if ally else ENEMIES, ally=ally,
+        abilities=Abilities(dict(creature.scores)),
         max_hp=creature.max_hp, armor=ARMORS[creature.armor], weapon=WEAPONS[creature.weapon],
         position=list(position), speed=creature.speed, base_reach=MOB_REACH + (creature.width - 0.6),
         proficiency=creature.proficiency, skills=creature.skills, on_hit=creature.on_hit, ai=creature.ai,

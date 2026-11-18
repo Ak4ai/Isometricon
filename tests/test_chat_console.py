@@ -30,7 +30,7 @@ def run(handler, line):
 
 
 def test_only_the_known_root_commands_exist():
-    assert sorted(COMMAND_TREE) == ["agua", "ajuda", "atributo", "bloco", "ficha", "girar", "inimigo", "revelar", "schem",
+    assert sorted(COMMAND_TREE) == ["agua", "ajuda", "atributo", "bloco", "criar", "ficha", "girar", "inimigo", "npc", "revelar", "schem",
                                   "seed", "skin", "sombras"]
     handler = SkinCommandHandler(character_model=None)
     for old in ("/top sweater", "/eyes blue", "/import 9240757332", "/cabelo rosa", "/manga largura 1.1", "/cintura alta"):
@@ -172,7 +172,7 @@ def test_autocomplete_follows_the_command_table():
     import glfw
     chat = ChatConsole(create_gl=False)
     chat.open("/")
-    assert chat.suggestions == ["/agua", "/ajuda", "/atributo", "/bloco", "/ficha", "/girar", "/inimigo", "/revelar",
+    assert chat.suggestions == ["/agua", "/ajuda", "/atributo", "/bloco", "/criar", "/ficha", "/girar", "/inimigo", "/npc", "/revelar",
                                 "/schem", "/seed", "/skin", "/sombras"]
     chat.handle_char(ord("s"))
     assert chat.suggestions == ["/schem", "/seed", "/skin", "/sombras"]

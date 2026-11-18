@@ -873,11 +873,14 @@ class CharacterModel:
         outer_top_id: Optional[Union[int, str]] = None,
         shoes_id: Optional[Union[int, str, tuple]] = None,
         async_loading: bool = False,
+        cache_name: Optional[str] = None,
         extra_ids: Optional[List[Union[int, str]]] = None,
     ) -> None:
         # With ``async_loading`` every (re)build runs on a background thread and the result is
         # swapped in by ``poll()`` on the main thread, so fitting clothes never freezes the UI.
         self.async_loading = bool(async_loading)
+        # o arquivo do cache da montagem (build_cache): cada NPC tem o seu, para não apagar o do jogador
+        self.cache_name = cache_name
         self.loading_status: str = ""  # shown by the HUD while a build is running
         self._dirty = False
         self._face_builder = None  # kept between redraws of the face (its layers stay loaded)

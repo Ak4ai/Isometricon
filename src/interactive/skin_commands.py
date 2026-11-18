@@ -200,6 +200,8 @@ class SkinCommandHandler:
         self.player_cell = None
         self.player_token = None  # PlayerToken do terreno, que recebe o modelo de /skin modelo
         self.combat = None  # CombatController do terreno (/inimigo, /ficha, /atributo); None fora dele
+        # /criar npc e /npc editar: o NPC que o jogo deve abrir na tela de criação (o laço principal atende)
+        self.npc_request: Optional[Dict[str, Any]] = None
         self.model_choice: Optional[Dict[str, Any]] = None  # o modelo .glb em uso (ver custom_model_store)
         self.custom_model_dir: Optional[str] = None  # pasta dos modelos (a padrão quando None)
         self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
@@ -603,7 +605,7 @@ class SkinCommandHandler:
         if not args or args[0].lower() in ("lista", "list"):
             return True, f"[Combate] Inimigos: {kinds}. Use /inimigo <tipo> [quantidade].", CYAN
         if args[0].lower() in ("limpar", "clear"):
-            return True, f"[Combate] {self.combat.clear()} inimigo(s) removido(s).", CYAN
+            return True, f"[Combate] {self.combat.clear(keep_npcs=True)} inimigo(s) removido(s).", CYAN
         creature = find_creature(args[0])
         if creature is None:
             return False, f"[Combate] Não conheço '{args[0]}'. Inimigos: {kinds}.", RED
@@ -616,6 +618,80 @@ class SkinCommandHandler:
         made = self.combat.spawn(creature.key, count, [float(v) for v in self.player_token.position])
         return True, (f"[Combate] {len(made)} {creature.name}(s) por perto. Clique num deles para atacar de surpresa, "
                       "ou chegue perto e ele te ataca."), GREEN
+
+    # ------------------------------------------------------------------ /criar npc e /npc
+    NPC_USAGE = "Uso: /criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde do bestiário]"
+
+    def create(self, args: List[str]) -> Result:
+        """/criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde]: abre a tela do /skin para o NPC; ao
+        fechá-la, ele aparece na frente do personagem e fica salvo no mundo."""
+        from src.combat.bestiary import BESTIARY, find_creature
+        from src.interactive.combat_controller import DEFAULT_LINE, NPC_SIDES, NPC_TEMPLATES
+        if self.combat is None or self.player_token is None:
+            return False, "[NPC] Só funciona no terreno (--terrain).", RED
+        if not args or args[0].lower() != "npc":
+            return False, self.NPC_USAGE, GOLD
+        rest = args[1:]
+        if len(rest) < 3:
+            return False, self.NPC_USAGE, GOLD
+        name = rest[0].replace("_", " ").strip()
+        side = rest[1].lower()
+        if side not in NPC_SIDES:
+            return False, f"[NPC] O lado é hostil ou amigavel, não '{rest[1]}'.", RED
+        body = rest[2].lower()
+        if body not in BODIES:
+            return False, f"[NPC] O corpo é masculino ou feminino, não '{rest[2]}'.", RED
+        ally = NPC_SIDES[side]
+        creature = find_creature(rest[3]) if len(rest) > 3 else BESTIARY[NPC_TEMPLATES[ally]]
+        if creature is None:
+            return False, f"[NPC] Não conheço o molde '{rest[3]}'. Moldes: {', '.join(BESTIARY)}.", RED
+        if self.combat.find_npc(name) is not None:
+            return False, f"[NPC] Já existe um NPC chamado {name}. Use /npc editar {rest[0]}.", RED
+        if self.npc_request is not None:
+            return False, "[NPC] Termine o NPC que está na tela de criação antes.", RED
+        female = BODIES[body] == BodyType.FEMALE
+        self.npc_request = {"nome": name, "lado": "amigavel" if ally else "hostil", "molde": creature.key,
+                            "fala": DEFAULT_LINE, "corpo": "feminino" if female else "masculino"}
+        kind = "amigável" if ally else "hostil"
+        return True, (f"[NPC] Criando {name} ({kind}, {'feminino' if female else 'masculino'}, ficha de "
+                      f"{creature.name}). Monte a aparência e feche a tela: o NPC aparece na sua frente."), GREEN
+
+    def npc(self, args: List[str]) -> Result:
+        """/npc lista | editar <nome> | fala <nome> <texto> | remover <nome>."""
+        usage = "Uso: /npc lista | editar <nome> | fala <nome> <texto> | remover <nome>"
+        if self.combat is None:
+            return False, "[NPC] Só funciona no terreno (--terrain).", RED
+        sub = args[0].lower() if args else "lista"
+        if sub in ("lista", "list"):
+            npcs = self.combat.npcs()
+            if not npcs:
+                return True, "[NPC] Nenhum NPC neste mundo. Crie um com /criar npc.", CYAN
+            shown = ", ".join(f"{e.combatant.name} ({'amigável' if e.friendly else 'hostil'}, "
+                              f"{e.creature.name.lower()})" for e in npcs)
+            return True, f"[NPC] {shown}", CYAN
+        if len(args) < 2:
+            return False, usage, GOLD
+        token = self.combat.find_npc(args[1].replace("_", " "))
+        if token is None:
+            return False, f"[NPC] Não há NPC chamado {args[1]}. Veja /npc lista.", RED
+        name = token.combatant.name
+        if sub in ("remover", "remove", "apagar"):
+            if not self.combat.remove_npc(token.id):
+                return False, f"[NPC] {name} está numa luta agora.", RED
+            return True, f"[NPC] {name} saiu do mundo.", CYAN
+        if sub in ("fala", "falar", "say"):
+            if len(args) < 3:
+                return True, f"[NPC] {name} diz: {token.npc.get('fala')}", CYAN
+            token.npc["fala"] = " ".join(args[2:])
+            return True, f"[NPC] {name} agora diz: {token.npc['fala']}", GREEN
+        if sub in ("editar", "edit"):
+            if self.npc_request is not None:
+                return False, "[NPC] Termine o NPC que está na tela de criação antes.", RED
+            if self.combat.session is not None and self.combat.session.get(token.id) is not None:
+                return False, f"[NPC] {name} está numa luta agora.", RED
+            self.npc_request = {"editar": token.id}
+            return True, f"[NPC] Editando a aparência de {name}. Feche a tela para voltar.", GREEN
+        return False, usage, GOLD
 
     def sheet(self, args: List[str]) -> Result:
         """/ficha: os atributos, a vida, a CA, a arma e os itens do personagem."""
@@ -1713,7 +1789,7 @@ SKIN_COMMANDS: List[Command] = [
     Command(("roupas", "outfit"), "/skin roupas", "mostra o que está vestido", SkinCommandHandler.outfit, [], "Roupas"),
     Command(("preset",), "/skin preset <nome>", "aparência pronta", SkinCommandHandler.preset, list(PRESETS), "Personagem"),
     Command(("reset",), "/skin reset", "volta ao padrão", SkinCommandHandler.reset, [], "Personagem"),
-    Command(("interface", "editor", "criar"), "/skin interface", "abre a tela de criação de personagem",
+    Command(("interface", "editor"), "/skin interface", "abre a tela de criação de personagem",
             SkinCommandHandler.interface, [], "Personagem"),
     Command(("modelo", "model"), "/skin modelo <nome|caminho.glb|lista|off|perfil|altura|giro>",
             "usa um modelo .glb como corpo do personagem", SkinCommandHandler.custom_model,
@@ -1731,6 +1807,10 @@ ROOT_COMMANDS: List[Command] = [
     Command(("inimigo", "enemy", "spawn"), "/inimigo <tipo> [quantidade] | lista | limpar",
             "põe inimigos perto do personagem (combate por turnos)", SkinCommandHandler.enemy, None),
     Command(("ficha", "sheet"), "/ficha", "mostra a ficha de combate do personagem", SkinCommandHandler.sheet, None),
+    Command(("criar", "create"), "/criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde]",
+            "cria um NPC com a tela do /skin", SkinCommandHandler.create, None),
+    Command(("npc",), "/npc lista | editar <nome> | fala <nome> <texto> | remover <nome>",
+            "os NPCs do mundo", SkinCommandHandler.npc, None),
     Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
             "muda a ficha de combate", SkinCommandHandler.attribute, None),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
@@ -1803,8 +1883,10 @@ COMMAND_TREE: Dict[str, Any] = {
     "revelar": ["on", "off", "escuro", "teto"],
     "sombras": ["on", "off", "forca"],
     "seed": [],
-    "inimigo": ["lista", "limpar", "zumbi", "esqueleto", "aranha", "slime", "bandido", "ogro"],
+    "inimigo": ["lista", "limpar", "zumbi", "esqueleto", "aranha", "slime", "bandido", "guarda", "ogro"],
     "ficha": [],
+    "criar": {"npc": []},
+    "npc": {"lista": [], "editar": [], "fala": [], "remover": []},
     "atributo": ["for", "des", "con", "sab", "arma", "armadura", "nivel"],
     "agua": [],
     "bloco": list(BLOCK_NAMES),

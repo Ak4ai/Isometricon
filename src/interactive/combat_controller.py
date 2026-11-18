@@ -13,6 +13,11 @@ A regra está em ``src.combat``; aqui fica o que liga a regra ao jogo:
 - a vez de cada inimigo espera a anterior terminar de andar na tela e mais ``ENEMY_DELAY`` segundos;
 - no fim: vitória tira os inimigos caídos; derrota faz o personagem acordar com 1 de vida e os inimigos irem embora;
   fuga deixa os inimigos onde estão, sem perseguir por ``AFTER_ESCAPE`` segundos.
+
+Os NPCs (``/criar npc``) são fichas do mesmo tabuleiro com a ficha (``npc``) que o mundo salva: o nome, o lado, o
+molde do bestiário, a fala e a aparência montada no ``/skin``. O hostil é um inimigo como os outros; o amigável fica
+do lado do personagem (``Combatant.ally``): nunca começa a luta, conversa com um clique e, numa luta por perto, entra
+como aliado jogado pela IA. Se cai, levanta com a vida cheia quando a luta acaba.
 """
 
 from __future__ import annotations
@@ -20,10 +25,10 @@ from __future__ import annotations
 import math
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from src.combat.bestiary import BESTIARY, Creature, PlayerSheet, find_creature, spawn
-from src.combat.combatant import Combatant, distance, flat_distance
+from src.combat.combatant import PLAYERS, Combatant, distance, flat_distance
 from src.combat.engine import DEFEAT, ESCAPED, JOIN_RADIUS, VICTORY, CombatSession, Event
 from src.combat.dice import Dice
 from src.combat.log import Line, format_event
@@ -39,6 +44,11 @@ TRAIL_STEP = 0.35        # o rastro marca um ponto a cada tanto que o personagem
 TRAIL_MAX = 160
 REST_HEAL_SECONDS = 3.0  # fora de combate, 1 de vida a cada tanto
 PLAYER_ID = "jogador"
+TALK_REACH = 4.0         # blocos até onde um clique num NPC amigável conversa
+SPEECH_SECONDS = 4.0     # quanto tempo a fala fica no balão
+DEFAULT_LINE = "Olá, viajante!"
+NPC_SIDES = {"hostil": False, "inimigo": False, "amigavel": True, "amigável": True, "aliado": True}
+NPC_TEMPLATES = {False: "bandido", True: "guarda"}   # o molde quando o comando não escolhe um
 
 SolidFn = Callable[[int, int, int], bool]
 
@@ -95,10 +105,16 @@ class EnemyToken:
     path: List[List[float]] = field(default_factory=list)
     fallen: float = 0.0                        # segundos desde que caiu (0: de pé)
     flash: float = 0.0                         # segundos de piscar vermelho depois de levar um golpe
+    npc: Optional[Dict[str, Any]] = None       # a ficha do NPC (nome, lado, molde, fala, aparência); None: um bicho
 
     @property
     def id(self) -> str:
         return self.combatant.id
+
+    @property
+    def friendly(self) -> bool:
+        """Do lado do personagem (um NPC amigável)."""
+        return self.combatant.team == PLAYERS
 
     @property
     def walking(self) -> bool:
@@ -165,6 +181,7 @@ class CombatController:
         self.trail: List[List[float]] = []   # por onde o personagem passou na vez dele (some na próxima vez)
         self._trail_turn = None
         self.hover: Optional[str] = None     # o inimigo sob o mouse (id), para o anel, a dica e o cursor de ataque
+        self.speech: Optional[Tuple[str, str, float]] = None   # quem fala, o quê e por quanto tempo ainda
         self._serial = 0
 
     # ------------------------------------------------------------------ consultas
@@ -211,13 +228,7 @@ class CombatController:
             angle = (self._serial * 2.399963) % (2 * math.pi)           # ângulo de ouro: espalha sem repetir
             x = float(around[0]) + 5.0 * math.cos(angle)
             z = float(around[2]) + 5.0 * math.sin(angle)
-            y = float(around[1])
-            if terrain is not None:
-                for hint in range(4, -24, -4):          # do alto para baixo, em faixas de 4 (o ground olha 5 níveis)
-                    ground = terrain.ground(x, z, y + hint)
-                    if ground is not None:
-                        y = ground
-                        break
+            y = self._ground_at(x, float(around[1]), z, terrain)
             combatant = spawn(creature, f"{creature.key}{self._serial}", (x, y, z))
             token = EnemyToken(combatant, creature, [x, y, z], yaw=math.atan2(around[0] - x, around[2] - z))
             self.enemies.append(token)
@@ -226,10 +237,81 @@ class CombatController:
                 self.session.add_combatant(combatant)
         return made
 
-    def clear(self) -> int:
-        """Tira todos os inimigos (e encerra um combate sem resultado)."""
-        count = len(self.enemies)
-        self.enemies.clear()
+    def _ground_at(self, x: float, y: float, z: float, terrain=None) -> float:
+        terrain = terrain or self.terrain
+        if terrain is not None:
+            for hint in range(4, -24, -4):          # do alto para baixo, em faixas de 4 (o ground olha 5 níveis)
+                ground = terrain.ground(x, z, y + hint)
+                if ground is not None:
+                    return ground
+        return y
+
+    # ------------------------------------------------------------------ NPCs
+
+    def add_npc(self, spec: Dict[str, Any], position: Sequence[float], yaw: float = 0.0) -> EnemyToken:
+        """Põe no mundo o NPC da ficha ``spec`` (``nome``, ``lado``, ``molde``, ``fala``, ``personagem``)."""
+        ally = NPC_SIDES.get(str(spec.get("lado", "hostil")).lower(), False)
+        creature = find_creature(str(spec.get("molde") or "")) or BESTIARY[NPC_TEMPLATES[ally]]
+        npc_id = spec.get("id")
+        if not npc_id or self.token(npc_id) is not None:
+            npc_id = self.new_npc_id()
+        spec = dict(spec, id=npc_id, lado="amigavel" if ally else "hostil", molde=creature.key)
+        x, z = float(position[0]), float(position[2])
+        y = self._ground_at(x, float(position[1]), z)
+        combatant = spawn(creature, npc_id, (x, y, z), name=str(spec.get("nome") or creature.name), ally=ally)
+        token = EnemyToken(combatant, creature, [x, y, z], yaw=float(yaw), npc=spec)
+        self.enemies.append(token)
+        return token
+
+    def new_npc_id(self) -> str:
+        """Um id de NPC que ninguém usa (também o nome do cache do corpo dele)."""
+        import time
+        while True:
+            self._serial += 1
+            npc_id = f"npc{int(time.time()) % 100000:05d}{self._serial}"
+            if self.token(npc_id) is None:
+                return npc_id
+
+    def npcs(self) -> List[EnemyToken]:
+        return [e for e in self.enemies if e.npc is not None and (e.friendly or not e.fallen)]
+
+    def find_npc(self, name: str) -> Optional[EnemyToken]:
+        key = name.strip().lower()
+        return next((e for e in self.npcs() if e.combatant.name.lower() == key or e.id == key), None)
+
+    def remove_npc(self, name: str) -> bool:
+        token = self.find_npc(name)
+        if token is None or (self.session is not None and self.session.get(token.id) is not None):
+            return False
+        self.enemies.remove(token)
+        return True
+
+    def npc_list(self) -> List[Dict[str, Any]]:
+        """Os NPCs como o mundo os salva (a ficha, onde estão e para onde olham)."""
+        return [dict(e.npc, posicao=[round(float(v), 3) for v in e.shown], yaw=round(float(e.yaw), 4))
+                for e in self.npcs()]
+
+    def load_npcs(self, items: Optional[Sequence[Dict[str, Any]]]) -> None:
+        """Troca os NPCs pelos salvos no mundo."""
+        self.enemies = [e for e in self.enemies if e.npc is None]
+        for item in items or ():
+            spec = {k: v for k, v in item.items() if k not in ("posicao", "yaw")}
+            self.add_npc(spec, item.get("posicao") or [0.0, 0.0, 0.0], float(item.get("yaw") or 0.0))
+
+    def talk(self, token: EnemyToken) -> None:
+        """O NPC diz a fala dele: no balão sobre a cabeça e no chat. Ele se vira para o personagem."""
+        text = str((token.npc or {}).get("fala") or DEFAULT_LINE)
+        self.speech = (token.id, text, SPEECH_SECONDS)
+        self.messages.append((f"[{token.combatant.name}] {text}", (235, 235, 235)))
+        if self.player_position is not None:
+            token.yaw = math.atan2(self.player_position[0] - token.shown[0], self.player_position[2] - token.shown[2])
+
+    def clear(self, keep_npcs: bool = False) -> int:
+        """Tira os inimigos (e encerra um combate sem resultado); ``keep_npcs`` deixa os NPCs no mundo."""
+        gone = [e for e in self.enemies if not (keep_npcs and e.npc is not None)]
+        count = len(gone)
+        self.enemies = [e for e in self.enemies if e not in gone]
+        self.speech = None
         self.hover = None
         self.trail = []
         self._trail_turn = None
@@ -251,6 +333,12 @@ class CombatController:
         enemy = self.hovered()
         if enemy is None:
             return None
+        if enemy.friendly:
+            if self.session is not None and self.session.get(enemy.id) is not None:
+                return "aliado nesta luta", (120, 255, 140)
+            if self.player_position is not None and distance(enemy.shown, self.player_position) > TALK_REACH:
+                return "longe demais para conversar", (170, 170, 170)
+            return "clique: conversar", (120, 255, 140)
         if self.session is None:
             if self.player_position is not None and distance(enemy.shown, self.player_position) > ENGAGE_REACH:
                 return "longe demais para atacar", (170, 170, 170)
@@ -286,13 +374,16 @@ class CombatController:
               surprise: bool = False) -> bool:
         if self.session is not None:
             return False
-        standing = [e for e in self.enemies if not e.fallen]
+        standing = [e for e in self.enemies if not e.fallen and not e.friendly]
         if first is None and not standing:
             return False
         center = first.combatant.position if first else player_position
         joining = [e for e in standing if e is first or distance(e.combatant.position, center) <= JOIN_RADIUS]
         if not joining:
             return False
+        allies = [e for e in self.enemies if e.friendly and not e.fallen
+                  and distance(e.shown, player_position) <= JOIN_RADIUS]
+        joining += allies
         self.player = self.sheet.combatant(player_position, PLAYER_ID)
         for e in joining:
             e.combatant.position = list(e.shown)
@@ -315,7 +406,7 @@ class CombatController:
         elif outcome == DEFEAT:
             player.hp = 1.0
             for e in self.enemies:
-                if e.combatant in session.order or e.combatant in session.left:
+                if not e.friendly and (e.combatant in session.order or e.combatant in session.left):
                     e.fallen = max(e.fallen, 1e-3)             # vão embora (somem afundando)
             self.banner = ("Você desmaiou… e acordou com 1 de vida", (255, 85, 85), 4.0)
             self.messages.append(("[Combate] Você desmaiou. Os inimigos foram embora e você acordou com 1 de vida.",
@@ -324,8 +415,12 @@ class CombatController:
             self.calm = AFTER_ESCAPE
             self.banner = ("Você fugiu", (110, 170, 255), 2.5)
         for e in self.enemies:
-            if e.combatant in session.left:
+            if e.combatant in session.left and not e.friendly:
                 e.fallen = max(e.fallen, 1e-3)
+            if e.friendly:                                     # os aliados se levantam e se recuperam
+                e.fallen = 0.0
+                e.combatant.hp = float(e.combatant.max_hp)
+                e.combatant.temp_hp = 0.0
         self.sheet.hp = player.hp
         player.temp_hp = 0.0
         player.effects.clear()
@@ -415,7 +510,7 @@ class CombatController:
 
     def _check_aggro(self, player_position: Sequence[float]) -> None:
         for e in self.enemies:
-            if e.fallen:
+            if e.fallen or e.friendly:
                 continue
             if distance(e.shown, player_position) <= AGGRO_RADIUS and (
                     self.terrain is None or self.terrain.sight(e.shown, player_position)):
@@ -455,7 +550,12 @@ class CombatController:
             e.flash = max(0.0, e.flash - dt)
             if e.fallen:
                 e.fallen += dt
-        self.enemies = [e for e in self.enemies if e.fallen < FALL_SECONDS or e.fallen == 0.0]
+            if e.friendly:
+                e.fallen = min(e.fallen, FALL_SECONDS)          # o aliado caído fica deitado até a luta acabar
+        self.enemies = [e for e in self.enemies if e.friendly or e.fallen < FALL_SECONDS or e.fallen == 0.0]
+        if self.speech is not None:
+            who, text, left = self.speech
+            self.speech = (who, text, left - dt) if left - dt > 0 and self.token(who) is not None else None
         for f in self.floaters:
             f.age += dt
         self.floaters = [f for f in self.floaters if f.age < 1.4]
@@ -472,7 +572,9 @@ class CombatController:
     def _consume_events(self) -> None:
         if self.session is None:
             return
-        is_player = lambda cid: cid == PLAYER_ID
+        def is_player(cid):        # o personagem e os aliados saem com a cor do lado dele
+            token = self.token(cid)
+            return cid == PLAYER_ID or (token is not None and token.friendly)
         for event in self.session.take_events():
             line = format_event(event, self.name_of, is_player)
             if line is not None:
@@ -563,7 +665,17 @@ class CombatController:
         return self.session.cycle_target() is not None
 
     def click_enemy(self, enemy: EnemyToken, player_position: Sequence[float]) -> bool:
-        """Clique num inimigo: fora do combate começa a luta (de surpresa, se perto); dentro, mira ou ataca."""
+        """Clique num inimigo: fora do combate começa a luta (de surpresa, se perto); dentro, mira ou ataca.
+        Num NPC amigável, conversa (fora da luta)."""
+        if enemy.friendly:
+            if self.session is not None:
+                return False
+            if distance(enemy.shown, player_position) > TALK_REACH:
+                self.messages.append((f"[NPC] {enemy.combatant.name} está longe demais para conversar.",
+                                      (190, 190, 190)))
+                return False
+            self.talk(enemy)
+            return True
         if self.session is None:
             if distance(enemy.shown, player_position) > ENGAGE_REACH:
                 self.messages.append((f"[Combate] {enemy.combatant.name} está longe demais.", (190, 190, 190)))

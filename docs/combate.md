@@ -54,6 +54,23 @@ e se não chega nesta vez dispara; o arqueiro recua quando o alvo encosta (a men
 atirar; ferido e ameaçado, o `agressivo` tende a defender e o `covarde` (aranha, bandido) foge e sai do combate; o
 Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um chefe.
 
+## NPCs
+
+- `/criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde]` abre a tela do `/skin` com um corpo padrão do
+  sexo pedido. Ao fechar a tela, o NPC aparece na frente do personagem (o hostil a 7 blocos, fora da vista dele; o
+  amigável a 2,5) e fica salvo no mundo, com a aparência, a posição e a fala. Nomes com espaço usam `_`
+  (`Velho_Joao`).
+- A ficha de combate vem do molde do bestiário (`/inimigo lista`); sem molde, o hostil usa a do `bandido` e o
+  amigável a do `guarda`.
+- O hostil é um inimigo como os outros: te vê a 6 blocos, luta e, vencido, sai do mundo.
+- O amigável nunca começa a luta. Um clique nele (a até 4 blocos) faz ele dizer a fala, num balão e no chat. Numa
+  luta a até 15 blocos dele, entra do seu lado, jogado pela IA (`Combatant.ally`); se cai, levanta com a vida cheia
+  quando a luta acaba. Se você cai, a luta é perdida mesmo com aliados de pé.
+- `/npc lista`, `/npc fala <nome> <texto>`, `/npc editar <nome>` (volta à tela do `/skin` com o corpo dele) e
+  `/npc remover <nome>`. `/inimigo limpar` não tira os NPCs.
+- Cada NPC tem o seu cache de montagem (`saves/cache/npc_<id>.pkl`), para não apagar o do personagem. Enquanto o
+  corpo monta, a miniatura do bestiário aparece no lugar.
+
 ## O que mudou em relação ao mod
 
 - Lutar, Golpe Pesado e Ataque Furtivo usam uma só resolução de golpe (no mod eram três cópias; o Golpe Pesado

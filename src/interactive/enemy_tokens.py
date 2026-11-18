@@ -107,6 +107,7 @@ class EnemyTokenRenderer:
     def __init__(self) -> None:
         self._meshes: Dict[Tuple[str, bool], Any] = {}
         self._rings: Dict[Tuple[int, str], Any] = {}
+        self.skip: set = set()   # os NPCs com o corpo do /skin pronto: a miniatura não aparece (os anéis sim)
         self._dots: Dict[int, Any] = {}
 
     def _mesh(self, creature: Creature, flash: bool):
@@ -149,8 +150,9 @@ class EnemyTokenRenderer:
             self.draw_trail(shader, model, controller.trail[:-1])   # o último ponto fica sob os pés
         for enemy in controller.enemies:
             sink = enemy.creature.height * min(1.0, enemy.fallen / FALL_SECONDS) if enemy.fallen else 0.0
-            shader.set_mat4("u_Model", model @ token_matrix(enemy.shown, enemy.yaw, sink))
-            self._mesh(enemy.creature, enemy.flash > 0.0 and int(enemy.flash * 20) % 2 == 0).draw()
+            if enemy.id not in self.skip:
+                shader.set_mat4("u_Model", model @ token_matrix(enemy.shown, enemy.yaw, sink))
+                self._mesh(enemy.creature, enemy.flash > 0.0 and int(enemy.flash * 20) % 2 == 0).draw()
             if controller.hover == enemy.id and not enemy.fallen:   # o mouse em cima: um anel claro mais largo
                 shader.set_mat4("u_Model", model @ mat4_translate(enemy.shown[0], enemy.shown[1] + 0.025,
                                                                   enemy.shown[2]))
