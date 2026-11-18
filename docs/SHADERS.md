@@ -42,3 +42,14 @@ FragColor = vec4(finalColor, 1.0);
 
 Utilizados para desenhar a borda translúcida ou contorno amarelo/branco sobre o bloco selecionado ou em hover do mouse.
 * **Modo de Blending:** `glEnable(GL_BLEND)` com `glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`.
+
+---
+
+## 4. Shader da Plataforma do Editor (`platform.vert` e `platform.frag`)
+
+Desenha a superfície de edição em um único quad, com grade, borda e célula sob o cursor calculadas no fragment shader.
+
+* **`platform.vert`:** projeta um quad unitário com as matrizes MVP e repassa `v_Local = aPos.xz * u_Size`.
+* **`platform.frag`:** calcula linhas de grade com `fwidth`, borda do volume, célula do cursor e pulso; mistura a cor base e usa alpha.
+* **Uniforms:** `u_Model`, `u_View`, `u_Projection`, `u_Size`, `u_BaseColor`, `u_LineColor`, `u_BorderColor`, `u_Cursor`, `u_CursorOn`, `u_CursorColor`, `u_GridOn`, `u_Time`.
+* **Por que em coordenadas locais:** a grade acompanha a rotação do tabuleiro (Q/E) sem desalinhar dos voxels.

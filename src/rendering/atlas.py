@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from PIL import Image
 
-from src.world.block import BlockType, get_block_color
+from src.world.block import SHAPED_BLOCK_NAMES, BlockType, get_block_color
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TEXTURES_DIR = os.path.abspath(
@@ -36,14 +36,31 @@ ATLAS_TILES: List[str] = [
     "cobblestone",          # 9
     "sand",                 # 10
     "white_concrete",       # 11
+    # Os blocos com forma (plantas em cruz, tocha, escada de mão, fogo)
+    "short_grass",          # 12
+    "poppy",                # 13
+    "dandelion",            # 14
+    "red_mushroom",         # 15
+    "brown_mushroom",       # 16
+    "torch",                # 17
+    "ladder",               # 18
+    "fire_0",               # 19
 ]
+
+
+def shaped_texture(block: BlockType) -> str:
+    """A textura do bloco com forma (a do primeiro plano ou caixa da forma)."""
+    from src.world.block_shapes import parse_block, shape_for
+    parts = shape_for(SHAPED_BLOCK_NAMES[block]) or ()
+    base, _ = parse_block(SHAPED_BLOCK_NAMES[block])
+    return next((p.texture for p in parts if p.texture), base)
 
 
 class TextureAtlas:
     """Atlas de texturas consolidado em um único mapa 2D para renderização de blocos."""
 
     TILE_SIZE = 16
-    GRID_COLS = 4
+    GRID_COLS = 8
     GRID_ROWS = 4
 
     def __init__(
@@ -75,6 +92,8 @@ class TextureAtlas:
             tile_path = os.path.join(self.textures_dir, f"{tile_name}.png")
             if os.path.exists(tile_path):
                 img = Image.open(tile_path).convert("RGBA")
+                if img.height > img.width and img.height % img.width == 0:
+                    img = img.crop((0, 0, img.width, img.width))  # tira animada (fogo): fica o primeiro quadro
                 if img.size != (self.TILE_SIZE, self.TILE_SIZE):
                     img = img.resize((self.TILE_SIZE, self.TILE_SIZE), Image.Resampling.NEAREST)
             else:
@@ -151,8 +170,18 @@ class TextureAtlas:
         elif block == BlockType.WATER:
             return "water_still", (0.32, 0.62, 0.95)
 
+        elif block in SHAPED_BLOCK_NAMES:
+            # a forma é desenhada pelo malhador com a textura do nome; a tabela só guarda a mesma textura
+            return shaped_texture(block), (1.0, 1.0, 1.0)
+
         # Fallback para blocos desconhecidos / genéricos
         return "white_concrete", get_block_color(block)
+
+    def flipped_rect(self, tile_name: str) -> Tuple[float, float, float, float]:
+        """(u0, v0, u1, v1) do ladrilho com v0 no alto da textura, como ``block_shapes`` espera (o atlas do
+        terreno vai para a GPU de cabeça para baixo)."""
+        u_min, v_min, u_max, v_max = self.tile_rects.get(tile_name, self.tile_rects["white_concrete"])
+        return u_min, v_max, u_max, v_min
 
     def load_gl_texture(self) -> int:
         """Cria e envia o Texture Atlas para a GPU com filtragem NEAREST pixel art."""

@@ -17,10 +17,29 @@ ACTIONS = {
     'chat': ('Abrir chat', 84), 'command': ('Abrir comandos', 47),
     'pan_modifier': ('Arrastar câmera (com clique)', 340),
     'zoom_in': ('Aproximar câmera', 61), 'zoom_out': ('Afastar câmera', 45),
+    'interact': ('Interagir (portas, escadas)', 70),
+}
+# Gráficos: cada opção só aceita os valores da lista (o primeiro item do par é o padrão).
+GRAPHICS = {
+    'msaa': (4, (0, 2, 4, 8)),                         # amostras do antisserrilhado da cena (0 desligado)
+    'fxaa': (False, (False, True)),                    # antisserrilhado rápido, uma passada sobre a imagem pronta
+    'render_scale': (1.0, (0.5, 0.67, 0.75, 0.85, 1.0)),  # resolução interna da cena (a interface fica nítida)
+    'render_distance': (2, (1, 2, 3, 4, 5, 6)),        # chunks carregados em volta do jogador
+    'shadows': ('high', ('off', 'low', 'medium', 'high')),  # qualidade da sombra do sol (raios por pixel)
+    'shadow_range': (56, (16, 32, 56)),                # até quantas células o raio do sol procura o que tapa
+    'shadow_strength': (1.0, (0.25, 0.5, 0.75, 1.0)),  # o quanto a sombra escurece
+    'fps_limit': (0, (0, 30, 60, 120, 144)),           # 0 sem limite
 }
 DEFAULTS = {'bindings': {k: v[1] for k, v in ACTIONS.items()}, 'vsync': True,
             'sensitivity': 1.0, 'invert_rotation': False, 'reduce_motion': False,
-            'text_scale': 1.0}
+            'text_scale': 1.0, 'show_fps': False, **{key: default for key, (default, _) in GRAPHICS.items()}}
+
+
+def cycle(key, value, step):
+    """O valor seguinte (ou anterior) da lista da opção gráfica, sem dar a volta."""
+    options = GRAPHICS[key][1]
+    index = options.index(value) if value in options else options.index(GRAPHICS[key][0])
+    return options[max(0, min(len(options) - 1, index + step))]
 
 
 def atomic_json(path, data):
@@ -58,13 +77,21 @@ class Preferences:
         self.reset()
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
-            for key in ('vsync', 'invert_rotation', 'reduce_motion'):
+            for key in ('vsync', 'invert_rotation', 'reduce_motion', 'show_fps'):
                 if isinstance(data.get(key), bool):
                     self.data[key] = data[key]
             for key, low, high in [('sensitivity', .25, 2), ('text_scale', 1, 1.25)]:
                 value = data.get(key)
                 if isinstance(value, (int, float)) and math.isfinite(value):
                     self.data[key] = max(low, min(high, value))
+            for key, (_, options) in GRAPHICS.items():
+                value = data.get(key)
+                # bool é int no Python: True não pode valer como 1 nem 1 como True
+                if any(value == option and type(value) is type(option) for option in options):
+                    self.data[key] = value
+                elif (isinstance(value, int) and not isinstance(value, bool) and float(value) in options
+                      and all(type(option) is float for option in options)):
+                    self.data[key] = float(value)
             bindings = dict(self.data['bindings'])
             for action, key in data.get('bindings', {}).items():
                 if action in ACTIONS and isinstance(key, int) and 32 <= key <= 348 and key != 256:

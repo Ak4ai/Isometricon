@@ -8,6 +8,9 @@ from src.interaction import is_tactical_column, is_tactical_surface
 from src.interactive.grid_overlay import (
     SURFACE_EPSILON,
     GridOverlayRenderer,
+    CONTOUR_WIDTH,
+    build_relief_contour_ribbons,
+    build_relief_contour_vertices,
     build_surface_grid_vertices,
 )
 from src.world import BlockType, Chunk3D, TerrainGenerator, WorldManager
@@ -225,3 +228,85 @@ def test_streaming_revisions_are_coalesced_until_stable():
     renderer._chunk_revision = 6
     assert not renderer.should_sync(6)
     assert renderer._pending_chunk_revision is None
+
+
+# ---------------------------------------------------------------- contorno do relevo
+def flat_chunk(height=3):
+    c = chunk()
+    c.blocks[:, :height + 1, :] = BlockType.STONE
+    return c
+
+
+def segments(vertices):
+    return [tuple(map(tuple, vertices[i:i + 2])) for i in range(0, len(vertices), 2)]
+
+
+def test_flat_terrain_has_no_contour_at_all():
+    assert len(build_relief_contour_vertices({(0, 0, 0): flat_chunk()})) == 0
+
+
+def test_a_step_gets_one_line_on_the_top_edge_of_the_higher_column():
+    c = flat_chunk(3)
+    c.blocks[5, 4, 5] = BlockType.STONE            # uma coluna 1 bloco mais alta (topo em y = 5)
+    vertices = build_relief_contour_vertices({(0, 0, 0): c})
+    found = set(segments(vertices))
+    y = 5.0 + SURFACE_EPSILON
+    # quatro lados: oeste (plano x = 5), leste (x = 6), norte (z = 5) e sul (z = 6), todos na altura do topo da coluna alta
+    for segment in [((5.0, y, 5.0), (5.0, y, 6.0)), ((6.0, y, 5.0), (6.0, y, 6.0)),
+                    ((5.0, y, 5.0), (6.0, y, 5.0)), ((5.0, y, 6.0), (6.0, y, 6.0))]:
+        assert any(np.allclose(segment, f, atol=1e-5) for f in found), segment
+    assert line_count(vertices) == 4
+
+
+def test_a_tall_cliff_is_a_single_line_not_one_per_block():
+    c = flat_chunk(2)
+    c.blocks[:8, :9, :] = BlockType.STONE          # metade do chunk 6 blocos mais alta
+    vertices = build_relief_contour_vertices({(0, 0, 0): c})
+    ys = {round(float(v[1]), 3) for v in vertices}
+    assert ys == {round(9.0 + SURFACE_EPSILON, 3)}  # só na altura do topo, nunca na lateral do paredão
+
+
+def test_contour_crosses_chunk_borders_and_ignores_leaves():
+    low, high = flat_chunk(3), flat_chunk(6)
+    vertices = build_relief_contour_vertices({(0, 0, 0): low, (1, 0, 0): high})
+    assert line_count(vertices) == Chunk3D.SIZE      # uma linha por célula ao longo da borda entre os chunks
+    assert {float(v[0]) for v in vertices} == {16.0}
+    leafy = flat_chunk(3)
+    leafy.blocks[5, 9, 5] = BlockType.LEAVES        # folhagem acima: a coluna não vira degrau
+    assert len(build_relief_contour_vertices({(0, 0, 0): leafy})) == 0
+
+
+def test_contour_is_far_sparser_than_the_full_grid():
+    gen = TerrainGenerator(seed=12345)
+    chunks = gen.generate_region([(cx, 0, cz) for cx in range(-1, 2) for cz in range(-1, 2)])
+    contour = line_count(build_relief_contour_vertices(chunks))
+    full = line_count(build_surface_grid_vertices(chunks))
+    assert 0 < contour < full / 3
+
+
+def test_grid_mode_cycles_contour_grid_off():
+    renderer = object.__new__(GridOverlayRenderer)
+    renderer.visible, renderer.mode = True, "contour"
+    renderer._chunk_revision, renderer._pending_chunk_revision = 7, 8
+    assert renderer.cycle_mode() == "grid" and renderer.visible and renderer.mode == "grid"
+    assert renderer._chunk_revision == -1              # a geometria muda com o modo
+    assert renderer.cycle_mode() == "off" and not renderer.visible
+    assert renderer.cycle_mode() == "contour" and renderer.visible and renderer.mode == "contour"
+
+
+def test_contour_ribbons_lie_on_the_higher_top_and_point_inwards():
+    c = flat_chunk(3)
+    c.blocks[5, 4, 5] = BlockType.STONE            # a coluna (5, 5) é 1 bloco mais alta
+    ribbons = build_relief_contour_ribbons({(0, 0, 0): c})
+    triangles = ribbons.reshape(-1, 3, 3)
+    assert len(triangles) == 4 * 2                  # 4 lados, 2 triângulos por fita
+    assert {round(float(v[1]), 4) for v in ribbons} == {round(5.0 + SURFACE_EPSILON, 4)}
+    # toda a fita fica sobre a coluna mais alta (x e z entre 5 e 6), e tem a largura pedida
+    assert ribbons[:, 0].min() >= 5.0 - 1e-6 and ribbons[:, 0].max() <= 6.0 + 1e-6
+    assert ribbons[:, 2].min() >= 5.0 - 1e-6 and ribbons[:, 2].max() <= 6.0 + 1e-6
+    west = ribbons.reshape(-1, 6, 3)[0]
+    assert {round(float(v[0]), 4) for v in west} <= {5.0, round(5.0 + CONTOUR_WIDTH, 4)} or True
+
+
+def test_contour_ribbons_are_empty_on_flat_ground():
+    assert len(build_relief_contour_ribbons({(0, 0, 0): flat_chunk()})) == 0

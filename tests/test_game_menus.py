@@ -155,16 +155,14 @@ def test_mouse_activation_requires_release_over_same_button(tmp_path):
     assert menus.page=='create'
 
 
-def test_sensitivity_slider_changes_only_draft_until_apply(tmp_path):
+def test_sensitivity_row_changes_only_draft_until_apply(tmp_path):
     import glfw
     menus = GameMenus('test', Preferences(tmp_path/'prefs.json'), WorldLibrary(tmp_path/'worlds'), create_gl=False)
     menus.settings()
     menus.render(1320,876)
-    rect=next(r for r,a in menus.hits if a=='sensitivity')
-    y=(rect[1]+rect[3])/2
-    menus.mouse_button(rect[2]-186,y,glfw.PRESS)
-    menus.hover(rect[2]-70,y)
-    menus.mouse_button(rect[2]-70,y,glfw.RELEASE)
+    menus.focus = menus.hits_order.index('row:sensitivity')
+    for _ in range(10):
+        menus.key(glfw.KEY_RIGHT, glfw.PRESS)
     assert menus.draft['sensitivity']==2.
     assert menus.preferences.data['sensitivity']==1.
     menus.activate('apply')

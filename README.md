@@ -200,7 +200,10 @@ gantt
 
 3. **Inicie o motor gráfico:**
    ```bash
-   python src/main.py
+   python src/main.py              # demonstração do cubo
+   python src/main.py --terrain    # mundo voxel
+   python src/main.py --char       # personagem
+   python src/main.py --map-editor # editor de mapa/objetos voxel
    ```
    *(Ou abra no VS Code e pressione **F5**!)*
 
@@ -209,6 +212,43 @@ gantt
 O jogo abre no menu de boas-vindas: crie um mundo por nome e seed, continue um mundo salvo, configure controles ou consulte os créditos. Durante a partida, **ESC** abre a pausa. Veja [Menus e mundos](docs/MENUS.md) para os dados salvos e as opções disponíveis.
 
 Os modos de diagnóstico continuam acessíveis com `python src/main.py --terrain` e `python src/main.py --char`.
+### 🗺️ Editor de mapa/objetos
+
+O modo `--map-editor` abre uma plataforma com shader próprio para construir
+objetos voxel com cor e textura por voxel, exportar/carimbar objetos e salvar o
+mapa. Há uma casa de exemplo em `assets/objects/casa_exemplo.json`:
+
+```bash
+python src/main.py --map-editor
+python src/main.py --map=assets/objects/casa_exemplo.json
+python src/main.py --terrain --map=saves/mapa.json   # joga o mapa salvo
+```
+
+O mesmo objeto também pode ser colocado **dentro do mundo procedural infinito**:
+
+```bash
+python src/main.py --terrain --object=assets/objects/casa_exemplo.json
+```
+
+Dentro do `--terrain`: `P` ou o botão **Colocar** do HUD ativa a colocação,
+`F3` troca o objeto, `N` escolhe o nome, `R` gira, `Esc` cancela, clique esquerdo
+confirma no topo de um bloco, `V` ou o botão **Selecionar** seleciona, e
+`Delete` remove. Os objetos são salvos por seed em
+`saves/mundos/mundo_<seed>.json` e recarregados ao abrir a mesma seed. Ao entrar
+em uma casa, as paredes/teto acima dos pés do token ficam translúcidos para o
+personagem continuar visível.
+
+Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
+a paleta clicável ou `C` escolhe a cor, `X` escolhe a textura, `H` digita cor
+hexadecimal, `-`/`=` mudam o pincel,
+`[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
+selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
+`F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso
+base, `F4` abre a biblioteca, `N` nomeia o objeto e `Ctrl+Z`/`Ctrl+Y`
+desfazem/refazem. O `F2` grava `saves/objetos/<nome>.json`. O painel tem
+botões clicáveis para as ferramentas e ações principais. Detalhes em
+[`docs/EDITOR.md`](docs/EDITOR.md) e
+[`docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md).
 
 ### 🕹️ Controles
 

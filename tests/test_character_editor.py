@@ -17,6 +17,7 @@ def make_editor(**model):
                               execute=lambda command: (sent.append(command), (True, "feito", (0, 0, 0)))[1])
     editor = CharacterEditor(handler, {"active": False, "yaw": 0.0}, create_gl=False)
     editor.open()
+    editor.active = 1   # a aba 0 é a do modelo; as demais começam em 'Corpo'
     editor.layout(*SIZE)
     return editor, sent
 
@@ -90,7 +91,7 @@ def test_a_click_on_an_option_runs_its_chat_command():
 def test_tabs_change_section_and_the_wheel_scrolls_only_over_the_panel():
     editor, _ = make_editor()
     titles = [section.title for section in editor.sections]
-    assert titles[:7] == ["Corpo", "Ajustes", "Olhos", "Rosto", "Nariz", "Maquiagem", "Cabelo"] and "Superior" in titles and "Extras" in titles
+    assert titles[:8] == ["Modelo", "Corpo", "Ajustes", "Olhos", "Rosto", "Nariz", "Maquiagem", "Cabelo"] and "Superior" in titles and "Extras" in titles
     labels = lambda: [option.label for group in editor.groups() for option in group.options]   # the whole section, scrolled or not
     for title, expected in (("Rosto", ("Sorriso", "Altura das sobrancelhas")), ("Nariz", ("Narinas grandes", "Bloco", "Largura da ponte")),
                             ("Olhos", ("Azul", "Arredondado", "Altura dos olhos"))):
@@ -276,7 +277,7 @@ def test_makeup_and_extra_garments_are_chosen_from_their_sections():
     commands = {o.label: o.command for g in editor.groups() for o in g.options}
     assert commands["Vermelho"] == "/skin maquiagem blush vermelho" and commands["Sem maquiagem"] == "/skin maquiagem sem"
     assert commands["Sem blush"] == "/skin maquiagem blush sem" and commands["Sem sombra"] == "/skin maquiagem sombra sem"
-    editor.select_section(0)
+    editor.select_section(1)
     assert "Vitiligo (quantidade)" in [o.label for g in editor.groups() for o in g.options]
 
 
@@ -361,3 +362,13 @@ def test_wearing_a_garment_with_a_known_defect_says_so():
     ok, message, colour = handler._worn("[Calça] Saia.", "18135693306")
     assert ok and "Defeito conhecido" in message and colour == GOLD
     assert handler._worn("[Top] Suéter.", "9240757332") == (True, "[Top] Suéter.", GREEN)
+
+
+def test_w_toggles_the_walk_preview_and_closing_turns_it_off():
+    editor, _ = make_editor()
+    assert not editor.walk_preview
+    assert editor.handle_key(87, 1) and editor.walk_preview
+    assert editor.handle_key(87, 1) and not editor.walk_preview
+    editor.handle_key(87, 1)
+    editor.close()
+    assert not editor.walk_preview

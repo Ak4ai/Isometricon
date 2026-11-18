@@ -9,6 +9,9 @@ import numpy as np
 class Shader:
     """Carrega, compila e gerencia programas de shaders GLSL."""
 
+    # Unidade de textura fixa de samplers adicionais do shader do mundo (u_RoomMask: máscara 3D do espaço)
+    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3}
+
     def __init__(self, vertex_path: str, fragment_path: str):
         """Inicializa e compila o programa de shader a partir de arquivos no disco.
 
@@ -41,6 +44,15 @@ class Shader:
         # Shaders individuais podem ser liberados após a linkagem bem-sucedida
         gl.glDeleteShader(vert_shader)
         gl.glDeleteShader(frag_shader)
+
+        # Samplers que não são do atlas (unidade 0) precisam de unidade própria desde já: um sampler3D
+        # que ficasse na 0, junto do sampler2D do atlas, faria o OpenGL recusar qualquer desenho.
+        gl.glUseProgram(self.program_id)
+        for sampler, unit in self.EXTRA_SAMPLER_UNITS.items():
+            location = gl.glGetUniformLocation(self.program_id, sampler)
+            if location >= 0:
+                gl.glUniform1i(location, unit)
+        gl.glUseProgram(0)
 
     def _read_source(self, path: str) -> str:
         """Lê o conteúdo de um arquivo de shader."""

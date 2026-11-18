@@ -700,6 +700,7 @@ def test_a_race_is_chosen_by_command_and_from_cards_in_the_body_section(tmp_path
     fake = SimpleNamespace(character_model=model, busy_status="", execute=lambda command: (True, "", (0, 0, 0)))
     editor = CharacterEditor(fake, {"active": False, "yaw": 0.0}, create_gl=False)
     editor.open()
+    editor.active = 1
     group = next(g for g in editor.groups() if g.title.startswith("Raça"))
     titles = [g.title for g in editor.groups()]
     assert titles.index(group.title) == titles.index("Corpo") + 1                            # right under female and male

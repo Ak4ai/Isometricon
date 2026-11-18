@@ -126,8 +126,8 @@ def test_horizontal_collision_blocks_wall():
     assert result.position[0] < 1.0
 
 
-def test_player_can_step_up_one_block():
-    # Piso em Y=0 e degrau em X=1/Y=1.
+def test_player_does_not_step_up_one_block_by_itself():
+    # Piso em Y=0 e degrau em X=1/Y=1: sem subida automática, andar contra o degrau para o personagem.
     blocks = {(0, 0, 0), (1, 0, 0), (1, 1, 0)}
     world = DictWorld(blocks)
     controller = VoxelCollisionController(world)
@@ -147,4 +147,37 @@ def test_player_can_step_up_one_block():
         0.0,
     )
 
-    assert result.position[0] > 1.0
+    assert result.collided_x
+    assert result.position[0] < 1.0
+    assert result.position[1] == 1.0
+
+
+def test_jump_velocity_clears_one_block():
+    # Do chão em Y=0 (pés em 1), a velocidade do salto do token passa do topo de um bloco (pés acima de 2).
+    from src.interactive.token_system import JUMP_SPEED
+
+    world = DictWorld({(x, 0, 0) for x in range(-2, 3)})
+    controller = VoxelCollisionController(world)
+    position = np.array([0.5, 1.0, 0.5], dtype=np.float32)
+    velocity = JUMP_SPEED
+    peak = 0.0
+    for _ in range(120):
+        result = controller.move(position, np.zeros(3, dtype=np.float32), 1.0 / 60.0, velocity)
+        position[:] = result.position
+        velocity = result.vertical_velocity
+        peak = max(peak, float(position[1]))
+    assert peak > 2.1
+    assert result.grounded and position[1] == 1.0  # e volta ao chão
+
+
+def test_climbing_has_no_gravity():
+    # Numa escada (climbing=True) a velocidade vertical é a de quem chama: zero segura no lugar, sem cair.
+    world = DictWorld(set())
+    controller = VoxelCollisionController(world)
+    position = np.array([0.5, 5.0, 0.5], dtype=np.float32)
+    for _ in range(60):
+        result = controller.move(position, np.zeros(3, dtype=np.float32), 1.0 / 60.0, 0.0, climbing=True)
+        position[:] = result.position
+    assert position[1] == 5.0
+    result = controller.move(position, np.zeros(3, dtype=np.float32), 0.5, 3.0, climbing=True)
+    assert np.isclose(result.position[1], 6.5)

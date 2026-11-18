@@ -29,8 +29,9 @@ def run(handler, line):
     return handler.execute(line, run_async=False)
 
 
-def test_only_skin_help_and_spin_are_root_commands():
-    assert sorted(COMMAND_TREE) == ["ajuda", "girar", "skin"]
+def test_only_the_known_root_commands_exist():
+    assert sorted(COMMAND_TREE) == ["agua", "ajuda", "atributo", "bloco", "criar", "ficha", "girar", "inimigo", "npc", "revelar", "schem",
+                                  "seed", "skin", "sombras"]
     handler = SkinCommandHandler(character_model=None)
     for old in ("/top sweater", "/eyes blue", "/import 9240757332", "/cabelo rosa", "/manga largura 1.1", "/cintura alta"):
         ok, msg, _ = run(handler, old)
@@ -171,9 +172,12 @@ def test_autocomplete_follows_the_command_table():
     import glfw
     chat = ChatConsole(create_gl=False)
     chat.open("/")
-    assert chat.suggestions == ["/ajuda", "/girar", "/skin"]
+    assert chat.suggestions == ["/agua", "/ajuda", "/atributo", "/bloco", "/criar", "/ficha", "/girar", "/inimigo", "/npc", "/revelar",
+                                "/schem", "/seed", "/skin", "/sombras"]
     chat.handle_char(ord("s"))
-    assert chat.suggestions == ["/skin"] and chat.ghost_text == "kin "
+    assert chat.suggestions == ["/schem", "/seed", "/skin", "/sombras"]
+    chat.handle_char(ord("k"))
+    assert chat.suggestions == ["/skin"] and chat.ghost_text == "in "
     chat.handle_key(glfw.KEY_TAB, glfw.PRESS, 0)
     assert chat.input_text == "/skin "
     assert {"olhos", "boca", "cabelo", "vestir", "top", "calca", "tirar"} <= set(chat.suggestions)
@@ -375,3 +379,13 @@ def test_async_model_defers_reloads_to_poll():
     model.reload()
     assert model.is_loading and model.parts == []
     assert model.loading_status
+
+
+def test_revelar_sets_the_outside_and_the_ceiling_brightness():
+    handler = SkinCommandHandler(character_model=None)
+    renderer = SimpleNamespace(exterior=0.12, ceiling=1.0, enabled=True)
+    handler.room_reveal = renderer
+    assert run(handler, "/revelar teto 0,5")[0] and renderer.ceiling == 0.5 and renderer.exterior == 0.12
+    assert run(handler, "/revelar escuro 0.3")[0] and renderer.exterior == 0.3 and renderer.ceiling == 0.5
+    ok, msg, _ = run(handler, "/revelar teto 2")
+    assert not ok and "teto" in msg and renderer.ceiling == 0.5

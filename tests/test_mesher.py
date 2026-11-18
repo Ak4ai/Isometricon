@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from src.world import BlockType, Chunk3D, ChunkMeshData, ChunkMesher, get_block_color, is_opaque
+from src.world.block import is_shaped
 
 
 DIRECTIONS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
@@ -59,7 +60,7 @@ def test_water_level_reduces_rendered_height():
     assert np.isclose(data.vertices[:, 1].min(), 5.0)
 
 
-@pytest.mark.parametrize('block', [b for b in BlockType if b != BlockType.AIR])
+@pytest.mark.parametrize('block', [b for b in BlockType if b != BlockType.AIR and not is_shaped(b)])
 def test_single_block_geometry_normals_uvs_colors(block):
     chunk = Chunk3D()
     position = np.array([4, 6, 7])
@@ -136,7 +137,7 @@ def test_corner(position):
     (BlockType.STONE, BlockType.WOOD, 10),
     (BlockType.STONE, BlockType.WATER, 11),
     (BlockType.LEAVES, BlockType.STONE, 11),
-    (BlockType.WATER, BlockType.WATER, 12),
+    (BlockType.WATER, BlockType.WATER, 10),  # entre duas águas não há face (a água é translúcida)
     (BlockType.LEAVES, BlockType.LEAVES, 12),
     (BlockType.WATER, BlockType.LEAVES, 12),
 ])
@@ -150,7 +151,8 @@ def test_mixed_types_and_transparency(first, second, faces):
         color = np.float32(get_block_color(block))
         actual = np.count_nonzero(np.all(data.vertices[:, 8:11] == color, axis=1))
         multiplier = 2 if first == second else 1
-        assert actual == multiplier * (6 - int(is_opaque(neighbor))) * 4
+        hidden = int(is_opaque(neighbor)) or int(block == neighbor == BlockType.WATER)
+        assert actual == multiplier * (6 - hidden) * 4
 
 
 @pytest.mark.parametrize('block,opaque', [
@@ -164,7 +166,7 @@ def test_opacity_policy(block, opaque):
 
 
 @pytest.mark.parametrize('value,error', [
-    (-1, ValueError), (7, ValueError), (256, ValueError),
+    (-1, ValueError), (18, ValueError), (256, ValueError),
     (1.0, TypeError), (True, TypeError), (np.bool_(False), TypeError),
     ('1', TypeError), (None, TypeError),
 ])
@@ -255,3 +257,25 @@ from src.world import Chunk3D, ChunkMesher
 assert ChunkMesher().build(Chunk3D()).face_count == 0
 '''
     subprocess.run([sys.executable, '-c', code], check=True)
+
+
+def test_water_surface_slopes_between_a_source_and_its_current():
+    chunk = Chunk3D()
+    chunk.set_block(5, 5, 5, BlockType.WATER)          # fonte (fica fora do mapa de níveis: cheia)
+    chunk.set_block(6, 5, 5, BlockType.WATER)          # corrente, metade da altura
+    data = ChunkMesher().build(chunk, water_levels={(6, 5, 5): 0.5})
+    tops = data.vertices[data.vertices[:, 4] == 1.0]   # as faces de cima (normal +Y)
+    by_corner = {(round(float(v[0]), 3), round(float(v[2]), 3)): round(float(v[1]), 3) for v in tops}
+    assert by_corner[(5.0, 5.0)] == 6.0                # canto só da fonte: cheio
+    assert by_corner[(6.0, 5.0)] == 5.75               # canto entre as duas: a média
+    assert by_corner[(7.0, 5.0)] == 5.5                # canto só da corrente: a altura dela
+
+
+def test_water_under_water_keeps_a_full_surface():
+    chunk = Chunk3D()
+    chunk.set_block(5, 5, 5, BlockType.WATER)
+    chunk.set_block(6, 5, 5, BlockType.WATER)
+    chunk.set_block(6, 6, 5, BlockType.WATER)          # água caindo sobre a corrente
+    data = ChunkMesher().build(chunk, water_levels={(6, 5, 5): 0.5})
+    lower_tops = data.vertices[(data.vertices[:, 4] == 1.0) & (data.vertices[:, 1] < 6.5)]
+    assert np.all(lower_tops[:, 1] == 6.0)             # encosta na água de cima sem degrau

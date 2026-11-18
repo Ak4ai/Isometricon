@@ -1,0 +1,148 @@
+"""Demo: mostra uma construção Schematic (.schem) em 3D, girando em projeção isométrica.
+
+Uso:
+    python scripts/demo_schematic.py [arquivo.schem] [--formas] [--frames N] [--capture saida.png]
+
+Sem argumentos abre assets/schematics/31422.schem. Com --frames N a janela fecha sozinha
+depois de N quadros; com --capture salva o último quadro em PNG (para conferir sem olhar a tela).
+"""
+
+import argparse
+import os
+import sys
+
+# Garante acesso aos módulos de 'src'
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+import numpy as np
+import OpenGL.GL as gl
+from PIL import Image
+
+from src.core.window import Window
+from src.math import mat4_look_at, mat4_ortho, mat4_rotate_y, vec3
+from src.rendering import SchematicAtlas, Shader
+from src.world import Schematic, StructureMesher
+
+DEFAULT_SCHEMATIC = os.path.join(PROJECT_ROOT, "assets", "schematics", "31422.schem")
+
+
+def save_frame(path: str, width: int, height: int) -> None:
+    """Salva o framebuffer atual em PNG."""
+    gl.glPixelStorei(gl.GL_PACK_ALIGNMENT, 1)
+    data = gl.glReadPixels(0, 0, width, height, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
+    image = Image.fromarray(np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3))
+    image.transpose(Image.FLIP_TOP_BOTTOM).save(path)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Visualizador 3D de schematics (.schem)")
+    parser.add_argument("schematic", nargs="?", default=DEFAULT_SCHEMATIC)
+    parser.add_argument("--formas", action="store_true", help="mostra uma amostra de cada forma de bloco")
+    parser.add_argument("--zoom", type=float, default=1.0, help="aproxima a câmera (2 = o dobro)")
+    parser.add_argument("--olhar", type=float, nargs=2, metavar=("X", "Z"), default=None,
+                        help="aponta a câmera para este ponto da construção (a partir do canto)")
+    parser.add_argument("--tampa", type=float, default=0.0, metavar="0-1",
+                        help="abre a tampa de todos os baús (0 fechada, 1 toda aberta), para conferir a forma")
+    parser.add_argument("--frames", type=int, default=None, help="fecha depois de N quadros")
+    parser.add_argument("--capture", default=None, help="salva o último quadro neste PNG")
+    args = parser.parse_args()
+
+    window = Window(
+        width=1280,
+        height=720,
+        title="Isometricon - Visualizador de Schematics (.schem)",
+        vsync=True,
+    )
+
+    gl.glEnable(gl.GL_DEPTH_TEST)
+    gl.glEnable(gl.GL_CULL_FACE)
+    gl.glCullFace(gl.GL_BACK)
+    gl.glFrontFace(gl.GL_CCW)
+    gl.glEnable(gl.GL_BLEND)  # vidro, folhas e outras transparências
+    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+    gl.glClearColor(0.10, 0.12, 0.16, 1.0)
+
+    shader = Shader(
+        os.path.join(PROJECT_ROOT, "assets", "shaders", "world_textured.vert"),
+        os.path.join(PROJECT_ROOT, "assets", "shaders", "world_textured.frag"),
+    )
+    atlas = SchematicAtlas(create_gl=True)
+
+    if args.formas:
+        from src.world.shape_showcase import showcase_schematic
+
+        schematic = showcase_schematic()
+    else:
+        schematic = Schematic.load_from_file(args.schematic)
+    print(f"Estrutura: {schematic.name} ({schematic.width}x{schematic.height}x{schematic.length})")
+    if args.tampa > 0.0:
+        from src.rendering.mesh import TexturedMesh
+        from src.world.chests import is_chest
+        lids = {(int(x), int(y), int(z)): args.tampa
+                for y, z, x in np.argwhere(np.vectorize(is_chest, otypes=[bool])(schematic.grid))}
+        mesh = TexturedMesh(*StructureMesher.build_arrays(schematic, atlas.get_uv, center=True, chest_open=lids))
+    else:
+        mesh = StructureMesher.build_mesh(schematic, atlas, center=True)
+    print(f"Malha: {mesh.index_count // 3} triângulos, com as faces ocultas descartadas.")
+
+    shader.use()
+    shader.set_int("u_TextureAtlas", 0)
+    shader.set_vec3("u_LightDir", 0.6, 1.0, 0.4)
+    shader.set_vec3("u_LightColor", 1.0, 0.98, 0.92)
+    shader.set_vec3("u_AmbientColor", 0.45, 0.45, 0.48)
+
+    max_dim = max(schematic.width, schematic.height, schematic.length)
+    ortho_size = max_dim * 0.75 / max(args.zoom, 0.05)
+    look_at = np.zeros(3, dtype=np.float32)
+    if args.olhar is not None:  # a construção está centrada na origem: o canto fica em -dim/2
+        look_at = np.array([args.olhar[0] - schematic.width / 2.0, 0.0, args.olhar[1] - schematic.length / 2.0],
+                           dtype=np.float32)
+    cam_dist = max_dim * 2.0
+
+    frame = 0
+    while not window.should_close():
+        window.update_delta_time()
+        window.poll_events()
+        window.set_title(
+            f"Isometricon | {schematic.name} "
+            f"({schematic.width}x{schematic.height}x{schematic.length}) | {window.fps:.0f} FPS"
+        )
+
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+        aspect = window.get_aspect_ratio()
+        projection = mat4_ortho(-ortho_size * aspect, ortho_size * aspect, -ortho_size, ortho_size, 0.1, 500.0)
+        view = mat4_look_at(
+            eye=vec3(cam_dist, cam_dist, cam_dist) + look_at,
+            target=look_at,
+            up=vec3(0.0, 1.0, 0.0),
+        )
+        # Gira devagar em torno do eixo Y; com --capture fica parado num ângulo fixo
+        model = mat4_rotate_y(0.6 if args.capture else window.get_time() * 0.4)
+
+        shader.use()
+        atlas.bind(0)
+        shader.set_mat4("u_Projection", projection)
+        shader.set_mat4("u_View", view)
+        shader.set_mat4("u_Model", model)
+        mesh.draw()
+
+        frame += 1
+        if args.frames is not None and frame >= args.frames:
+            if args.capture:
+                width, height = 1280, 720
+                save_frame(args.capture, width, height)
+                print(f"Quadro salvo em {args.capture}")
+            break
+        window.swap_buffers()
+
+    mesh.delete()
+    atlas.delete()
+    shader.delete()
+    window.close()
+
+
+if __name__ == "__main__":
+    main()

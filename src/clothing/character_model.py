@@ -12,6 +12,7 @@ import math
 import hashlib
 import os
 import threading
+import time
 import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -872,11 +873,14 @@ class CharacterModel:
         outer_top_id: Optional[Union[int, str]] = None,
         shoes_id: Optional[Union[int, str, tuple]] = None,
         async_loading: bool = False,
+        cache_name: Optional[str] = None,
         extra_ids: Optional[List[Union[int, str]]] = None,
     ) -> None:
         # With ``async_loading`` every (re)build runs on a background thread and the result is
         # swapped in by ``poll()`` on the main thread, so fitting clothes never freezes the UI.
         self.async_loading = bool(async_loading)
+        # o arquivo do cache da montagem (build_cache): cada NPC tem o seu, para não apagar o do jogador
+        self.cache_name = cache_name
         self.loading_status: str = ""  # shown by the HUD while a build is running
         self._dirty = False
         self._face_builder = None  # kept between redraws of the face (its layers stay loaded)
@@ -2103,6 +2107,9 @@ class CharacterModel:
                     part.texture_id = ids.get(part.texture_id, part.texture_id)
                 self.parts = builder.parts
                 self.textures = [ids.get(t, t) for t in builder.textures]
+                took = time.perf_counter() - getattr(self, "_worker_started", time.perf_counter())
+                print(f"[CharacterModel] Personagem pronto em {took:.1f}s"
+                      + (" (lido do cache)." if getattr(self, "_worker_cached", False) else " (montado)."))
                 self.white_tex_id = ids.get(builder.white_tex_id, builder.white_tex_id)
                 self.cage_debug_mesh = builder.cage_debug_mesh
                 self._garment_buffers = builder._garment_buffers
@@ -2128,11 +2135,31 @@ class CharacterModel:
             DEFERRED.on = True
             _DEFERRED_TEXTURES.images = {}
             try:
-                builder._build()
-                self._worker_result = (builder, _DEFERRED_TEXTURES.images, None)
+                # The same character built before (same choices, files and code) is read back from disk instead.
+                from . import build_cache
+                try:
+                    key = build_cache.build_key(builder)
+                except Exception as exc:
+                    print(f"[CharacterModel] Cache do personagem desligado: {exc}")
+                    key = None
+                images = build_cache.load(builder, key) if key else None
+                self._worker_cached = images is not None
+                if images is None:
+                    builder._build()
+                    images = _DEFERRED_TEXTURES.images
+                    if key:
+                        build_cache.save(builder, images, key)
+                try:  # bind it here once: the bind on the main thread, when it is swapped in, finds the work done
+                    from .character_animation import CharacterAnimator
+                    CharacterAnimator(builder).warm_bind()
+                except Exception as exc:  # only a head start: the main thread binds it anyway
+                    print(f"[CharacterModel] Pré-cálculo da animação falhou: {exc}")
+                self._worker_result = (builder, images, None)
             except Exception as exc:  # the old model stays on screen
                 self._worker_result = (None, {}, exc)
 
+        self._worker_started = time.perf_counter()
+        self._worker_cached = False
         self._worker = threading.Thread(target=run, daemon=True, name="CharacterBuild")
         self._worker.start()
 

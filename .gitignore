@@ -165,3 +165,12 @@ assets/models/clothing/reference_cage_*.mesh
 
 # Contexto local de análise (DSH)
 .context-dsh/
+
+# Modelos e blockstates do Minecraft (arquivos da Mojang), só nesta máquina
+assets/minecraft_models/
+
+# Ladrilhos do baú recortados das texturas de entidade do jogo (arte da Mojang), só nesta máquina
+assets/textures/blocks/chest_*.png
+
+# Folha da fonte do Minecraft (arte da Mojang), só nesta máquina
+assets/fonts/

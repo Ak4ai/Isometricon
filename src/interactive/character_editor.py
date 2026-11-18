@@ -60,6 +60,8 @@ FOOTER_HEIGHT = 136
 PAD = 12
 CARD = (88, 112)   # a garment: picture and two lines of name
 TEXT_TILE = 34     # height of a named option (two to a row)
+ENTRY_TILE = 40    # height of a field of free text (one to a row)
+NPC_SECTION = "NPC"  # the tab of the NPC on the screen (only while one is made or edited)
 SWATCH = 32        # a colour (seven to a row)
 GAP = 8
 SWATCHES_PER_ROW = 7
@@ -120,9 +122,13 @@ class Option:
     slider: Optional[str] = None                  # an adjustment of body_shape, set from -100 to 100
     check: bool = False                           # drawn with a box that is ticked when selected
     picker: Optional[str] = None                  # a command that takes "#rrggbb": drawn as a picker of any colour
+    entry: Optional[str] = None                   # a field of free text: the command that takes what is typed
+    value: Optional[Callable[[], str]] = None     # what the field shows while nobody types in it
 
     @property
     def kind(self) -> str:
+        if self.entry is not None:
+            return "entry"
         if self.slider is not None:
             return "slider"
         if self.picker is not None:
@@ -261,12 +267,18 @@ class CharacterEditor:
         self.autosave = True  # closing the editor saves the character
         self.typing = False   # the field that adds a Roblox item has the keyboard
         self.entry = ""
+        self._entry_option: Optional[Option] = None  # the field of the grid being typed in (None: the Roblox one)
         self.clipboard: Callable[[], str] = lambda: ""
         self.make_thumbnails = create_gl  # pictures of new items are rendered by a process of their own
         self._thumbnails: Any = None
         self._pictured: set = set()
         self.is_open = False
         self.active = 0
+        self.bones_view: Optional[dict] = None  # os ossos do modelo na tela (a cena põe a cada quadro): xy, depth, parents
+        self.bone_hover: Optional[int] = None
+        self._bones_quad = None
+        self._bones_key: Any = None
+        self.walk_preview = False  # W liga e desliga o andar do personagem na tela
         self.scroll = 0
         self.hover: Optional[Tuple[str, Any]] = None
         self.message = ""
@@ -316,7 +328,8 @@ class CharacterEditor:
         self._overlay_key: Any = None
         self._ring_quad = None
         self._ring_size = 0
-        self.sections = self._make_sections()
+        self._base_sections = self._make_sections()
+        self.sections = list(self._base_sections)
 
     # ------------------------------------------------------------------ o que há para escolher
     @property
@@ -337,6 +350,25 @@ class CharacterEditor:
             options.append(Option(item.name, f"/skin {command} {item.asset_id}", image=item.image or "",
                                   selected=lambda m, s=slot, i=item.asset_id: _same(getattr(m, s, None), i)))
         return options
+
+    def _npc_groups(self) -> List[Group]:
+        """A aba NPC: o nome, o lado, o corpo, a ficha de combate e a fala do NPC que está na tela."""
+        from src.combat.bestiary import BESTIARY
+        spec = lambda: getattr(self.handler, "npc_editing", None) or {}
+        text = lambda key: lambda: str(spec().get(key, "") or "")
+        return [
+            Group("Nome", [Option("Nome", "", entry="/npc definir nome", value=text("nome"))]),
+            Group("Lado", [Option(label, f"/npc definir lado {side}", selected=lambda m, side=side: spec().get("lado") == side)
+                           for label, side in (("Amigável", "amigavel"), ("Hostil", "hostil"))]),
+            Group("Corpo", [Option(n.capitalize(), f"/skin corpo {n}",
+                                   selected=lambda m, v=BODIES[n]: _value(getattr(m, "body", "")) == _value(v))
+                            for n in ("feminino", "masculino")]),
+            Group("Ficha de combate (do bestiário)", [
+                Option(c.name, f"/npc definir molde {key}",
+                       selected=lambda m, key=key: spec().get("molde") == key)
+                for key, c in BESTIARY.items()]),
+            Group("Fala (o amigável diz ao conversar)", [Option("Fala", "", entry="/npc definir fala", value=text("fala"))]),
+        ]
 
     def _make_sections(self) -> List[Section]:
         custom = self._custom
@@ -536,7 +568,60 @@ class CharacterEditor:
             return [Group("Aparências prontas", [Option(n.replace("_", " ").capitalize(), f"/skin preset {n}") for n in PRESETS]),
                     Group("Recomeçar", [Option("Padrão", "/skin reset"), Option("Tirar roupas", "/skin tirar tudo")])]
 
-        return [
+        def custom_mode() -> bool:
+            return bool(getattr(self.handler, "custom_mode", False))
+
+        def custom_model() -> List[Group]:
+            """A primeira aba: personagem montado ou um modelo .glb personalizado (/skin modelo)."""
+            from src.clothing import custom_model_store as store
+            from src.clothing.procedural import PROFILE_NAMES
+            handler = self.handler
+
+            def choice(key: str):
+                current = getattr(handler, "model_choice", None)
+                return None if current is None else current.get(key)
+
+            groups = [Group("Que corpo usar", [
+                Option("Personagem", "/skin modelo off", selected=lambda m: not custom_mode()),
+                Option("Personalizado", "/skin modelo modo", selected=lambda m: custom_mode())])]
+            if not custom_mode():
+                return groups
+            names = store.list_models(getattr(handler, "custom_model_dir", None) or store.MODELS_DIR)
+            models = [Option("Importar modelo (.glb)...", "/skin modelo importar")]
+            models += [Option(n, f"/skin modelo {n}", selected=lambda m, n=n: choice("arquivo") == n) for n in names]
+            groups.append(Group("Modelo", models))
+            if getattr(handler, "model_choice", None) is None:
+                return groups
+            groups.append(Group("Como anda", [Option("Automático", "/skin modelo perfil auto",
+                                                     selected=lambda m: choice("perfil") is None)] +
+                                [Option(p.capitalize(), f"/skin modelo perfil {p}",
+                                        selected=lambda m, p=p: choice("perfil") == p) for p in PROFILE_NAMES + ("clipes",)]))
+            groups.append(Group("Altura (m)", [Option(f"{h:g}", f"/skin modelo altura {h}",
+                                                      selected=lambda m, h=h: abs((choice("altura") or 0) - h) < 1e-6)
+                                               for h in (0.6, 1.0, 1.5, 1.8, 2.2, 3.0)]))
+            groups.append(Group("Malha", [Option("Cortar o que estica ao andar", "/skin modelo reparar", check=True,
+                                                 selected=lambda m: bool(choice("reparar") is not False))]))
+            groups.append(Group("Gira o modelo (se ele olha para o lado errado)", [
+                Option(f"{n * 90}°", f"/skin modelo giro {n}", selected=lambda m, n=n: choice("giro") == n)
+                for n in range(4)]))
+            if handler.bone_labels() is not None:
+                from src.clothing.role_editor import LABELS, TITLES
+                groups.append(Group("Ossos na tela: clique num osso para dar o papel", [
+                    Option("Mostrar os ossos", "/skin modelo ossos", check=True, selected=lambda m: handler.bone_view)] +
+                    [Option(TITLES[l], f"/skin modelo osso {l}", selected=lambda m, l=l: handler.bone_brush == l)
+                     for l in LABELS] +
+                    [Option("Voltar ao automático", "/skin modelo papeis off")]))
+            return groups
+
+        def unless_custom(groups: Callable[[], List[Group]]) -> Callable[[], List[Group]]:
+            """O corpo montado não se ajusta enquanto um modelo personalizado está em uso."""
+            def wrapped() -> List[Group]:
+                if custom_mode():
+                    return [Group("O modelo personalizado está em uso: volte a 'Personagem' na aba Modelo para vestir.", [])]
+                return groups()
+            return wrapped
+
+        sections = [
             Section("Corpo", body),
             Section("Ajustes", shape),
             Section("Olhos", eyes),
@@ -556,6 +641,7 @@ class CharacterEditor:
             Section(FINE_SECTION, fine),
             Section("Prontos", looks),
         ]
+        return [Section("Modelo", custom_model)] + [Section(s.title, unless_custom(s.groups)) for s in sections]
 
     @property
     def focus(self) -> str:
@@ -616,9 +702,16 @@ class CharacterEditor:
 
     # ------------------------------------------------------------------ abrir, fechar, girar
     def open(self) -> None:
+        # a aba NPC vem primeiro enquanto a tela veste um NPC (o jogo põe a ficha dele em handler.npc_editing)
+        npc = getattr(self.handler, "npc_editing", None) is not None
+        sections = ([Section(NPC_SECTION, self._npc_groups)] if npc else []) + self._base_sections
+        if npc or [x.title for x in sections] != [x.title for x in self.sections]:
+            self.sections, self.active, self.scroll, self._groups = sections, 0, 0, None
+        self.typing, self.entry, self._entry_option = False, "", None
         self.refresh_catalog()
         self.is_open = True
-        self.message = "Arraste para girar e inclinar a vista. Esc fecha."
+        self.message = ("Dê nome, lado e ficha ao NPC aqui; monte a aparência nas outras abas. Esc fecha."
+                        if npc else "Arraste para girar e inclinar a vista. W liga o andar. Esc fecha.")
         self._was_spinning = True
         self.turntable["active"] = True
         self.dirty = True
@@ -628,6 +721,8 @@ class CharacterEditor:
         if self.is_open and self.autosave and self.model is not None and hasattr(self.handler, "save"):
             self.handler.save()
         self.is_open = False
+        self.bones_view = self.bone_hover = None
+        self.walk_preview = False
         self._dragging = False
         self.hover = None
         self._stroke = None
@@ -694,9 +789,11 @@ class CharacterEditor:
         """As áreas clicáveis, em pixels da janela: ('tab', índice), ('option', Option), ('button', nome)."""
         self._size = (width, height)
         hits: List[Tuple[Rect, str, Any]] = []
+        # as abas encolhem quando são tantas que não cabem na altura da janela
+        tab_height = min(TAB_HEIGHT, (height - 2 * PAD) // max(len(self.sections), 1) - 4)
         for index in range(len(self.sections)):
-            y = PAD + index * (TAB_HEIGHT + 4)
-            hits.append(((6, y, TAB_WIDTH - 6, y + TAB_HEIGHT), "tab", index))
+            y = PAD + index * (tab_height + 4)
+            hits.append(((6, y, TAB_WIDTH - 6, y + tab_height), "tab", index))
         left, right = TAB_WIDTH + PAD, PANEL_WIDTH - PAD
         top, bottom = PAD, height - FOOTER_HEIGHT
         for kind, (x0, y0, x1, y1), payload in self._tiles():
@@ -728,6 +825,8 @@ class CharacterEditor:
                 columns, (w, h) = 1, (right - left, SLIDER_TILE)
             elif kind == "picker":
                 columns, (w, h) = 1, (right - left, PICKER_TILE)
+            elif kind == "entry":
+                columns, (w, h) = 1, (right - left, ENTRY_TILE)
             else:
                 columns, (w, h) = 2, ((right - left - GAP) // 2, TEXT_TILE)
             for k, option in enumerate(group.options):
@@ -794,9 +893,16 @@ class CharacterEditor:
             return self.over_panel(x)
         if not self.over_panel(x):
             if self.typing:
-                self.typing, self.dirty = False, True
+                if self._entry_option is not None:
+                    self.entry = ""
+                self.typing, self._entry_option, self.dirty = False, None, True
             if shift:
                 return False  # Shift + arrastar continua sendo o pan da câmera
+            bone = self.bone_under(x, y)
+            if bone is not None:   # um osso do modelo: o clique dá a ele o papel escolhido
+                _, self.message, _ = self.handler.set_bone_role(bone, self.handler.bone_brush)
+                self.dirty = True
+                return True
             if self.brushing:
                 # Ctrl paints the opposite, as in Blender: showing with the brush that hides, and back.
                 opposite = {"esconder": "mostrar", "mostrar": "esconder"}
@@ -808,13 +914,18 @@ class CharacterEditor:
             self._was_spinning = bool(self.turntable.get("active"))
             return True
         found = self.hit(x, y)
-        typing = found is not None and found[1] == "field"
-        if typing != self.typing:
-            self.typing, self.dirty = typing, True
+        field = found[2] if found is not None and found[1] == "option" and found[2].entry is not None else None
+        typing = field is not None or (found is not None and found[1] == "field")
+        if typing != self.typing or field is not self._entry_option:
+            if field is not None and field is not self._entry_option:
+                self.entry = field.value() if field.value else ""   # o campo começa com o que já está lá
+            elif field is None and self._entry_option is not None:
+                self.entry = ""
+            self.typing, self._entry_option, self.dirty = typing, field, True
         if found is None:
             return True
         _, kind, payload = found
-        if kind == "field":
+        if kind == "field" or field is not None:
             pass
         elif kind == "tab":
             self.select_section(payload)
@@ -952,12 +1063,14 @@ class CharacterEditor:
             return
         _, feedback, _ = self.handler.execute(option.command)
         self.message = feedback.split("\n")[0] if feedback else ""
+        self._groups = None   # o comando pode ter mudado o que a aba oferece (um modelo importado, por exemplo)
         self.dirty = True
 
     def handle_cursor(self, x: float, y: float) -> None:
         if not self.is_open:
             return
         self.cursor = (x, y)
+        self.bone_hover = self.bone_under(x, y)
         if self._stroke is not None:
             self._paint(x, y)
             return
@@ -997,14 +1110,18 @@ class CharacterEditor:
         return True
 
     def submit(self) -> None:
-        """Baixa e veste o item do campo (id ou link do catálogo do Roblox)."""
-        text = self.entry.strip()
-        self.entry, self.typing, self.dirty = "", False, True
-        if text:
+        """Envia o campo em uso: um da grade (o nome do NPC, por exemplo) roda o comando dele com o texto; o de
+        baixo baixa e veste o item (id ou link do catálogo do Roblox)."""
+        text, field = self.entry.strip(), self._entry_option
+        self.entry, self.typing, self._entry_option, self.dirty = "", False, None, True
+        if field is not None:
+            if text:
+                self.choose(Option(field.label, f"{field.entry} {text}"))
+        elif text:
             self.choose(Option(text, f"/skin vestir {text}"))
 
     def handle_key(self, key: int, action: int, mods: int = 0) -> bool:
-        """Esc fecha; Espaço liga ou desliga o giro. Com o campo de adicionar item em uso, o
+        """Esc fecha; Espaço liga ou desliga o giro; W, o andar. Com o campo de adicionar item em uso, o
         teclado é dele: Enter envia, Esc desiste, Ctrl+V cola."""
         if not self.is_open:
             return False
@@ -1013,7 +1130,7 @@ class CharacterEditor:
                 if key in (257, 335):   # Enter
                     self.submit()
                 elif key == 256:        # Esc
-                    self.entry, self.typing = "", False
+                    self.entry, self.typing, self._entry_option = "", False, None
                 elif key == 259:        # Backspace
                     self.entry = self.entry[:-1]
                 elif key == 86 and mods & 2:  # Ctrl+V
@@ -1027,6 +1144,10 @@ class CharacterEditor:
             return False
         if key == 256:  # GLFW_KEY_ESCAPE
             self.close()
+            return True
+        if key == 87:   # GLFW_KEY_W: liga ou desliga a animação de andar na tela
+            self.walk_preview = not self.walk_preview
+            self.dirty = True
             return True
         if key == 32:   # GLFW_KEY_SPACE
             self.turntable["active"] = self._was_spinning = not self.turntable.get("active")
@@ -1094,6 +1215,19 @@ class CharacterEditor:
                 pen.text((x0, y0 + 4), payload.upper(), font=small, fill=MUTED)
                 continue
             draw_rect = (x0, y0, x1 - 1, y1 - 1)
+            if payload.kind == "entry":
+                editing = self.typing and self._entry_option is payload
+                hovered = self.hover == ("option", id(payload))
+                pen.rounded_rectangle(draw_rect, 6, fill=(14, 15, 19, 255),
+                                      outline=ACCENT if editing else (MUTED if hovered else TILE_HOVER),
+                                      width=2 if editing else 1)
+                shown = (self.entry + "|") if editing else (payload.value() if payload.value else "")
+                room = x1 - x0 - 20
+                while shown and pen.textlength(shown, font=text) > room:
+                    shown = shown[1:] if editing else shown[:-2] + "…"
+                pen.text((x0 + 10, (y0 + y1) // 2), shown or "Clique e escreva",
+                         font=text, fill=TEXT if shown else MUTED, anchor="lm")
+                continue
             pen.rounded_rectangle(draw_rect, 6, fill=TILE_HOVER if self.hover == ("option", id(payload)) else TILE)
             if payload.kind == "slider":
                 value = self.slider_value(payload) if self.model is not None else 0
@@ -1161,8 +1295,9 @@ class CharacterEditor:
             if kind == "option":
                 continue
             if kind == "field":
-                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if self.typing else TILE_HOVER)
-                shown = self.entry + ("|" if self.typing else "")
+                mine = self.typing and self._entry_option is None
+                draw.rounded_rectangle(rect, 6, fill=(14, 15, 19, 255), outline=ACCENT if mine else TILE_HOVER)
+                shown = (self.entry + "|") if mine else ""
                 while shown and draw.textlength(shown, font=small) > x1 - x0 - 16:
                     shown = shown[1:]
                 draw.text((x0 + 8, (y0 + y1) // 2), shown or "Adicionar do Roblox: cole o id ou o link",
@@ -1207,6 +1342,7 @@ class CharacterEditor:
             self.dirty = False
         self._quad.draw(0, 0, width, height)
         self._draw_brush(width, height)
+        self._draw_bones(width, height)
         self._draw_history(width, height)
 
     def history_image(self, width: int, height: int) -> Any:
@@ -1261,6 +1397,38 @@ class CharacterEditor:
             self._history_key = key
         self._history_quad.draw(rects["desfazer"][0], rects["desfazer"][1], width, height)
 
+    @property
+    def bones_active(self) -> bool:
+        """Os ossos do modelo estão na tela e um clique neles muda o papel: aba Modelo, modelo com esqueleto."""
+        return (self.is_open and self.bones_view is not None and getattr(self.handler, "bone_view", False)
+                and self.sections[self.active].title == "Modelo")
+
+    def _draw_bones(self, width: int, height: int) -> None:
+        """Os ossos do modelo sobre ele, na cor do papel de cada um (aba Modelo)."""
+        if not self.bones_active:
+            return
+        from src.clothing import role_editor
+        from src.rendering.hud_quad import HudQuad
+        labels = self.handler.bone_labels()
+        if labels is None:
+            return
+        view = self.bones_view
+        x0, y0, x1, y1 = self.scene_rect(width, height)
+        key = (x0, y0, x1, y1, np.round(view["xy"]).astype(np.int32).tobytes(), tuple(labels), self.bone_hover)
+        if self._bones_quad is None:
+            self._bones_quad = HudQuad()
+        if key != self._bones_key:
+            self._bones_quad.set_image(role_editor.overlay_image(
+                (x1 - x0, y1 - y0), (x0, y0), view["xy"], view["parents"], labels, self.bone_hover, view["names"]))
+            self._bones_key = key
+        self._bones_quad.draw(x0, y0, width, height)
+
+    def bone_under(self, x: float, y: float) -> Optional[int]:
+        if not self.bones_active or self.over_panel(x):
+            return None
+        from src.clothing import role_editor
+        return role_editor.bone_at(self.bones_view["xy"], self.bones_view["depth"], x, y)
+
     def _draw_brush(self, width: int, height: int) -> None:
         """Os pontos da cage sobre o personagem (o que cada um é) e o cursor do pincel."""
         if not self.brushing or self.overlay is None:
@@ -1285,7 +1453,7 @@ class CharacterEditor:
             self._ring_quad.draw(self.cursor[0] - half, self.cursor[1] - half, width, height)
 
     def delete(self) -> None:
-        for name in ("_overlay_quad", "_ring_quad", "_history_quad", "_legend_quad"):
+        for name in ("_overlay_quad", "_ring_quad", "_history_quad", "_legend_quad", "_bones_quad"):
             if getattr(self, name) is not None:
                 getattr(self, name).delete()
                 setattr(self, name, None)
