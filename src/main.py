@@ -670,6 +670,7 @@ def main() -> None:
     fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
     if master_panel is not None:
         master_panel.on_recover = fog_war.explored.clear
+    cloud_fog = None   # a névoa de guerra em nuvens de blocos (criada no terreno, com o GL pronto)
     if terrain_demo:
         skin_command_handler.combat = combat
         skin_command_handler.master_panel = master_panel
@@ -937,6 +938,8 @@ def main() -> None:
         combat.load_npcs(world.get('npcs'))
         ambience.load(world.get('ambiente'))
         fog_war.explored.load(world.get('nevoa_explorada'))
+        if cloud_fog is not None:
+            cloud_fog.field.reset()
         menus.world = world
 
 
@@ -1031,6 +1034,8 @@ def main() -> None:
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
             combat.clear()                     # os inimigos ficavam no relevo antigo
             fog_war.explored.clear()           # o explorado era de outro relevo
+            if cloud_fog is not None:
+                cloud_fog.field.reset()
             # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
             from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
             saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else []
@@ -1829,7 +1834,12 @@ def main() -> None:
                 shadow_renderer.sun_direction = sun_now
             ambience.apply(shader, (model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3])
             fog_war.update(ambience.fog_war, float(player_token.position[0]), float(player_token.position[2]))
-            fog_war_args = (ambience.fog_war, np.linalg.inv(np.asarray(model, dtype=np.float64)), ambience.war_color(),
+            # na superfície, a névoa de guerra são nuvens de blocos (cloud_fog); numa caverna, a névoa do shader
+            clouds_on = bool(ambience.fog_war) and not underground_mode
+            if clouds_on and cloud_fog is None:
+                from src.rendering.cloud_fog import CloudFog
+                cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored)
+            fog_war_args = (0 if clouds_on else ambience.fog_war, np.linalg.inv(np.asarray(model, dtype=np.float64)), ambience.war_color(),
                             (float(player_token.position[0]), float(player_token.position[2])))
             fog_war.apply(shader, *fog_war_args)
             grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
@@ -2010,6 +2020,12 @@ def main() -> None:
                 gl.glDepthMask(gl.GL_TRUE)
                 mark("water_pass")
             gl.glDisable(gl.GL_BLEND)
+            if cloud_fog is not None and (clouds_on or cloud_fog.field.cover):
+                # 2d. A névoa de guerra: a manta de nuvens sobre o que ninguém viu (esconde também quem está debaixo)
+                cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
+                                 float(player_token.position[2]), dt)
+                cloud_fog.render(projection, view, model, ambience.tint(), window.time)
+                shader.use()
             shader.set_int("u_WaterPass", 0)
             shader.set_float("u_SightActive", 0.0)
             room_renderer.disable(shader)
@@ -2271,6 +2287,8 @@ def main() -> None:
     if master_panel is not None:
         master_panel.delete()
     fog_war.delete()
+    if cloud_fog is not None:
+        cloud_fog.delete()
     if selection_box is not None:
         selection_box.delete()
     fps_overlay.delete()
