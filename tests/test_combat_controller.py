@@ -309,3 +309,37 @@ def test_submenus_dim_after_the_action_is_used():
     assert c.blocked(None) is None
     c.choose("4")
     assert "já foi usada" in c.blocked(None)
+
+
+# ---------------------------------------------------------------- mouse em cima de um inimigo
+
+def test_hover_tells_what_a_click_would_do():
+    c = controller(FixedDice([20, 1]))
+    zombie = c.spawn("zumbi", 1, ORIGIN)[0]
+    assert c.hover_hint() is None
+    c.set_hover(zombie)
+    c.player_position = list(zombie.shown)
+    assert c.hover_hint()[0] == "clique: ataque de surpresa"
+    c.player_position = [zombie.shown[0] + 50.0, zombie.shown[1], zombie.shown[2]]
+    assert c.hover_hint()[0] == "longe demais para atacar"
+    c.click_enemy(zombie, zombie.shown)
+    c.player_position = list(zombie.shown)
+    assert c.is_player_turn and c.session.target_id == zombie.id
+    text = c.hover_hint()[0]
+    assert text.startswith("clique: atacar (") and text.endswith("% de acerto)")
+    c.set_hover(None)
+    assert c.hovered() is None and c.hover_hint() is None
+
+
+def test_hover_tip_floats_over_the_enemy_even_outside_combat():
+    c = controller()
+    zombie = c.spawn("zumbi", 1, ORIGIN)[0]
+    c.player_position = list(zombie.shown)
+    c.set_hover(zombie)
+    mvp = np.eye(4) * 0.05
+    mvp[3, 3] = 1.0
+    items = {key: (image, x, y) for key, image, x, y, _ in compose(c, 800, 600, mvp, {})}
+    tip, x, y = items["dica"]
+    assert tip.width > 0 and 0 <= x <= 800 - tip.width and y >= 0
+    c.clear()
+    assert c.hover is None

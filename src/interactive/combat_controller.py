@@ -164,6 +164,7 @@ class CombatController:
         self.player_position: Optional[List[float]] = None
         self.trail: List[List[float]] = []   # por onde o personagem passou na vez dele (some na próxima vez)
         self._trail_turn = None
+        self.hover: Optional[str] = None     # o inimigo sob o mouse (id), para o anel, a dica e o cursor de ataque
         self._serial = 0
 
     # ------------------------------------------------------------------ consultas
@@ -229,12 +230,43 @@ class CombatController:
         """Tira todos os inimigos (e encerra um combate sem resultado)."""
         count = len(self.enemies)
         self.enemies.clear()
+        self.hover = None
         self.trail = []
         self._trail_turn = None
         self.session = None
         self.player = None
         self.menu = "main"
         return count
+
+    def set_hover(self, enemy: Optional[EnemyToken]) -> None:
+        """Marca o inimigo sob o mouse (None: nenhum)."""
+        self.hover = enemy.id if enemy is not None and not enemy.fallen else None
+
+    def hovered(self) -> Optional[EnemyToken]:
+        token = self.token(self.hover) if self.hover else None
+        return token if token is not None and not token.fallen else None
+
+    def hover_hint(self) -> Optional[Tuple[str, Tuple[int, int, int]]]:
+        """O que um clique no inimigo sob o mouse faria agora (texto e cor), ou None sem inimigo sob o mouse."""
+        enemy = self.hovered()
+        if enemy is None:
+            return None
+        if self.session is None:
+            if self.player_position is not None and distance(enemy.shown, self.player_position) > ENGAGE_REACH:
+                return "longe demais para atacar", (170, 170, 170)
+            return "clique: ataque de surpresa", (255, 200, 60)
+        if not self.session.active or self.session.get(enemy.id) is None:
+            return None
+        if self.session.target_id != enemy.id:
+            return "clique: mirar", (235, 235, 235)
+        if not self.is_player_turn:
+            return "espere a sua vez", (170, 170, 170)
+        reason = self.session.block_reason("atacar", enemy.id)
+        if reason:
+            return reason, (170, 170, 170)
+        from src.combat.ai import hit_chance
+        chance = round(100 * hit_chance(self.session.current, enemy.combatant))
+        return f"clique: atacar ({chance}% de acerto)", (255, 110, 110)
 
     def pick(self, origin: Sequence[float], direction: Sequence[float]) -> Optional[EnemyToken]:
         """O inimigo de pé mais perto ao longo do raio do mouse."""

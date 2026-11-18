@@ -214,6 +214,31 @@ def _menu_key(controller: CombatController):
                                          round(s.current.distance_to(target), 1)))
 
 
+def hover_image(controller: CombatController) -> Optional[Image.Image]:
+    """A dica do inimigo sob o mouse: nome, vida e CA, e o que o clique faria."""
+    enemy = controller.hovered()
+    hint = controller.hover_hint()
+    if enemy is None or hint is None:
+        return None
+    c = enemy.combatant
+    targeted = controller.session is not None and controller.session.target_id == c.id
+    ratio = c.hp / c.max_hp if c.max_hp else 0
+    rows = [row_image([(c.name, RED if targeted else WHITE)], scale=SCALE),
+            row_image([(f"{int(c.hp)}/{int(c.max_hp)} vida", hp_color(ratio)), (f"   CA {c.armor_class}", WHITE)],
+                      scale=1),
+            row_image([hint], scale=1)]
+    return panel_image(rows, pad=6, gap=3, border=GOLD)
+
+
+def _hover_key(controller: CombatController):
+    enemy = controller.hovered()
+    if enemy is None:
+        return None
+    c = enemy.combatant
+    return (c.id, int(c.hp), c.armor_class, controller.hover_hint(),
+            controller.session is not None and controller.session.target_id == c.id)
+
+
 def compose(controller: CombatController, width: int, height: int, mvp: Optional[np.ndarray] = None,
             cache: Optional[dict] = None) -> List[DrawItem]:
     """O que desenhar neste quadro: (chave, imagem, x, y, opacidade). ``cache`` guarda as imagens entre quadros."""
@@ -245,6 +270,18 @@ def compose(controller: CombatController, width: int, height: int, mvp: Optional
         key = (c.name, int(c.hp), c.max_hp, c.id == session.target_id, c is session.current)
         image = _cached(cache, f"cabeca:{enemy.id}", key, lambda: overhead_image(*key))
         items.append((f"cabeca:{enemy.id}", image, spot[0] - image.width / 2, spot[1] - image.height, 1.0))
+    hovered = controller.hovered()
+    hover_key = _hover_key(controller)
+    if hovered is not None and hover_key[3] is not None:
+        # a dica fica em cima da cabeça (acima da barra de vida, quando há luta)
+        in_fight = session is not None and session.get(hovered.id) is not None
+        lift = hovered.creature.height + (0.35 if in_fight else 0.2)
+        spot = project((hovered.shown[0], hovered.shown[1] + lift, hovered.shown[2]), mvp, width, height)
+        if spot is not None:
+            tip = _cached(cache, "dica", hover_key, lambda: hover_image(controller))
+            above = 30 if in_fight else 4
+            x = min(max(MARGIN, spot[0] - tip.width / 2), width - tip.width - MARGIN)
+            items.append(("dica", tip, x, max(MARGIN, spot[1] - above - tip.height), 1.0))
     for i, floater in enumerate(controller.floaters):
         if floater.target == PLAYER_ID:
             base, lift = controller.player_position, 2.1
@@ -272,7 +309,8 @@ class CombatHud:
 
     def render(self, controller: CombatController, width: int, height: int, mvp: Optional[np.ndarray]) -> None:
         self.menu_left = None
-        if not controller.in_combat and controller.banner is None and not controller.floaters:
+        if (not controller.in_combat and controller.banner is None and not controller.floaters
+                and controller.hover is None):
             self._prune(set())
             return
         from src.rendering.hud_quad import HudQuad

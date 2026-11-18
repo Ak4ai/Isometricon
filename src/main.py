@@ -1529,6 +1529,7 @@ def main() -> None:
         picking_state.update(aim=None, door=None, door_in_reach=False)
         if not cursor_in_use():
             picking_state["hover_hit"] = None
+            combat.set_hover(None)
         if terrain_demo and not editing and not pan_state["active"] and cursor_in_use():
             mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
             mouse_ray = screen_to_world_ray(
@@ -1548,9 +1549,11 @@ def main() -> None:
             hovered_door = None if hit is None else door_at(schematic_tool.layer.structures, hit.block)
             picking_state.update(aim=aim_point(hit, mouse_ray, float(player_token.position[1])), door=hovered_door,
                                  door_in_reach=door_in_reach(hovered_door, player_token.position))
+            # o inimigo sob o mouse ganha anel, dica e o cursor de ataque
+            combat.set_hover(combat.pick(mouse_ray.origin, mouse_ray.direction))
             if picking_state["click_pending"]:
                 # um clique num inimigo começa a luta (de surpresa), ou mira e ataca nela
-                clicked_enemy = combat.pick(mouse_ray.origin, mouse_ray.direction)
+                clicked_enemy = combat.hovered()
                 if clicked_enemy is not None:
                     combat.click_enemy(clicked_enemy, player_token.position)
                     picking_state["click_pending"] = False
@@ -1892,6 +1895,9 @@ def main() -> None:
             from src.interactive.context_cursor import block_name_at, classify, highlight_box
             hover_hit = picking_state["hover_hit"]
             cursor_mode = classify(hover_hit, picking_state["door"])
+            if combat.hover is not None:          # em cima de um inimigo: o cursor de ataque, sem destacar o bloco
+                from src.interactive.context_cursor import CursorMode
+                cursor_mode, hover_hit = CursorMode.ATTACK, None
             if hover_hit is not None:
                 hx, hy, hz = hover_hit.block
                 highlight_renderer.render(

@@ -77,6 +77,7 @@ def ring_vertices(radius: float, thickness: float, color: Tuple[float, float, fl
     return np.array(v, dtype=np.float32), np.array(idx, dtype=np.uint32)
 
 
+HOVER_COLOR = (1.0, 0.95, 0.85)   # o anel do inimigo sob o mouse
 TRAIL_COLOR = (0.35, 0.85, 1.0)
 TRAIL_SMALL, TRAIL_BIG = 0.07, 0.15    # raio do ponto mais antigo e do mais novo do rastro
 
@@ -150,6 +151,10 @@ class EnemyTokenRenderer:
             sink = enemy.creature.height * min(1.0, enemy.fallen / FALL_SECONDS) if enemy.fallen else 0.0
             shader.set_mat4("u_Model", model @ token_matrix(enemy.shown, enemy.yaw, sink))
             self._mesh(enemy.creature, enemy.flash > 0.0 and int(enemy.flash * 20) % 2 == 0).draw()
+            if controller.hover == enemy.id and not enemy.fallen:   # o mouse em cima: um anel claro mais largo
+                shader.set_mat4("u_Model", model @ mat4_translate(enemy.shown[0], enemy.shown[1] + 0.025,
+                                                                  enemy.shown[2]))
+                self._ring(0.7 * max(1.0, enemy.creature.width / 0.6), "hover", HOVER_COLOR, 0.06).draw()
             if session is None or enemy.fallen:
                 continue
             ring = None
