@@ -526,6 +526,8 @@ def main() -> None:
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
+        from src.rendering.cast_shadow import CharacterShadowMap
+        character_shadows = CharacterShadowMap()   # a sombra do personagem e dos NPCs em qualquer face de bloco
         # a cena do jogo num framebuffer próprio: MSAA, escala de resolução e FXAA mudam na hora (Configurações)
         from src.rendering.scene_target import SceneTarget
         scene_target = SceneTarget()
@@ -584,6 +586,7 @@ def main() -> None:
         world_manager = None
         schematic_tool = None
         room_tracker = room_renderer = shadow_renderer = scene_target = None
+        character_shadows = None
         interact_prompt = None
         context_cursor = None
         player_token = None
@@ -597,6 +600,7 @@ def main() -> None:
         world_manager = None
         schematic_tool = None
         room_tracker = room_renderer = shadow_renderer = scene_target = None
+        character_shadows = None
         interact_prompt = None
         context_cursor = None
         player_token = None
@@ -1782,6 +1786,24 @@ def main() -> None:
             shader.set_bool("u_WaterMode", player_token.in_water)
             shader.set_int("u_CutawayPass", 0)
 
+            # 0. A sombra dos personagens: eles vistos do sol num mapa de profundidade que o terreno lê a seguir
+            if character_shadows is not None:
+                shadow_casters = []
+                if shadow_renderer.enabled and not character_editor.is_open:
+                    gl.glActiveTexture(gl.GL_TEXTURE0)
+                    gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
+                    shader.set_int("u_TextureAtlas", 0)
+                    shader.set_bool("u_WorldStyle", False)
+                    shadow_casters = [lambda: player_token.draw(
+                        shader=shader, base_model=model @ player_token.get_model_matrix())]
+                    shadow_casters += npc_models.casters(shader, combat, model)
+                feet_drawn = model @ np.array([float(v) for v in player_token.position] + [1.0])
+                character_shadows.strength = shadow_renderer.strength
+                character_shadows.render(shader, feet_drawn[:3], shadow_renderer.sun_direction, shadow_casters)
+                shader.set_mat4("u_Projection", projection)
+                shader.set_mat4("u_View", view)
+                character_shadows.apply(shader)
+
             # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
@@ -2014,6 +2036,8 @@ def main() -> None:
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
             shader.set_int("u_TextureAtlas", 0)
+            if character_shadows is not None:
+                character_shadows.disable(shader)   # o personagem não lê a própria sombra
             player_token.draw(shader=shader, base_model=base_model)
             mark("player_draw")
             if npc_models.bodies:
@@ -2181,6 +2205,8 @@ def main() -> None:
         room_renderer.delete()
     if shadow_renderer is not None:
         shadow_renderer.delete()
+    if character_shadows is not None:
+        character_shadows.delete()
     if scene_target is not None:
         scene_target.delete()
     if map_editor is not None:

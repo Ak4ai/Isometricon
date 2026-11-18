@@ -79,6 +79,14 @@ Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um ch
 - Cada NPC tem o seu cache de montagem (`saves/cache/npc_<id>.pkl`), para não apagar o do personagem. Enquanto o
   corpo monta, a miniatura do bestiário aparece no lugar.
 
+## Sombra dos personagens
+
+O seu personagem e os NPCs projetam sombra do sol em qualquer face de bloco: chão, parede e degrau de descida
+(`src/rendering/cast_shadow.py`). A cada quadro eles são desenhados vistos do sol num mapa de profundidade em volta do
+jogador, e o shader do mundo compara cada pixel de bloco com ele. A borda é nítida; a opacidade cai com a distância
+até o que tapa: forte nos pés, clara na cabeça. A sombra só tira o sol que chega ao lugar e fica bem mais clara dentro
+de casa e em cavernas. Ela segue a força das sombras das configurações e some com elas desligadas.
+
 ## O que mudou em relação ao mod
 
 - Lutar, Golpe Pesado e Ataque Furtivo usam uma só resolução de golpe (no mod eram três cópias; o Golpe Pesado

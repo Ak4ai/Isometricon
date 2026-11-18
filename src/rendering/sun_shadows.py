@@ -95,6 +95,7 @@ class SunShadowRenderer:
 
     def __init__(self, strength: float = 1.0, sun_direction=(0.55, 0.26, 0.7)) -> None:
         self.enabled = True
+        self.sun_direction = tuple(float(v) for v in sun_direction)   # o u_LightDir do terreno (cast_shadow usa)
         # a subida mínima dos raios do sol (o u_LightDir do terreno, girado só em torno de y: a elevação não muda);
         # se o sol for outro, o shader só deixa de usar o atalho nos raios que sobem menos
         self.rise = cone_rise(sun_direction)

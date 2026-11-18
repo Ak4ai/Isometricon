@@ -500,6 +500,11 @@ bool storyCovers(vec3 cell)
     return !behindRoom(c) || overRoom(c.xz);
 }
 
+uniform bool u_CastShadow;       // a passada do mapa de sombra dos personagens: só a profundidade, vista do sol
+uniform sampler2D u_CharShadowMap;    // a profundidade dos personagens vistos do sol (cast_shadow.py)
+uniform mat4 u_CharShadowMatrix;      // do espaço desenhado para a textura do mapa
+uniform float u_CharShadowTexel;
+uniform float u_CharShadowStrength;   // 0 desligado
 uniform bool u_DepthOnly;        // pré-passada de profundidade: descarta como sempre e para antes da luz
 uniform bool u_KeepVisible;      // portas: nenhum corte de visão as remove
 
@@ -535,6 +540,31 @@ bool sightCarved()
     return (1.0 - keep) * u_SightActive > roomDither();
 }
 
+// O quanto de um personagem está entre este ponto (espaço desenhado) e o sol: 0 nada, 1 tudo. A borda é nítida (3x3
+// texels só para não serrilhar); a opacidade cai com a distância, ao longo do raio, até a parte do corpo que faz a
+// sombra: forte junto aos pés, esmaecendo para a cabeça.
+uniform float u_CharShadowDepth;      // a profundidade do mapa, em blocos (converte a diferença de profundidade)
+uniform float u_CharShadowLength;     // até onde, ao longo do raio, vai a sombra de um personagem (com o sol baixo, longe)
+float characterShadow(vec3 drawnPos, vec3 drawnNormal)
+{
+    vec4 p = u_CharShadowMatrix * vec4(drawnPos + drawnNormal * 0.04, 1.0);
+    vec3 c = p.xyz / p.w;
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThan(c, vec3(1.0))))
+        return 0.0;
+    float bias = 0.0006;
+    float hidden = 0.0, gap = 0.0;
+    for (int dx = -1; dx <= 1; dx++)
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            float d = texture(u_CharShadowMap, c.xy + vec2(dx, dy) * u_CharShadowTexel).r;
+            if (c.z - bias > d) { hidden += 1.0; gap += c.z - d; }
+        }
+    if (hidden < 0.5)
+        return 0.0;
+    float along = clamp(gap / hidden * u_CharShadowDepth / u_CharShadowLength, 0.0, 1.0);   // 0 nos pés, 1 na cabeça
+    return hidden / 9.0 * mix(1.0, 0.15, along);
+}
+
 void main()
 {
     vec4 texColor = texture(u_TextureAtlas, v_TexCoord);
@@ -543,6 +573,8 @@ void main()
     if (texColor.a < 0.1) {
         discard;
     }
+    if (u_CastShadow)
+        return;   // o mapa de sombra dos personagens guarda só a profundidade (o transparente já foi descartado)
     bool water = u_WaterPass > 0 && isWaterTexel(v_TexCoord);
     if ((u_WaterPass == 1 && water) || (u_WaterPass == 2 && !water)) {
         discard;
@@ -668,6 +700,13 @@ void main()
                     sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld, indoor);
                 }
             }
+        }
+        if (u_CharShadowStrength > 0.001 && dot(norm, lightDir) > 0.02)  // a sombra do personagem, em qualquer face
+        {
+            // ela só tira o sol que chega (sunVis): onde ele não chega não há o que tirar. Numa caverna ou dentro de
+            // casa ela fica bem mais clara, quase some: ali a luz é a do ambiente, não a do sol
+            float place = (u_UndergroundMode ? 0.15 : 1.0) * (1.0 - 0.8 * clamp(u_RoomActive, 0.0, 1.0));
+            sunVis *= 1.0 - u_CharShadowStrength * place * characterShadow(v_FragPos, norm);
         }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
         if (waterAbove > 0.0)

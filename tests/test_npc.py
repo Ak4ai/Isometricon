@@ -431,3 +431,17 @@ def test_custom_model_commands_go_to_the_npc_on_the_editor():
     assert not mine.deleted and h.player_token.custom_model is mine   # o do personagem fica
     h.model_target = None
     assert h.model_holder() is h.player_token
+
+
+def test_npc_casters_draw_each_ready_body_where_it_stands():
+    import numpy as np
+    c = controller()
+    choice = {"arquivo": "dragao.glb", "altura": 2.2, "giro": 0, "perfil": None}
+    foe = c.add_npc(hostile(modelo=choice), [8.0, 0.0, 0.0])
+    c.add_npc(friendly(personagem={"b": 1}), [-3.0, 0.0, 0.0])      # ainda montando: sem sombra
+    models = NpcModels(FakeModel, FakeAnimator, custom_factory=FakeCustom)
+    models.sync(c, 0.1)
+    casters = models.casters(None, c, np.eye(4))
+    assert len(casters) == 1
+    casters[0]()
+    assert np.allclose(models.bodies[foe.id].custom.drawn[-1][:3, 3], [8.0, 0.0, 0.0])

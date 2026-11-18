@@ -156,6 +156,17 @@ class NpcModels:
                 continue
             (body.custom or body.model).draw(shader, model @ npc_matrix(token.shown, token.yaw, token.fallen, fall_seconds))
 
+    def casters(self, shader: Any, controller: Any, model: np.ndarray, fall_seconds: float = 1.0) -> list:
+        """Um draw por NPC com corpo pronto, para o mapa de sombra dos personagens (ver ``cast_shadow``)."""
+        out = []
+        for token in controller.enemies:
+            body = self.bodies.get(token.id) if token.npc is not None else None
+            if body is None or body.loading:
+                continue
+            matrix = model @ npc_matrix(token.shown, token.yaw, token.fallen, fall_seconds)
+            out.append(lambda mesh=body.custom or body.model, matrix=matrix: mesh.draw(shader, matrix))
+        return out
+
     def delete(self) -> None:
         for body in self.bodies.values():
             body.delete()
