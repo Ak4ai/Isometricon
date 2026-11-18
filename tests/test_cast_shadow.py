@@ -41,3 +41,10 @@ def test_without_characters_nothing_is_drawn_and_the_shadow_is_off():
     shadows.render(shader, (0.0, 9.0, 0.0), SUN, [])
     shadows.apply(shader)
     assert shadows.fbo == 0 and shader.values["u_CharShadowStrength"] == 0.0
+
+
+def test_sombra_comprida_some_cedo():
+    from src.rendering.cast_shadow import FADE_MAX, TAIL, fade_profile
+    assert fade_profile(2.0) == (2.0, TAIL)          # sol alto: esmaece pelo corpo, fica um pouco na cabeça
+    fade, tail = fade_profile(9.0)                   # sol baixo: some antes de virar uma faixa
+    assert fade == FADE_MAX and tail == 0.0

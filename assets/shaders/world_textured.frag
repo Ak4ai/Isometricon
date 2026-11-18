@@ -544,7 +544,8 @@ bool sightCarved()
 // texels só para não serrilhar); a opacidade cai com a distância, ao longo do raio, até a parte do corpo que faz a
 // sombra: forte junto aos pés, esmaecendo para a cabeça.
 uniform float u_CharShadowDepth;      // a profundidade do mapa, em blocos (converte a diferença de profundidade)
-uniform float u_CharShadowLength;     // até onde, ao longo do raio, vai a sombra de um personagem (com o sol baixo, longe)
+uniform float u_CharShadowLength;     // até onde, ao longo do raio, a sombra esmaece (no máximo uns 4 blocos)
+uniform float u_CharShadowTail = 0.15; // a opacidade no fim do esmaecido (0 quando a sombra é comprida: some)
 float characterShadow(vec3 drawnPos, vec3 drawnNormal)
 {
     vec4 p = u_CharShadowMatrix * vec4(drawnPos + drawnNormal * 0.04, 1.0);
@@ -562,7 +563,7 @@ float characterShadow(vec3 drawnPos, vec3 drawnNormal)
     if (hidden < 0.5)
         return 0.0;
     float along = clamp(gap / hidden * u_CharShadowDepth / u_CharShadowLength, 0.0, 1.0);   // 0 nos pés, 1 na cabeça
-    return hidden / 9.0 * mix(1.0, 0.15, along);
+    return hidden / 9.0 * mix(1.0, u_CharShadowTail, smoothstep(0.0, 1.0, along));   // escuro junto aos pés, cai depois
 }
 
 // A ambientação do mestre (/mestre, src/rendering/ambience.py), no fim de tudo: um tom por cima (a luz da hora, a

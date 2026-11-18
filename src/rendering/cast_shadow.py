@@ -6,7 +6,8 @@ ortográfico em volta do jogador). Depois, ao iluminar o mundo, o shader leva ca
 compara: se um personagem está entre ele e o sol, o sol que chega ali cai (``u_CharShadow*`` no shader). Como a
 conta é feita no pixel do bloco, a sombra dobra no degrau e sobe na parede como a de um bloco faria.
 
-A borda é nítida; a opacidade cai com a distância até o que tapa (forte nos pés, clara na cabeça). Ela só tira o
+A borda é nítida; a opacidade cai com a distância até o que tapa (forte nos pés, clara na cabeça); com o sol
+baixo, comprida, ela some em ``FADE_MAX`` blocos em vez de virar uma faixa pelo chão. Ela só tira o
 sol que chega ao lugar e, numa caverna ou dentro de casa, fica bem mais clara.
 
 Tudo no espaço desenhado (o da matriz ``model`` da cena), onde já está o ``u_LightDir`` do terreno.
@@ -26,6 +27,9 @@ RADIUS = 24.0         # meia largura da área coberta, em blocos (um texel ~ 0,0
 DISTANCE = 48.0       # o quanto o "olho" do sol fica atrás do jogador
 DEPTH = 110.0         # a profundidade coberta a partir do olho
 STRENGTH = 1.0        # o quanto do sol a sombra de um personagem tira (vezes a força das sombras nas configurações)
+FADE_MAX = 4.0        # a sombra esmaece até sumir em no máximo esta distância ao longo do raio, em blocos: com o sol
+                      # baixo ela ficaria comprida demais (uma faixa pelo chão); assim, só a parte perto dos pés fica
+TAIL = 0.15           # a opacidade no fim do esmaecido de uma sombra curta (a comprida vai a 0)
 
 # do espaço de recorte [-1, 1] para as coordenadas da textura [0, 1]
 CLIP_TO_TEXTURE = np.array([[0.5, 0, 0, 0.5], [0, 0.5, 0, 0.5], [0, 0, 0.5, 0.5], [0, 0, 0, 1]], dtype=np.float32)
@@ -40,6 +44,14 @@ def sun_camera(center: Sequence[float], sun: Sequence[float]) -> np.ndarray:
         else np.array([0.0, 0.0, 1.0], dtype=np.float32)
     view = mat4_look_at(center + sun * DISTANCE, center, up)
     return mat4_ortho(-RADIUS, RADIUS, -RADIUS, RADIUS, 0.5, DEPTH) @ view
+
+
+def fade_profile(length: float) -> tuple:
+    """(até onde esmaece, opacidade no fim) para uma sombra de ``length`` blocos ao longo do raio: a curta esmaece
+    pelo corpo e fica a ``TAIL`` na cabeça; a comprida esmaece em ``FADE_MAX`` blocos e some."""
+    fade = min(float(length), FADE_MAX)
+    tail = TAIL * max(0.0, min(1.0, (FADE_MAX + 0.5 - float(length)) / 1.0))
+    return fade, tail
 
 
 class CharacterShadowMap:
@@ -124,7 +136,9 @@ class CharacterShadowMap:
         shader.set_mat4("u_CharShadowMatrix", self.matrix)
         shader.set_float("u_CharShadowTexel", 1.0 / SIZE)
         shader.set_float("u_CharShadowDepth", DEPTH - 0.5)   # a diferença de profundidade do mapa, em blocos
-        shader.set_float("u_CharShadowLength", self.length)
+        fade, tail = fade_profile(self.length)
+        shader.set_float("u_CharShadowLength", fade)
+        shader.set_float("u_CharShadowTail", tail)
         shader.set_float("u_CharShadowStrength", STRENGTH * max(0.0, min(1.0, self.strength)))
 
     @staticmethod
