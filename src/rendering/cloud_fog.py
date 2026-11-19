@@ -499,10 +499,18 @@ class CloudFog:
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glPolygonOffset(-1.0, -4.0)
         if full['count'] and soft:
-            # as fofas: uma passada só, que procura a superfície redonda e grava a profundidade dela (quase opaca)
+            # as fofas são translúcidas perto do aberto: 1. só a profundidade da superfície redonda; 2. a cor, só onde
+            # a profundidade é exatamente a gravada (GL_EQUAL), então quando duas caixas da malha acham a mesma
+            # superfície, uma só mistura e a nuvem não clareia em dobro
             gl.glBindVertexArray(full['vao'])
             self.shader.set_bool('u_Moving', False)
+            gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
             gl.glDrawArrays(gl.GL_TRIANGLES, 0, full['count'])
+            gl.glColorMask(gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE)
+            gl.glDepthFunc(gl.GL_EQUAL)
+            gl.glDepthMask(gl.GL_FALSE)
+            gl.glDrawArrays(gl.GL_TRIANGLES, 0, full['count'])
+            gl.glDepthFunc(gl.GL_LESS)
         elif full['count']:
             gl.glBindVertexArray(full['vao'])
             # 1. só a profundidade: a face da frente de cada ponto da manta

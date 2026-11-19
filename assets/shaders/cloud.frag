@@ -28,6 +28,7 @@ uniform mat4 u_MVP;
 
 const float EDGE_ALPHA = 0.42;
 const float CORE_ALPHA = 0.97;
+const float SOFT_EDGE_ALPHA = 0.38;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
@@ -177,7 +178,11 @@ void main() {
            + w.z * occlusion(hit + vec3(0.0, 0.0, sign(n.z) * 0.45));
     }
     color *= mix(vec3(1.0), vec3(0.72, 0.77, 0.88), ao);
-    // opaca, como blocos de nuvem (onde duas caixas da malha acham a mesma superfície, não clareia em dobro)
-    alpha = u_Moving ? alpha : 1.0;
+    // o gradiente de transparência: rala perto do aberto (onde o grupo está) e opaca para dentro da manta, pela
+    // distância até a beira no ponto achado
+    if (!u_Moving) {
+        float near = texture(u_Distance, cellUV(hit.xz)).r;
+        alpha = mix(SOFT_EDGE_ALPHA, 1.0, smoothstep(0.02, 0.7, near));
+    }
     FragColor = vec4(color, alpha);
 }
