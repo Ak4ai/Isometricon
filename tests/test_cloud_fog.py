@@ -98,3 +98,18 @@ def test_altura_da_nevoa_e_cobrir_objetos():
     assert lift[20 - ox, 20 - oz] == 6 - CLEARANCE         # longe, a altura do mestre
     steps = [lift[i - ox, 0 - oz] for i in range(3, 12)]
     assert steps == sorted(steps)                          # e desce em degraus até a beira, como uma pia
+
+
+def test_longe_do_aberto_o_topo_fica_plano():
+    bumpy = lambda x, z: 8 + ((x * 7 + z * 13) // 3) % 4      # um relevo cheio de montinhos
+    field = CloudField(bumpy)
+    field.update(REVEAL, 0.5, 0.5, 0.016)
+    full, bottom, top = field._full_grid()
+    shaped = field.shaped_top(full, top)
+    ox, oz = field.origin
+    far = shaped[20 - ox:30 - ox, 20 - oz:30 - oz]
+    near = shaped[3 - ox, -2 - oz:3 - oz]
+    assert (shaped >= top)[full].all()                       # nunca desce: continua cobrindo o relevo
+    assert len(set(far.ravel().tolist())) < len(set(top[20 - ox:30 - ox, 20 - oz:30 - oz].ravel().tolist())) or \
+        far.std() < top[20 - ox:30 - ox, 20 - oz:30 - oz].std()
+    assert (near == top[3 - ox, -2 - oz:3 - oz]).all()       # perto do aberto, rente ao relevo
