@@ -74,6 +74,8 @@ def value_text(key: str, value) -> str:
         return f'{value} chunk' + ('s' if value != 1 else '')
     if key == 'shadows':
         return {'off': 'Desligadas', 'low': 'Baixa', 'medium': 'Média', 'high': 'Alta'}[value]
+    if key == 'shadow_detail':
+        return ('Leve', 'Formas', 'Plantas', 'Completa')[value]
     if key == 'shadow_range':
         return {16: 'Curto', 32: 'Médio', 56: 'Longo'}.get(value, str(value))
     if key == 'fps_limit':
@@ -141,6 +143,13 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'com menos raios (até 11), um pouco mais granulada. Baixa: um raio só, sombra dura em degraus de pixel. '
                 'Desligadas: sem sombra do sol.',
                 [('Custo', 'O maior da cena')]),
+            Row('shadow_detail', 'Detalhe da sombra', 'O que faz sombra pelo formato de verdade', 'leaf', 'choice',
+                None, 'shadow_detail',
+                'Leve: cada bloco faz sombra de cubo inteiro, como antes (lajes, escadas e cercas viram cubos; placas '
+                'e plantas não fazem sombra). Formas: lajes, escadas, cercas, placas e lanternas fazem sombra pelo '
+                'formato. Plantas: também mudas, flores e cogumelos, pelo desenho das folhas. Completa: também o '
+                'capim do chão, o mais pesado.',
+                [('Custo', 'Baixo a alto (o capim é o mais pesado)')]),
             Row('shadow_range', 'Alcance da sombra', 'Até onde o raio procura o que tapa o sol', 'range', 'choice',
                 None, 'shadow_range',
                 'Com o sol baixo, um morro distante pode sombrear o personagem. O alcance diz até quantos blocos o raio '
@@ -219,6 +228,9 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: float, y: float, s: float, co
             line([(.5 + .32 * math.cos(a), .5 + .32 * math.sin(a)), (.5 + .47 * math.cos(a), .5 + .47 * math.sin(a))])
     elif kind == 'range':
         line([(.08, .5), (.92, .5)]); line([(.75, .32), (.92, .5), (.75, .68)]); line([(.08, .3), (.08, .7)])
+    elif kind == 'leaf':   # uma folha (a sombra pelo formato das coisas)
+        draw.chord((*p(.12, .1), *p(.88, .9)), 135, 315, fill=color)
+        line([(.15, .88), (.82, .18)])
     elif kind == 'contrast':
         draw.ellipse((*p(.1, .1), *p(.9, .9)), outline=color, width=2)
         draw.pieslice((*p(.1, .1), *p(.9, .9)), 90, 270, fill=color)

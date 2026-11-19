@@ -625,6 +625,7 @@ def main() -> None:
     skin_command_handler.construction_panel = construction_panel
     skin_command_handler.room_reveal = room_renderer
     skin_command_handler.sun_shadows = shadow_renderer
+    skin_command_handler.world_shader = shader
     skin_command_handler.world_seed = (lambda: active_seed["value"]) if terrain_demo else None
     if terrain_demo:
         skin_command_handler.place_water = lambda x, y, z: world_manager.place_water(x, y, z)
@@ -1317,6 +1318,7 @@ def main() -> None:
             shadow_renderer.enabled = prefs["shadows"] != "off"
             shadow_renderer.quality = {"low": 0, "medium": 1, "high": 2}.get(prefs["shadows"], 2)
             shadow_renderer.steps = int(prefs["shadow_range"])
+            shadow_renderer.set_detail(int(prefs["shadow_detail"]), shader)
             shadow_renderer.strength = float(prefs["shadow_strength"])
 
 

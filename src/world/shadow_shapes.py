@@ -77,6 +77,10 @@ class ShapeTable:
         count = int((row[0::2, 3] > 0.5).sum())   # (numa planta: o desenho e as alturas, e zeros)
         return np.stack([row[0:2 * count:2, :3], row[1:2 * count:2, :3]], axis=1)
 
+    def plant_flags(self) -> np.ndarray:
+        """Por número de forma: True nas plantas em cruz."""
+        return np.array([row[0, 3] > 1.5 for row in self._rows], dtype=bool)
+
     def plant_masks(self) -> np.ndarray:
         """Os desenhos das plantas, um embaixo do outro: [16 * n, 16] (pelo menos um, vazio)."""
         if not self._masks:

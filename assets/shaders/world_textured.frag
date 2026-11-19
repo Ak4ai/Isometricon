@@ -48,6 +48,7 @@ uniform bool u_WorldStyle;
 // Sombras do sol (ver src/rendering/sun_shadows.py): blocos sólidos em volta do jogador, em coordenadas do mundo.
 uniform sampler3D u_ShadowMask;
 uniform sampler2D u_ShadowShapes;   // as caixas de cada forma de bloco parcial (ver shadow_shapes.py)
+uniform sampler3D u_ShadowShapeIds; // o número da forma de cada célula parcial ou planta (byte de baixo, de cima)
 uniform sampler2D u_ShadowPlants;   // os desenhos das plantas, 16 x 16 um embaixo do outro
 uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
@@ -71,8 +72,12 @@ float shadowCell(vec3 worldPos)
     return texelFetch(u_ShadowMask, ivec3(c), 0).r;
 }
 
-// Os blocos que não são cubo inteiro (laje, degrau, cerca, placa, lanterna) são parciais na máscara (r entre 0.75 e
-// 0.94): os canais g e b dizem o número da forma, e a linha dela em u_ShadowShapes tem as caixas (até SHAPE_BOXES pares
+// Os detalhes da sombra (Configurações > Gráficos > Detalhe da sombra): no "Leve" o shader é compilado sem
+// SHADOW_SHAPES, sem o caminho das formas (a máscara então só tem cubos inteiros, água e ar): o código das formas,
+// mesmo sem uso, deixava o raio mais pesado.
+#ifdef SHADOW_SHAPES
+// Os blocos que não são cubo inteiro (laje, degrau, cerca, placa, lanterna) são parciais na máscara (entre 0.82 e
+// 0.94; as plantas em cruz entre 0.70 e 0.82): u_ShadowShapeIds diz o número da forma, e a linha dela em u_ShadowShapes tem as caixas (até SHAPE_BOXES pares
 // de texels: o canto de baixo, com w = 1, e o de cima; w = 0 acaba a lista), em blocos dentro da célula. Uma planta
 // em cruz (w = 2) são os dois planos em X dela, com o desenho da textura (ver plantLight); não faz sombra de contato.
 const int SHAPE_BOXES = 8;
@@ -101,9 +106,10 @@ bool plantBlocks(vec3 plant, vec3 start, vec3 dir, float tEnter, float tExit, bo
     }
     return false;
 }
-int shapeOf(vec4 texel)
+int shapeAt(ivec3 cell)
 {
-    return int(texel.g * 255.0 + 0.5) + 256 * int(texel.b * 255.0 + 0.5);
+    vec2 id = texelFetch(u_ShadowShapeIds, cell, 0).rg;
+    return int(id.r * 255.0 + 0.5) + 256 * int(id.g * 255.0 + 0.5);
 }
 
 // O ponto (dentro da célula, 0..1) está dentro de alguma caixa da forma?
@@ -120,6 +126,8 @@ bool insideShape(int shape, vec3 local)
     return false;
 }
 
+#endif
+
 // A célula tapa o pé da parede na altura de ``worldPos``? Um sólido inteiro sempre; um parcial se o ponto está dentro
 // de uma caixa dele. A célula ``own`` (a do próprio chão) não conta: o degrau de cima da escada não mancha o de baixo.
 bool blockedAt(vec3 worldPos, vec3 own)
@@ -128,9 +136,13 @@ bool blockedAt(vec3 worldPos, vec3 own)
     vec3 c = floor(q);
     if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)) || c == own)
         return false;
-    vec4 texel = texelFetch(u_ShadowMask, ivec3(c), 0);
-    if (texel.r > 0.94) return true;
-    return texel.r > 0.75 && insideShape(shapeOf(texel), q - c);
+    float value = texelFetch(u_ShadowMask, ivec3(c), 0).r;
+    if (value > 0.94) return true;
+#ifdef SHADOW_SHAPES
+    return value > 0.82 && insideShape(shapeAt(ivec3(c)), q - c);   // a planta não faz sombra de contato
+#else
+    return false;
+#endif
 }
 
 // Sombra de contato: o chão escurece junto ao pé de qualquer parede, de qualquer lado e sem depender do sol. É o que
@@ -162,6 +174,7 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
     return clamp(occ / 3.2, 0.0, 1.0);
 }
 
+#ifdef SHADOW_SHAPES
 // O trecho do raio dentro de uma célula parcial (de tEnter a tExit; ``start`` é a origem do raio no espaço da célula)
 // cruza alguma caixa da forma (ou o desenho da planta)? A conta é exata, caixa a caixa. Na célula de onde o raio sai,
 // a caixa que contém a origem não conta: é o próprio bloco.
@@ -188,6 +201,8 @@ bool shapeBlocks(int shape, vec3 start, vec3 dir, float tEnter, float tExit, boo
     }
     return false;
 }
+
+#endif
 
 // Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
 // água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
@@ -220,14 +235,19 @@ float traceSun(vec3 worldPos, vec3 dir)
         // subindo e acima de tudo o que há nas colunas à frente: nada mais o tapa, sol livre
         if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
             return light;
-        vec4 texel = texelFetch(u_ShadowMask, cell, 0);
-        float value = texel.r;
+        float value = texelFetch(u_ShadowMask, cell, 0).r;
         float tExit = min(tMax.x, min(tMax.y, tMax.z));
         if (value > 0.94)
             return 0.0;
-        if (value > 0.75 && shapeBlocks(shapeOf(texel), q - vec3(cell), safe, tEnter, tExit, i == 0))
-            return 0.0;
-        else if (value > 0.25 && value <= 0.75)
+#ifdef SHADOW_SHAPES
+        if (value > 0.7)
+        {
+            if (shapeBlocks(shapeAt(cell), q - vec3(cell), safe, tEnter, tExit, i == 0))
+                return 0.0;
+        }
+        else
+#endif
+        if (value > 0.25 && value < 0.6)
             light *= WATER_TRANSMIT;
         tEnter = tExit;
         if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
@@ -261,7 +281,7 @@ bool insideShadowWindow(vec3 worldPos)
 bool waterCell(vec3 worldPos)
 {
     float value = shadowCell(worldPos);
-    return value > 0.25 && value < 0.75;
+    return value > 0.25 && value < 0.6;
 }
 
 // Quantos blocos de água há a partir de ``start`` seguindo ``dir`` (para cima: a coluna sobre o fundo; para baixo: a

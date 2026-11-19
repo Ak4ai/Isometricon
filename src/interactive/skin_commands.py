@@ -230,6 +230,7 @@ class SkinCommandHandler:
         self.construction_panel = None  # ConstructionPanel do terreno: o /schem sozinho o abre
         self.room_reveal = None  # RoomRevealRenderer do terreno (/revelar); None fora dele
         self.sun_shadows = None  # SunShadowRenderer do terreno (/sombras); None fora dele
+        self.world_shader = None  # o shader do mundo (o /sombras detalhe troca a variante dele)
         self.world_seed = None  # () -> int, a seed do mundo aberto (/seed); None fora do terreno
         self.place_water = None  # (x, y, z) -> bool e a célula do jogador (/agua); None fora do terreno
         self.place_block = None  # (x, y, z, BlockType) -> BlockType posto ou None (/bloco); None fora do terreno
@@ -940,7 +941,8 @@ class SkinCommandHandler:
 
     # ------------------------------------------------------------------ /sombras
     def shadows(self, args: List[str]) -> Result:
-        """/sombras [on|off|forca <0-1>]: as sombras que o sol projeta no terreno e nas construções."""
+        """/sombras [on|off|forca <0-1>|detalhe <leve|formas|plantas|completa>]: as sombras que o sol projeta no
+        terreno e nas construções."""
         renderer = self.sun_shadows
         if renderer is None:
             return False, "[Sombras] Só funciona no terreno (--terrain).", RED
@@ -954,12 +956,20 @@ class SkinCommandHandler:
                 return False, "[Sombras] Use /sombras forca <0 a 1>.", RED
             renderer.strength = value
             return True, f"[Sombras] Força: {value:g}.", CYAN
+        if word in ("detalhe", "detail"):
+            names = ("leve", "formas", "plantas", "completa")
+            choice = args[1].lower() if len(args) > 1 else ""
+            level = names.index(choice) if choice in names else (int(choice) if choice in ("0", "1", "2", "3") else None)
+            if level is None:
+                return False, "[Sombras] Use /sombras detalhe leve | formas | plantas | completa.", RED
+            renderer.set_detail(level, self.world_shader)
+            return True, f"[Sombras] Detalhe: {names[level]} (até mudar nas Configurações).", CYAN
         if word in ("on", "ligar", "sim"):
             renderer.enabled = True
         elif word in ("off", "desligar", "nao", "não"):
             renderer.enabled = False
         elif word:
-            return False, "[Sombras] Use /sombras [on|off|forca <0 a 1>].", RED
+            return False, "[Sombras] Use /sombras [on|off|forca <0 a 1>|detalhe <nível>].", RED
         else:
             renderer.enabled = not renderer.enabled
         return True, f"[Sombras] {'ligadas' if renderer.enabled else 'desligadas'}.", CYAN
@@ -1957,8 +1967,8 @@ ROOT_COMMANDS: List[Command] = [
             SkinCommandHandler.water, None),
     Command(("bloco", "block", "setblock"), "/bloco <escada|tocha|fogo|capim|papoula|...> [x y z [altura]]",
             "põe um enfeite no terreno (escada de mão, tocha, fogo, planta)", SkinCommandHandler.block, None),
-    Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>]",
-            "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca"]),
+    Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>|detalhe <nível>]",
+            "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca", "detalhe"]),
     Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>|teto <0-1>]",
             "revela só o espaço fechado em que o jogador está", SkinCommandHandler.reveal,
             ["on", "off", "escuro", "teto"]),
@@ -2020,7 +2030,7 @@ def _schematic_names() -> List[str]:
 COMMAND_TREE: Dict[str, Any] = {
     "skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"],
     "revelar": ["on", "off", "escuro", "teto"],
-    "sombras": ["on", "off", "forca"],
+    "sombras": ["on", "off", "forca", "detalhe"],
     "seed": [],
     "inimigo": ["lista", "limpar", "zumbi", "esqueleto", "aranha", "slime", "bandido", "guarda", "ogro"],
     "ficha": [],
