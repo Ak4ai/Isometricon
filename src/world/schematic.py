@@ -118,13 +118,13 @@ class Schematic:
         self._occupied_mask: Optional[np.ndarray] = None
         self._full_cube_mask: Optional[np.ndarray] = None
         self._detail_mask: Optional[np.ndarray] = None
-        self._octant_mask: Optional[np.ndarray] = None
+        self._shadow_shape_mask: Optional[np.ndarray] = None
         self._door_mask: Optional[np.ndarray] = None
 
     def invalidate_masks(self) -> None:
         """Esquece as máscaras calculadas (depois de trocar blocos da grade, como abrir uma porta)."""
         self._solid_mask = self._occupied_mask = self._full_cube_mask = self._detail_mask = None
-        self._octant_mask = None
+        self._shadow_shape_mask = None
         self._door_mask = None
 
     def get_block(self, x: int, y: int, z: int) -> str:
@@ -178,17 +178,16 @@ class Schematic:
         return self._full_cube_mask
 
     @property
-    def octant_mask(self) -> np.ndarray:
-        """uint8 (height, length, width): os oitavos que cada bloco sólido sem ser cubo inteiro enche (ver
-        ``octant_bits``); 0 nos cubos inteiros, no ar e no que não barra."""
-        if self._octant_mask is None:
-            from src.world.block_shapes import octant_bits
+    def shadow_shape_mask(self) -> np.ndarray:
+        """uint16 (height, length, width): o número da forma de cada bloco que não é cubo inteiro na tabela da sombra
+        do sol (``shadow_shapes.TABLE``), barre ou não o personagem (a placa e a cerca também fazem sombra); 0 no
+        resto."""
+        if self._shadow_shape_mask is None:
+            from src.world.shadow_shapes import TABLE
 
-            names = set(self.grid.ravel().tolist())
-            lookup = {name: (octant_bits(name) if not is_air_name(name) else 0) for name in names}
-            bits = np.vectorize(lookup.__getitem__, otypes=[np.uint8])(self.grid)
-            self._octant_mask = np.where(self.solid_mask & ~self.full_cube_mask, bits, 0).astype(np.uint8)
-        return self._octant_mask
+            lookup = {name: (0 if is_air_name(name) else TABLE.id_for(name)) for name in set(self.grid.ravel().tolist())}
+            self._shadow_shape_mask = np.vectorize(lookup.__getitem__, otypes=[np.uint16])(self.grid)
+        return self._shadow_shape_mask
 
     @property
     def detail_mask(self) -> np.ndarray:

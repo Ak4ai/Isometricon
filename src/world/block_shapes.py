@@ -699,32 +699,17 @@ def is_full_cube(block_name: str) -> bool:
     return shape_for(block_name) is None
 
 
-OCTANT_FILL = 0.3   # a fração de um oitavo que as caixas precisam cobrir para ele contar como cheio
+SHADOW_BOXES = 8    # até quantas caixas de um bloco a sombra do sol leva (as maiores)
 
 
 @lru_cache(maxsize=4096)
-def octant_bits(block_name: str) -> int:
-    """Quais oitavos da célula (metades em x, y e z) o bloco enche: o bit ``ox + 2 * oy + 4 * oz`` (0 a metade de
-    baixo do eixo, 1 a de cima). As sombras do sol usam isso para que uma laje, um degrau ou um bolo tapem só a parte
-    que ocupam. Um oitavo conta se as caixas cobrem pelo menos ``OCTANT_FILL`` dele; uma forma fina que não enche
-    nenhum (cerca, grade, painel) conta em todos os oitavos que toca; sem caixas (só planos) ou cubo inteiro, 255."""
+def shadow_boxes(block_name: str) -> Tuple[Tuple[Vec, Vec], ...]:
+    """As caixas do bloco em blocos (0 a 1 dentro da célula), para a sombra do sol: ``(lo, hi)`` de cada uma, as
+    ``SHADOW_BOXES`` maiores. Vazio para o cubo inteiro e para o que só tem planos (planta, escada de mão)."""
     shape = shape_for(block_name)
     boxes = [part for part in shape or () if isinstance(part, Box)]
-    if not boxes:
-        return 255
-    filled = touched = 0
-    for bit in range(8):
-        lo = [8.0 * ((bit >> axis) & 1) for axis in range(3)]
-        cover = 0.0
-        for box in boxes:
-            size = [min(box.hi[a], lo[a] + 8.0) - max(box.lo[a], lo[a]) for a in range(3)]
-            if min(size) > 0:
-                cover += size[0] * size[1] * size[2] / 512.0
-        if cover >= OCTANT_FILL:
-            filled |= 1 << bit
-        if cover > 0:
-            touched |= 1 << bit
-    return filled or touched or 255
+    boxes.sort(key=lambda b: -(b.hi[0] - b.lo[0]) * (b.hi[1] - b.lo[1]) * (b.hi[2] - b.lo[2]))
+    return tuple((tuple(v / 16.0 for v in b.lo), tuple(v / 16.0 for v in b.hi)) for b in boxes[:SHADOW_BOXES])
 
 
 # Blocos que enfeitam o espaço sem barrar quem passa (nem selar um cômodo)

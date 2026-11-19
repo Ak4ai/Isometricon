@@ -47,6 +47,7 @@ uniform bool u_WorldStyle;
 
 // Sombras do sol (ver src/rendering/sun_shadows.py): blocos sólidos em volta do jogador, em coordenadas do mundo.
 uniform sampler3D u_ShadowMask;
+uniform sampler2D u_ShadowShapes;   // as caixas de cada forma de bloco parcial (ver shadow_shapes.py)
 uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
 uniform mat4 u_ShadowInvModel;   // do espaço desenhado (girado pelo modelo) de volta ao mundo
@@ -69,25 +70,40 @@ float shadowCell(vec3 worldPos)
     return texelFetch(u_ShadowMask, ivec3(c), 0).r;
 }
 
-// Os blocos que não são cubo inteiro (laje, degrau, bolo, cama) são parciais na máscara (r entre 0.75 e 0.94): o
-// canal g diz quais oitavos da célula eles enchem (o bit ox + 2 oy + 4 oz).
+// Os blocos que não são cubo inteiro (laje, degrau, cerca, placa, lanterna) são parciais na máscara (r entre 0.75 e
+// 0.94): os canais g e b dizem o número da forma, e a linha dela em u_ShadowShapes tem as caixas (até SHAPE_BOXES pares
+// de texels: o canto de baixo, com w = 1, e o de cima; w = 0 acaba a lista), em blocos dentro da célula.
+const int SHAPE_BOXES = 8;
+int shapeOf(vec4 texel)
+{
+    return int(texel.g * 255.0 + 0.5) + 256 * int(texel.b * 255.0 + 0.5);
+}
 
-// A célula tapa o pé da parede na altura de ``worldPos``? Um sólido inteiro sempre; um parcial se enche algum oitavo
-// daquela metade da altura (a célula inteira conta, como uma parede: olhar o oitavo de cada ponto deixava o chão
-// manchado em blocos de texel). A célula ``own`` (a do próprio chão) não conta: o degrau de cima da escada não mancha o
-// de baixo.
+// O ponto (dentro da célula, 0..1) está dentro de alguma caixa da forma?
+bool insideShape(int shape, vec3 local)
+{
+    for (int k = 0; k < SHAPE_BOXES; k++)
+    {
+        vec4 lo = texelFetch(u_ShadowShapes, ivec2(2 * k, shape), 0);
+        if (lo.w < 0.5) break;
+        vec3 hi = texelFetch(u_ShadowShapes, ivec2(2 * k + 1, shape), 0).xyz;
+        if (all(greaterThan(local, lo.xyz)) && all(lessThan(local, hi)))
+            return true;
+    }
+    return false;
+}
+
+// A célula tapa o pé da parede na altura de ``worldPos``? Um sólido inteiro sempre; um parcial se o ponto está dentro
+// de uma caixa dele. A célula ``own`` (a do próprio chão) não conta: o degrau de cima da escada não mancha o de baixo.
 bool blockedAt(vec3 worldPos, vec3 own)
 {
     vec3 q = worldPos - u_ShadowOrigin;
     vec3 c = floor(q);
     if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)) || c == own)
         return false;
-    vec2 texel = texelFetch(u_ShadowMask, ivec3(c), 0).rg;
+    vec4 texel = texelFetch(u_ShadowMask, ivec3(c), 0);
     if (texel.r > 0.94) return true;
-    if (texel.r <= 0.75) return false;
-    int bits = int(texel.g * 255.0 + 0.5);
-    int layer = q.y - c.y >= 0.5 ? 0xCC : 0x33;            // os quatro oitavos de cima (oy = 1) ou os de baixo
-    return (bits & layer) != 0;
+    return texel.r > 0.75 && insideShape(shapeOf(texel), q - c);
 }
 
 // Sombra de contato: o chão escurece junto ao pé de qualquer parede, de qualquer lado e sem depender do sol. É o que
@@ -96,8 +112,8 @@ bool blockedAt(vec3 worldPos, vec3 own)
 float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 {
     if (worldNormal.y < 0.6) return 0.0;                         // só no chão (topos de bloco)
-    // um pouco abaixo do meio da célula logo acima do chão: numa laje vizinha conta a metade de baixo dela; a célula
-    // do próprio chão (o degrau de baixo de uma escada está na mesma célula do de cima) fica de fora
+    // um pouco abaixo do meio da célula logo acima do chão (numa laje vizinha conta a metade de baixo dela); a
+    // célula do próprio chão (o degrau de baixo de uma escada está na mesma célula do de cima) fica de fora
     vec3 base = worldPos + vec3(0.0, 0.4, 0.0);
     vec3 own = floor(base - u_ShadowOrigin);
     float occ = 0.0;
@@ -120,19 +136,17 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 }
 
 // O trecho do raio dentro de uma célula parcial (de tEnter a tExit; ``start`` é a origem do raio no espaço da célula)
-// cruza algum oitavo cheio? A conta é exata, caixa a caixa (amostrar o trecho deixava escapar luz em listras). Na
-// célula de onde o raio sai, o oitavo que contém a origem não conta: é o próprio bloco (a face lateral do bolo,
-// recuada da borda da célula, começa dentro do oitavo dele).
-bool partialBlocks(vec2 texel, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
+// cruza alguma caixa da forma? A conta é exata, caixa a caixa. Na célula de onde o raio sai, a caixa que contém a
+// origem não conta: é o próprio bloco.
+bool shapeBlocks(int shape, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
 {
-    int bits = int(texel.g * 255.0 + 0.5);
-    for (int b = 0; b < 8; b++)
+    for (int k = 0; k < SHAPE_BOXES; k++)
     {
-        if (((bits >> b) & 1) == 0)
-            continue;
-        vec3 lo = vec3(float(b & 1), float((b >> 1) & 1), float((b >> 2) & 1)) * 0.5;
-        vec3 hi = lo + 0.5;
-        if (first && all(greaterThan(start, lo - 1e-4)) && all(lessThan(start, hi + 1e-4)))
+        vec4 lo4 = texelFetch(u_ShadowShapes, ivec2(2 * k, shape), 0);
+        if (lo4.w < 0.5) break;
+        vec3 lo = lo4.xyz;
+        vec3 hi = texelFetch(u_ShadowShapes, ivec2(2 * k + 1, shape), 0).xyz;
+        if (first && all(greaterThan(start, lo - 1e-3)) && all(lessThan(start, hi + 1e-3)))
             continue;
         vec3 t0 = (lo - start) / dir;
         vec3 t1 = (hi - start) / dir;
@@ -148,7 +162,7 @@ bool partialBlocks(vec2 texel, vec3 start, vec3 dir, float tEnter, float tExit, 
 
 // Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
 // água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
-// bloco parcial o raio só é cortado se cruza um oitavo cheio dele (ver partialBlocks).
+// bloco parcial o raio só é cortado se cruza uma das caixas dele (ver shapeBlocks).
 const float WATER_TRANSMIT = 0.82;
 float traceSun(vec3 worldPos, vec3 dir)
 {
@@ -177,12 +191,12 @@ float traceSun(vec3 worldPos, vec3 dir)
         // subindo e acima de tudo o que há nas colunas à frente: nada mais o tapa, sol livre
         if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
             return light;
-        vec2 texel = texelFetch(u_ShadowMask, cell, 0).rg;
+        vec4 texel = texelFetch(u_ShadowMask, cell, 0);
         float value = texel.r;
         float tExit = min(tMax.x, min(tMax.y, tMax.z));
         if (value > 0.94)
             return 0.0;
-        if (value > 0.75 && partialBlocks(texel, q - vec3(cell), safe, tEnter, tExit, i == 0))
+        if (value > 0.75 && shapeBlocks(shapeOf(texel), q - vec3(cell), safe, tEnter, tExit, i == 0))
             return 0.0;
         else if (value > 0.25 && value <= 0.75)
             light *= WATER_TRANSMIT;
