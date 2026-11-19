@@ -157,12 +157,16 @@ def cursor_image(mode: CursorMode, grow: int = 0, vertical: int = 0) -> Image.Im
 
 
 def _font(size: int):
-    for name in ("consolab.ttf", "C:/Windows/Fonts/consolab.ttf", "arialbd.ttf", "consola.ttf", "arial.ttf"):
+    for name in ("consolab.ttf", "C:/Windows/Fonts/consolab.ttf", "arialbd.ttf", "consola.ttf", "arial.ttf",
+                 "DejaVuSansMono-Bold.ttf", "DejaVuSans-Bold.ttf"):   # as do Linux, sem as do Windows
         try:
             return ImageFont.truetype(name, size)
         except Exception:
             continue
-    return ImageFont.load_default()
+    try:
+        return ImageFont.load_default(size)   # sem tamanho, a padrão é miúda e o contorno some com o verbo
+    except TypeError:                         # Pillow antigo (antes do 10.1)
+        return ImageFont.load_default()
 
 
 def prompt_image(key: str, verb: str) -> Image.Image:

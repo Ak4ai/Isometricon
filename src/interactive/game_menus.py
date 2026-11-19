@@ -6,9 +6,12 @@ import time
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 import glfw
-from src.core.game_storage import ACTIONS, Preferences, WorldLibrary
-from src.interactive.menu_style import icon, world_thumbnail, menu_base
+from src.core.game_storage import ACTIONS, Preferences, WorldLibrary, seed_value
+from src.interactive.menu_style import atmosphere, icon, world_thumbnail, menu_base
 from src.interactive import settings_screen
+from src.world import terrain_options
+
+SLIDER_STEP = 5   # ← → numa opção de criação
 
 PANEL = '#F2E8D1'
 CARD = '#FBF4E4'
@@ -49,6 +52,10 @@ class GameMenus:
         self.world = None
         self.result = None
         self.fields = {'name': '', 'seed': ''}
+        self.terrain = terrain_options.defaults()   # as opções de criação do mundo (porcentagens)
+        self.preview_seed = seed_value('')          # a seed da prévia com o campo vazio (vira a do mundo)
+        self.preview = None                         # a thread da prévia (criada na primeira vez da tela)
+        self._preview_shown = None
         self.field = None
         self.capture = None
         self.message = ''
@@ -62,6 +69,7 @@ class GameMenus:
         self.quad = None
         self.scene_quad = None
         self.scrim_quad = None
+        self.atmosphere_quad = None
         self._last_effect_signature = ()
         self._worlds = None
         self._raster_state = None
@@ -81,6 +89,8 @@ class GameMenus:
             self.quad = HudQuad()
             self.scrim_quad = HudQuad()
             self.scrim_quad.set_image(Image.new('RGBA',(1,1),(9,26,21,100)))
+            self.atmosphere_quad = HudQuad()   # a vinheta da tela inteira (a faixa escura atrás da marca)
+        self._atmosphere_size = None
 
         self.draft = copy.deepcopy(self.preferences.data)
         self.last_image = None
@@ -97,6 +107,8 @@ class GameMenus:
     def go(self, page):
         if self.page == 'create' or page == 'create':
             self.fields = {'name': '', 'seed': ''}
+            self.terrain = terrain_options.defaults()
+            self.preview_seed = seed_value('')
         self.page, self.message, self.field, self.capture = page, '', None, None
         self._effects.clear()
         self._raster_state = None
@@ -181,7 +193,9 @@ class GameMenus:
             elif action == 'save_exit':
                 self.result = ('save_exit', None)
             elif action == 'create_world':
-                self.world = self.library.create(self.fields['name'], self.fields['seed'])
+                # com o campo vazio, a seed é a da prévia: o mundo criado é o que a tela mostrou
+                seed = self.fields['seed'] if self.fields['seed'].strip() else str(self.preview_seed)
+                self.world = self.library.create(self.fields['name'], seed, dict(self.terrain))
                 self.result = ('play', self.world)
                 self.go('game')
             elif action.startswith('load:'):
@@ -206,6 +220,12 @@ class GameMenus:
                 self.go('worlds')
                 self.scroll = self.worlds_scroll
                 self.message = 'Mundo excluído.'
+            elif action == 'reroll':
+                self.preview_seed = seed_value('')
+            elif action == 'terrain_defaults':
+                self.terrain = terrain_options.defaults()
+            elif action.startswith('slider:'):
+                self.field = None
             elif action.startswith('field:'):
                 self.field = action[6:]
             elif action.startswith('bind:'):
@@ -272,6 +292,14 @@ class GameMenus:
                 self.shift_row(self.focused_row_id(), step)
             self.dirty = True
             return True
+        if self.page == 'create' and not self.field and key in (glfw.KEY_LEFT, glfw.KEY_RIGHT) and self.hits:
+            action = self.hits[self.focus % len(self.hits)][1]
+            if action.startswith('slider:'):
+                name = action[7:]
+                step = SLIDER_STEP if key == glfw.KEY_RIGHT else -SLIDER_STEP
+                self.terrain[name] = max(0, min(100, self.terrain[name] + step))
+                self.dirty = True
+                return True
         if key == glfw.KEY_ESCAPE:
             self.back()
         elif self.field and key == glfw.KEY_BACKSPACE:
@@ -324,13 +352,28 @@ class GameMenus:
         return None, None
 
     def hover(self, x, y):
+        if self._pressed and self._pressed.startswith('slider:'):
+            self.drag_slider(self._pressed, x)     # arrastando a opção: o foco fica nela
+            return
         index, _ = self.hit_at(x, y)
         if index is not None and self.focus != index:
             self.focus, self.dirty = index, True
 
+    def drag_slider(self, action, x):
+        """Põe a opção ``slider:<chave>`` no valor sob ``x`` (pixels da janela), de 0 a 100."""
+        rect = next((r for r, a in self.hits if a == action), None)
+        if rect is None or rect[2] <= rect[0]:
+            return
+        value = max(0, min(100, round((x - rect[0]) / (rect[2] - rect[0]) * 100)))
+        if self.terrain.get(action[7:]) != value:
+            self.terrain[action[7:]] = value
+            self.dirty = True
+
     def mouse_button(self, x, y, action):
         if action == glfw.PRESS:
             self._pressed = self.hit_at(x, y)[1]
+            if self._pressed and self._pressed.startswith('slider:'):
+                self.drag_slider(self._pressed, x)
             self.dirty = True
         elif action == glfw.RELEASE:
             pressed, self._pressed = self._pressed, None
@@ -350,7 +393,7 @@ class GameMenus:
         background = (7, 22, 18, 90) if self.page == 'pause' else (9, 26, 21, 100)
         self.hits = []
         self._control_bounds = {}
-        small = self.page in ('pause', 'create', 'discard', 'delete_world')
+        small = self.page in ('pause', 'discard', 'delete_world')
         left, right = (400, 920) if small else (36, 1284)
         top, bottom = 24, 828
         if self.page == 'welcome':
@@ -431,7 +474,7 @@ class GameMenus:
             self._control_bounds[action]=(max(0,int(bx)-3),max(0,int(y)-5),
                                           min(1320,int(ex)+3),min(876,int(y+height)+9))
 
-        def input_field(y, field, placeholder):
+        def input_field(y, field, placeholder, ex=None):
             value = self.fields[field]
             focused = self.field == field
             label = value if value else '' if focused else placeholder
@@ -439,9 +482,28 @@ class GameMenus:
                 label += ' |'
             # Exibe o fim do texto durante a digitação sem invadir a borda do campo.
             field_font = font(round(17 * text_factor))
-            while label and draw.textlength(label, font=field_font) > end-x-32:
+            while label and draw.textlength(label, font=field_font) > (ex or end)-x-32:
                 label = label[1:]
-            button(y, label, 'field:' + field, color=INK if value or focused else MUTED)
+            button(y, label, 'field:' + field, color=INK if value or focused else MUTED, ex=ex)
+
+        def slider(y, key, label, hint, ex):
+            """Uma opção de criação: rótulo, valor e a trilha (clique, arraste ou ← →)."""
+            action = 'slider:' + key
+            value = self.terrain[key]
+            glow = self._effects.get(action, 1. if len(self.hits) == self.focus else 0.)
+            text((x, y), label, 15, INK)
+            stamp = f'{value}%'
+            text((ex - draw.textlength(stamp, font=font(round(17*text_factor))) - 2, y), stamp, 15, '#7E673A')
+            text((x, y + 23), hint, 12, MUTED)
+            ty = y + 50
+            draw.rounded_rectangle((x, ty - 3, ex, ty + 3), 3, fill='#DCCFB0')
+            knob = x + (ex - x) * value / 100
+            draw.rounded_rectangle((x, ty - 3, knob, ty + 3), 3, fill='#355B48')
+            radius = 10 if glow > .25 or self._pressed == action else 8
+            draw.ellipse((knob - radius, ty - radius, knob + radius, ty + radius), fill='#EAC374',
+                         outline='#A17A34' if glow > .25 else '#B0986E', width=2)
+            self.hits.append(((x, ty - 14, ex, ty + 14), action))
+            self._control_bounds[action] = (max(0, int(x) - 14), int(y) - 4, min(1320, int(ex) + 14), int(ty) + 16)
 
         if self.page == 'welcome':
             icon(draw,'cube',94,96,62,'#E7B65E')
@@ -484,14 +546,21 @@ class GameMenus:
                 text((x, 605), 'Último save: ' + self.world.get('saved_at', '—'), 13, MUTED)
             text((x, 735), 'ESC · Voltar ao jogo', 13, MUTED)
         elif self.page == 'create':
-            text((x, 166), 'Dê um nome à sua história.', 17, MUTED)
-            text((x, 230), 'Nome do mundo', 15)
-            input_field(260, 'name', 'Meu mundo')
-            text((x, 345), 'Seed · número ou texto (opcional)', 15)
-            input_field(375, 'seed', 'Aleatória')
-            text((x, 460), 'A mesma seed recria o mesmo terreno.', 14, MUTED)
-            button(545, 'Criar e explorar', 'create_world', primary=True)
-            button(610, 'Voltar', 'back')
+            column = 600                  # a coluna das opções; à direita, a prévia
+            text((x, 138), 'Dê um nome à sua história e molde o terreno.', 17, MUTED)
+            text((x, 182), 'Nome do mundo', 15)
+            input_field(208, 'name', 'Meu mundo', ex=column)
+            text((x, 276), 'Seed · número ou texto (opcional)', 15)
+            input_field(302, 'seed', f'Aleatória · {self.preview_seed}', ex=column)
+            draw.line((x, 374, column, 374), fill=LINE)
+            for i, (key, label, _, hint) in enumerate(terrain_options.OPTIONS):
+                slider(390 + i * 64, key, label, hint, column)
+            self.draw_preview(image, draw, text, (648, 138, end, 690))
+            button(720, 'Voltar', 'back', bx=x, ex=x+180)
+            button(720, 'Padrões', 'terrain_defaults', bx=x+200, ex=x+380)
+            if not self.fields['seed'].strip():
+                button(720, 'Outra seed', 'reroll', bx=648, ex=868)
+            button(720, 'Criar e explorar', 'create_world', primary=True, bx=end-288, ex=end)
         elif self.page == 'worlds':
             if self._worlds is None:
                 self._worlds = self.library.list()
@@ -574,8 +643,41 @@ class GameMenus:
             return image
         resized = image.resize((max(1,round(1320*scale)),max(1,round(876*scale))),Image.Resampling.LANCZOS)
         canvas = Image.new('RGBA',(width,height),background)
+        if self.page != 'pause':
+            canvas.alpha_composite(atmosphere(width,height).resize((width,height),Image.Resampling.BILINEAR))
         canvas.alpha_composite(resized,self.offset)
         return canvas
+
+    def preview_key_seed(self):
+        """A seed que a prévia mostra (e que o mundo vai ter)."""
+        return seed_value(self.fields['seed']) if self.fields['seed'].strip() else self.preview_seed
+
+    def draw_preview(self, image, draw, text, box):
+        """O quadro da prévia: o recorte do começo do mundo com as opções atuais (feito numa thread)."""
+        if self.preview is None:
+            from src.interactive.world_preview import PreviewWorker
+            self.preview = PreviewWorker(on_ready=self._preview_ready)
+        seed = self.preview_key_seed()
+        self.preview.request(seed, dict(self.terrain))
+        left, top, right, bottom = box
+        draw.rounded_rectangle(box, 10, fill='#E9DEC4', outline='#C7B68D')
+        draw.rounded_rectangle((left+6, top+6, right-6, bottom-6), 7, outline='#D8CBAA')
+        text((left+22, top+18), 'PRÉVIA DO COMEÇO DO MUNDO', 13, '#7E673A')
+        text((left+22, top+44), f'Seed {seed}', 15, MUTED)
+        preview = self.preview.image()
+        self._preview_shown = (self.preview.done, preview is not None)
+        if preview is not None:
+            room = (right - left - 40, bottom - top - 120)
+            factor = min(room[0] / preview.width, room[1] / preview.height)
+            shown = preview.resize((max(1, round(preview.width*factor)), max(1, round(preview.height*factor))),
+                                   Image.Resampling.LANCZOS)
+            image.alpha_composite(shown, (round((left+right-shown.width)/2), round(top+80+(room[1]-shown.height)/2)))
+        if self.preview.pending:
+            text((right-128, top+44), 'Gerando…', 13, '#A47B36')
+        text((left+22, bottom-36), 'Os túneis aparecem escuros no corte.', 12, MUTED)
+
+    def _preview_ready(self):
+        self.dirty = True     # da thread da prévia: o próximo quadro redesenha a tela
 
     def prepare_background(self, wait=False):
         if self.quad and self.landscape is None:
@@ -607,7 +709,10 @@ class GameMenus:
             state=(self.page,width,height,tuple(self.fields.items()),self.field,self.capture,
                    self.message,self.scroll,self.version,world_state,
                    self.preferences.data['text_scale'],json.dumps(self.draft,sort_keys=True),
-                   (self.settings_tab,round(self.list_scroll),self.focus) if self.page=='settings' else None)
+                   (self.settings_tab,round(self.list_scroll),self.focus) if self.page=='settings' else None,
+                   (tuple(self.terrain.items()),self.preview_seed,
+                    self.preview.done if self.preview else None,
+                    self.preview.pending if self.preview else None) if self.page=='create' else None)
             region=None
             redraw=True
             if self.quad and state==self._raster_state:
@@ -640,6 +745,11 @@ class GameMenus:
                 self.landscape.draw(width,height,reduced)
             scrim_alpha = .9 if self.page=='pause' else 1.
             self.scrim_quad.draw(0,0,width,height,size=(width,height),opacity=scrim_alpha)
+            if self.page != 'pause' and getattr(self, 'atmosphere_quad', None) is not None:
+                if self._atmosphere_size != (width, height):
+                    self.atmosphere_quad.set_image(atmosphere(width, height))
+                    self._atmosphere_size = (width, height)
+                self.atmosphere_quad.draw(0,0,width,height,size=(width,height))
             scale=min(width/1320,height/876)
             progress = 1. if reduced else min(1.,(now-self._transition_started)/.18)
             slide=8*(1-progress)*scale
@@ -650,6 +760,8 @@ class GameMenus:
     def delete(self):
         if self.scrim_quad:
             self.scrim_quad.delete()
+        if getattr(self, 'atmosphere_quad', None):
+            self.atmosphere_quad.delete()
         if self.landscape:
             self.landscape.delete()
         if self.scene_quad:

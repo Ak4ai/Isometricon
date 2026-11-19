@@ -88,6 +88,12 @@ def build_key(model: Any) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def file_name(model: Any) -> str:
+    """O arquivo do cache deste modelo: o do jogador, ou o de um NPC (``cache_name``), um por personagem."""
+    name = getattr(model, "cache_name", None)
+    return f"{name}.pkl" if name else FILE_NAME
+
+
 def _image_bytes(image: Image.Image) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", compress_level=1)
@@ -105,7 +111,7 @@ def save(model: Any, images: Dict[int, Image.Image], key: str, directory: str = 
             "escolhido": {name: getattr(model.customization, name, None) for name in CHOSEN},
             "imagens": {placeholder: _image_bytes(image) for placeholder, image in images.items()},
         }
-        path = os.path.join(directory, FILE_NAME)
+        path = os.path.join(directory, file_name(model))
         temporary = path + ".tmp"
         with open(temporary, "wb") as handle:
             pickle.dump(payload, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -119,7 +125,7 @@ def save(model: Any, images: Dict[int, Image.Image], key: str, directory: str = 
 def load(model: Any, key: str, directory: str = CACHE_DIR) -> Optional[Dict[int, Image.Image]]:
     """Põe em ``model`` o personagem guardado com a chave ``key`` e devolve as imagens das texturas por marcador;
     None se não há um guardado, se é de outra chave ou se o arquivo não pode ser lido."""
-    path = os.path.join(directory, FILE_NAME)
+    path = os.path.join(directory, file_name(model))
     try:
         with open(path, "rb") as handle:
             payload = pickle.load(handle)

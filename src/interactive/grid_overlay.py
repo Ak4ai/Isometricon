@@ -419,6 +419,12 @@ class GridOverlayRenderer:
         self.shader.set_mat4("u_Model", model)
         contour = self.mode == "contour"
         self.shader.set_vec4("u_GridColor", *(self.contour_color if contour else self.color))
+        amount, center = getattr(self, "fog", (0.0, (0.0, 0.0, 0.0)))   # a névoa do /mestre (o main põe)
+        self.shader.set_float("u_FogAmount", float(amount))
+        self.shader.set_vec3("u_FogCenter", *(float(v) for v in center))
+        fog_war = getattr(self, "fog_war", None)   # a névoa de guerra: o main liga os uniforms dela neste shader
+        if fog_war is not None:
+            fog_war(self.shader)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)

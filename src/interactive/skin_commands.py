@@ -182,6 +182,42 @@ class Command:
     group: str = ""
 
 
+def build_custom_model(choice: Dict[str, Any], directory: Optional[str] = None,
+                       create_gl: bool = True) -> Tuple[Any, str]:
+    """O modelo .glb da ``choice`` (ver custom_model_store), animado: (modelo, nota) ou (None, o erro)."""
+    from src.clothing import custom_model_store as store
+    from src.clothing.custom_model import CustomModel
+    from src.clothing.glb import ModelError
+    from src.clothing.procedural import Roles, RolesError
+    directory = directory or store.MODELS_DIR
+    path = store.path_of(choice["arquivo"], directory)
+    if path is None:
+        return None, f"[Modelo] Não achei o modelo '{choice['arquivo']}'. /skin modelo lista mostra os guardados."
+    try:
+        model = CustomModel.from_file(path, choice["altura"], choice["giro"], create_gl=create_gl)
+    except ModelError as exc:
+        return None, f"[Modelo] {exc}"
+    if choice.get("perfil") == "clipes" and not model.clips_available:
+        model.delete()
+        return None, "[Modelo] Este arquivo não traz clipes de animação para os ossos dele; escolha outro perfil."
+    if model.rig is not None:
+        try:
+            roles, roles_file = None, store.roles_path(choice["arquivo"], directory)
+            if choice.get("perfil") != "clipes" and os.path.isfile(roles_file):
+                roles = Roles.load(model.rig, roles_file)   # os papéis ajustados à mão (/skin modelo papeis)
+            model.animate(roles, choice.get("perfil"))
+            note = f" Anda como '{model.animator.profile}'." + (" (papéis do arquivo .papeis.json)" if roles else "")
+        except (ModelError, RolesError) as exc:
+            note = f" Sem animação: {exc}"
+    else:
+        note = " Sem esqueleto: fica parado, na pose do arquivo."
+    if model.animator is not None and choice.get("reparar", True):
+        cut = model.repair_stretch()
+        if cut:
+            note += f" Cortei {cut} triângulos que esticavam ao andar."
+    return model, note
+
+
 class SkinCommandHandler:
     """Executa os comandos do chat sobre um CharacterModel."""
 
@@ -194,11 +230,17 @@ class SkinCommandHandler:
         self.construction_panel = None  # ConstructionPanel do terreno: o /schem sozinho o abre
         self.room_reveal = None  # RoomRevealRenderer do terreno (/revelar); None fora dele
         self.sun_shadows = None  # SunShadowRenderer do terreno (/sombras); None fora dele
+        self.world_shader = None  # o shader do mundo (o /sombras detalhe troca a variante dele)
         self.world_seed = None  # () -> int, a seed do mundo aberto (/seed); None fora do terreno
         self.place_water = None  # (x, y, z) -> bool e a célula do jogador (/agua); None fora do terreno
         self.place_block = None  # (x, y, z, BlockType) -> BlockType posto ou None (/bloco); None fora do terreno
         self.player_cell = None
         self.player_token = None  # PlayerToken do terreno, que recebe o modelo de /skin modelo
+        self.combat = None  # CombatController do terreno (/inimigo, /ficha, /atributo); None fora dele
+        # /criar npc e /npc editar: o NPC que o jogo deve abrir na tela de criação (o laço principal atende)
+        self.npc_request: Optional[Dict[str, Any]] = None
+        self.master_panel = None  # o painel do /mestre (ambientação); None fora do terreno
+        self.npc_editing: Optional[Dict[str, Any]] = None   # a ficha do NPC na tela de criação (o jogo põe e tira)
         self.model_choice: Optional[Dict[str, Any]] = None  # o modelo .glb em uso (ver custom_model_store)
         self.custom_model_dir: Optional[str] = None  # pasta dos modelos (a padrão quando None)
         self.model_choice_path: str = ""  # arquivo da escolha (o padrão quando vazio)
@@ -209,6 +251,7 @@ class SkinCommandHandler:
         self._labels = None
         self._labels_model = None
         self.want_custom = False  # a aba Modelo está em "Personalizado", ainda que nenhum modelo tenha sido escolhido
+        self.model_target: Any = None  # quem recebe o modelo .glb no lugar do personagem (o NPC na tela de criação)
         self.pick_file: Callable[[], Optional[str]] = _pick_model_file  # a janela de escolher o .glb (trocada nos testes)
         self.editor_requested: bool = False  # /skin interface: the main loop opens the editor
         self.save_path: Optional[str] = None  # where /skin salvar writes (the default file when None)
@@ -317,40 +360,18 @@ class SkinCommandHandler:
         return ("Uso: /skin modelo <nome|caminho.glb> | lista | off | perfil <bipede|quadrupede|rastejante|flutuante|clipes|auto> "
                 "| altura <metros> | giro <0-3> | papeis <salvar|off|arquivo> | importar")
 
+    def model_holder(self) -> Any:
+        """Quem recebe o modelo .glb: o personagem, ou o NPC que está na tela de criação (``model_target``)."""
+        return self.model_target if self.model_target is not None else self.player_token
+
     def apply_custom_model(self, choice: Dict[str, Any]) -> Result:
         """Constrói o modelo da ``choice`` (ver custom_model_store) e o põe no token. Roda na thread principal."""
-        from src.clothing import custom_model_store as store
-        from src.clothing.custom_model import CustomModel
-        from src.clothing.glb import ModelError
-        from src.clothing.procedural import Roles, RolesError
-        token = self.player_token
-        if token is None:
+        token = self.model_holder()
+        if self.player_token is None or token is None:
             return False, "[Modelo] Só funciona no terreno (--terrain).", RED
-        path = store.path_of(choice["arquivo"], self.custom_model_dir or store.MODELS_DIR)
-        if path is None:
-            return False, f"[Modelo] Não achei o modelo '{choice['arquivo']}'. /skin modelo lista mostra os guardados.", RED
-        try:
-            model = CustomModel.from_file(path, choice["altura"], choice["giro"], create_gl=self.model_gl)
-        except ModelError as exc:
-            return False, f"[Modelo] {exc}", RED
-        if choice.get("perfil") == "clipes" and not model.clips_available:
-            model.delete()
-            return False, "[Modelo] Este arquivo não traz clipes de animação para os ossos dele; escolha outro perfil.", RED
-        if model.rig is not None:
-            try:
-                roles, roles_file = None, store.roles_path(choice["arquivo"], self.custom_model_dir or store.MODELS_DIR)
-                if choice.get("perfil") != "clipes" and os.path.isfile(roles_file):
-                    roles = Roles.load(model.rig, roles_file)   # os papéis ajustados à mão (/skin modelo papeis)
-                model.animate(roles, choice.get("perfil"))
-                note = f" Anda como '{model.animator.profile}'." + (" (papéis do arquivo .papeis.json)" if roles else "")
-            except (ModelError, RolesError) as exc:
-                note = f" Sem animação: {exc}"
-        else:
-            note = " Sem esqueleto: fica parado, na pose do arquivo."
-        if model.animator is not None and choice.get("reparar", True):
-            cut = model.repair_stretch()
-            if cut:
-                note += f" Cortei {cut} triângulos que esticavam ao andar."
+        model, note = build_custom_model(choice, self.custom_model_dir, self.model_gl)
+        if model is None:
+            return False, note, RED
         previous = token.set_custom_model(model)
         if previous is not None:
             previous.delete()
@@ -365,7 +386,7 @@ class SkinCommandHandler:
 
     def clear_custom_model(self) -> None:
         self.want_custom = False
-        token = self.player_token
+        token = self.model_holder()
         if token is not None:
             previous = token.set_custom_model(None)
             if previous is not None:
@@ -384,7 +405,7 @@ class SkinCommandHandler:
         """Um rótulo de papel por osso do modelo em uso (None sem modelo ou sem esqueleto)."""
         from src.clothing.procedural import auto_roles
         from src.clothing.role_editor import labels_from_roles
-        model = self.player_token.custom_model if self.player_token is not None else None
+        model = getattr(self.model_holder(), "custom_model", None)
         if model is None or model.rig is None:
             return None
         if self._labels_model is not model:
@@ -398,7 +419,7 @@ class SkinCommandHandler:
         from src.clothing.procedural import auto_roles
         from src.clothing.role_editor import LABELS, TITLES, roles_from_labels
         labels = self.bone_labels()
-        model = self.player_token.custom_model if labels is not None else None
+        model = getattr(self.model_holder(), "custom_model", None) if labels is not None else None
         if model is None or label not in LABELS or not 0 <= bone < len(labels):
             return False, "[Modelo] Sem esqueleto para ajustar.", RED
         labels[bone] = label
@@ -420,9 +441,9 @@ class SkinCommandHandler:
         import shutil
         from src.clothing import custom_model_store as store
         from src.clothing.procedural import Roles, RolesError, auto_roles
-        if self.model_choice is None or self.player_token.custom_model is None:
+        model = getattr(self.model_holder(), "custom_model", None)
+        if self.model_choice is None or model is None:
             return False, "[Modelo] Escolha um modelo antes: /skin modelo <nome>.", RED
-        model = self.player_token.custom_model
         if model.rig is None:
             return False, "[Modelo] Este modelo não tem esqueleto.", RED
         directory = self.custom_model_dir or store.MODELS_DIR
@@ -592,6 +613,264 @@ class SkinCommandHandler:
         return True, f"[Revelar] {'ligado' if renderer.enabled else 'desligado'}.", CYAN
 
     # ------------------------------------------------------------------ /seed
+    # ------------------------------------------------------------------ combate
+    def enemy(self, args: List[str]) -> Result:
+        """/inimigo <tipo> [quantidade] | lista | limpar: põe inimigos perto do personagem (o combate é por turnos)."""
+        from src.combat.bestiary import BESTIARY, find_creature
+        if self.combat is None or self.player_token is None:
+            return False, "[Combate] Só funciona no terreno (--terrain).", RED
+        kinds = ", ".join(BESTIARY)
+        if not args or args[0].lower() in ("lista", "list"):
+            return True, f"[Combate] Inimigos: {kinds}. Use /inimigo <tipo> [quantidade].", CYAN
+        if args[0].lower() in ("limpar", "clear"):
+            return True, f"[Combate] {self.combat.clear(keep_npcs=True)} inimigo(s) removido(s).", CYAN
+        creature = find_creature(args[0])
+        if creature is None:
+            return False, f"[Combate] Não conheço '{args[0]}'. Inimigos: {kinds}.", RED
+        count = 1
+        if len(args) > 1:
+            try:
+                count = max(1, min(8, int(args[1])))
+            except ValueError:
+                return False, "[Combate] Use /inimigo <tipo> [quantidade 1-8].", RED
+        made = self.combat.spawn(creature.key, count, [float(v) for v in self.player_token.position])
+        return True, (f"[Combate] {len(made)} {creature.name}(s) por perto. Clique num deles para atacar de surpresa, "
+                      "ou chegue perto e ele te ataca."), GREEN
+
+    # ------------------------------------------------------------------ /criar npc e /npc
+    NPC_USAGE = "Uso: /criar npc [nome] [hostil|amigavel] [masculino|feminino] [molde do bestiário]"
+    NPC_FIELDS = ("nome", "lado", "molde", "fala")
+
+    def create(self, args: List[str]) -> Result:
+        """/criar npc [nome] [hostil|amigavel] [masculino|feminino] [molde]: abre a tela do /skin para o NPC, com a
+        aba NPC onde tudo isso se muda; ao fechá-la, ele aparece na frente do personagem e fica salvo no mundo.
+        Nada é obrigatório e a ordem não importa: o que não é lado, corpo nem molde vira o nome."""
+        from src.combat.bestiary import BESTIARY, find_creature
+        from src.interactive.combat_controller import DEFAULT_LINE, NPC_SIDES, NPC_TEMPLATES
+        if self.combat is None or self.player_token is None:
+            return False, "[NPC] Só funciona no terreno (--terrain).", RED
+        if not args or args[0].lower() != "npc":
+            return False, self.NPC_USAGE, GOLD
+        if self.npc_request is not None or self.npc_editing is not None:
+            return False, "[NPC] Termine o NPC que está na tela de criação antes.", RED
+        side, body, creature, words = None, None, None, []
+        for word in args[1:]:
+            low = word.lower()
+            if side is None and low in NPC_SIDES:
+                side = NPC_SIDES[low]
+            elif body is None and low in BODIES:
+                body = low
+            elif creature is None and find_creature(low) is not None:
+                creature = find_creature(low)
+            else:
+                words.append(word.replace("_", " "))
+        ally = True if side is None else side
+        creature = creature or BESTIARY[NPC_TEMPLATES[ally]]
+        female = body is not None and BODIES[body] == BodyType.FEMALE
+        name = self.combat.unique_npc_name(" ".join(words).strip() or "Novo NPC")
+        self.npc_request = {"nome": name, "lado": "amigavel" if ally else "hostil", "molde": creature.key,
+                            "fala": DEFAULT_LINE, "corpo": "feminino" if female else "masculino"}
+        return True, (f"[NPC] Criando {name}: monte o NPC etapa por etapa (modelo, roupa, ajustes, rosto, cabelo) e, "
+                      "por último, dê nome, lado, ficha e fala. Ao criar, ele aparece na sua frente."), GREEN
+
+    def npc_set(self, field: str, value: str) -> Result:
+        """/npc definir <nome|lado|molde|fala> <valor>: muda o NPC que está na tela de criação."""
+        from src.combat.bestiary import BESTIARY, find_creature
+        from src.interactive.combat_controller import NPC_SIDES, NPC_TEMPLATES
+        spec = self.npc_editing
+        if spec is None:
+            return False, "[NPC] Nenhum NPC na tela de criação. Use /criar npc ou /npc editar <nome>.", RED
+        field, value = field.lower(), value.strip()
+        if field not in self.NPC_FIELDS:
+            return False, f"[NPC] Campos: {', '.join(self.NPC_FIELDS)}.", GOLD
+        if field == "nome":
+            if not value:
+                return False, "[NPC] O nome não pode ficar vazio.", RED
+            keep = spec.get("id") if self.combat is not None and self.combat.token(spec.get("id")) else None
+            spec["nome"] = self.combat.unique_npc_name(value, keep) if self.combat is not None else value
+            return True, f"[NPC] Nome: {spec['nome']}.", GREEN
+        if field == "lado":
+            if value.lower() not in NPC_SIDES:
+                return False, f"[NPC] O lado é hostil ou amigavel, não '{value}'.", RED
+            ally, was = NPC_SIDES[value.lower()], spec.get("lado") == "amigavel"
+            if spec.get("molde") == NPC_TEMPLATES[was]:   # a ficha padrão do lado acompanha a troca
+                spec["molde"] = NPC_TEMPLATES[ally]
+            spec["lado"] = "amigavel" if ally else "hostil"
+            return True, f"[NPC] {spec.get('nome')} agora é {'amigável' if ally else 'hostil'}.", GREEN
+        if field == "molde":
+            creature = find_creature(value)
+            if creature is None:
+                return False, f"[NPC] Não conheço o molde '{value}'. Moldes: {', '.join(BESTIARY)}.", RED
+            spec["molde"] = creature.key
+            return True, f"[NPC] Ficha de combate: {creature.name}.", GREEN
+        if not value:
+            return False, "[NPC] Escreva o que ele diz.", RED
+        spec["fala"] = value
+        return True, f"[NPC] {spec.get('nome')} diz: {value}", GREEN
+
+    def npc(self, args: List[str]) -> Result:
+        """/npc lista | editar <nome> | fala <nome> <texto> | remover <nome>."""
+        usage = "Uso: /npc lista | editar <nome> | fala <nome> <texto> | remover <nome> | definir <campo> <valor>"
+        if self.combat is None:
+            return False, "[NPC] Só funciona no terreno (--terrain).", RED
+        sub = args[0].lower() if args else "lista"
+        if sub in ("definir", "set"):
+            if len(args) < 2:
+                return False, f"Uso: /npc definir <{'|'.join(self.NPC_FIELDS)}> <valor>", GOLD
+            return self.npc_set(args[1], " ".join(args[2:]))
+        if sub in ("lista", "list"):
+            npcs = self.combat.npcs()
+            if not npcs:
+                return True, "[NPC] Nenhum NPC neste mundo. Crie um com /criar npc.", CYAN
+            shown = ", ".join(f"{e.combatant.name} ({'amigável' if e.friendly else 'hostil'}, "
+                              f"{e.creature.name.lower()})" for e in npcs)
+            return True, f"[NPC] {shown}", CYAN
+        if len(args) < 2:
+            return False, usage, GOLD
+        token = self.combat.find_npc(args[1].replace("_", " "))
+        if token is None:
+            return False, f"[NPC] Não há NPC chamado {args[1]}. Veja /npc lista.", RED
+        name = token.combatant.name
+        if sub in ("remover", "remove", "apagar"):
+            if not self.combat.remove_npc(token.id):
+                return False, f"[NPC] {name} está numa luta agora.", RED
+            return True, f"[NPC] {name} saiu do mundo.", CYAN
+        if sub in ("fala", "falar", "say"):
+            if len(args) < 3:
+                return True, f"[NPC] {name} diz: {token.npc.get('fala')}", CYAN
+            token.npc["fala"] = " ".join(args[2:])
+            return True, f"[NPC] {name} agora diz: {token.npc['fala']}", GREEN
+        if sub in ("editar", "edit"):
+            if self.npc_request is not None or self.npc_editing is not None:
+                return False, "[NPC] Termine o NPC que está na tela de criação antes.", RED
+            if self.combat.session is not None and self.combat.session.get(token.id) is not None:
+                return False, f"[NPC] {name} está numa luta agora.", RED
+            self.npc_request = {"editar": token.id}
+            return True, f"[NPC] Editando {name}: as etapas da aparência e, na última, nome, lado, ficha e fala.", GREEN
+        return False, usage, GOLD
+
+    def sheet(self, args: List[str]) -> Result:
+        """/ficha: os atributos, a vida, a CA, a arma e os itens do personagem."""
+        if self.combat is None:
+            return False, "[Combate] Só funciona no terreno (--terrain).", RED
+        from src.combat.actions import ITEMS
+        from src.combat.stats import ABILITY_NAMES
+        sheet = self.combat.sheet
+        c = sheet.combatant((0.0, 0.0, 0.0))
+        scores = "  ".join(f"{k.upper()} {sheet.scores[k]} ({c.mod(k):+d})" for k in ABILITY_NAMES)
+        items = ", ".join(f"{ITEMS[k].name} x{n}" for k, n in sheet.items.items() if k in ITEMS) or "nenhum"
+        return True, (f"[Ficha] Nível {sheet.level}  Vida {int(c.hp)}/{c.max_hp}  CA {c.armor_class}  {scores}  |  "
+                      f"{c.weapon.name} {c.weapon.damage} (acerto {c.attack_bonus:+d})  {c.armor.name}  |  "
+                      f"Itens: {items}"), CYAN
+
+    def attribute(self, args: List[str]) -> Result:
+        """/atributo <for|des|con|sab> <1-30> | arma <nome> | armadura <nome> | nivel <1-20>."""
+        if self.combat is None:
+            return False, "[Combate] Só funciona no terreno (--terrain).", RED
+        if self.combat.in_combat:
+            return False, "[Combate] Não dá para mudar a ficha no meio de um combate.", RED
+        from src.combat.stats import ABILITIES, ARMORS, WEAPONS
+        sheet = self.combat.sheet
+        usage = ("[Ficha] Use /atributo <for|des|con|sab> <1-30>, /atributo arma <" + "|".join(WEAPONS) + ">, "
+                 "/atributo armadura <" + "|".join(ARMORS) + "> ou /atributo nivel <1-20>.")
+        if len(args) < 2:
+            return False, usage, RED
+        key, value = args[0].lower(), args[1].lower()
+        if key in ABILITIES:
+            if not value.isdigit() or not 1 <= int(value) <= 30:
+                return False, usage, RED
+            sheet.scores[key] = int(value)
+        elif key == "arma" and value in WEAPONS:
+            sheet.weapon = value
+        elif key == "armadura" and value in ARMORS:
+            sheet.armor = value
+        elif key in ("nivel", "nível") and value.isdigit() and 1 <= int(value) <= 20:
+            sheet.level = int(value)
+        else:
+            return False, usage, RED
+        sheet.hp = None
+        return self.sheet([])
+
+    def master(self, args: List[str]) -> Result:
+        """/mestre [fechar | hora <hh[:mm]> | cena <nome> | padrao]: o painel de ambientação do mestre, à esquerda."""
+        import unicodedata
+        from src.rendering.ambience import PRESETS
+
+        def _fold(text: str) -> str:
+            return "".join(c for c in unicodedata.normalize("NFD", text.lower().strip()) if not unicodedata.combining(c))
+        panel = self.master_panel
+        if panel is None:
+            return False, "[Mestre] Só funciona no terreno (--terrain).", RED
+        word = args[0].lower() if args else ""
+        if not word:
+            opened = panel.toggle()
+            return True, "[Mestre] Ambientação aberta." if opened else "[Mestre] Ambientação fechada.", CYAN
+        if word in ("fechar", "close", "off"):
+            panel.close()
+            return True, "[Mestre] Ambientação fechada.", CYAN
+        if word in ("abrir", "open", "on"):
+            panel.open()
+            return True, "[Mestre] Ambientação aberta.", CYAN
+        if word in ("hora", "hour") and len(args) > 1:
+            try:
+                hours, _, minutes = args[1].replace("h", ":").partition(":")
+                value = int(hours) + (int(minutes) if minutes else 0) / 60.0
+            except ValueError:
+                return False, "[Mestre] Use /mestre hora 18:30.", RED
+            if not 0 <= value < 24:
+                return False, "[Mestre] A hora vai de 0 a 23:59.", RED
+            panel.ambience.hour = value
+            panel.activate("set")
+            return True, f"[Mestre] Agora são {panel.ambience.clock_text()}.", CYAN
+        if word in ("cena", "scene") and len(args) > 1:
+            wanted = _fold(" ".join(args[1:]))
+            name = next((n for n, _ in PRESETS if _fold(n) == wanted or _fold(n).startswith(wanted)), None)
+            if name is None:
+                return False, "[Mestre] Cenas: " + ", ".join(n for n, _ in PRESETS) + ".", RED
+            panel.activate("preset:" + name)
+            return True, f"[Mestre] Cena: {name}.", CYAN
+        if word in ("guerra", "war"):
+            modes = {"sem": 0, "off": 0, "desligada": 0, "revela": 1, "on": 1, "volta": 2, "em": 2}
+            mode = modes.get(_fold(args[1]) if len(args) > 1 else "", None)
+            if mode is None:
+                return False, "[Mestre] Use /mestre guerra sem | revela | volta.", RED
+            panel.activate(f"war:{mode}")
+            return True, "[Mestre] Névoa de guerra: " + ("desligada", "o explorado fica limpo",
+                                                         "só em volta do grupo")[mode] + ".", CYAN
+        if word in ("estilo", "style") and len(args) > 1:
+            choice = {"nuvens": 0, "nuvem": 0, "blocos": 0, "nevoa": 1, "plana": 1, "fog": 1,
+                      "fofas": 2, "fofa": 2, "macias": 2}.get(_fold(args[1]))
+            if choice is None:
+                return False, "[Mestre] Use /mestre estilo nuvens | nevoa | fofas.", RED
+            panel.activate(f"style:{choice}")
+            return True, ("[Mestre] Névoa de guerra em nuvens de blocos.",
+                          "[Mestre] Névoa de guerra plana (a névoa de antes).",
+                          "[Mestre] Névoa de guerra em nuvens fofas.")[choice], CYAN
+        if word in ("altura", "height") and len(args) > 1:
+            try:
+                value = int(args[1])
+            except ValueError:
+                return False, "[Mestre] Use /mestre altura <0 a 16>.", RED
+            panel.ambience.war_height = value
+            panel.activate("set")
+            return True, f"[Mestre] A névoa de guerra sobe {panel.ambience.war_height} bloco(s) acima do relevo.", CYAN
+        if word in ("objetos", "objects") and len(args) > 1:
+            choice = {"cobrir": 1, "esconder": 1, "mostrar": 0, "acima": 0}.get(_fold(args[1]))
+            if choice is None:
+                return False, "[Mestre] Use /mestre objetos cobrir | mostrar.", RED
+            panel.activate(f"objects:{choice}")
+            return True, ("[Mestre] O que é mais alto que a névoa aparece por cima dela.",
+                          "[Mestre] A névoa cobre também as construções.")[choice], CYAN
+        if word in ("recobrir", "cobrir"):
+            panel.activate("recover")
+            return True, "[Mestre] A névoa cobriu de novo o que foi explorado.", CYAN
+        if word in ("padrao", "padrão", "reset"):
+            panel.activate("reset")
+            return True, "[Mestre] Ambientação de volta ao padrão.", CYAN
+        return False, ("[Mestre] Use /mestre, /mestre hora <hh:mm>, /mestre cena <nome>, /mestre guerra "
+                       "<sem|revela|volta>, /mestre estilo <nuvens|nevoa|fofas>, /mestre altura <0 a 16>, /mestre objetos <cobrir|mostrar>, /mestre recobrir ou "
+                       "/mestre padrao."), RED
+
     def seed(self, args: List[str]) -> Result:
         """/seed: mostra a seed do mundo aberto e a copia para a área de transferência."""
         getter = self.world_seed
@@ -662,7 +941,8 @@ class SkinCommandHandler:
 
     # ------------------------------------------------------------------ /sombras
     def shadows(self, args: List[str]) -> Result:
-        """/sombras [on|off|forca <0-1>]: as sombras que o sol projeta no terreno e nas construções."""
+        """/sombras [on|off|forca <0-1>|detalhe <leve|formas|plantas|completa>]: as sombras que o sol projeta no
+        terreno e nas construções."""
         renderer = self.sun_shadows
         if renderer is None:
             return False, "[Sombras] Só funciona no terreno (--terrain).", RED
@@ -676,12 +956,20 @@ class SkinCommandHandler:
                 return False, "[Sombras] Use /sombras forca <0 a 1>.", RED
             renderer.strength = value
             return True, f"[Sombras] Força: {value:g}.", CYAN
+        if word in ("detalhe", "detail"):
+            names = ("leve", "formas", "plantas", "completa")
+            choice = args[1].lower() if len(args) > 1 else ""
+            level = names.index(choice) if choice in names else (int(choice) if choice in ("0", "1", "2", "3") else None)
+            if level is None:
+                return False, "[Sombras] Use /sombras detalhe leve | formas | plantas | completa.", RED
+            renderer.set_detail(level, self.world_shader)
+            return True, f"[Sombras] Detalhe: {names[level]} (até mudar nas Configurações).", CYAN
         if word in ("on", "ligar", "sim"):
             renderer.enabled = True
         elif word in ("off", "desligar", "nao", "não"):
             renderer.enabled = False
         elif word:
-            return False, "[Sombras] Use /sombras [on|off|forca <0 a 1>].", RED
+            return False, "[Sombras] Use /sombras [on|off|forca <0 a 1>|detalhe <nível>].", RED
         else:
             renderer.enabled = not renderer.enabled
         return True, f"[Sombras] {'ligadas' if renderer.enabled else 'desligadas'}.", CYAN
@@ -1646,7 +1934,7 @@ SKIN_COMMANDS: List[Command] = [
     Command(("roupas", "outfit"), "/skin roupas", "mostra o que está vestido", SkinCommandHandler.outfit, [], "Roupas"),
     Command(("preset",), "/skin preset <nome>", "aparência pronta", SkinCommandHandler.preset, list(PRESETS), "Personagem"),
     Command(("reset",), "/skin reset", "volta ao padrão", SkinCommandHandler.reset, [], "Personagem"),
-    Command(("interface", "editor", "criar"), "/skin interface", "abre a tela de criação de personagem",
+    Command(("interface", "editor"), "/skin interface", "abre a tela de criação de personagem",
             SkinCommandHandler.interface, [], "Personagem"),
     Command(("modelo", "model"), "/skin modelo <nome|caminho.glb|lista|off|perfil|altura|giro>",
             "usa um modelo .glb como corpo do personagem", SkinCommandHandler.custom_model,
@@ -1661,13 +1949,26 @@ ROOT_COMMANDS: List[Command] = [
     Command(("skin",), "/skin <comando>", "muda o personagem", SkinCommandHandler.skin, None),
     Command(("ajuda", "help", "?"), "/ajuda [comando]", "lista os comandos", SkinCommandHandler.help, None),
     Command(("girar", "spin"), "/girar [on|off]", "rotação automática no visualizador", SkinCommandHandler.spin, ["on", "off"]),
+    Command(("inimigo", "enemy", "spawn"), "/inimigo <tipo> [quantidade] | lista | limpar",
+            "põe inimigos perto do personagem (combate por turnos)", SkinCommandHandler.enemy, None),
+    Command(("ficha", "sheet"), "/ficha", "mostra a ficha de combate do personagem", SkinCommandHandler.sheet, None),
+    Command(("criar", "create"), "/criar npc <nome> <hostil|amigavel> <masculino|feminino> [molde]",
+            "cria um NPC com a tela do /skin", SkinCommandHandler.create, None),
+    Command(("npc",), "/npc lista | editar <nome> | fala <nome> <texto> | remover <nome>",
+            "os NPCs do mundo", SkinCommandHandler.npc, None),
+    Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
+            "muda a ficha de combate", SkinCommandHandler.attribute, None),
+    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | estilo <nuvens|nevoa|fofas> | altura <n> | objetos <cobrir|mostrar> | "
+            "recobrir | padrao]",
+            "o painel do mestre: hora do dia, claridade, névoa e outras ambientações", SkinCommandHandler.master,
+            ["hora", "cena", "guerra", "estilo", "altura", "objetos", "recobrir", "padrao", "fechar"]),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),
     Command(("bloco", "block", "setblock"), "/bloco <escada|tocha|fogo|capim|papoula|...> [x y z [altura]]",
             "põe um enfeite no terreno (escada de mão, tocha, fogo, planta)", SkinCommandHandler.block, None),
-    Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>]",
-            "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca"]),
+    Command(("sombras", "shadows"), "/sombras [on|off|forca <0-1>|detalhe <nível>]",
+            "sombras do sol no terreno", SkinCommandHandler.shadows, ["on", "off", "forca", "detalhe"]),
     Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>|teto <0-1>]",
             "revela só o espaço fechado em que o jogador está", SkinCommandHandler.reveal,
             ["on", "off", "escuro", "teto"]),
@@ -1729,8 +2030,13 @@ def _schematic_names() -> List[str]:
 COMMAND_TREE: Dict[str, Any] = {
     "skin": _tree(SKIN_COMMANDS), "ajuda": [c.names[0] for c in SKIN_COMMANDS], "girar": ["on", "off"],
     "revelar": ["on", "off", "escuro", "teto"],
-    "sombras": ["on", "off", "forca"],
+    "sombras": ["on", "off", "forca", "detalhe"],
     "seed": [],
+    "inimigo": ["lista", "limpar", "zumbi", "esqueleto", "aranha", "slime", "bandido", "guarda", "ogro"],
+    "ficha": [],
+    "criar": {"npc": []},
+    "npc": {"lista": [], "editar": [], "fala": [], "remover": [], "definir": ["nome", "lado", "molde", "fala"]},
+    "atributo": ["for", "des", "con", "sab", "arma", "armadura", "nivel"],
     "agua": [],
     "bloco": list(BLOCK_NAMES),
     "schem": {"load": _schematic_names, "list": [], "place": [], "cancel": [], "remove": [], "clear": [], "info": []},

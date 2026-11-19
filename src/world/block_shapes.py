@@ -699,6 +699,38 @@ def is_full_cube(block_name: str) -> bool:
     return shape_for(block_name) is None
 
 
+SHADOW_BOXES = 8    # até quantas caixas de um bloco a sombra do sol leva (as maiores)
+
+
+@lru_cache(maxsize=4096)
+def shadow_boxes(block_name: str) -> Tuple[Tuple[Vec, Vec], ...]:
+    """As caixas do bloco em blocos (0 a 1 dentro da célula), para a sombra do sol: ``(lo, hi)`` de cada uma, as
+    ``SHADOW_BOXES`` maiores. Vazio para o cubo inteiro e para o que só tem planos (planta, escada de mão)."""
+    shape = shape_for(block_name)
+    boxes = [part for part in shape or () if isinstance(part, Box)]
+    boxes.sort(key=lambda b: -(b.hi[0] - b.lo[0]) * (b.hi[1] - b.lo[1]) * (b.hi[2] - b.lo[2]))
+    return tuple((tuple(v / 16.0 for v in b.lo), tuple(v / 16.0 for v in b.hi)) for b in boxes[:SHADOW_BOXES])
+
+
+@lru_cache(maxsize=4096)
+def shadow_plant(block_name: str) -> Optional[Tuple[str, float, float]]:
+    """Os planos em X de uma planta (muda, flor, capim, cogumelo), para a sombra do sol: ``(textura, y0, y1)``, a
+    textura deles e a altura de baixo e de cima em blocos; None se o bloco não é planta em cruz. A sombra sai do
+    desenho da textura (o transparente deixa o sol passar)."""
+    if parse_block(block_name)[0] in ("fire", "soul_fire"):
+        return None                                            # o fogo é luz, não faz sombra
+    shape = shape_for(block_name)
+    if not shape or any(isinstance(part, Box) for part in shape):
+        return None
+    crossed = [part for part in shape if isinstance(part, Quad)
+               and len({c[0] for c in part.corners}) > 1 and len({c[2] for c in part.corners}) > 1
+               and len({c[1] for c in part.corners}) > 1]           # de pé e na diagonal (não cipó, trilho, escada)
+    if not crossed or not crossed[0].texture:
+        return None
+    ys = [c[1] for part in crossed for c in part.corners]
+    return crossed[0].texture, min(ys) / 16.0, max(ys) / 16.0
+
+
 # Blocos que enfeitam o espaço sem barrar quem passa (nem selar um cômodo)
 _DECORATION_SUFFIXES = ("_button", "_pressure_plate", "_wall_sign", "_sign", "_carpet", "torch", "lantern", "_candle",
                         "_rail", "_banner")
