@@ -79,3 +79,16 @@ def test_malha_vetorizada_tem_os_lados_virados_para_fora():
     assert below.min() == 0.0 and below.max() > 0.0       # o topo (0) e o pé dos lados (abaixo do topo)
     tops = mesh[mesh[:, 3] == 1.0]
     assert (tops[:, 5] == 0.0).all()
+
+
+def test_altura_da_nevoa_e_cobrir_objetos():
+    box = ((20, 9, 20), (21, 30, 21))                      # uma torre alta na célula (10, 10)
+    field = CloudField(lambda x, z: 8, objects=lambda: [box])
+    field.update(REVEAL, 0.5, 0.5, 0.016)
+    top = field.column((10, 10))[1]
+    assert top >= 30 + 1 + CLEARANCE                       # padrão: a nuvem sobe por cima da construção
+    assert field.column((12, 12))[1] <= 8 + 2 + CLEARANCE  # longe dela, rente ao relevo
+    field.configure(CLEARANCE, False)                       # o mestre: o que é mais alto aparece
+    assert field.column((10, 10))[1] <= 8 + 2 + CLEARANCE
+    field.configure(6, False)                               # a névoa mais alta
+    assert field.column((12, 12))[1] >= 8 + 1 + 6

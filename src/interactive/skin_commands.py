@@ -836,6 +836,21 @@ class SkinCommandHandler:
             panel.activate(f"war:{mode}")
             return True, "[Mestre] Névoa de guerra: " + ("desligada", "o explorado fica limpo",
                                                          "só em volta do grupo")[mode] + ".", CYAN
+        if word in ("altura", "height") and len(args) > 1:
+            try:
+                value = int(args[1])
+            except ValueError:
+                return False, "[Mestre] Use /mestre altura <0 a 16>.", RED
+            panel.ambience.war_height = value
+            panel.activate("set")
+            return True, f"[Mestre] A névoa de guerra sobe {panel.ambience.war_height} bloco(s) acima do relevo.", CYAN
+        if word in ("objetos", "objects") and len(args) > 1:
+            choice = {"cobrir": 1, "esconder": 1, "mostrar": 0, "acima": 0}.get(_fold(args[1]))
+            if choice is None:
+                return False, "[Mestre] Use /mestre objetos cobrir | mostrar.", RED
+            panel.activate(f"objects:{choice}")
+            return True, ("[Mestre] O que é mais alto que a névoa aparece por cima dela.",
+                          "[Mestre] A névoa cobre também as construções.")[choice], CYAN
         if word in ("recobrir", "cobrir"):
             panel.activate("recover")
             return True, "[Mestre] A névoa cobriu de novo o que foi explorado.", CYAN
@@ -843,7 +858,8 @@ class SkinCommandHandler:
             panel.activate("reset")
             return True, "[Mestre] Ambientação de volta ao padrão.", CYAN
         return False, ("[Mestre] Use /mestre, /mestre hora <hh:mm>, /mestre cena <nome>, /mestre guerra "
-                       "<sem|revela|volta>, /mestre recobrir ou /mestre padrao."), RED
+                       "<sem|revela|volta>, /mestre altura <0 a 16>, /mestre objetos <cobrir|mostrar>, /mestre recobrir ou "
+                       "/mestre padrao."), RED
 
     def seed(self, args: List[str]) -> Result:
         """/seed: mostra a seed do mundo aberto e a copia para a área de transferência."""
@@ -1923,9 +1939,10 @@ ROOT_COMMANDS: List[Command] = [
             "os NPCs do mundo", SkinCommandHandler.npc, None),
     Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
             "muda a ficha de combate", SkinCommandHandler.attribute, None),
-    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | recobrir | padrao]",
+    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | altura <n> | objetos <cobrir|mostrar> | "
+            "recobrir | padrao]",
             "o painel do mestre: hora do dia, claridade, névoa e outras ambientações", SkinCommandHandler.master,
-            ["hora", "cena", "guerra", "recobrir", "padrao", "fechar"]),
+            ["hora", "cena", "guerra", "altura", "objetos", "recobrir", "padrao", "fechar"]),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),

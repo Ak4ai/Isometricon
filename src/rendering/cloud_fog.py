@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import os
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Iterable, Optional, Tuple
 
 import numpy as np
 
@@ -24,7 +24,7 @@ from src.rendering.fog_of_war import AROUND, OFF, RADIUS, REVEAL, ExploredMap
 CELL = 2            # o lado de uma célula de nuvem, em blocos
 WINDOW = 64         # células de lado na manta (128 blocos)
 RECENTER = 12       # células: recentra quando o jogador se afasta isto do centro
-CLEARANCE = 2       # o topo fica isto acima do bloco mais alto da célula (cobre o capim e as flores)
+CLEARANCE = 2       # padrão: o topo fica isto acima do bloco mais alto da célula (cobre o capim e as flores)
 FADE_SECONDS = 0.55
 SHADES = {'top': 1.0, 'x': 0.86, 'z': 0.74}   # o sombreado chapado das nuvens do Minecraft
 FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
@@ -32,6 +32,7 @@ FAR = 4             # células: daqui para dentro da manta a nuvem é densa
 UNIT = 8            # a unidade de textura do campo de distância (7 é a do cursor)
 
 Cell = Tuple[int, int]
+Box = Tuple[Tuple[int, int, int], Tuple[int, int, int]]
 
 
 def _hash(cx: int, cz: int) -> float:
@@ -43,8 +44,14 @@ def _hash(cx: int, cz: int) -> float:
 class CloudField:
     """As células cobertas, as alturas e a animação (sem GL: testável)."""
 
-    def __init__(self, height: Callable[[int, int], int], explored: Optional[ExploredMap] = None) -> None:
+    def __init__(self, height: Callable[[int, int], int], explored: Optional[ExploredMap] = None,
+                 objects: Optional[Callable[[], Iterable[Box]]] = None) -> None:
         self.height = height                        # a altura do relevo num bloco (x, z)
+        self.objects = objects                      # as caixas (mín, máx, inclusive) das construções no mundo
+        self.clearance = CLEARANCE                  # blocos acima do relevo (o mestre: "Altura da névoa")
+        self.cover_objects = True                   # as nuvens sobem por cima das construções
+        self._boxes: Tuple[Box, ...] = ()
+        self._object_tops: Dict[Cell, int] = {}
         self.explored = explored or ExploredMap()
         self.origin: Optional[Cell] = None          # a célula do canto da manta
         self.cover: Dict[Cell, float] = {}           # 1 nuvem inteira, 0 aberta; entre os dois, animando
@@ -53,6 +60,29 @@ class CloudField:
         self._key = None
         self.revision = 0                            # muda quando a malha das células inteiras precisa ser refeita
         self._distance = None                        # (revisão, distance_map)
+
+    def configure(self, clearance: int, cover_objects: bool) -> None:
+        """A altura das nuvens e se elas cobrem as construções; refaz as colunas se mudou."""
+        clearance, cover_objects = int(clearance), bool(cover_objects)
+        if (clearance, cover_objects) != (self.clearance, self.cover_objects):
+            self.clearance, self.cover_objects = clearance, cover_objects
+            self._columns.clear()
+            self.revision += 1
+
+    def _sync_objects(self) -> None:
+        """Relê as caixas das construções; se mudaram, refaz o topo delas por célula e as colunas."""
+        boxes = tuple(self.objects()) if self.objects is not None else ()
+        if boxes == self._boxes:
+            return
+        self._boxes = boxes
+        tops: Dict[Cell, int] = {}
+        for (x0, _, z0), (x1, y1, z1) in boxes:
+            for cx in range(x0 // CELL, x1 // CELL + 1):
+                for cz in range(z0 // CELL, z1 // CELL + 1):
+                    tops[(cx, cz)] = max(tops.get((cx, cz), y1), y1)
+        self._object_tops = tops
+        self._columns.clear()
+        self.revision += 1
 
     def reset(self) -> None:
         """Outro relevo (outro mundo ou outra seed): as alturas e a manta são refeitas."""
@@ -76,7 +106,9 @@ class CloudField:
                 low, high = min(low, h), max(high, h)
         # rente ao relevo (numa vista isométrica, uma nuvem alta na frente taparia o que já foi revelado), com um
         # bloco a mais aqui e ali: o topo fica em patamares, como as nuvens do Minecraft
-        top = high + 1 + CLEARANCE + (1 if _hash(cx, cz) > 0.78 else 0)
+        if self.cover_objects and cell in self._object_tops:   # por cima da construção também
+            high = max(high, self._object_tops[cell])
+        top = high + 1 + self.clearance + (1 if _hash(cx, cz) > 0.78 else 0)
         found = self._columns[cell] = (low - 1, top)
         return found
 
@@ -91,6 +123,7 @@ class CloudField:
 
     def update(self, mode: int, x: float, z: float, dt: float) -> None:
         """Os alvos (coberto ou não) quando algo muda, e a animação das células que estão mudando."""
+        self._sync_objects()
         here = (int(math.floor(x / CELL)), int(math.floor(z / CELL)))
         if (self.origin is None or abs(here[0] - (self.origin[0] + WINDOW // 2)) > RECENTER
                 or abs(here[1] - (self.origin[1] + WINDOW // 2)) > RECENTER):
@@ -256,10 +289,11 @@ class CloudFog:
     distância (``CloudField.distance_map``), uma textura pequena: rala na beira, densa no miolo.
     """
 
-    def __init__(self, height: Callable[[int, int], int], explored: ExploredMap) -> None:
+    def __init__(self, height: Callable[[int, int], int], explored: ExploredMap,
+                 objects: Optional[Callable[[], Iterable[Box]]] = None) -> None:
         from src.rendering.shader import Shader
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.field = CloudField(height, explored)
+        self.field = CloudField(height, explored, objects)
         self.shader = Shader(os.path.join(root, 'assets', 'shaders', 'cloud.vert'),
                              os.path.join(root, 'assets', 'shaders', 'cloud.frag'))
         self._meshes = {'full': self._new_mesh(), 'moving': self._new_mesh()}

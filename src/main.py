@@ -1838,7 +1838,9 @@ def main() -> None:
             clouds_on = bool(ambience.fog_war) and not underground_mode
             if clouds_on and cloud_fog is None:
                 from src.rendering.cloud_fog import CloudFog
-                cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored)
+                cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored,
+                                     lambda: [placed.bounds() for placed in schematic_tool.layer.structures]
+                                     if schematic_tool is not None else [])
             fog_war_args = (0 if clouds_on else ambience.fog_war, np.linalg.inv(np.asarray(model, dtype=np.float64)), ambience.war_color(),
                             (float(player_token.position[0]), float(player_token.position[2])))
             fog_war.apply(shader, *fog_war_args)
@@ -2117,6 +2119,7 @@ def main() -> None:
             if cloud_fog is not None and (clouds_on or cloud_fog.field.cover):
                 # a névoa de guerra: a manta de nuvens translúcida sobre o que ninguém viu, por último (quem está
                 # debaixo da beira rala aparece através dela)
+                cloud_fog.field.configure(ambience.war_height, ambience.war_objects)
                 cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
                                  float(player_token.position[2]), dt)
                 cloud_fog.render(projection, view, model, ambience.tint(), window.time)

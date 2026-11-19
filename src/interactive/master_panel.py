@@ -32,6 +32,11 @@ SLIDERS = (
 CLOCK_LABELS = ('Parado', '1×', '10×', '60×')
 WAR_LABELS = ('Sem', 'Revela', 'Em volta')
 WAR_HINTS = ('o mundo todo à vista', 'o explorado fica limpo', 'a névoa fecha atrás de você')
+# a altura das nuvens da névoa de guerra (acima do relevo, ou das construções se elas ficam cobertas)
+WAR_SLIDERS = (
+    ('war_height', 'Altura da névoa', 0, 16, lambda v: 'rente' if v == 0 else f'+{v} bloco' + ('s' if v > 1 else '')),
+)
+OBJECT_LABELS = ('Mostrar acima', 'Cobrir objetos')
 
 
 class MasterPanel:
@@ -123,7 +128,7 @@ class MasterPanel:
         if name == 'hour':
             value = round(t * 24 * 4) / 4 % 24.0      # de 15 em 15 minutos
         else:
-            low, high = next((lo, hi) for key, _, lo, hi, _ in SLIDERS if key == name)
+            low, high = next((lo, hi) for key, _, lo, hi, _ in SLIDERS + WAR_SLIDERS if key == name)
             value = int(round(low + (high - low) * t))
             if name in ('brightness', 'saturation') and abs(value - 100) <= 3:
                 value = 100                             # o neutro "gruda"
@@ -144,6 +149,8 @@ class MasterPanel:
             a.clock = int(action[6:])
         elif action.startswith('war:'):
             a.fog_war = int(action[4:])
+        elif action.startswith('objects:'):
+            a.war_objects = int(action[8:])
         elif action == 'recover':
             if self.on_recover is not None:
                 self.on_recover()
@@ -164,7 +171,8 @@ class MasterPanel:
         return (tuple(sorted(self.ambience.to_dict().items(), key=lambda kv: kv[0]))
                 if self.ambience.clock == 0 else self.ambience.clock_text(),
                 tuple(self.ambience.to_dict()[k] for k in ('clock', 'brightness', 'temperature', 'fog', 'saturation',
-                                                          'torch', 'fog_war')),
+                                                          'torch', 'fog_war', 'war_height',
+                                                          'war_objects')),
                 self.hover, self.pressed)
 
     def draw_image(self) -> Image.Image:
@@ -274,6 +282,16 @@ class MasterPanel:
             chip((bx, y, bx + cw, y + 30), label, f'war:{i}', selected=a.fog_war == i)
         bx = x0 + 3 * (cw + gap)
         chip((bx, y, bx + cw, y + 30), 'Recobrir', 'recover')
+        y += 44
+        # até onde as nuvens sobem, e se o que é mais alto (uma torre, uma árvore construída) aparece por cima
+        for key, label, low, high, text in WAR_SLIDERS:
+            value = getattr(a, key)
+            track(y, key, (value - low) / (high - low), label, text(value))
+            y += 45
+        ow = (x1 - x0 - gap) / 2
+        for i, label in enumerate(OBJECT_LABELS):
+            bx = x0 + i * (ow + gap)
+            chip((bx, y, bx + ow, y + 30), label, f'objects:{i}', selected=a.war_objects == i)
         y += 44
         draw.line((x0, y, x1, y), fill=(*style.LINE, 255))
         y += 14
