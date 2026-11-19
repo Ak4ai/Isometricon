@@ -29,6 +29,7 @@ FADE_SECONDS = 0.55
 SHADES = {'top': 1.0, 'x': 0.86, 'z': 0.74}   # o sombreado chapado das nuvens do Minecraft
 FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
 FAR = 4             # células: daqui para dentro da manta a nuvem é densa
+SINK = 6            # células: a névoa mais alta desce em degraus até a altura padrão na beira do aberto
 UNIT = 8            # a unidade de textura do campo de distância (7 é a do cursor)
 
 Cell = Tuple[int, int]
@@ -108,7 +109,7 @@ class CloudField:
         # bloco a mais aqui e ali: o topo fica em patamares, como as nuvens do Minecraft
         if self.cover_objects and cell in self._object_tops:   # por cima da construção também
             high = max(high, self._object_tops[cell])
-        top = high + 1 + self.clearance + (1 if _hash(cx, cz) > 0.78 else 0)
+        top = high + 1 + min(self.clearance, CLEARANCE) + (1 if _hash(cx, cz) > 0.78 else 0)
         found = self._columns[cell] = (low - 1, top)
         return found
 
@@ -195,6 +196,7 @@ class CloudField:
         full, bottom, top = self._full_grid()
         if not full.any():
             return np.zeros((0, FLOATS), dtype=np.float32)
+        top = top + self.lift()
         ox, oz = self.origin
         ix, iz = np.nonzero(full)
         x0, z0 = ((ix + ox) * CELL).astype(np.float32), ((iz + oz) * CELL).astype(np.float32)
@@ -232,23 +234,36 @@ class CloudField:
         return np.concatenate([_quads(face, x0, z0, size, bottom, top, ease)
                                for face in ('top', (1, 0), (-1, 0), (0, 1), (0, -1))])
 
-    def distance_map(self) -> np.ndarray:
-        """Quantas células cada nuvem inteira está da beira (do aberto), como imagem [iz, ix] de 0 a 1 (``FAR``
-        células ou mais é 1). O shader lê com filtro linear: a beira da manta fica rala e o miolo, denso."""
+    def edge_distance(self) -> np.ndarray:
+        """Quantas células cada nuvem inteira está da beira (do aberto), [ix, iz]; 0 no aberto."""
         if self._distance is not None and self._distance[0] == self.revision:
             return self._distance[1]
         full = self._full_grid()[0]
+        pad = max(FAR, SINK) + 1
         if full.all() or not full.any():
-            out = np.full((WINDOW, WINDOW), 1.0 if full.any() else 0.0, dtype=np.float32)
+            out = np.full((WINDOW, WINDOW), float(pad) if full.any() else 0.0, dtype=np.float32)
         else:
             from scipy.ndimage import distance_transform_edt
             # fora da manta conta como coberto (a beira dela não é uma beira de verdade, é o vazio da névoa)
-            padded = np.pad(full, FAR, mode='constant', constant_values=True)
-            out = distance_transform_edt(padded)[FAR:-FAR, FAR:-FAR].astype(np.float32)
-            out = np.minimum(out, FAR) / FAR
-        out = np.ascontiguousarray(out.T)
+            padded = np.pad(full, pad, mode='constant', constant_values=True)
+            out = distance_transform_edt(padded)[pad:-pad, pad:-pad].astype(np.float32)
         self._distance = (self.revision, out)
         return out
+
+    def distance_map(self) -> np.ndarray:
+        """A distância até a beira como imagem [iz, ix] de 0 a 1 (``FAR`` células ou mais é 1). O shader lê com
+        filtro linear: a beira da manta fica rala e o miolo, denso."""
+        return np.ascontiguousarray((np.minimum(self.edge_distance(), FAR) / FAR).T)
+
+    def lift(self) -> np.ndarray:
+        """Quantos blocos cada célula sobe acima da altura padrão, [ix, iz]: com a névoa mais alta que a padrão,
+        ela desce como uma pia até a altura padrão na beira do que já foi visto (de perto não atrapalha a vista)
+        e sobe em degraus inteiros para longe, até a altura do mestre a ``SINK`` células da beira."""
+        extra = self.clearance - CLEARANCE
+        if extra <= 0:
+            return np.zeros((WINDOW, WINDOW), dtype=np.float32)
+        t = np.clip((self.edge_distance() - 1.0) / SINK, 0.0, 1.0)
+        return np.round(extra * t * t * (3.0 - 2.0 * t)).astype(np.float32)
 
 
 # os cantos de cada face numa caixa unitária (x, y, z): y 0 é o fundo e 1 o topo; anti-horário visto de fora

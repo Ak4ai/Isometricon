@@ -90,5 +90,11 @@ def test_altura_da_nevoa_e_cobrir_objetos():
     assert field.column((12, 12))[1] <= 8 + 2 + CLEARANCE  # longe dela, rente ao relevo
     field.configure(CLEARANCE, False)                       # o mestre: o que é mais alto aparece
     assert field.column((10, 10))[1] <= 8 + 2 + CLEARANCE
-    field.configure(6, False)                               # a névoa mais alta
-    assert field.column((12, 12))[1] >= 8 + 1 + 6
+    field.configure(6, False)                               # a névoa mais alta: só longe da beira
+    field.update(REVEAL, 0.5, 0.5, 0.016)
+    lift = field.lift()
+    ox, oz = field.origin
+    assert lift[3 - ox, 0 - oz] == 0                       # na beira do aberto, a altura padrão
+    assert lift[20 - ox, 20 - oz] == 6 - CLEARANCE         # longe, a altura do mestre
+    steps = [lift[i - ox, 0 - oz] for i in range(3, 12)]
+    assert steps == sorted(steps)                          # e desce em degraus até a beira, como uma pia
