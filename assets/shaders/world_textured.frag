@@ -70,24 +70,24 @@ float shadowCell(vec3 worldPos)
 }
 
 // Os blocos que não são cubo inteiro (laje, degrau, bolo, cama) são parciais na máscara (r entre 0.75 e 0.94): o
-// canal g diz quais oitavos da célula eles enchem (o bit ox + 2 oy + 4 oz). ``local`` é o ponto dentro da célula (0..1).
-bool octantFilled(vec2 texel, vec3 local)
-{
-    int bits = int(texel.g * 255.0 + 0.5);
-    ivec3 o = ivec3(step(vec3(0.5), local));
-    return ((bits >> (o.x + 2 * o.y + 4 * o.z)) & 1) != 0;
-}
+// canal g diz quais oitavos da célula eles enchem (o bit ox + 2 oy + 4 oz).
 
-// O ponto está dentro de algo que tapa (um sólido inteiro, ou o pedaço cheio de um parcial)?
-bool blockedAt(vec3 worldPos)
+// A célula tapa o pé da parede na altura de ``worldPos``? Um sólido inteiro sempre; um parcial se enche algum oitavo
+// daquela metade da altura (a célula inteira conta, como uma parede: olhar o oitavo de cada ponto deixava o chão
+// manchado em blocos de texel). A célula ``own`` (a do próprio chão) não conta: o degrau de cima da escada não mancha o
+// de baixo.
+bool blockedAt(vec3 worldPos, vec3 own)
 {
     vec3 q = worldPos - u_ShadowOrigin;
     vec3 c = floor(q);
-    if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)))
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)) || c == own)
         return false;
     vec2 texel = texelFetch(u_ShadowMask, ivec3(c), 0).rg;
     if (texel.r > 0.94) return true;
-    return texel.r > 0.75 && octantFilled(texel, q - c);
+    if (texel.r <= 0.75) return false;
+    int bits = int(texel.g * 255.0 + 0.5);
+    int layer = q.y - c.y >= 0.5 ? 0xCC : 0x33;            // os quatro oitavos de cima (oy = 1) ou os de baixo
+    return (bits & layer) != 0;
 }
 
 // Sombra de contato: o chão escurece junto ao pé de qualquer parede, de qualquer lado e sem depender do sol. É o que
@@ -96,9 +96,10 @@ bool blockedAt(vec3 worldPos)
 float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 {
     if (worldNormal.y < 0.6) return 0.0;                         // só no chão (topos de bloco)
-    // um pouco abaixo do meio da célula logo acima do chão: numa laje vizinha conta a metade de baixo dela, e no
-    // degrau de baixo de uma escada conta o degrau de cima, na mesma célula
+    // um pouco abaixo do meio da célula logo acima do chão: numa laje vizinha conta a metade de baixo dela; a célula
+    // do próprio chão (o degrau de baixo de uma escada está na mesma célula do de cima) fica de fora
     vec3 base = worldPos + vec3(0.0, 0.4, 0.0);
+    vec3 own = floor(base - u_ShadowOrigin);
     float occ = 0.0;
     for (int i = 0; i < 8; i++)
     {
@@ -108,7 +109,7 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
         for (int k = 0; k < 4; k++)
         {
             float t = 0.3 + 0.55 * float(k);
-            if (blockedAt(base + vec3(dir.x, 0.0, dir.y) * t))
+            if (blockedAt(base + vec3(dir.x, 0.0, dir.y) * t, own))
             {
                 occ += axis * (1.0 - 0.22 * float(k));           // a primeira parede achada basta
                 break;
@@ -118,12 +119,36 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
     return clamp(occ / 3.2, 0.0, 1.0);
 }
 
+// O trecho do raio dentro de uma célula parcial (de tEnter a tExit; ``start`` é a origem do raio no espaço da célula)
+// cruza algum oitavo cheio? A conta é exata, caixa a caixa (amostrar o trecho deixava escapar luz em listras). Na
+// célula de onde o raio sai, o oitavo que contém a origem não conta: é o próprio bloco (a face lateral do bolo,
+// recuada da borda da célula, começa dentro do oitavo dele).
+bool partialBlocks(vec2 texel, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
+{
+    int bits = int(texel.g * 255.0 + 0.5);
+    for (int b = 0; b < 8; b++)
+    {
+        if (((bits >> b) & 1) == 0)
+            continue;
+        vec3 lo = vec3(float(b & 1), float((b >> 1) & 1), float((b >> 2) & 1)) * 0.5;
+        vec3 hi = lo + 0.5;
+        if (first && all(greaterThan(start, lo - 1e-4)) && all(lessThan(start, hi + 1e-4)))
+            continue;
+        vec3 t0 = (lo - start) / dir;
+        vec3 t1 = (hi - start) / dir;
+        vec3 tn = min(t0, t1);
+        vec3 tf = max(t0, t1);
+        float a = max(max(tn.x, tn.y), max(tn.z, tEnter));
+        float c = min(min(tf.x, tf.y), min(tf.z, tExit));
+        if (a < c - 1e-4)
+            return true;
+    }
+    return false;
+}
+
 // Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
 // água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
-// bloco parcial o raio só é cortado se passa por um oitavo cheio dele (amostrado ao longo do trecho na célula); na
-// célula de onde sai, os oitavos cheios até o primeiro vazio não contam: são o próprio bloco (a face lateral do bolo,
-// recuada da borda da célula, começa dentro do oitavo dele).
-const int PARTIAL_SAMPLES = 6;
+// bloco parcial o raio só é cortado se cruza um oitavo cheio dele (ver partialBlocks).
 const float WATER_TRANSMIT = 0.82;
 float traceSun(vec3 worldPos, vec3 dir)
 {
@@ -157,20 +182,9 @@ float traceSun(vec3 worldPos, vec3 dir)
         float tExit = min(tMax.x, min(tMax.y, tMax.z));
         if (value > 0.94)
             return 0.0;
-        if (value > 0.75)
-        {
-            bool own = i == 0;                                // ainda dentro do próprio bloco de onde saiu
-            for (int k = 0; k < PARTIAL_SAMPLES; k++)
-            {
-                float t = mix(tEnter, tExit, (float(k) + 0.5) / float(PARTIAL_SAMPLES));
-                vec3 local = clamp(q + safe * t - vec3(cell), vec3(0.0), vec3(0.999));
-                bool filled = octantFilled(texel, local);
-                if (own && filled) continue;
-                own = false;
-                if (filled) return 0.0;
-            }
-        }
-        else if (value > 0.25)
+        if (value > 0.75 && partialBlocks(texel, q - vec3(cell), safe, tEnter, tExit, i == 0))
+            return 0.0;
+        else if (value > 0.25 && value <= 0.75)
             light *= WATER_TRANSMIT;
         tEnter = tExit;
         if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
