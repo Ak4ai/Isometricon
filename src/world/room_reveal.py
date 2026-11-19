@@ -137,7 +137,8 @@ def extract_window_cells(
         culls[:, :floor_rows, :] = True
     occupied = solid | SHAPED_LUT[blocks]   # os enfeites do terreno são desenhados, mas não são parede
     details = np.zeros(WINDOW, dtype=bool)
-    shapes = np.zeros(WINDOW, dtype=np.uint16)
+    from src.world.shadow_shapes import terrain_shapes
+    shapes = terrain_shapes()[blocks]      # os enfeites do terreno (capim, flores, tocha) também fazem sombra
     terrain_solid = solid.copy()
 
     for index, placed in enumerate(structures):

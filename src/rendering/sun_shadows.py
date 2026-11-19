@@ -17,6 +17,7 @@ from src.world.shadow_shapes import TABLE
 SHADOW_UNIT = 3  # unidade de textura da máscara de sombra (0 atlas, 2 máscara do espaço)
 HORIZON_UNIT = 4  # unidade do mapa de alturas por quadrante (column_horizons)
 SHAPES_UNIT = 10  # unidade da tabela das formas dos blocos parciais (shadow_shapes)
+PLANTS_UNIT = 11  # unidade dos desenhos das plantas (shadow_shapes.plant_masks)
 
 
 SOFT_SPREAD = 0.15  # o raio do disco do cone borrado do shader (softSun); a nítida (0.08) cabe dentro dele
@@ -123,6 +124,7 @@ class SunShadowRenderer:
         self.texture_id = 0
         self.horizon_id = 0  # textura 2D RGBA: column_horizons + 1, um quadrante por canal
         self.shapes_id = 0   # textura 2D RGBA32F: a tabela das formas (shadow_shapes.TABLE)
+        self.plants_id = 0   # textura 2D R8: os desenhos das plantas
         self._shapes_revision = -1
         self._uploaded = None  # as células da janela que estão na GPU
         self._origin = (0, 0, 0)
@@ -153,6 +155,12 @@ class SunShadowRenderer:
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.shapes_id)
             gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, table.shape[1], table.shape[0], 0, gl.GL_RGBA,
                             gl.GL_FLOAT, table)
+            masks = TABLE.plant_masks()
+            gl.glActiveTexture(gl.GL_TEXTURE0 + PLANTS_UNIT)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.plants_id)
+            gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_R8, masks.shape[1], masks.shape[0], 0, gl.GL_RED,
+                            gl.GL_UNSIGNED_BYTE, masks)
             self._shapes_revision = TABLE.revision
         gl.glActiveTexture(gl.GL_TEXTURE0)
         self._uploaded = mask.window
@@ -180,12 +188,13 @@ class SunShadowRenderer:
             gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA8, sx, sz, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sx, 4), dtype=np.uint8))
-        self.shapes_id = gl.glGenTextures(1)
-        gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPES_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.shapes_id)
-        for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
-                            (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
-            gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
+        self.shapes_id, self.plants_id = gl.glGenTextures(2)
+        for unit, texture in ((SHAPES_UNIT, self.shapes_id), (PLANTS_UNIT, self.plants_id)):
+            gl.glActiveTexture(gl.GL_TEXTURE0 + unit)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
+            for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
+                                (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
+                gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
         gl.glActiveTexture(gl.GL_TEXTURE0)
 
     @property
@@ -206,9 +215,12 @@ class SunShadowRenderer:
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPES_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.shapes_id)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + PLANTS_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.plants_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         shader.set_int("u_ShadowMask", SHADOW_UNIT)
         shader.set_int("u_ShadowShapes", SHAPES_UNIT)
+        shader.set_int("u_ShadowPlants", PLANTS_UNIT)
         shader.set_int("u_ShadowHorizon", HORIZON_UNIT)
         shader.set_float("u_ShadowHorizonRise", self.rise)
         shader.set_int("u_ShadowSteps", int(self.steps))

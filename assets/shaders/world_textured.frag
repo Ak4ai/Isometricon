@@ -48,6 +48,7 @@ uniform bool u_WorldStyle;
 // Sombras do sol (ver src/rendering/sun_shadows.py): blocos sólidos em volta do jogador, em coordenadas do mundo.
 uniform sampler3D u_ShadowMask;
 uniform sampler2D u_ShadowShapes;   // as caixas de cada forma de bloco parcial (ver shadow_shapes.py)
+uniform sampler2D u_ShadowPlants;   // os desenhos das plantas, 16 x 16 um embaixo do outro
 uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
 uniform mat4 u_ShadowInvModel;   // do espaço desenhado (girado pelo modelo) de volta ao mundo
@@ -72,8 +73,34 @@ float shadowCell(vec3 worldPos)
 
 // Os blocos que não são cubo inteiro (laje, degrau, cerca, placa, lanterna) são parciais na máscara (r entre 0.75 e
 // 0.94): os canais g e b dizem o número da forma, e a linha dela em u_ShadowShapes tem as caixas (até SHAPE_BOXES pares
-// de texels: o canto de baixo, com w = 1, e o de cima; w = 0 acaba a lista), em blocos dentro da célula.
+// de texels: o canto de baixo, com w = 1, e o de cima; w = 0 acaba a lista), em blocos dentro da célula. Uma planta
+// em cruz (w = 2) são os dois planos em X dela, com o desenho da textura (ver plantLight); não faz sombra de contato.
 const int SHAPE_BOXES = 8;
+const float PLANT_A = 0.05, PLANT_B = 0.95;   // de onde a onde vão os planos em X na célula (0,8 a 15,2 / 16)
+
+// O raio cruza o desenho da planta num dos dois planos em X (x = z e x + z = 1) entre tEnter e tExit? ``plant`` é
+// (desenho, y0, y1). Na célula de onde sai, o plano em que o raio começa (a própria folha) não conta.
+bool plantBlocks(vec3 plant, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
+{
+    for (int p = 0; p < 2; p++)
+    {
+        // plano 0: x - z = 0; plano 1: x + z = 1
+        float side = p == 0 ? start.x - start.z : start.x + start.z - 1.0;
+        float speed = p == 0 ? dir.x - dir.z : dir.x + dir.z;
+        if (first && abs(side) < 0.09) continue;   // a origem sai 0,04 da folha pela normal (0,06 em x - z)
+        if (abs(speed) < 1e-6) continue;
+        float t = -side / speed;
+        if (t <= tEnter || t >= tExit) continue;
+        vec3 hit = start + dir * t;
+        float u = (hit.x - PLANT_A) / (PLANT_B - PLANT_A);
+        float v = (hit.y - plant.y) / max(plant.z - plant.y, 1e-4);
+        if (u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0) continue;
+        ivec2 texel = ivec2(int(u * 16.0), int(plant.x + 0.5) * 16 + int((1.0 - v) * 16.0));
+        if (texelFetch(u_ShadowPlants, texel, 0).r > 0.5)
+            return true;
+    }
+    return false;
+}
 int shapeOf(vec4 texel)
 {
     return int(texel.g * 255.0 + 0.5) + 256 * int(texel.b * 255.0 + 0.5);
@@ -87,7 +114,7 @@ bool insideShape(int shape, vec3 local)
         vec4 lo = texelFetch(u_ShadowShapes, ivec2(2 * k, shape), 0);
         if (lo.w < 0.5) break;
         vec3 hi = texelFetch(u_ShadowShapes, ivec2(2 * k + 1, shape), 0).xyz;
-        if (all(greaterThan(local, lo.xyz)) && all(lessThan(local, hi)))
+        if (lo.w < 1.5 && all(greaterThan(local, lo.xyz)) && all(lessThan(local, hi)))
             return true;
     }
     return false;
@@ -136,14 +163,16 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 }
 
 // O trecho do raio dentro de uma célula parcial (de tEnter a tExit; ``start`` é a origem do raio no espaço da célula)
-// cruza alguma caixa da forma? A conta é exata, caixa a caixa. Na célula de onde o raio sai, a caixa que contém a
-// origem não conta: é o próprio bloco.
+// cruza alguma caixa da forma (ou o desenho da planta)? A conta é exata, caixa a caixa. Na célula de onde o raio sai,
+// a caixa que contém a origem não conta: é o próprio bloco.
 bool shapeBlocks(int shape, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
 {
     for (int k = 0; k < SHAPE_BOXES; k++)
     {
         vec4 lo4 = texelFetch(u_ShadowShapes, ivec2(2 * k, shape), 0);
         if (lo4.w < 0.5) break;
+        if (lo4.w > 1.5)
+            return plantBlocks(lo4.xyz, start, dir, tEnter, tExit, first);
         vec3 lo = lo4.xyz;
         vec3 hi = texelFetch(u_ShadowShapes, ivec2(2 * k + 1, shape), 0).xyz;
         if (first && all(greaterThan(start, lo - 1e-3)) && all(lessThan(start, hi + 1e-3)))
@@ -162,7 +191,7 @@ bool shapeBlocks(int shape, vec3 start, vec3 dir, float tEnter, float tExit, boo
 
 // Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
 // água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
-// bloco parcial o raio só é cortado se cruza uma das caixas dele (ver shapeBlocks).
+// bloco parcial o raio só é cortado se cruza uma das caixas dele ou o desenho da planta (ver shapeBlocks).
 const float WATER_TRANSMIT = 0.82;
 float traceSun(vec3 worldPos, vec3 dir)
 {

@@ -140,3 +140,16 @@ def test_partial_and_decoration_blocks_go_to_the_mask_with_their_shape():
     slab = TABLE.id_for("minecraft:oak_slab[type=bottom]")
     assert tuple(texels[1, 0, 0]) == (PARTIAL_VALUE, slab & 0xFF, slab >> 8, 0)
     assert texels[2, 0, 0, 0] == PARTIAL_VALUE
+
+
+def test_plants_cast_the_drawing_of_their_texture():
+    from src.world.block_shapes import shadow_plant
+    from src.world.shadow_shapes import TABLE
+    assert shadow_plant("minecraft:oak_sapling[stage=0]") == ("oak_sapling", 0.0, 1.0)
+    assert shadow_plant("minecraft:fire") is None                   # o fogo é luz
+    assert shadow_plant("minecraft:rail[shape=north_south]") is None
+    shape = TABLE.id_for("minecraft:oak_sapling[stage=0]")
+    mask_row = TABLE.texels()[shape][0]
+    assert mask_row[3] == 2.0                                       # a marca de planta
+    drawing = TABLE.plant_masks()[int(mask_row[0]) * 16:int(mask_row[0]) * 16 + 16]
+    assert 0 < (drawing > 0).sum() < 256                            # tem folha e tem fresta
