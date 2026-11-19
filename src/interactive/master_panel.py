@@ -37,6 +37,7 @@ WAR_SLIDERS = (
     ('war_height', 'Altura da névoa', 0, 16, lambda v: 'rente' if v == 0 else f'+{v} bloco' + ('s' if v > 1 else '')),
 )
 OBJECT_LABELS = ('Mostrar acima', 'Cobrir objetos')
+STYLE_LABELS = ('Nuvens de blocos', 'Névoa plana')
 
 
 class MasterPanel:
@@ -149,6 +150,8 @@ class MasterPanel:
             a.clock = int(action[6:])
         elif action.startswith('war:'):
             a.fog_war = int(action[4:])
+        elif action.startswith('style:'):
+            a.war_style = int(action[6:])
         elif action.startswith('objects:'):
             a.war_objects = int(action[8:])
         elif action == 'recover':
@@ -172,7 +175,7 @@ class MasterPanel:
                 if self.ambience.clock == 0 else self.ambience.clock_text(),
                 tuple(self.ambience.to_dict()[k] for k in ('clock', 'brightness', 'temperature', 'fog', 'saturation',
                                                           'torch', 'fog_war', 'war_height',
-                                                          'war_objects')),
+                                                          'war_objects', 'war_style')),
                 self.hover, self.pressed)
 
     def draw_image(self) -> Image.Image:
@@ -282,6 +285,12 @@ class MasterPanel:
             chip((bx, y, bx + cw, y + 30), label, f'war:{i}', selected=a.fog_war == i)
         bx = x0 + 3 * (cw + gap)
         chip((bx, y, bx + cw, y + 30), 'Recobrir', 'recover')
+        y += 44
+        # o jeito da névoa: as nuvens de blocos ou a névoa plana de antes (a do shader, a mesma das cavernas)
+        ow = (x1 - x0 - gap) / 2
+        for i, label in enumerate(STYLE_LABELS):
+            bx = x0 + i * (ow + gap)
+            chip((bx, y, bx + ow, y + 30), label, f'style:{i}', selected=a.war_style == i)
         y += 44
         # até onde as nuvens sobem, e se o que é mais alto (uma torre, uma árvore construída) aparece por cima
         for key, label, low, high, text in WAR_SLIDERS:

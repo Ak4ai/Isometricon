@@ -1835,7 +1835,7 @@ def main() -> None:
             ambience.apply(shader, (model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3])
             fog_war.update(ambience.fog_war, float(player_token.position[0]), float(player_token.position[2]))
             # na superfície, a névoa de guerra são nuvens de blocos (cloud_fog); numa caverna, a névoa do shader
-            clouds_on = bool(ambience.fog_war) and not underground_mode
+            clouds_on = bool(ambience.fog_war) and not underground_mode and ambience.war_style == 0
             if clouds_on and cloud_fog is None:
                 from src.rendering.cloud_fog import CloudFog
                 cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored,
