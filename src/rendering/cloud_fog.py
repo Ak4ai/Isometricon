@@ -25,7 +25,9 @@ CELL = 2            # o lado de uma célula de nuvem, em blocos
 WINDOW = 64         # células de lado na manta (128 blocos)
 RECENTER = 12       # células: recentra quando o jogador se afasta isto do centro
 CLEARANCE = 2       # padrão: o topo fica isto acima do bloco mais alto da célula (cobre o capim e as flores)
-FADE_SECONDS = 0.55
+FADE_SECONDS = 0.9   # o tempo de uma célula se desfazer em tufos (ou se formar de novo)
+PUFFS = 2           # cada célula se parte em PUFFS x PUFFS tufos
+PUFF_DELAY = 0.4    # até quanto do tempo um tufo espera para começar (cada um no seu tempo)
 SHADES = {'top': 1.0, 'x': 0.86, 'z': 0.74}   # o sombreado chapado das nuvens do Minecraft
 FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
 FAR = 4             # células: daqui para dentro da manta a nuvem é densa
@@ -34,6 +36,11 @@ UNIT = 8            # a unidade de textura do campo de distância (7 é a do cur
 
 Cell = Tuple[int, int]
 Box = Tuple[Tuple[int, int, int], Tuple[int, int, int]]
+
+
+def _smooth(a: float, b: float, x: np.ndarray) -> np.ndarray:
+    t = np.clip((x - a) / (b - a), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
 
 
 def _hash(cx: int, cz: int) -> float:
@@ -217,22 +224,56 @@ class CloudField:
         return np.concatenate(parts)
 
     def moving_mesh(self) -> np.ndarray:
-        """As células que estão se desfazendo ou se formando: caixas menores, mais altas e transparentes."""
+        """As células que estão se desfazendo ou se formando, em tufos: cada célula se parte em ``PUFFS`` x
+        ``PUFFS`` cubinhos que, cada um no seu tempo, incham um pouco, encolhem para um tufo de um bloco e sobem
+        girando, se afastando e sumindo. Ao voltar, é a mesma coisa de trás para frente: os tufos descem do alto,
+        assentam com um quique e crescem até virar a célula inteira."""
         moving = [(cell, value) for cell, value in self.cover.items() if value < 1.0]
         if not moving:
             return np.zeros((0, FLOATS), dtype=np.float32)
-        cells = np.array([cell for cell, _ in moving], dtype=np.float32)
-        value = np.array([v for _, v in moving], dtype=np.float32)
-        columns = np.array([self.column(cell) for cell, _ in moving], dtype=np.float32)
-        ease = value * value * (3 - 2 * value)
-        size = CELL * (0.35 + 0.65 * ease)
-        lift = (1.0 - ease) * 1.6
-        x0 = cells[:, 0] * CELL + (CELL - size) / 2
-        z0 = cells[:, 1] * CELL + (CELL - size) / 2
-        height = (columns[:, 1] - columns[:, 0]) * (0.4 + 0.6 * ease)
-        bottom, top = columns[:, 1] - height + lift, columns[:, 1] + lift
-        return np.concatenate([_quads(face, x0, z0, size, bottom, top, ease)
-                               for face in ('top', (1, 0), (-1, 0), (0, 1), (0, -1))])
+        sub = CELL / PUFFS
+        rows = []   # (centro x, centro z, base da célula, topo, t do tufo, giro)
+        for (cx, cz), value in moving:
+            bottom, top = self.column((cx, cz))
+            t = 1.0 - value                                # 0 inteira, 1 sumiu (voltando, anda de trás para frente)
+            for i in range(PUFFS):
+                for j in range(PUFFS):
+                    seed = _hash(cx * PUFFS + i, cz * PUFFS + j)
+                    delay = seed * PUFF_DELAY
+                    local = min(1.0, max(0.0, (t - delay) / (1.0 - PUFF_DELAY)))
+                    if local >= 1.0:
+                        continue
+                    rows.append((cx * CELL + (i + 0.5) * sub, cz * CELL + (j + 0.5) * sub, bottom, top, local,
+                                 (_hash(cz * 7 + j, cx * 5 + i) - 0.5) * 2.0))
+        if not rows:
+            return np.zeros((0, FLOATS), dtype=np.float32)
+        data = np.array(rows, dtype=np.float32)
+        px, pz, bottom, top, t, spin = data.T
+        cell_x = (np.floor(px / CELL) + 0.5) * CELL
+        cell_z = (np.floor(pz / CELL) + 0.5) * CELL
+        swell = np.sin(np.pi * np.clip(t / 0.22, 0.0, 1.0)) * 0.14                      # incha (ou quica, voltando)
+        shrink = _smooth(0.22, 1.0, t)
+        scale = (1.0 + swell) * (1.0 - 0.6 * shrink)
+        size = sub * scale
+        height = (top - bottom) + (1.0 - (top - bottom)) * _smooth(0.0, 0.4, t)       # a coluna vira um tufo
+        lift = t * t * 3.4                                                              # sobe cada vez mais rápido
+        spread = 1.0 + 1.6 * t * t                                                       # e se afasta do centro
+        center_x = cell_x + (px - cell_x) * spread
+        center_z = cell_z + (pz - cell_z) * spread
+        y1 = top + lift + swell * 0.5
+        y0 = y1 - height * scale
+        alpha = 1.0 - _smooth(0.3, 1.0, t)
+        angle = spin * 1.2 * t                                                           # gira devagar
+        parts = []
+        for face in ('top', (1, 0), (-1, 0), (0, 1), (0, -1)):
+            quads = _quads(face, -size / 2, -size / 2, size, y0, y1, alpha)
+            a = np.repeat(angle, 6)
+            c, s = np.cos(a), np.sin(a)
+            x, z = quads[:, 0].copy(), quads[:, 2].copy()
+            quads[:, 0] = x * c - z * s + np.repeat(center_x, 6)
+            quads[:, 2] = x * s + z * c + np.repeat(center_z, 6)
+            parts.append(quads)
+        return np.concatenate(parts)
 
     def edge_distance(self) -> np.ndarray:
         """Quantas células cada nuvem inteira está da beira (do aberto), [ix, iz]; 0 no aberto."""
@@ -369,7 +410,8 @@ class CloudFog:
             self._built = self.field.revision
         self._upload(self._meshes['moving'], self.field.moving_mesh())
 
-    def render(self, projection, view, model, tint, time: float) -> None:
+    def render(self, projection, view, model, tint, time: float, light=(0.55, 0.26, 0.7), soft: bool = False) -> None:
+        """``light``: para onde está o sol, no espaço desenhado (o ``u_LightDir``); ``soft``: as nuvens fofas."""
         import OpenGL.GL as gl
         full, moving = self._meshes['full'], self._meshes['moving']
         if not full['count'] and not moving['count']:
@@ -382,6 +424,15 @@ class CloudFog:
         self.shader.set_vec2('u_Origin', float(self._origin[0]), float(self._origin[1]))
         self.shader.set_float('u_Window', float(WINDOW))
         self.shader.set_float('u_Cell', float(CELL))
+        self.shader.set_bool('u_Soft', bool(soft))
+        if soft:
+            # o sol e a câmera no espaço do mundo (as nuvens são desenhadas nele, com o model no u_MVP)
+            rotation = np.asarray(model, dtype=np.float64)[:3, :3]
+            sun = np.linalg.solve(rotation, np.asarray(light, dtype=np.float64))
+            eye = np.linalg.solve((np.asarray(view, dtype=np.float64) @ np.asarray(model, dtype=np.float64))[:3, :3],
+                                  np.array([0.0, 0.0, 1.0]))
+            self.shader.set_vec3('u_Light', *(sun / max(np.linalg.norm(sun), 1e-9)))
+            self.shader.set_vec3('u_ToCamera', *(eye / max(np.linalg.norm(eye), 1e-9)))
         gl.glActiveTexture(gl.GL_TEXTURE0 + UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)

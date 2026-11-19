@@ -44,7 +44,8 @@ class Ambience:
     fog_war: int = 0              # a névoa de guerra: 0 desligada, 1 revela ao explorar, 2 só em volta (fog_of_war)
     war_height: int = 2           # quantos blocos as nuvens da névoa de guerra sobem acima do relevo (0 a 16)
     war_objects: int = 1          # 1: as nuvens sobem também por cima das construções; 0: o que é mais alto aparece
-    war_style: int = 0            # o jeito da névoa de guerra: 0 nuvens de blocos (cloud_fog), 1 névoa plana do shader
+    war_style: int = 0            # o jeito da névoa de guerra: 0 nuvens de blocos (cloud_fog), 1 névoa plana do
+                                  # shader, 2 nuvens fofas (as caixas com bordas arredondadas pela luz)
 
     # ---- estado ----
     def to_dict(self) -> Dict[str, Any]:
@@ -77,7 +78,7 @@ class Ambience:
         self.fog_war = max(0, min(2, self.fog_war))
         self.war_height = max(0, min(16, self.war_height))
         self.war_objects = max(0, min(1, self.war_objects))
-        self.war_style = max(0, min(1, self.war_style))
+        self.war_style = max(0, min(2, self.war_style))
 
     def reset(self) -> None:
         self.load(None)

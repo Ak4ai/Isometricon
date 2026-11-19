@@ -37,7 +37,7 @@ WAR_SLIDERS = (
     ('war_height', 'Altura da névoa', 0, 16, lambda v: 'rente' if v == 0 else f'+{v} bloco' + ('s' if v > 1 else '')),
 )
 OBJECT_LABELS = ('Mostrar acima', 'Cobrir objetos')
-STYLE_LABELS = ('Nuvens de blocos', 'Névoa plana')
+STYLE_LABELS = ('Blocos', 'Plana', 'Fofas')
 
 
 class MasterPanel:
@@ -286,8 +286,9 @@ class MasterPanel:
         bx = x0 + 3 * (cw + gap)
         chip((bx, y, bx + cw, y + 30), 'Recobrir', 'recover')
         y += 44
-        # o jeito da névoa: as nuvens de blocos ou a névoa plana de antes (a do shader, a mesma das cavernas)
-        ow = (x1 - x0 - gap) / 2
+        # o jeito da névoa: as nuvens de blocos, a névoa plana de antes (a do shader, a mesma das cavernas) ou as
+        # nuvens fofas
+        ow = (x1 - x0 - gap * 2) / 3
         for i, label in enumerate(STYLE_LABELS):
             bx = x0 + i * (ow + gap)
             chip((bx, y, bx + ow, y + 30), label, f'style:{i}', selected=a.war_style == i)

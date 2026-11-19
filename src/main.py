@@ -1835,7 +1835,7 @@ def main() -> None:
             ambience.apply(shader, (model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3])
             fog_war.update(ambience.fog_war, float(player_token.position[0]), float(player_token.position[2]))
             # na superfície, a névoa de guerra são nuvens de blocos (cloud_fog); numa caverna, a névoa do shader
-            clouds_on = bool(ambience.fog_war) and not underground_mode and ambience.war_style == 0
+            clouds_on = bool(ambience.fog_war) and not underground_mode and ambience.war_style != 1
             if clouds_on and cloud_fog is None:
                 from src.rendering.cloud_fog import CloudFog
                 cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored,
@@ -2122,7 +2122,8 @@ def main() -> None:
                 cloud_fog.field.configure(ambience.war_height, ambience.war_objects)
                 cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
                                  float(player_token.position[2]), dt)
-                cloud_fog.render(projection, view, model, ambience.tint(), window.time)
+                cloud_fog.render(projection, view, model, ambience.tint(), window.time,
+                                 light=ambience.light_direction(), soft=ambience.war_style == 2)
                 shader.use()
                 mark("clouds")
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela

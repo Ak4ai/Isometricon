@@ -837,12 +837,14 @@ class SkinCommandHandler:
             return True, "[Mestre] Névoa de guerra: " + ("desligada", "o explorado fica limpo",
                                                          "só em volta do grupo")[mode] + ".", CYAN
         if word in ("estilo", "style") and len(args) > 1:
-            choice = {"nuvens": 0, "nuvem": 0, "blocos": 0, "nevoa": 1, "plana": 1, "fog": 1}.get(_fold(args[1]))
+            choice = {"nuvens": 0, "nuvem": 0, "blocos": 0, "nevoa": 1, "plana": 1, "fog": 1,
+                      "fofas": 2, "fofa": 2, "macias": 2}.get(_fold(args[1]))
             if choice is None:
-                return False, "[Mestre] Use /mestre estilo nuvens | nevoa.", RED
+                return False, "[Mestre] Use /mestre estilo nuvens | nevoa | fofas.", RED
             panel.activate(f"style:{choice}")
             return True, ("[Mestre] Névoa de guerra em nuvens de blocos.",
-                          "[Mestre] Névoa de guerra plana (a névoa de antes).")[choice], CYAN
+                          "[Mestre] Névoa de guerra plana (a névoa de antes).",
+                          "[Mestre] Névoa de guerra em nuvens fofas.")[choice], CYAN
         if word in ("altura", "height") and len(args) > 1:
             try:
                 value = int(args[1])
@@ -865,7 +867,7 @@ class SkinCommandHandler:
             panel.activate("reset")
             return True, "[Mestre] Ambientação de volta ao padrão.", CYAN
         return False, ("[Mestre] Use /mestre, /mestre hora <hh:mm>, /mestre cena <nome>, /mestre guerra "
-                       "<sem|revela|volta>, /mestre estilo <nuvens|nevoa>, /mestre altura <0 a 16>, /mestre objetos <cobrir|mostrar>, /mestre recobrir ou "
+                       "<sem|revela|volta>, /mestre estilo <nuvens|nevoa|fofas>, /mestre altura <0 a 16>, /mestre objetos <cobrir|mostrar>, /mestre recobrir ou "
                        "/mestre padrao."), RED
 
     def seed(self, args: List[str]) -> Result:
@@ -1946,7 +1948,7 @@ ROOT_COMMANDS: List[Command] = [
             "os NPCs do mundo", SkinCommandHandler.npc, None),
     Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
             "muda a ficha de combate", SkinCommandHandler.attribute, None),
-    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | estilo <nuvens|nevoa> | altura <n> | objetos <cobrir|mostrar> | "
+    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | estilo <nuvens|nevoa|fofas> | altura <n> | objetos <cobrir|mostrar> | "
             "recobrir | padrao]",
             "o painel do mestre: hora do dia, claridade, névoa e outras ambientações", SkinCommandHandler.master,
             ["hora", "cena", "guerra", "estilo", "altura", "objetos", "recobrir", "padrao", "fechar"]),
