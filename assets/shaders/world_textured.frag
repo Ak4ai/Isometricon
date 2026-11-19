@@ -69,13 +69,36 @@ float shadowCell(vec3 worldPos)
     return texelFetch(u_ShadowMask, ivec3(c), 0).r;
 }
 
+// Os blocos que não são cubo inteiro (laje, degrau, bolo, cama) são parciais na máscara (r entre 0.75 e 0.94): o
+// canal g diz quais oitavos da célula eles enchem (o bit ox + 2 oy + 4 oz). ``local`` é o ponto dentro da célula (0..1).
+bool octantFilled(vec2 texel, vec3 local)
+{
+    int bits = int(texel.g * 255.0 + 0.5);
+    ivec3 o = ivec3(step(vec3(0.5), local));
+    return ((bits >> (o.x + 2 * o.y + 4 * o.z)) & 1) != 0;
+}
+
+// O ponto está dentro de algo que tapa (um sólido inteiro, ou o pedaço cheio de um parcial)?
+bool blockedAt(vec3 worldPos)
+{
+    vec3 q = worldPos - u_ShadowOrigin;
+    vec3 c = floor(q);
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)))
+        return false;
+    vec2 texel = texelFetch(u_ShadowMask, ivec3(c), 0).rg;
+    if (texel.r > 0.94) return true;
+    return texel.r > 0.75 && octantFilled(texel, q - c);
+}
+
 // Sombra de contato: o chão escurece junto ao pé de qualquer parede, de qualquer lado e sem depender do sol. É o que
 // deixa ler uma descida cujo degrau está de costas para a câmera (o topo de cima e o de baixo teriam o mesmo verde).
 // Olha, em volta do ponto, as células logo acima do chão: quanto mais perto e mais numerosas, mais escuro.
 float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 {
     if (worldNormal.y < 0.6) return 0.0;                         // só no chão (topos de bloco)
-    vec3 base = worldPos + vec3(0.0, 0.5, 0.0);                  // meio da célula logo acima do chão
+    // um pouco abaixo do meio da célula logo acima do chão: numa laje vizinha conta a metade de baixo dela, e no
+    // degrau de baixo de uma escada conta o degrau de cima, na mesma célula
+    vec3 base = worldPos + vec3(0.0, 0.4, 0.0);
     float occ = 0.0;
     for (int i = 0; i < 8; i++)
     {
@@ -85,7 +108,7 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
         for (int k = 0; k < 4; k++)
         {
             float t = 0.3 + 0.55 * float(k);
-            if (shadowCell(base + vec3(dir.x, 0.0, dir.y) * t) > 0.75)
+            if (blockedAt(base + vec3(dir.x, 0.0, dir.y) * t))
             {
                 occ += axis * (1.0 - 0.22 * float(k));           // a primeira parede achada basta
                 break;
@@ -96,7 +119,11 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 }
 
 // Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
-// água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol).
+// água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
+// bloco parcial o raio só é cortado se passa por um oitavo cheio dele (amostrado ao longo do trecho na célula); na
+// célula de onde sai, os oitavos cheios até o primeiro vazio não contam: são o próprio bloco (a face lateral do bolo,
+// recuada da borda da célula, começa dentro do oitavo dele).
+const int PARTIAL_SAMPLES = 6;
 const float WATER_TRANSMIT = 0.82;
 float traceSun(vec3 worldPos, vec3 dir)
 {
@@ -115,6 +142,7 @@ float traceSun(vec3 worldPos, vec3 dir)
                          stepDir.x <= 0 && stepDir.z > 0, stepDir.x <= 0 && stepDir.z <= 0);
     bool useHorizon = stepDir.y > 0 && safe.y >= u_ShadowHorizonRise * length(safe.xz);
     float light = 1.0;
+    float tEnter = 0.0;                                       // onde o raio entrou na célula atual
     for (int i = 0; i < 56; i++)
     {
         if (i >= u_ShadowSteps)
@@ -124,11 +152,27 @@ float traceSun(vec3 worldPos, vec3 dir)
         // subindo e acima de tudo o que há nas colunas à frente: nada mais o tapa, sol livre
         if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
             return light;
-        float value = texelFetch(u_ShadowMask, cell, 0).r;
-        if (value > 0.75)
+        vec2 texel = texelFetch(u_ShadowMask, cell, 0).rg;
+        float value = texel.r;
+        float tExit = min(tMax.x, min(tMax.y, tMax.z));
+        if (value > 0.94)
             return 0.0;
-        if (value > 0.25)
+        if (value > 0.75)
+        {
+            bool own = i == 0;                                // ainda dentro do próprio bloco de onde saiu
+            for (int k = 0; k < PARTIAL_SAMPLES; k++)
+            {
+                float t = mix(tEnter, tExit, (float(k) + 0.5) / float(PARTIAL_SAMPLES));
+                vec3 local = clamp(q + safe * t - vec3(cell), vec3(0.0), vec3(0.999));
+                bool filled = octantFilled(texel, local);
+                if (own && filled) continue;
+                own = false;
+                if (filled) return 0.0;
+            }
+        }
+        else if (value > 0.25)
             light *= WATER_TRANSMIT;
+        tEnter = tExit;
         if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
         else if (tMax.y < tMax.z)               { cell.y += stepDir.y; tMax.y += tDelta.y; }
         else                                    { cell.z += stepDir.z; tMax.z += tDelta.z; }

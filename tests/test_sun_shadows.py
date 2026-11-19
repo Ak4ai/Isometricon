@@ -104,3 +104,30 @@ def test_the_shortcut_gives_the_same_light_as_the_full_ray():
             shortcuts += math.tan(elevation) >= rise
             checked += 1
     assert checked == 9000 and shortcuts > 4000
+
+
+# ------------------------------------------------------------------------------------- blocos parciais
+def test_octants_of_the_partial_blocks():
+    from src.world.block_shapes import octant_bits
+    bottom = 0b00110011                                    # os quatro oitavos de baixo (oy = 0)
+    assert octant_bits("minecraft:oak_slab[type=bottom]") == bottom
+    assert octant_bits("minecraft:oak_slab[type=top]") == 0xFF & ~bottom
+    # o degrau voltado para leste: a base e a metade de cima no lado leste (ox = 1, oy = 1)
+    assert octant_bits("minecraft:oak_stairs[facing=east,half=bottom,shape=straight]") == bottom | 0b10001000
+    assert octant_bits("minecraft:cake") == bottom          # o bolo, recuado da borda, ainda enche a metade de baixo
+    # a cerca é fina: não enche oitavo nenhum, então conta em todos os que toca (tapa como antes)
+    assert octant_bits("minecraft:oak_fence[east=false,north=false,south=false,west=false]") == 0xFF
+
+
+def test_partial_blocks_go_to_the_mask_with_their_octants():
+    from src.rendering.sun_shadows import PARTIAL_VALUE, SOLID_VALUE, mask_texels
+    from src.world.room_reveal import extract_window_cells
+    from src.world.schematic import Schematic
+    from src.world.structure_layer import PlacedStructure
+
+    grid = np.full((1, 1, 2), "minecraft:stone", dtype=object)
+    grid[0, 0, 1] = "minecraft:oak_slab[type=bottom]"
+    placed = PlacedStructure("t", Schematic(2, 1, 1, grid, {}, "t"), (0, 0, 0))
+    texels = mask_texels(extract_window_cells((0, 0, 0), {}, [placed]))
+    assert tuple(texels[0, 0, 0]) == (SOLID_VALUE, 0)
+    assert tuple(texels[1, 0, 0]) == (PARTIAL_VALUE, 0b00110011)

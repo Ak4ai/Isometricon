@@ -18,14 +18,27 @@ HORIZON_UNIT = 4  # unidade do mapa de alturas por quadrante (column_horizons)
 
 
 SOFT_SPREAD = 0.15  # o raio do disco do cone borrado do shader (softSun); a nítida (0.08) cabe dentro dele
-SOLID_VALUE, WATER_VALUE = 255, 128  # na textura: o shader lê sólido > 0.75 e água entre 0.25 e 0.75
+# na textura (canal r): o shader lê sólido > 0.94, parcial entre 0.75 e 0.94 e água entre 0.25 e 0.75; no canal g
+# do parcial vão os oitavos que o bloco enche (block_shapes.octant_bits)
+SOLID_VALUE, PARTIAL_VALUE, WATER_VALUE = 255, 224, 128
 
 
 def mask_values(window) -> np.ndarray:
     """O valor de cada célula da janela: sólido (bloqueia o sol), água (a luz atravessa tingida) ou ar."""
     values = np.where(window.solid, SOLID_VALUE, 0).astype(np.uint8)
     values[(window.blocks == int(BlockType.WATER)) & ~window.solid] = WATER_VALUE
+    partial = getattr(window, 'partial', None)
+    if partial is not None:
+        values[window.solid & (partial != 0)] = PARTIAL_VALUE
     return values
+
+
+def mask_texels(window) -> np.ndarray:
+    """Os dois canais da textura, [x, y, z, 2]: o valor da célula (``mask_values``) e os oitavos dos parciais."""
+    partial = getattr(window, 'partial', None)
+    values = mask_values(window)
+    bits = np.where(values == PARTIAL_VALUE, partial, 0) if partial is not None else np.zeros_like(values)
+    return np.stack([values, bits.astype(np.uint8)], axis=-1)
 
 
 def quadrant_channel(step_x: int, step_z: int) -> int:
@@ -115,12 +128,13 @@ class SunShadowRenderer:
         self._ensure_texture()
         sx, sy, sz = WINDOW
         # a janela é [x, y, z]; a textura 3D quer (profundidade z, altura y, largura x)
-        values = mask_values(mask.window)
-        data = np.ascontiguousarray(values.transpose(2, 1, 0))
+        texels = mask_texels(mask.window)
+        values = texels[..., 0]
+        data = np.ascontiguousarray(texels.transpose(2, 1, 0, 3))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
+        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RG, gl.GL_UNSIGNED_BYTE, data)
         # [x, z, 4] -> a textura 2D quer (altura z, largura x, canais)
         horizons = np.ascontiguousarray((column_horizons(values, self.rise)).astype(np.uint8).transpose(1, 0, 2))
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
@@ -142,8 +156,8 @@ class SunShadowRenderer:
             gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
         sx, sy, sz = WINDOW
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
-                        np.zeros((sz, sy, sx), dtype=np.uint8))
+        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_RG8, sx, sy, sz, 0, gl.GL_RG, gl.GL_UNSIGNED_BYTE,
+                        np.zeros((sz, sy, sx, 2), dtype=np.uint8))
         self.horizon_id = gl.glGenTextures(1)
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)

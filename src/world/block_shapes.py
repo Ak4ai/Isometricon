@@ -699,6 +699,34 @@ def is_full_cube(block_name: str) -> bool:
     return shape_for(block_name) is None
 
 
+OCTANT_FILL = 0.3   # a fração de um oitavo que as caixas precisam cobrir para ele contar como cheio
+
+
+@lru_cache(maxsize=4096)
+def octant_bits(block_name: str) -> int:
+    """Quais oitavos da célula (metades em x, y e z) o bloco enche: o bit ``ox + 2 * oy + 4 * oz`` (0 a metade de
+    baixo do eixo, 1 a de cima). As sombras do sol usam isso para que uma laje, um degrau ou um bolo tapem só a parte
+    que ocupam. Um oitavo conta se as caixas cobrem pelo menos ``OCTANT_FILL`` dele; uma forma fina que não enche
+    nenhum (cerca, grade, painel) conta em todos os oitavos que toca; sem caixas (só planos) ou cubo inteiro, 255."""
+    shape = shape_for(block_name)
+    boxes = [part for part in shape or () if isinstance(part, Box)]
+    if not boxes:
+        return 255
+    filled = touched = 0
+    for bit in range(8):
+        lo = [8.0 * ((bit >> axis) & 1) for axis in range(3)]
+        cover = 0.0
+        for box in boxes:
+            size = [min(box.hi[a], lo[a] + 8.0) - max(box.lo[a], lo[a]) for a in range(3)]
+            if min(size) > 0:
+                cover += size[0] * size[1] * size[2] / 512.0
+        if cover >= OCTANT_FILL:
+            filled |= 1 << bit
+        if cover > 0:
+            touched |= 1 << bit
+    return filled or touched or 255
+
+
 # Blocos que enfeitam o espaço sem barrar quem passa (nem selar um cômodo)
 _DECORATION_SUFFIXES = ("_button", "_pressure_plate", "_wall_sign", "_sign", "_carpet", "torch", "lantern", "_candle",
                         "_rail", "_banner")
