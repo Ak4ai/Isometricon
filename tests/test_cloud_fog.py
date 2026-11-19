@@ -109,7 +109,8 @@ def test_longe_do_aberto_o_topo_fica_plano():
     ox, oz = field.origin
     far = shaped[20 - ox:30 - ox, 20 - oz:30 - oz]
     near = shaped[3 - ox, -2 - oz:3 - oz]
-    assert (shaped >= top)[full].all()                       # nunca desce: continua cobrindo o relevo
+    assert (shaped >= top - 1)[full].all()                   # no máximo perde o bloco a mais do acaso
+    assert (shaped >= 8 + 3 + 1 + CLEARANCE)[full].all()     # e continua acima do relevo (o mais alto é 8 + 3)
     assert len(set(far.ravel().tolist())) < len(set(top[20 - ox:30 - ox, 20 - oz:30 - oz].ravel().tolist())) or \
         far.std() < top[20 - ox:30 - ox, 20 - oz:30 - oz].std()
     assert (near == top[3 - ox, -2 - oz:3 - oz]).all()       # perto do aberto, rente ao relevo

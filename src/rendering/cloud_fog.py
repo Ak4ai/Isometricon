@@ -35,8 +35,7 @@ FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
 PUFF_FLOATS = FLOATS + 7   # os tufos levam também o centro, a meia medida (x, y, z) e o giro da caixa deles
 FAR = 4             # células: daqui para dentro da manta a nuvem é densa
 SINK = 6            # células: a névoa mais alta desce em degraus até a altura padrão na beira do aberto
-FLAT_SIZE = 13      # células: longe do aberto, o topo é o mais alto das células em volta (um tapete plano)
-FLAT_STEP = 3       # blocos: e sobe para o próximo múltiplo disto (poucos patamares largos, sem degrau de um bloco)
+FLAT_SIZE = 5       # células: longe do aberto, o topo é o mais alto das células em volta (alisa sem virar blocão)
 FLAT_NEAR, FLAT_FAR = 2.0, 7.0   # células da beira: daqui o topo começa a achatar, e daqui é todo plano
 UNIT = 8            # a unidade de textura do campo de distância (7 é a do cursor)
 
@@ -332,18 +331,26 @@ class CloudField:
 
     def shaped_top(self, full: np.ndarray, top: np.ndarray) -> np.ndarray:
         """O topo final de cada célula, [ix, iz]: o rente ao relevo (mais a pia da altura do mestre) perto do aberto e,
-        para longe, um planalto: o topo mais alto das células em volta (``FLAT_SIZE`` de lado), então os montinhos
-        do relevo somem num tapete plano em poucos patamares largos (de ``FLAT_STEP`` em ``FLAT_STEP`` blocos). A passagem é suave entre ``FLAT_NEAR`` e ``FLAT_FAR``
-        células da beira, e o topo só sobe (continua cobrindo o relevo)."""
+        para longe, mais liso: sem o bloco a mais aqui e ali, e no topo mais alto das células em volta (``FLAT_SIZE``
+        de lado, pequeno, para alisar os montinhos sem formar blocos grandes). A passagem é suave entre ``FLAT_NEAR``
+        e ``FLAT_FAR`` células da beira, e o topo nunca fica abaixo do relevo da célula."""
         top = top + self.lift()
         if not full.any():
             return top
         from scipy.ndimage import maximum_filter
-        plateau = maximum_filter(np.where(full, top, -1e9), size=FLAT_SIZE, mode='nearest')
-        plateau = np.ceil(plateau / FLAT_STEP) * FLAT_STEP
+        smooth = top - self._bumps(full)                   # sem o bloco a mais do acaso
+        plateau = maximum_filter(np.where(full, smooth, -1e9), size=FLAT_SIZE, mode='nearest')
         t = np.clip((self.edge_distance() - FLAT_NEAR) / (FLAT_FAR - FLAT_NEAR), 0.0, 1.0)
         t = t * t * (3.0 - 2.0 * t)
         return np.where(full, np.round(top + (plateau - top) * t), top).astype(np.float32)
+
+    def _bumps(self, full: np.ndarray) -> np.ndarray:
+        """O bloco a mais do acaso no topo de cada célula (o ``_hash`` de ``column``), [ix, iz]."""
+        ox, oz = self.origin
+        out = np.zeros((WINDOW, WINDOW), dtype=np.float32)
+        for ix, iz in zip(*np.nonzero(full)):
+            out[ix, iz] = 1.0 if _hash(int(ix) + ox, int(iz) + oz) > 0.78 else 0.0
+        return out
 
     def lift(self) -> np.ndarray:
         """Quantos blocos cada célula sobe acima da altura padrão, [ix, iz]: com a névoa mais alta que a padrão,
