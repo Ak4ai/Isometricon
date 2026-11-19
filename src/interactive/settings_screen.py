@@ -43,6 +43,7 @@ CHOICES = {
     'invert_rotation': (False, (False, True)),
     'reduce_motion': (False, (False, True)),
     'show_fps': (False, (False, True)),
+    'show_coords': (True, (False, True)),
 }
 
 LIST = (72, 202, 790, 690)     # a coluna das linhas
@@ -100,6 +101,10 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
             Row('sensitivity', 'Sensibilidade do pan', 'Quanto a câmera anda ao arrastar com o mouse', 'mouse',
                 'choice', None, 'sensitivity',
                 'A velocidade com que a câmera acompanha o mouse quando você arrasta a vista (Shift + clique).'),
+            Row('show_coords', 'Mostrar coordenadas', 'A posição X Y Z no canto de cima à esquerda', 'pin',
+                'toggle', 'Interface', 'show_coords',
+                'Mostra onde o personagem está no mundo (X, Y e Z), como no Minecraft. Desligada, a tela fica limpa '
+                'e o contador de FPS, se estiver ligado, sobe para o lugar dela.'),
             Row('audio', 'Sons da floresta', 'Ainda não disponível no motor', 'sound', 'info', 'Som', None,
                 'O áudio chega junto com o sistema de som do motor. Por enquanto não há volume para ajustar.'),
         ]
@@ -211,6 +216,10 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: float, y: float, s: float, co
     if kind == 'monitor':
         draw.rounded_rectangle((*p(.08, .15), *p(.92, .7)), 3, outline=color, width=2)
         line([(.5, .7), (.5, .85)]); line([(.3, .88), (.7, .88)])
+    elif kind == 'pin':    # um marcador de mapa (a posição no mundo)
+        draw.ellipse((*p(.22, .05), *p(.78, .61)), outline=color, width=2)
+        draw.ellipse((*p(.42, .25), *p(.58, .41)), fill=color)
+        line([(.27, .48), (.5, .95), (.73, .48)])
     elif kind == 'gauge':
         draw.arc((*p(.05, .12), *p(.95, 1.02)), 180, 360, fill=color, width=2)
         line([(.5, .57), (.75, .3)]); draw.ellipse((*p(.43, .5), *p(.57, .64)), fill=color)

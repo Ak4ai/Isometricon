@@ -1324,6 +1324,12 @@ def main() -> None:
 
 
     fps_overlay = FpsOverlay()
+
+    def coords_on_screen() -> bool:
+        """As coordenadas do canto de cima à esquerda: ligadas em Configurações > Geral e sem o painel do /mestre ali."""
+        return (coordinate_overlay is not None and menus.preferences.data.get('show_coords', True)
+                and not (master_panel is not None and master_panel.is_open))
+
     # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
     loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)
     from src.interactive.combat_hud import CombatHud, chat_log_view
@@ -2135,7 +2141,7 @@ def main() -> None:
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
             scene_target.finish()
 
-            if coordinate_overlay is not None and not (master_panel is not None and master_panel.is_open):
+            if coords_on_screen():
                 coordinate_overlay.render(window.width, window.height, player_token.position)   # o painel fica ali
                 shader.use()
 
@@ -2205,7 +2211,7 @@ def main() -> None:
         if menus.preferences.data.get('show_fps'):   # Configurações > Mostrar FPS (desligado por padrão)
             # sob as coordenadas, quando elas estão na tela (uma linha de 18 pixels mais a folga)
             fps_overlay.render(window.width, window.height,
-                               FpsOverlay.MARGIN + (22 if coordinate_overlay is not None else 0))
+                               FpsOverlay.MARGIN + (22 if coords_on_screen() else 0))
         character_editor.render(window.width, window.height)
         # com a tela de criação aberta, o chat fica ao lado do painel dela (por cima, tapava os botões do rodapé)
         chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open
