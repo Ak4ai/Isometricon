@@ -45,13 +45,11 @@ A escala cromática dos mapas de calor representa a distância ponto a ponto em 
 *Figura 1: Comparativo em vestidos, calças e camisas. A formulação combinada (radial <-> global) reduziu o percentil de erro em mais de 50%.*
 
 ### 2. Calça Jeans e Camisa Social
-````carousel
 ![Heatmap Jeans](images/validacao/heatmap-jeans-roblox.png)
-<!-- slide -->
+
 ![Heatmap Camisa](images/validacao/heatmap-camisa-roblox.png)
-<!-- slide -->
+
 ![Heatmap Vestido](images/validacao/heatmap-vestido-roblox.png)
-````
 
 ---
 
@@ -64,10 +62,8 @@ Antes da introdução do vínculo radial prismático, deformações simplistas g
 *Figura 2: Comparação que motivou o abandono de deformações heurísticas e adoção do WrapLayer universal.*
 
 ### Elementos Pendurados e Silhueta
-````carousel
 ![Closeup Calça Skater](images/validacao/closeup-calca-skater.png)
-<!-- slide -->
+
 ![Closeup Saia-Short](images/validacao/closeup-saia-short.png)
-<!-- slide -->
+
 ![Closeup Franjas e Cordões](images/validacao/closeup-pendurados-direcao.png)
-````

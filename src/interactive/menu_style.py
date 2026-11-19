@@ -71,26 +71,28 @@ def icon(draw, kind, x, y, size=22, color='#345246'):
 
 
 @lru_cache(maxsize=96)
-def seed_map(seed):
-    """Prévia cartográfica determinística com o mesmo gerador de terreno."""
-    from src.world import TerrainGenerator
-    generator=TerrainGenerator(seed=seed)
+def seed_map(seed, terrain=None):
+    """Prévia cartográfica determinística com o mesmo gerador de terreno (``terrain``: as opções, em JSON)."""
+    import json
+    from src.world.terrain_options import make_generator
+    generator=make_generator(seed, json.loads(terrain) if terrain else None, vegetation=False)
     image=Image.new('RGB',(120,80),'#425C50');d=ImageDraw.Draw(image)
     for z in range(20):
         for x in range(30):
             h=generator.get_height((x-15)*2,(z-10)*2)
-            color=('#426D78' if h<7 else '#B5AE7E' if h==7 else '#7D9561' if h<10 else '#496A4E')
+            sea=generator.sea_level
+            color=('#426D78' if h<sea else '#B5AE7E' if h==sea else '#7D9561' if h<sea+3 else '#496A4E')
             d.rectangle((x*4,z*4,x*4+3,z*4+3),fill=color)
     return image
 
 
 @lru_cache(maxsize=64)
-def _thumbnail(path, modified, seed):
+def _thumbnail(path, modified, seed, terrain=None):
     try:
         with Image.open(path) as image:
             return ImageOps.fit(image.convert('RGB'),(78,52),method=Image.Resampling.LANCZOS)
     except (OSError,ValueError):
-        return seed_map(seed).resize((78,52),Image.Resampling.LANCZOS)
+        return seed_map(seed,terrain).resize((78,52),Image.Resampling.LANCZOS)
 
 
 def world_thumbnail(library, world):
@@ -99,17 +101,26 @@ def world_thumbnail(library, world):
         modified=path.stat().st_mtime_ns
     except OSError:
         modified=None
-    return _thumbnail(str(path),modified,world['seed'])
+    import json
+    terrain=json.dumps(world['terrain'],sort_keys=True) if world.get('terrain') else None
+    return _thumbnail(str(path),modified,world['seed'],terrain)
 
 
-@lru_cache(maxsize=1)
-def atmosphere():
-    """Vinheta suave: a paisagem permanece legível e a marca ganha contraste."""
+@lru_cache(maxsize=4)
+def atmosphere(width=1320, height=876, step=4):
+    """Vinheta suave: a paisagem permanece legível e a marca ganha contraste.
+
+    Cobre a tela inteira (``width`` x ``height``), não só o quadro 1320 x 876 do menu: a faixa escura atrás da
+    marca vai até a borda numa tela mais larga ou mais alta. Sai em 1/``step`` da resolução (é um degradê liso;
+    o quad a estica com filtro linear)."""
     import numpy as np
-    y,x = np.mgrid[0:876,0:1320]
+    scale = min(width/1320, height/876)
+    ox, oy = (width-1320*scale)/2, (height-876*scale)/2
+    sy, sx = np.mgrid[0:max(1,height//step), 0:max(1,width//step)]
+    x, y = ((sx+.5)*step-ox)/scale, ((sy+.5)*step-oy)/scale     # no quadro do menu (passa das bordas dele)
     edge = ((x-660)/800)**2 + ((y-420)/650)**2
     alpha = np.clip(12 + 24*edge + 52*np.clip((700-x)/700,0,1) + 28*np.clip((y-550)/326,0,1),0,115)
-    rgba=np.empty((876,1320,4),dtype=np.uint8)
+    rgba=np.empty((*x.shape,4),dtype=np.uint8)
     rgba[:,:,:3]=(9,25,20)
     rgba[:,:,3]=alpha.astype(np.uint8)
     return Image.fromarray(rgba)
@@ -117,10 +128,8 @@ def atmosphere():
 
 @lru_cache(maxsize=8)
 def menu_base(paused, bounds):
-    """Sombra, papel e vinheta são superfícies estáticas compartilhadas."""
+    """Sombra e papel são superfícies estáticas compartilhadas (a vinheta é da tela toda: ``atmosphere``)."""
     image=Image.new('RGBA',(1320,876),(0,0,0,0))
-    if not paused:
-        image.alpha_composite(atmosphere())
     panel(image,bounds)
     return image
 

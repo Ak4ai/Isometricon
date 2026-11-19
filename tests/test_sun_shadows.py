@@ -104,3 +104,82 @@ def test_the_shortcut_gives_the_same_light_as_the_full_ray():
             shortcuts += math.tan(elevation) >= rise
             checked += 1
     assert checked == 9000 and shortcuts > 4000
+
+
+# ------------------------------------------------------------------------------------- blocos parciais
+def test_shadow_boxes_follow_the_shape_of_the_block():
+    from src.world.block_shapes import shadow_boxes
+    assert shadow_boxes("minecraft:stone") == ()
+    assert shadow_boxes("minecraft:oak_slab[type=bottom]") == (((0.0, 0.0, 0.0), (1.0, 0.5, 1.0)),)
+    post = shadow_boxes("minecraft:oak_fence[east=false,north=false,south=false,west=false]")
+    assert post == (((0.375, 0.0, 0.375), (0.625, 1.0, 0.625)),)           # a cerca é só o poste fino
+    assert len(shadow_boxes("minecraft:oak_stairs[facing=east,half=bottom,shape=straight]")) == 2
+
+
+def test_the_same_shape_gets_the_same_number():
+    from src.world.shadow_shapes import TABLE
+    a = TABLE.id_for("minecraft:oak_slab[type=bottom]")
+    assert a > 0 and TABLE.id_for("minecraft:stone_slab[type=bottom]") == a
+    assert TABLE.id_for("minecraft:stone") == 0
+    np.testing.assert_allclose(TABLE.boxes(a), [[[0, 0, 0], [1, 0.5, 1]]])
+
+
+def test_partial_and_decoration_blocks_go_to_the_mask_with_their_shape():
+    from src.rendering.sun_shadows import PARTIAL_VALUE, SOLID_VALUE, mask_values, shape_texels
+    from src.world.room_reveal import extract_window_cells
+    from src.world.schematic import Schematic
+    from src.world.shadow_shapes import TABLE
+    from src.world.structure_layer import PlacedStructure
+
+    grid = np.full((1, 1, 3), "minecraft:stone", dtype=object)
+    grid[0, 0, 1] = "minecraft:oak_slab[type=bottom]"
+    grid[0, 0, 2] = "minecraft:stone_pressure_plate"            # não barra o personagem, mas faz sombra
+    placed = PlacedStructure("t", Schematic(3, 1, 1, grid, {}, "t"), (0, 0, 0))
+    window = extract_window_cells((0, 0, 0), {}, [placed])
+    values, ids = mask_values(window), shape_texels(window)
+    assert values[0, 0, 0] == SOLID_VALUE and tuple(ids[0, 0, 0]) == (0, 0)
+    slab = TABLE.id_for("minecraft:oak_slab[type=bottom]")
+    assert values[1, 0, 0] == PARTIAL_VALUE and tuple(ids[1, 0, 0]) == (slab & 0xFF, slab >> 8)
+    assert values[2, 0, 0] == PARTIAL_VALUE
+
+
+def test_plants_get_their_own_value_in_the_mask():
+    from src.rendering.sun_shadows import PLANT_VALUE, mask_values
+    from src.world.room_reveal import extract_window_cells
+    from src.world.schematic import Schematic
+    from src.world.structure_layer import PlacedStructure
+
+    grid = np.full((1, 1, 1), "minecraft:oak_sapling[stage=0]", dtype=object)
+    placed = PlacedStructure("t", Schematic(1, 1, 1, grid, {}, "t"), (0, 0, 0))
+    assert mask_values(extract_window_cells((0, 0, 0), {}, [placed]))[0, 0, 0] == PLANT_VALUE
+
+
+def test_plants_cast_the_drawing_of_their_texture():
+    from src.world.block_shapes import shadow_plant
+    from src.world.shadow_shapes import TABLE
+    assert shadow_plant("minecraft:oak_sapling[stage=0]") == ("oak_sapling", 0.0, 1.0)
+    assert shadow_plant("minecraft:fire") is None                   # o fogo é luz
+    assert shadow_plant("minecraft:rail[shape=north_south]") is None
+    shape = TABLE.id_for("minecraft:oak_sapling[stage=0]")
+    mask_row = TABLE.texels()[shape][0]
+    assert mask_row[3] == 2.0                                       # a marca de planta
+    drawing = TABLE.plant_masks()[int(mask_row[0]) * 16:int(mask_row[0]) * 16 + 16]
+    assert 0 < (drawing > 0).sum() < 256                            # tem folha e tem fresta
+
+
+def test_shadow_detail_levels_go_from_cubes_to_grass():
+    from src.rendering.sun_shadows import (DETAIL_CUBES, DETAIL_FULL, DETAIL_PLANTS, DETAIL_SHAPES, PARTIAL_VALUE,
+                                           PLANT_VALUE, SOLID_VALUE, mask_values)
+    from src.world.room_reveal import extract_window_cells
+    from src.world.schematic import Schematic
+    from src.world.structure_layer import PlacedStructure
+
+    grid = np.array([[["minecraft:oak_slab[type=bottom]", "minecraft:stone_pressure_plate",
+                       "minecraft:oak_sapling[stage=0]", "minecraft:short_grass"]]], dtype=object)
+    placed = PlacedStructure("t", Schematic(4, 1, 1, grid, {}, "t"), (0, 0, 0))
+    window = extract_window_cells((0, 0, 0), {}, [placed])
+    row = lambda detail: [int(v) for v in mask_values(window, detail)[:4, 0, 0]]
+    assert row(DETAIL_CUBES) == [SOLID_VALUE, 0, 0, 0]               # como antes: a laje é cubo, o resto não tapa
+    assert row(DETAIL_SHAPES) == [PARTIAL_VALUE, PARTIAL_VALUE, 0, 0]
+    assert row(DETAIL_PLANTS) == [PARTIAL_VALUE, PARTIAL_VALUE, PLANT_VALUE, 0]   # sem o capim
+    assert row(DETAIL_FULL) == [PARTIAL_VALUE, PARTIAL_VALUE, PLANT_VALUE, PLANT_VALUE]

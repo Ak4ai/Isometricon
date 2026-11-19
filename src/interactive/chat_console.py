@@ -71,9 +71,6 @@ class ChatConsole:
         self.max_messages = max_messages
         self.glfw_window = glfw_window
 
-        self.loading_frame: int = 0
-        self.loading_timer: float = 0.0
-        self.SPINNER_FRAMES = ["|", "/", "-", "\\"]
 
         self.is_open: bool = False
         self.input_text: str = ""
@@ -100,6 +97,7 @@ class ChatConsole:
         self._ignore_chars: set = set()
 
         self.combat_log: Optional[CombatLogView] = None
+        self.left = 16   # a margem esquerda da caixa (a tela de criação aberta empurra o chat para o lado dela)
         self._combat_key: Any = None
 
         self.hud_dirty: bool = True
@@ -712,18 +710,9 @@ class ChatConsole:
             self.add_message(f"> {cmd}", (255, 255, 255))
 
     def update(self, dt: float) -> None:
-        """Atualiza temporizador do cursor, processa callbacks na thread principal e anima spinner."""
+        """Atualiza temporizador do cursor, processa callbacks na thread principal."""
         if self.command_handler is not None:
             self.command_handler.process_pending_callbacks()
-
-        # Atualiza animação do loading spinner se estiver importando roupa em background
-        is_importing = bool(self.command_handler and self.command_handler.busy_status)
-        if is_importing:
-            self.loading_timer += dt
-            if self.loading_timer >= 0.12:
-                self.loading_timer = 0.0
-                self.loading_frame = (self.loading_frame + 1) % len(self.SPINNER_FRAMES)
-                self.hud_dirty = True
 
         if self.is_open:
             self.cursor_timer += dt
@@ -741,10 +730,15 @@ class ChatConsole:
             self.combat_log = view
             self.hud_dirty = True
 
+    def set_left(self, left: int) -> None:
+        """Muda a margem esquerda da caixa (e redesenha só quando ela muda)."""
+        if left != self.left:
+            self.left, self.hud_dirty = left, True
+
     def _box_width(self, width: int) -> int:
         """A largura da caixa: a de sempre; no combate, da margem esquerda até a borda do menu de combate."""
         if self.combat_log is None:
-            return min(740, width - 32)
+            return min(740, width - self.left - 16)
         right = self.combat_log.right if self.combat_log.right is not None else width - 16
         return max(COMBAT_MIN_WIDTH, min(width - 32, int(right) - 16 - 6 - 10))
 
@@ -760,8 +754,7 @@ class ChatConsole:
             if self.is_open or (now - m.timestamp < 8.0)
         ]
 
-        is_importing = bool(self.command_handler and self.command_handler.busy_status)
-        if not self.is_open and not visible_messages and not is_importing and self.combat_log is None:
+        if not self.is_open and not visible_messages and self.combat_log is None:
             return
 
         import OpenGL.GL as gl
@@ -873,7 +866,7 @@ class ChatConsole:
         view = self.combat_log
         draw = ImageDraw.Draw(img)
         body = st.font(14)
-        box_x = 16
+        box_x = self.left
         box_w = self._box_width(width)
         line_height = 20
         rows: List[List[Segment]] = []
@@ -923,7 +916,7 @@ class ChatConsole:
             return img
 
         # Dimensões da caixa de chat (canto inferior esquerdo; no combate, até a borda do menu de combate)
-        box_x = 16
+        box_x = self.left
         box_w = self._box_width(width)
         line_height = 20
         max_lines = 8
@@ -1057,36 +1050,6 @@ class ChatConsole:
         else:
             hint_text = "[T] Abrir Chat / Comandos | [/] Digitar Comando"
             draw.text((box_x, box_y + hist_h + 2), hint_text, font=self.font, fill=(160, 160, 170, 160))
-
-        # Badge animada de Loading / Importando em segundo plano (canto superior direito)
-        if self.command_handler and self.command_handler.busy_status:
-            spinner = self.SPINNER_FRAMES[self.loading_frame % len(self.SPINNER_FRAMES)]
-            status_text = self.command_handler.busy_status
-            badge_text = f"[ {spinner} ] {status_text}"
-
-            try:
-                badge_w = int(draw.textlength(badge_text, font=self.font)) + 24
-            except AttributeError:
-                badge_w = len(badge_text) * 10 + 24
-            badge_h = 32
-            badge_x = width - badge_w - 20
-            badge_y = 20
-
-            # Fundo translúcido estilizado com borda neon ciano
-            draw.rounded_rectangle(
-                [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
-                radius=6,
-                fill=(12, 22, 34, 230),
-                outline=(85, 255, 255, 240),
-                width=2,
-            )
-            # Texto e spinner em ciano neon brilhante
-            draw.text(
-                (badge_x + 12, badge_y + 7),
-                badge_text,
-                font=self.font,
-                fill=(85, 255, 255, 255),
-            )
 
         return img
 

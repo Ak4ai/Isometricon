@@ -87,6 +87,8 @@ class WindowCells:
     culls: np.ndarray       # bool: cubo inteiro e opaco, o único que esconde a face do vizinho
     doors: Optional[np.ndarray] = None  # bool: portas das construções (abertas ou não): cada cômodo termina nelas
     details: Optional[np.ndarray] = None  # bool: móveis e enfeites das construções (ficam na casa de bonecas)
+    shapes: Optional[np.ndarray] = None   # uint16: nos blocos das construções que não são cubo inteiro (laje, degrau,
+                                          # cerca, placa), o número da forma deles (ver shadow_shapes); 0 no resto
 
 
 def extract_window(
@@ -135,6 +137,9 @@ def extract_window_cells(
         culls[:, :floor_rows, :] = True
     occupied = solid | SHAPED_LUT[blocks]   # os enfeites do terreno são desenhados, mas não são parede
     details = np.zeros(WINDOW, dtype=bool)
+    from src.world.shadow_shapes import terrain_shapes
+    shapes = terrain_shapes()[blocks]      # os enfeites do terreno (capim, flores, tocha) também fazem sombra
+    terrain_solid = solid.copy()
 
     for index, placed in enumerate(structures):
         (bx0, by0, bz0), (bx1, by1, bz1) = placed.bounds()
@@ -148,15 +153,18 @@ def extract_window_cells(
         shown = placed._occupied[window].transpose(2, 0, 1)
         cube = placed._culls[window].transpose(2, 0, 1)
         detail = placed.schematic.detail_mask[window].transpose(2, 0, 1)
+        shape = placed.schematic.shadow_shape_mask[window].transpose(2, 0, 1)
         sel = (slice(lo[0] - ox, hi[0] - ox), slice(lo[1] - oy, hi[1] - oy), slice(lo[2] - oz, hi[2] - oz))
         solid[sel] |= part
         roof[sel] |= part
         occupied[sel] |= shown
         culls[sel] |= cube
         details[sel] |= detail
+        shapes[sel] = np.where(shape != 0, shape, shapes[sel])
         owner[sel][shown] = index
+    shapes[terrain_solid | culls] = 0     # um cubo inteiro na mesma célula (do terreno ou de outra construção) vence
     return WindowCells(solid, roof, blocks, owner, structures, occupied, culls, _door_cells(owner, structures, origin),
-                       details)
+                       details, shapes)
 
 
 def _door_cells(owner: np.ndarray, structures, origin) -> np.ndarray:

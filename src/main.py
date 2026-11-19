@@ -90,6 +90,7 @@ from src.interaction import raycast_voxels, screen_to_world_ray
 from src.interactive import BlockHighlightRenderer, GridOverlayRenderer, PlayerToken
 from src.interactive.coordinate_overlay import CoordinateOverlayRenderer
 from src.interactive.fps_overlay import FpsOverlay
+from src.interactive.loading_indicator import LoadingIndicator
 from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 from src.rendering import Shader, TexturedMesh, TextureAtlas
 from src.world import BlockType, Chunk3D, ChunkMesher, TerrainGenerator, WorldManager
@@ -444,7 +445,10 @@ def main() -> None:
         water_uv = atlas.uv_table[int(BlockType.WATER)].reshape(-1, 2)
         water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
                       float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
-        generator = TerrainGenerator(seed=active_seed["value"], enable_caves=True, vegetation=True)
+        from src.world.terrain_options import make_generator
+        # as opções de criação do mundo (tela "Uma nova aventura"); sem elas, o relevo de sempre
+        active_terrain = {"options": selected_world.get("terrain") if selected_world else None}
+        generator = make_generator(active_seed["value"], active_terrain["options"])
         world_manager = WorldManager(generator=generator,
                                      render_distance=menus.preferences.data['render_distance'], atlas=atlas)
         start_surface_y = generator.get_height(0, 0)
@@ -526,6 +530,8 @@ def main() -> None:
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
+        from src.rendering.cast_shadow import CharacterShadowMap
+        character_shadows = CharacterShadowMap()   # a sombra do personagem e dos NPCs em qualquer face de bloco
         # a cena do jogo num framebuffer próprio: MSAA, escala de resolução e FXAA mudam na hora (Configurações)
         from src.rendering.scene_target import SceneTarget
         scene_target = SceneTarget()
@@ -584,6 +590,7 @@ def main() -> None:
         world_manager = None
         schematic_tool = None
         room_tracker = room_renderer = shadow_renderer = scene_target = None
+        character_shadows = None
         interact_prompt = None
         context_cursor = None
         player_token = None
@@ -597,6 +604,7 @@ def main() -> None:
         world_manager = None
         schematic_tool = None
         room_tracker = room_renderer = shadow_renderer = scene_target = None
+        character_shadows = None
         interact_prompt = None
         context_cursor = None
         player_token = None
@@ -618,6 +626,7 @@ def main() -> None:
     skin_command_handler.construction_panel = construction_panel
     skin_command_handler.room_reveal = room_renderer
     skin_command_handler.sun_shadows = shadow_renderer
+    skin_command_handler.world_shader = shader
     skin_command_handler.world_seed = (lambda: active_seed["value"]) if terrain_demo else None
     if terrain_demo:
         skin_command_handler.place_water = lambda x, y, z: world_manager.place_water(x, y, z)
@@ -653,8 +662,20 @@ def main() -> None:
     combat = CombatController(PlayerSheet.from_dict(selected_world.get("combat")
                                                     if isinstance(selected_world, dict) else None))
     combat.terrain = WorldTerrain(lambda x, y, z: is_solid(voxel_provider.get_block_at(x, y, z)))
+    # A ambientação do mestre (/mestre): hora do dia, claridade, névoa... guardada no mundo
+    from src.rendering.ambience import Ambience
+    from src.interactive.master_panel import MasterPanel
+    ambience = Ambience.from_dict(selected_world.get("ambiente") if isinstance(selected_world, dict) else None)
+    master_panel = MasterPanel(ambience) if terrain_demo else None
+    from src.rendering.fog_of_war import FogOfWar
+    fog_war = FogOfWar()   # o explorado (névoa de guerra do /mestre), guardado no mundo
+    fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
+    if master_panel is not None:
+        master_panel.on_recover = fog_war.explored.clear
+    cloud_fog = None   # a névoa de guerra em nuvens de blocos (criada no terreno, com o GL pronto)
     if terrain_demo:
         skin_command_handler.combat = combat
+        skin_command_handler.master_panel = master_panel
         combat.load_npcs(selected_world.get("npcs") if isinstance(selected_world, dict) else None)
     if initial_cmd:
         for single_cmd in initial_cmd.split(";"):
@@ -667,7 +688,7 @@ def main() -> None:
         chat_console.open(chat_text or "")
 
     # Tela de criação de personagem (/skin interface, ou --editor para já abrir nela).
-    from src.interactive.character_editor import CharacterEditor
+    from src.interactive.character_editor import CharacterEditor, PANEL_WIDTH as character_editor_panel_width
     character_editor = CharacterEditor(skin_command_handler, turntable_state, create_gl=True)
     character_editor.autosave = max_frames is None  # an automated run (--frames) leaves the save alone
     character_editor.clipboard = chat_console._get_clipboard_string
@@ -862,7 +883,8 @@ def main() -> None:
         if not terrain_demo:
             return
         if menus.world is None:
-            menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'])
+            menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'],
+                                               active_terrain["options"])
         menus.world['seed'] = active_seed['value']
         menus.world['position'] = [float(v) for v in player_token.position]
         if construction_panel is not None:
@@ -872,6 +894,8 @@ def main() -> None:
             menus.world['character'] = character_save.to_dict(character_model)
         menus.world['combat'] = combat.sheet.to_dict()
         menus.world['npcs'] = combat.npc_list()
+        menus.world['ambiente'] = ambience.to_dict()
+        menus.world['nevoa_explorada'] = fog_war.explored.to_data()
         menus.library.save(menus.world)
         if not menus.active:
             menus.capture_scene(window.width,window.height)
@@ -887,7 +911,8 @@ def main() -> None:
         nonlocal world_manager, voxel_provider
         world_manager.delete()
         active_seed['value'] = world['seed']
-        world_manager = WorldManager(TerrainGenerator(seed=world["seed"], enable_caves=True, vegetation=True),
+        active_terrain["options"] = world.get("terrain")
+        world_manager = WorldManager(make_generator(world["seed"], active_terrain["options"]),
                                      render_distance=menus.preferences.data['render_distance'], atlas=atlas)
         x, z = .5, .5
         player_token.position[:] = world.get('position') or [x, world_manager.get_height(x, z) + 1., z]
@@ -913,6 +938,10 @@ def main() -> None:
         combat.clear()
         combat.sheet = PlayerSheet.from_dict(world.get('combat'))
         combat.load_npcs(world.get('npcs'))
+        ambience.load(world.get('ambiente'))
+        fog_war.explored.load(world.get('nevoa_explorada'))
+        if cloud_fog is not None:
+            cloud_fog.field.reset()
         menus.world = world
 
 
@@ -934,6 +963,11 @@ def main() -> None:
         if map_editor is not None and not chat_console.is_open:
             if map_editor.handle_key(key, action, mods):
                 return True
+
+        if (master_panel is not None and master_panel.is_open and not chat_console.is_open
+                and key == glfw.KEY_ESCAPE and action == glfw.PRESS):
+            master_panel.close()
+            return True
 
         if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
             if construction_panel.handle_key(key, action, mods):
@@ -995,12 +1029,15 @@ def main() -> None:
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
             world_manager.delete()
             room_tracker.reset()
-            world_manager.generator = TerrainGenerator(seed=new_seed, enable_caves=True, vegetation=True)
+            world_manager.generator = make_generator(new_seed, active_terrain["options"])   # as opções ficam
             # Reposiciona o token no topo do novo relevo
             new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
             player_token.position[1] = float(new_surface) + 1.0
             world_manager.load_initial_region(player_token.position[0], player_token.position[2])
             combat.clear()                     # os inimigos ficavam no relevo antigo
+            fog_war.explored.clear()           # o explorado era de outro relevo
+            if cloud_fog is not None:
+                cloud_fog.field.reset()
             # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
             from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
             saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else []
@@ -1076,6 +1113,11 @@ def main() -> None:
             if map_editor.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
                 return
 
+        if (master_panel is not None and master_panel.is_open and not character_editor.is_open
+                and button == glfw.MOUSE_BUTTON_LEFT and action in (glfw.PRESS, glfw.RELEASE)):
+            if master_panel.handle_mouse_button(*window.get_cursor_pos(), action == glfw.PRESS):
+                return
+
         if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
             if construction_panel.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT),
                                                       window.get_cursor_pos(), window.width):
@@ -1114,6 +1156,8 @@ def main() -> None:
             menus.hover(*window.get_cursor_pos_framebuffer())
             return
         if chat_console.is_open:
+            return
+        if master_panel is not None and not character_editor.is_open and master_panel.handle_cursor(*window.get_cursor_pos()):
             return
         character_editor.handle_cursor(x, y)
         if pan_state["active"] and not window.is_mouse_button_pressed(glfw.MOUSE_BUTTON_MIDDLE):
@@ -1275,10 +1319,19 @@ def main() -> None:
             shadow_renderer.enabled = prefs["shadows"] != "off"
             shadow_renderer.quality = {"low": 0, "medium": 1, "high": 2}.get(prefs["shadows"], 2)
             shadow_renderer.steps = int(prefs["shadow_range"])
+            shadow_renderer.set_detail(int(prefs["shadow_detail"]), shader)
             shadow_renderer.strength = float(prefs["shadow_strength"])
 
 
     fps_overlay = FpsOverlay()
+
+    def coords_on_screen() -> bool:
+        """As coordenadas do canto de cima à esquerda: ligadas em Configurações > Geral e sem o painel do /mestre ali."""
+        return (coordinate_overlay is not None and menus.preferences.data.get('show_coords', True)
+                and not (master_panel is not None and master_panel.is_open))
+
+    # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
+    loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)
     from src.interactive.combat_hud import CombatHud, chat_log_view
     from src.interactive.enemy_tokens import EnemyTokenRenderer
     enemy_renderer = EnemyTokenRenderer()
@@ -1290,6 +1343,7 @@ def main() -> None:
     while not window.should_close():
         dt = window.update_delta_time()
         fps_overlay.update(dt)
+        loading_indicator.update(dt)
         if frametimes_path:
             if frame_marks:
                 frame_sections.append({n: (t - frame_marks[i - 1][1]) * 1000.0
@@ -1336,14 +1390,19 @@ def main() -> None:
             # /criar npc (um corpo novo do sexo pedido) ou /npc editar (o corpo que ele já tem): a tela do /skin
             # passa a vestir o NPC; o personagem volta para ela quando a tela fecha
             from src.clothing.character_animation import CharacterAnimator
-            from src.interactive.npc_models import build_model
+            from src.interactive.npc_models import CustomHolder, build_model
             request, skin_command_handler.npc_request = skin_command_handler.npc_request, None
             editing_token = combat.token(request["editar"]) if "editar" in request else None
+            holder = CustomHolder()   # o modelo .glb do NPC (o /skin modelo põe nele enquanto a tela veste o NPC)
             if editing_token is not None:
                 spec = dict(editing_token.npc)        # a aba NPC muda uma cópia; o NPC é refeito ao fechar
                 body = npc_models.release(editing_token.id)
-                npc_model = body.model if body is not None else build_model(spec["id"], spec.get("personagem"))
-                npc_animator = body.animator if body is not None else CharacterAnimator(npc_model, walking=False)
+                if body is not None and body.model is not None:
+                    npc_model, npc_animator = body.model, body.animator
+                else:                                 # o NPC só tinha o modelo .glb: o corpo montado vem agora
+                    npc_model = build_model(spec["id"], spec.get("personagem"))
+                    npc_animator = CharacterAnimator(npc_model, walking=False)
+                holder.custom_model = body.custom if body is not None else None
             elif "editar" not in request:
                 spec = dict(request, id=combat.new_npc_id())
                 npc_model = build_model(spec["id"], None, spec.pop("corpo", "masculino"))
@@ -1352,7 +1411,14 @@ def main() -> None:
                 spec = None
             if spec is not None:
                 npc_edit.update(spec=spec, model=npc_model, animator=npc_animator, token=editing_token,
-                                player_model=skin_command_handler.character_model)
+                                player_model=skin_command_handler.character_model, holder=holder,
+                                player_choice=(skin_command_handler.model_choice, skin_command_handler.want_custom,
+                                               skin_command_handler.save_model_choice))
+                # a escolha do modelo .glb passa a ser a do NPC, sem gravar por cima da do personagem
+                skin_command_handler.model_choice = dict(spec["modelo"]) if spec.get("modelo") else None
+                skin_command_handler.want_custom = False
+                skin_command_handler.save_model_choice = False
+                skin_command_handler.model_target = holder
                 skin_command_handler.character_model = npc_model
                 skin_command_handler.npc_editing = spec  # a aba NPC da tela muda nome, lado, ficha e fala
                 character_editor.autosave = False      # fechar a tela não grava o NPC como o personagem
@@ -1361,7 +1427,17 @@ def main() -> None:
             # a tela fechou: o NPC leva a aparência e aparece (ou volta) no mundo; a tela volta a vestir o personagem
             spec, npc_model = npc_edit["spec"], npc_edit["model"]
             spec["personagem"] = character_save.to_dict(npc_model)
+            custom = npc_edit["holder"].custom_model if skin_command_handler.model_choice is not None else None
+            if custom is not None:
+                spec["modelo"] = dict(skin_command_handler.model_choice)
+            else:
+                spec.pop("modelo", None)
+                if npc_edit["holder"].custom_model is not None:
+                    npc_edit["holder"].custom_model.delete()
             skin_command_handler.character_model = npc_edit["player_model"]
+            (skin_command_handler.model_choice, skin_command_handler.want_custom,
+             skin_command_handler.save_model_choice) = npc_edit["player_choice"]
+            skin_command_handler.model_target = None
             skin_command_handler.npc_editing = None
             character_editor.autosave = True
             token = npc_edit["token"]
@@ -1376,7 +1452,8 @@ def main() -> None:
                 token = combat.add_npc(spec, spot, yaw + math.pi)
                 chat_console.add_message(f"[NPC] {token.combatant.name} chegou "
                                          f"({'amigável' if ally else 'hostil'}).", (85, 255, 85))
-            npc_models.adopt(token.id, npc_model, npc_edit["animator"], spec.get("personagem"))
+            npc_models.adopt(token.id, npc_model, npc_edit["animator"], spec.get("personagem"),
+                             custom=custom, choice=spec.get("modelo"))
             npc_edit.clear()
         edited_model = npc_edit["model"] if npc_edit else character_model   # quem a tela de criação mostra
         editing = character_editor.is_open and character_model is not None
@@ -1413,6 +1490,8 @@ def main() -> None:
                 character_animator.update(dt)
             if terrain_demo and player_token.custom_model is not None:
                 player_token.custom_model.update(dt, player_token.speed if character_editor.walk_preview else 0.0)  # W anda
+            if npc_edit and npc_edit["holder"].custom_model is not None:
+                npc_edit["holder"].custom_model.update(dt, player_token.speed if character_editor.walk_preview else 0.0)
             # Nas seções do rosto a câmera vai para o rosto: na altura da cabeça, de perto, na
             # horizontal e com o personagem parado de frente para ela. Ao sair, volta ao que era.
             if character_editor.focus != editor_camera.get("focus", "body"):
@@ -1657,19 +1736,21 @@ def main() -> None:
             shader.set_vec3("u_LightDir", 0.5, 1.2, 0.8)
             shader.set_vec3("u_LightColor", 0.70, 0.70, 0.70)
             shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.38)
+            Ambience.neutral(shader)
             if editor_animator is not None:
                 editor_animator.sync()  # a pele recortada por um clique deste quadro já entra na pose
             shown_body = player_token.custom_model if terrain_demo and player_token.custom_model is not None \
                 else character_model
-            if npc_edit:
-                shown_body = edited_model
+            if npc_edit:   # o NPC na tela: o modelo .glb dele, se escolheu um, ou o corpo montado
+                shown_body = npc_edit["holder"].custom_model or edited_model
             shown_body.draw(shader, model @ mat4_rotate_y(math.radians(turntable_state["yaw"])))
             gl.glEnable(gl.GL_CULL_FACE)
             gl.glViewport(0, 0, fb_w, fb_h)
             # O pincel de pele: os pontos da cage do corpo na tela, para pintar e para mostrar.
             character_editor.picker = character_editor.overlay = None
             character_editor.bones_view = None
-            shown_custom = player_token.custom_model if terrain_demo and not npc_edit else None
+            shown_custom = (npc_edit["holder"].custom_model if npc_edit else player_token.custom_model) \
+                if terrain_demo else None
             if shown_custom is not None and shown_custom.rig is not None:
                 # os ossos do modelo personalizado na tela, para a aba Modelo mostrar e deixar clicar
                 from src.clothing import role_editor
@@ -1755,6 +1836,44 @@ def main() -> None:
             shader.set_float("u_CutawayFade", 0.45)
             shader.set_bool("u_WaterMode", player_token.in_water)
             shader.set_int("u_CutawayPass", 0)
+
+            # 0. A sombra dos personagens: eles vistos do sol num mapa de profundidade que o terreno lê a seguir
+            # a ambientação do mestre: a hora move o sol (e as sombras), o resto é a correção no fim do shader
+            ambience.update(dt)
+            sun_now = ambience.light_direction()
+            shader.set_vec3("u_LightDir", *sun_now)
+            if shadow_renderer is not None:
+                shadow_renderer.sun_direction = sun_now
+            ambience.apply(shader, (model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3])
+            fog_war.update(ambience.fog_war, float(player_token.position[0]), float(player_token.position[2]))
+            # na superfície, a névoa de guerra são nuvens de blocos (cloud_fog); numa caverna, a névoa do shader
+            clouds_on = bool(ambience.fog_war) and not underground_mode and ambience.war_style != 1
+            if clouds_on and cloud_fog is None:
+                from src.rendering.cloud_fog import CloudFog
+                cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored,
+                                     lambda: [placed.bounds() for placed in schematic_tool.layer.structures]
+                                     if schematic_tool is not None else [])
+            fog_war_args = (0 if clouds_on else ambience.fog_war, np.linalg.inv(np.asarray(model, dtype=np.float64)), ambience.war_color(),
+                            (float(player_token.position[0]), float(player_token.position[2])))
+            fog_war.apply(shader, *fog_war_args)
+            grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
+            gl.glClearColor(*ambience.background(), 1.0)
+            if character_shadows is not None:
+                shadow_casters = []
+                if shadow_renderer.enabled and not character_editor.is_open:
+                    gl.glActiveTexture(gl.GL_TEXTURE0)
+                    gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
+                    shader.set_int("u_TextureAtlas", 0)
+                    shader.set_bool("u_WorldStyle", False)
+                    shadow_casters = [lambda: player_token.draw(
+                        shader=shader, base_model=model @ player_token.get_model_matrix())]
+                    shadow_casters += npc_models.casters(shader, combat, model)
+                feet_drawn = model @ np.array([float(v) for v in player_token.position] + [1.0])
+                character_shadows.strength = shadow_renderer.strength
+                character_shadows.render(shader, feet_drawn[:3], shadow_renderer.sun_direction, shadow_casters)
+                shader.set_mat4("u_Projection", projection)
+                shader.set_mat4("u_View", view)
+                character_shadows.apply(shader)
 
             # 1. Renderiza os chunks de terreno e cavernas com Frustum Culling ativo
             gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -1922,6 +2041,8 @@ def main() -> None:
             shader.set_bool("u_WorldStyle", False)
 
             # 3. Grade tática: um draw GL_LINES, mesmas matrizes do terreno.
+            grid_renderer.fog = (ambience.fog / 100.0,
+                                 tuple((model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3]))
             grid_renderer.render(projection, view, model)
             mark("grid_draw")
 
@@ -1988,10 +2109,13 @@ def main() -> None:
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, token_tex_id)
             shader.set_int("u_TextureAtlas", 0)
+            if character_shadows is not None:
+                character_shadows.disable(shader)   # o personagem não lê a própria sombra
             player_token.draw(shader=shader, base_model=base_model)
             mark("player_draw")
             if npc_models.bodies:
-                npc_models.draw(shader, model, combat)       # os NPCs com o corpo montado no /skin
+                npc_models.draw(shader, model, combat)       # os NPCs com o corpo montado no /skin (ou o .glb)
+                gl.glEnable(gl.GL_CULL_FACE)                  # o modelo .glb desenha com as duas faces
             if combat.enemies:
                 # as miniaturas dos inimigos (e os anéis de alvo, vez e movimento), com a textura branca da miniatura
                 shader.set_bool("u_WaterMode", False)
@@ -2004,11 +2128,21 @@ def main() -> None:
                 shader.set_int("u_TextureAtlas", 0)
                 enemy_renderer.draw(shader, model, combat)
                 mark("enemy_draw")
+            if cloud_fog is not None and (clouds_on or cloud_fog.field.cover):
+                # a névoa de guerra: a manta de nuvens translúcida sobre o que ninguém viu, por último (quem está
+                # debaixo da beira rala aparece através dela)
+                cloud_fog.field.configure(ambience.war_height, ambience.war_objects)
+                cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
+                                 float(player_token.position[2]), dt, soft=ambience.war_style == 2)
+                cloud_fog.render(projection, view, model, ambience.tint(), window.time,
+                                 light=ambience.light_direction(), soft=ambience.war_style == 2)
+                shader.use()
+                mark("clouds")
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
             scene_target.finish()
 
-            if coordinate_overlay is not None:
-                coordinate_overlay.render(window.width, window.height, player_token.position)
+            if coords_on_screen():
+                coordinate_overlay.render(window.width, window.height, player_token.position)   # o painel fica ali
                 shader.use()
 
             # 7. A tecla F ao lado do personagem, se há uma porta ou uma escada de mão ao alcance
@@ -2037,6 +2171,8 @@ def main() -> None:
             shader.use()
             if construction_panel is not None:
                 construction_panel.render(window.width, window.height)
+            if master_panel is not None and not character_editor.is_open:
+                master_panel.render(window.width, window.height)
         elif char_demo:
             # 1. Renderiza o modelo 3D modular completo do personagem com iluminação
             spin_mat = mat4_rotate_y(math.radians(turntable_state["yaw"]))
@@ -2075,10 +2211,15 @@ def main() -> None:
         if menus.preferences.data.get('show_fps'):   # Configurações > Mostrar FPS (desligado por padrão)
             # sob as coordenadas, quando elas estão na tela (uma linha de 18 pixels mais a folga)
             fps_overlay.render(window.width, window.height,
-                               FpsOverlay.MARGIN + (22 if coordinate_overlay is not None else 0))
+                               FpsOverlay.MARGIN + (22 if coords_on_screen() else 0))
         character_editor.render(window.width, window.height)
+        # com a tela de criação aberta, o chat fica ao lado do painel dela (por cima, tapava os botões do rodapé)
+        chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open
+                              else master_panel.right + 16 if master_panel is not None and master_panel.is_open
+                              else 16)
         if map_editor is None or chat_console.is_open:
             chat_console.render(window.width, window.height)
+        loading_indicator.render(window.width, window.height)
         if context_cursor is not None:
             # No terreno, jogando, a seta do sistema dá lugar ao cursor de contexto
             playing = not (menus.active or chat_console.is_open or character_editor.is_open or pan_state["active"])
@@ -2152,6 +2293,8 @@ def main() -> None:
         room_renderer.delete()
     if shadow_renderer is not None:
         shadow_renderer.delete()
+    if character_shadows is not None:
+        character_shadows.delete()
     if scene_target is not None:
         scene_target.delete()
     if map_editor is not None:
@@ -2160,13 +2303,21 @@ def main() -> None:
         map_world.delete()
     if construction_panel is not None:
         construction_panel.delete()
+    if master_panel is not None:
+        master_panel.delete()
+    fog_war.delete()
+    if cloud_fog is not None:
+        cloud_fog.delete()
     if selection_box is not None:
         selection_box.delete()
     fps_overlay.delete()
+    loading_indicator.delete()
     enemy_renderer.delete()
     npc_models.delete()
     if npc_edit:
         npc_edit["model"].delete()
+        if npc_edit["holder"].custom_model is not None:
+            npc_edit["holder"].custom_model.delete()
     combat_hud.delete()
     if terrain_demo:
         if atlas is not None:

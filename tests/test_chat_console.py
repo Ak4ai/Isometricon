@@ -320,8 +320,8 @@ def test_chat_console_clipboard_shortcuts(monkeypatch):
     assert chat.input_text == "bytes_test_123"
 
 
-def test_chat_console_async_callbacks_and_spinner():
-    """Verifica a fila de callbacks thread-safe e a animação do badge de loading."""
+def test_chat_console_async_callbacks():
+    """Verifica a fila de callbacks thread-safe durante uma importação em segundo plano."""
     cust = AvatarCustomization(head_type=HeadType.ROUNDED)
     model = CharacterModel(customization=cust, create_mesh=False)
     handler = SkinCommandHandler(character_model=model)
@@ -332,10 +332,6 @@ def test_chat_console_async_callbacks_and_spinner():
     handler.import_asset_id = 9240757332
     handler.import_status = "Baixando Suéter #9240757332..."
 
-    assert chat.loading_frame == 0
-    chat.update(0.15)
-    assert chat.loading_frame == 1  # Spinner avançou
-
     # Agenda callback simulado de conclusão de download/mesh
     called = []
     with handler._callback_lock:
@@ -345,7 +341,7 @@ def test_chat_console_async_callbacks_and_spinner():
     chat.update(0.01)  # Dispara process_pending_callbacks
     assert called == ["ok"]
 
-    # Testa geração do HUD com o badge de loading ativo
+    # O HUD do chat continua saindo com uma importação rodando
     hud_img = chat._generate_hud_image(800, 600, [])
     assert hud_img is not None
     assert hud_img.size == (800, 600)
@@ -354,7 +350,7 @@ def test_chat_console_async_callbacks_and_spinner():
 
 
 def test_busy_status_covers_imports_and_background_builds():
-    """The loading badge shows for a running import and while the character is rebuilt."""
+    """O aviso de carregamento vale para uma importação e enquanto o personagem é remontado."""
     model = CharacterModel(create_mesh=False)
     handler = SkinCommandHandler(character_model=model)
     assert handler.busy_status == ""

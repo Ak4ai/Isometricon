@@ -155,3 +155,15 @@ def test_scene_size_follows_scale():
     assert scaled_size(1280, 720, 1.0) == (1280, 720)
     assert scaled_size(1280, 720, 0.5) == (640, 360)
     assert scaled_size(1, 1, 0.5) == (1, 1)
+
+
+def test_coordinates_are_on_by_default_and_can_be_hidden_in_general(tmp_path):
+    assert DEFAULTS['show_coords'] is True
+    menus = open_settings(tmp_path)                            # abre na aba Geral
+    assert 'row:show_coords' in menus.hits_order
+    click(menus, 'row:show_coords')
+    assert menus.draft['show_coords'] is False and menus.preferences.data['show_coords'] is True
+    menus.activate('apply')
+    assert Preferences(menus.preferences.path).data['show_coords'] is False
+    (tmp_path / 'lixo.json').write_text(json.dumps({'show_coords': 0}), encoding='utf-8')
+    assert Preferences(tmp_path / 'lixo.json').data['show_coords'] is True   # valor que não é bool: o padrão

@@ -6,6 +6,9 @@ montado em segundo plano, com o cache de montagem dele (``npc_<id>``), e um ``Ch
 ficha anda. Enquanto o corpo monta, a miniatura do tabuleiro aparece no lugar (``ready``).
 
 O corpo que a tela de criação acabou de montar entra pronto (``adopt``), sem montar de novo.
+
+Um NPC com ``npc["modelo"]`` (a escolha do ``/skin modelo``: arquivo, altura, giro, perfil) usa o modelo .glb
+personalizado no lugar do corpo montado; se o arquivo sumiu, volta ao corpo montado.
 """
 
 from __future__ import annotations
@@ -22,9 +25,30 @@ from src.math import mat4_rotate_x, mat4_rotate_y, mat4_translate
 FALL_TILT = math.radians(84.0)   # o NPC caído fica deitado de costas
 
 
-def look_key(look: Optional[Dict[str, Any]]) -> str:
-    """Uma assinatura da aparência: quando muda (``/npc editar``), o corpo é montado de novo."""
-    return json.dumps(look or {}, sort_keys=True, default=str)
+def look_key(look: Optional[Dict[str, Any]], choice: Optional[Dict[str, Any]] = None) -> str:
+    """Uma assinatura da aparência (e do modelo .glb): quando muda (``/npc editar``), o corpo é montado de novo."""
+    return json.dumps(look or {} if choice is None else {"personagem": look, "modelo": choice},
+                      sort_keys=True, default=str)
+
+
+class CustomHolder:
+    """Quem guarda o modelo .glb do NPC na tela de criação (o ``/skin modelo`` põe nele, não no personagem)."""
+
+    def __init__(self, model: Any = None) -> None:
+        self.custom_model = model
+
+    def set_custom_model(self, model: Any) -> Any:
+        previous, self.custom_model = self.custom_model, model
+        return previous
+
+
+def build_custom(choice: Dict[str, Any]) -> Any:
+    """O modelo .glb da escolha do NPC, ou None (o arquivo sumiu ou não abre)."""
+    from src.interactive.skin_commands import build_custom_model
+    model, note = build_custom_model(choice)
+    if model is None:
+        print(f"[NPC] {note}")
+    return model
 
 
 def npc_matrix(position, yaw: float, fallen: float = 0.0, fall_seconds: float = 1.0) -> np.ndarray:
@@ -49,24 +73,39 @@ def build_model(npc_id: str, look: Optional[Dict[str, Any]], body: str = "mascul
 
 @dataclass
 class NpcBody:
-    model: Any
+    model: Any               # o corpo montado (None quando o NPC só tem o modelo .glb)
     animator: Any
     key: str
+    custom: Any = None       # o modelo .glb, desenhado no lugar do corpo montado
+
+    @property
+    def loading(self) -> bool:
+        return self.custom is None and (self.model is None or bool(getattr(self.model, "is_loading", False)))
+
+    def delete(self) -> None:
+        for part in (self.model, self.custom):
+            if part is not None:
+                part.delete()
 
 
 class NpcModels:
     def __init__(self, factory: Callable[[str, Optional[Dict[str, Any]]], Any] = build_model,
-                 animator: Optional[Callable[[Any], Any]] = None) -> None:
+                 animator: Optional[Callable[[Any], Any]] = None,
+                 custom_factory: Callable[[Dict[str, Any]], Any] = build_custom) -> None:
         self.factory = factory
         self.animator = animator     # None: o CharacterAnimator do jogo
+        self.custom_factory = custom_factory
         self.bodies: Dict[str, NpcBody] = {}
 
-    def adopt(self, npc_id: str, model: Any, animator: Any, look: Optional[Dict[str, Any]]) -> None:
-        """Põe um corpo já montado (o da tela de criação) no NPC ``npc_id``."""
+    def adopt(self, npc_id: str, model: Any, animator: Any, look: Optional[Dict[str, Any]],
+              custom: Any = None, choice: Optional[Dict[str, Any]] = None) -> None:
+        """Põe um corpo já montado (o da tela de criação, e o modelo .glb dele, se há) no NPC ``npc_id``."""
         old = self.bodies.get(npc_id)
-        if old is not None and old.model is not model:
-            old.model.delete()
-        self.bodies[npc_id] = NpcBody(model, animator, look_key(look))
+        if old is not None:
+            for part in (old.model, old.custom):
+                if part is not None and part is not model and part is not custom:
+                    part.delete()
+        self.bodies[npc_id] = NpcBody(model, animator, look_key(look, choice), custom)
 
     def release(self, npc_id: str) -> Optional[NpcBody]:
         """Tira o corpo do NPC daqui sem apagá-lo (a tela de criação passa a cuidar dele)."""
@@ -74,7 +113,7 @@ class NpcModels:
 
     def ready(self, npc_id: str) -> bool:
         body = self.bodies.get(npc_id)
-        return body is not None and not getattr(body.model, "is_loading", False)
+        return body is not None and not body.loading
 
     def ready_ids(self) -> Set[str]:
         return {npc_id for npc_id in self.bodies if self.ready(npc_id)}
@@ -89,29 +128,46 @@ class NpcModels:
             if token.npc is None or token.id == skip:
                 continue
             present.add(token.id)
-            look = token.npc.get("personagem")
-            key = look_key(look)
+            look, choice = token.npc.get("personagem"), token.npc.get("modelo")
+            key = look_key(look, choice)
             body = self.bodies.get(token.id)
             if body is None or body.key != key:
                 if body is not None:
-                    body.model.delete()
-                model = self.factory(token.id, look)
-                body = self.bodies[token.id] = NpcBody(model, self.animator(model), key)
+                    body.delete()
+                custom = self.custom_factory(choice) if choice else None
+                model = None if custom is not None else self.factory(token.id, look)
+                body = self.bodies[token.id] = NpcBody(model, self.animator(model) if model is not None else None,
+                                                        key, custom)
+            walking = token.walking and not token.fallen
+            if body.custom is not None:
+                body.custom.update(dt, token.creature.speed if walking else 0.0)
+                continue
             body.model.poll()
             if not getattr(body.model, "is_loading", False):
-                body.animator.walking = token.walking and not token.fallen
+                body.animator.walking = walking
                 body.animator.update(dt)
         for npc_id in [i for i in self.bodies if i not in present and i != skip]:
-            self.bodies.pop(npc_id).model.delete()
+            self.bodies.pop(npc_id).delete()
 
     def draw(self, shader: Any, model: np.ndarray, controller: Any, fall_seconds: float = 1.0) -> None:
         for token in controller.enemies:
             body = self.bodies.get(token.id) if token.npc is not None else None
-            if body is None or getattr(body.model, "is_loading", False):
+            if body is None or body.loading:
                 continue
-            body.model.draw(shader, model @ npc_matrix(token.shown, token.yaw, token.fallen, fall_seconds))
+            (body.custom or body.model).draw(shader, model @ npc_matrix(token.shown, token.yaw, token.fallen, fall_seconds))
+
+    def casters(self, shader: Any, controller: Any, model: np.ndarray, fall_seconds: float = 1.0) -> list:
+        """Um draw por NPC com corpo pronto, para o mapa de sombra dos personagens (ver ``cast_shadow``)."""
+        out = []
+        for token in controller.enemies:
+            body = self.bodies.get(token.id) if token.npc is not None else None
+            if body is None or body.loading:
+                continue
+            matrix = model @ npc_matrix(token.shown, token.yaw, token.fallen, fall_seconds)
+            out.append(lambda mesh=body.custom or body.model, matrix=matrix: mesh.draw(shader, matrix))
+        return out
 
     def delete(self) -> None:
         for body in self.bodies.values():
-            body.model.delete()
+            body.delete()
         self.bodies.clear()

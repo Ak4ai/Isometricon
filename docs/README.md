@@ -10,7 +10,7 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 
 | Documento | Foco Principal | Público-Alvo |
 | :--- | :--- | :--- |
-| [📋 **Proposta Acadêmica**](../proposta.md) | Escopo geral, prazos (30 dias) e modelo dual 2x3. | Professor & Equipes |
+| [📋 **Proposta Acadêmica**](wiki/Proposta-do-Projeto.md) | Escopo geral, prazos (30 dias) e modelo dual 2x3. | Professor & Equipes |
 | [🏛️ **Arquitetura do Motor**](ARCHITECTURE.md) | Estrutura de Chunks 3D, Face Culling na CPU e Pipeline OpenGL. | Equipe A (Mundo) |
 | [🔗 **Contrato de Integração**](INTEGRATION_SPEC.md) | Interfaces `VoxelGridProvider`, Raycasting 3D e Matrizes de Câmera. | Equipe A & Equipe B |
 | [🎨 **Guia de Shaders GLSL**](SHADERS.md) | Shaders GLSL 330 core, modelo de iluminação Lambertiana e Destaques. | Equipe A & Equipe B |

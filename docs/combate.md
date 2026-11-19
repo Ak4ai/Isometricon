@@ -56,24 +56,36 @@ Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um ch
 
 ## NPCs
 
-- `/criar npc` abre a tela do `/skin` com um corpo padrão e, antes das outras, a aba **NPC**: o nome e a fala em
-  campos de texto (clique, escreva, Enter), o lado (amigável ou hostil), o corpo (feminino ou masculino) e a ficha
-  de combate (um molde do bestiário). Ao fechar a tela, o NPC aparece na frente do personagem (o hostil a 7 blocos,
-  fora da vista dele; o amigável a 2,5) e fica salvo no mundo, com a aparência, a posição e a fala.
+- `/criar npc` abre a tela do `/skin` como um assistente por etapas, no pergaminho das telas de entrada e do
+  combate: **Modelo** (modelo, corpo, prontos), **Roupa** (as peças e o campo do Roblox), **Ajustes** (ajustes e
+  ajuste fino), **Rosto**, **Cabelo** e, por último, **Identidade**: o nome e a fala em campos de texto (clique,
+  escreva, Enter), o lado (amigável ou hostil) e a ficha de combate (um molde do bestiário). As abas de cada etapa
+  ficam em pílulas sob a régua das etapas; Voltar e Próximo andam entre elas e um clique na régua pula para uma.
+  "Criar NPC" (ou Esc) fecha a tela: o NPC aparece na frente do personagem (o hostil a 7 blocos, fora da vista dele;
+  o amigável a 2,5) e fica salvo no mundo, com a aparência, a posição e a fala.
 - Tudo pode vir já no comando, em qualquer ordem: `/criar npc Velho_Joao hostil masculino ogro` (o que não é lado,
   corpo nem molde vira o nome; `_` vira espaço). Sem nada, é o "Novo NPC", amigável e masculino. Um nome que já
   existe ganha um número (`Lia 2`).
 - A ficha de combate vem do molde do bestiário (`/inimigo lista`); sem molde, o hostil usa a do `bandido` e o
   amigável a do `guarda`. Trocar o lado na aba troca junto a ficha padrão; uma escolhida à mão fica.
-- A aba usa `/npc definir <nome|lado|molde|fala> <valor>`, que também funciona pelo chat com a tela aberta.
+- Na etapa Modelo, "Personalizado" dá ao NPC um modelo .glb (os mesmos do `/skin modelo`, com perfil de andar, altura, giro e ossos) no lugar do corpo montado. A escolha é do NPC e fica salva com ele (`npc["modelo"]`); a do personagem não muda. Se o arquivo some, o NPC volta ao corpo montado.
+- A etapa Identidade usa `/npc definir <nome|lado|molde|fala> <valor>`, que também funciona pelo chat com a tela aberta.
 - O hostil é um inimigo como os outros: te vê a 6 blocos, luta e, vencido, sai do mundo.
 - O amigável nunca começa a luta. Um clique nele (a até 4 blocos) faz ele dizer a fala, num balão e no chat. Numa
   luta a até 15 blocos dele, entra do seu lado, jogado pela IA (`Combatant.ally`); se cai, levanta com a vida cheia
   quando a luta acaba. Se você cai, a luta é perdida mesmo com aliados de pé.
-- `/npc lista`, `/npc fala <nome> <texto>`, `/npc editar <nome>` (volta à tela do `/skin` com o corpo e a aba NPC dele) e
+- `/npc lista`, `/npc fala <nome> <texto>`, `/npc editar <nome>` (volta ao assistente com o corpo e a ficha dele) e
   `/npc remover <nome>`. `/inimigo limpar` não tira os NPCs.
 - Cada NPC tem o seu cache de montagem (`saves/cache/npc_<id>.pkl`), para não apagar o do personagem. Enquanto o
   corpo monta, a miniatura do bestiário aparece no lugar.
+
+## Sombra dos personagens
+
+O seu personagem e os NPCs projetam sombra do sol em qualquer face de bloco: chão, parede e degrau de descida
+(`src/rendering/cast_shadow.py`). A cada quadro eles são desenhados vistos do sol num mapa de profundidade em volta do
+jogador, e o shader do mundo compara cada pixel de bloco com ele. A borda é nítida; a opacidade cai com a distância
+até o que tapa: forte nos pés, clara na cabeça. A sombra só tira o sol que chega ao lugar e fica bem mais clara dentro
+de casa e em cavernas. Ela segue a força das sombras das configurações e some com elas desligadas.
 
 ## O que mudou em relação ao mod
 

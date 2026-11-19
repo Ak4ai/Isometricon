@@ -27,12 +27,13 @@ GRAPHICS = {
     'render_distance': (2, (1, 2, 3, 4, 5, 6)),        # chunks carregados em volta do jogador
     'shadows': ('high', ('off', 'low', 'medium', 'high')),  # qualidade da sombra do sol (raios por pixel)
     'shadow_range': (56, (16, 32, 56)),                # até quantas células o raio do sol procura o que tapa
+    'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o capim
     'shadow_strength': (1.0, (0.25, 0.5, 0.75, 1.0)),  # o quanto a sombra escurece
     'fps_limit': (0, (0, 30, 60, 120, 144)),           # 0 sem limite
 }
 DEFAULTS = {'bindings': {k: v[1] for k, v in ACTIONS.items()}, 'vsync': True,
             'sensitivity': 1.0, 'invert_rotation': False, 'reduce_motion': False,
-            'text_scale': 1.0, 'show_fps': False, **{key: default for key, (default, _) in GRAPHICS.items()}}
+            'text_scale': 1.0, 'show_fps': False, 'show_coords': True, **{key: default for key, (default, _) in GRAPHICS.items()}}
 
 
 def cycle(key, value, step):
@@ -77,7 +78,7 @@ class Preferences:
         self.reset()
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
-            for key in ('vsync', 'invert_rotation', 'reduce_motion', 'show_fps'):
+            for key in ('vsync', 'invert_rotation', 'reduce_motion', 'show_fps', 'show_coords'):
                 if isinstance(data.get(key), bool):
                     self.data[key] = data[key]
             for key, low, high in [('sensitivity', .25, 2), ('text_scale', 1, 1.25)]:
@@ -150,11 +151,15 @@ class WorldLibrary:
                 continue
         return sorted(worlds, key=lambda w: str(w.get('saved_at', '')), reverse=True)
 
-    def create(self, name, seed):
+    def create(self, name, seed, terrain=None):
+        """Um mundo novo; ``terrain``: as opções de criação do relevo (``src.world.terrain_options``)."""
         if not name.strip():
             raise ValueError('Dê um nome ao mundo.')
         world = dict(version=1, id=uuid.uuid4().hex, name=name.strip()[:64],
                      seed=seed_value(seed), position=None, played=0.0, character=None)
+        if terrain is not None:
+            from src.world.terrain_options import clean
+            world['terrain'] = clean(terrain)
         self.save(world)
         return world
 

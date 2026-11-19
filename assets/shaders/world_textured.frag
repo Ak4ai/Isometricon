@@ -47,6 +47,9 @@ uniform bool u_WorldStyle;
 
 // Sombras do sol (ver src/rendering/sun_shadows.py): blocos sólidos em volta do jogador, em coordenadas do mundo.
 uniform sampler3D u_ShadowMask;
+uniform sampler2D u_ShadowShapes;   // as caixas de cada forma de bloco parcial (ver shadow_shapes.py)
+uniform sampler3D u_ShadowShapeIds; // o número da forma de cada célula parcial ou planta (byte de baixo, de cima)
+uniform sampler2D u_ShadowPlants;   // os desenhos das plantas, 16 x 16 um embaixo do outro
 uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
 uniform mat4 u_ShadowInvModel;   // do espaço desenhado (girado pelo modelo) de volta ao mundo
@@ -69,13 +72,89 @@ float shadowCell(vec3 worldPos)
     return texelFetch(u_ShadowMask, ivec3(c), 0).r;
 }
 
+// Os detalhes da sombra (Configurações > Gráficos > Detalhe da sombra): no "Leve" o shader é compilado sem
+// SHADOW_SHAPES, sem o caminho das formas (a máscara então só tem cubos inteiros, água e ar): o código das formas,
+// mesmo sem uso, deixava o raio mais pesado.
+#ifdef SHADOW_SHAPES
+// Os blocos que não são cubo inteiro (laje, degrau, cerca, placa, lanterna) são parciais na máscara (entre 0.82 e
+// 0.94; as plantas em cruz entre 0.70 e 0.82): u_ShadowShapeIds diz o número da forma, e a linha dela em u_ShadowShapes tem as caixas (até SHAPE_BOXES pares
+// de texels: o canto de baixo, com w = 1, e o de cima; w = 0 acaba a lista), em blocos dentro da célula. Uma planta
+// em cruz (w = 2) são os dois planos em X dela, com o desenho da textura (ver plantLight); não faz sombra de contato.
+const int SHAPE_BOXES = 8;
+const float PLANT_A = 0.05, PLANT_B = 0.95;   // de onde a onde vão os planos em X na célula (0,8 a 15,2 / 16)
+
+// O raio cruza o desenho da planta num dos dois planos em X (x = z e x + z = 1) entre tEnter e tExit? ``plant`` é
+// (desenho, y0, y1). Na célula de onde sai, o plano em que o raio começa (a própria folha) não conta.
+bool plantBlocks(vec3 plant, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
+{
+    for (int p = 0; p < 2; p++)
+    {
+        // plano 0: x - z = 0; plano 1: x + z = 1
+        float side = p == 0 ? start.x - start.z : start.x + start.z - 1.0;
+        float speed = p == 0 ? dir.x - dir.z : dir.x + dir.z;
+        if (first && abs(side) < 0.09) continue;   // a origem sai 0,04 da folha pela normal (0,06 em x - z)
+        if (abs(speed) < 1e-6) continue;
+        float t = -side / speed;
+        if (t <= tEnter || t >= tExit) continue;
+        vec3 hit = start + dir * t;
+        float u = (hit.x - PLANT_A) / (PLANT_B - PLANT_A);
+        float v = (hit.y - plant.y) / max(plant.z - plant.y, 1e-4);
+        if (u < 0.0 || u >= 1.0 || v < 0.0 || v >= 1.0) continue;
+        ivec2 texel = ivec2(int(u * 16.0), int(plant.x + 0.5) * 16 + int((1.0 - v) * 16.0));
+        if (texelFetch(u_ShadowPlants, texel, 0).r > 0.5)
+            return true;
+    }
+    return false;
+}
+int shapeAt(ivec3 cell)
+{
+    vec2 id = texelFetch(u_ShadowShapeIds, cell, 0).rg;
+    return int(id.r * 255.0 + 0.5) + 256 * int(id.g * 255.0 + 0.5);
+}
+
+// O ponto (dentro da célula, 0..1) está dentro de alguma caixa da forma?
+bool insideShape(int shape, vec3 local)
+{
+    for (int k = 0; k < SHAPE_BOXES; k++)
+    {
+        vec4 lo = texelFetch(u_ShadowShapes, ivec2(2 * k, shape), 0);
+        if (lo.w < 0.5) break;
+        vec3 hi = texelFetch(u_ShadowShapes, ivec2(2 * k + 1, shape), 0).xyz;
+        if (lo.w < 1.5 && all(greaterThan(local, lo.xyz)) && all(lessThan(local, hi)))
+            return true;
+    }
+    return false;
+}
+
+#endif
+
+// A célula tapa o pé da parede na altura de ``worldPos``? Um sólido inteiro sempre; um parcial se o ponto está dentro
+// de uma caixa dele. A célula ``own`` (a do próprio chão) não conta: o degrau de cima da escada não mancha o de baixo.
+bool blockedAt(vec3 worldPos, vec3 own)
+{
+    vec3 q = worldPos - u_ShadowOrigin;
+    vec3 c = floor(q);
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThanEqual(c, u_ShadowSize)) || c == own)
+        return false;
+    float value = texelFetch(u_ShadowMask, ivec3(c), 0).r;
+    if (value > 0.94) return true;
+#ifdef SHADOW_SHAPES
+    return value > 0.82 && insideShape(shapeAt(ivec3(c)), q - c);   // a planta não faz sombra de contato
+#else
+    return false;
+#endif
+}
+
 // Sombra de contato: o chão escurece junto ao pé de qualquer parede, de qualquer lado e sem depender do sol. É o que
 // deixa ler uma descida cujo degrau está de costas para a câmera (o topo de cima e o de baixo teriam o mesmo verde).
 // Olha, em volta do ponto, as células logo acima do chão: quanto mais perto e mais numerosas, mais escuro.
 float contactOcclusion(vec3 worldPos, vec3 worldNormal)
 {
     if (worldNormal.y < 0.6) return 0.0;                         // só no chão (topos de bloco)
-    vec3 base = worldPos + vec3(0.0, 0.5, 0.0);                  // meio da célula logo acima do chão
+    // um pouco abaixo do meio da célula logo acima do chão (numa laje vizinha conta a metade de baixo dela); a
+    // célula do próprio chão (o degrau de baixo de uma escada está na mesma célula do de cima) fica de fora
+    vec3 base = worldPos + vec3(0.0, 0.4, 0.0);
+    vec3 own = floor(base - u_ShadowOrigin);
     float occ = 0.0;
     for (int i = 0; i < 8; i++)
     {
@@ -85,7 +164,7 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
         for (int k = 0; k < 4; k++)
         {
             float t = 0.3 + 0.55 * float(k);
-            if (shadowCell(base + vec3(dir.x, 0.0, dir.y) * t) > 0.75)
+            if (blockedAt(base + vec3(dir.x, 0.0, dir.y) * t, own))
             {
                 occ += axis * (1.0 - 0.22 * float(k));           // a primeira parede achada basta
                 break;
@@ -95,8 +174,39 @@ float contactOcclusion(vec3 worldPos, vec3 worldNormal)
     return clamp(occ / 3.2, 0.0, 1.0);
 }
 
+#ifdef SHADOW_SHAPES
+// O trecho do raio dentro de uma célula parcial (de tEnter a tExit; ``start`` é a origem do raio no espaço da célula)
+// cruza alguma caixa da forma (ou o desenho da planta)? A conta é exata, caixa a caixa. Na célula de onde o raio sai,
+// a caixa que contém a origem não conta: é o próprio bloco.
+bool shapeBlocks(int shape, vec3 start, vec3 dir, float tEnter, float tExit, bool first)
+{
+    for (int k = 0; k < SHAPE_BOXES; k++)
+    {
+        vec4 lo4 = texelFetch(u_ShadowShapes, ivec2(2 * k, shape), 0);
+        if (lo4.w < 0.5) break;
+        if (lo4.w > 1.5)
+            return plantBlocks(lo4.xyz, start, dir, tEnter, tExit, first);
+        vec3 lo = lo4.xyz;
+        vec3 hi = texelFetch(u_ShadowShapes, ivec2(2 * k + 1, shape), 0).xyz;
+        if (first && all(greaterThan(start, lo - 1e-3)) && all(lessThan(start, hi + 1e-3)))
+            continue;
+        vec3 t0 = (lo - start) / dir;
+        vec3 t1 = (hi - start) / dir;
+        vec3 tn = min(t0, t1);
+        vec3 tf = max(t0, t1);
+        float a = max(max(tn.x, tn.y), max(tn.z, tEnter));
+        float c = min(min(tf.x, tf.y), min(tf.z, tExit));
+        if (a < c - 1e-4)
+            return true;
+    }
+    return false;
+}
+
+#endif
+
 // Um raio exato pelos voxels (Amanatides-Woo): a fração do sol que chega. Um bloco sólido no caminho corta tudo; a
-// água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol).
+// água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
+// bloco parcial o raio só é cortado se cruza uma das caixas dele ou o desenho da planta (ver shapeBlocks).
 const float WATER_TRANSMIT = 0.82;
 float traceSun(vec3 worldPos, vec3 dir)
 {
@@ -115,6 +225,7 @@ float traceSun(vec3 worldPos, vec3 dir)
                          stepDir.x <= 0 && stepDir.z > 0, stepDir.x <= 0 && stepDir.z <= 0);
     bool useHorizon = stepDir.y > 0 && safe.y >= u_ShadowHorizonRise * length(safe.xz);
     float light = 1.0;
+    float tEnter = 0.0;                                       // onde o raio entrou na célula atual
     for (int i = 0; i < 56; i++)
     {
         if (i >= u_ShadowSteps)
@@ -125,10 +236,20 @@ float traceSun(vec3 worldPos, vec3 dir)
         if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
             return light;
         float value = texelFetch(u_ShadowMask, cell, 0).r;
-        if (value > 0.75)
+        float tExit = min(tMax.x, min(tMax.y, tMax.z));
+        if (value > 0.94)
             return 0.0;
-        if (value > 0.25)
+#ifdef SHADOW_SHAPES
+        if (value > 0.7)
+        {
+            if (shapeBlocks(shapeAt(cell), q - vec3(cell), safe, tEnter, tExit, i == 0))
+                return 0.0;
+        }
+        else
+#endif
+        if (value > 0.25 && value < 0.6)
             light *= WATER_TRANSMIT;
+        tEnter = tExit;
         if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
         else if (tMax.y < tMax.z)               { cell.y += stepDir.y; tMax.y += tDelta.y; }
         else                                    { cell.z += stepDir.z; tMax.z += tDelta.z; }
@@ -160,7 +281,7 @@ bool insideShadowWindow(vec3 worldPos)
 bool waterCell(vec3 worldPos)
 {
     float value = shadowCell(worldPos);
-    return value > 0.25 && value < 0.75;
+    return value > 0.25 && value < 0.6;
 }
 
 // Quantos blocos de água há a partir de ``start`` seguindo ``dir`` (para cima: a coluna sobre o fundo; para baixo: a
@@ -500,6 +621,11 @@ bool storyCovers(vec3 cell)
     return !behindRoom(c) || overRoom(c.xz);
 }
 
+uniform bool u_CastShadow;       // a passada do mapa de sombra dos personagens: só a profundidade, vista do sol
+uniform sampler2D u_CharShadowMap;    // a profundidade dos personagens vistos do sol (cast_shadow.py)
+uniform mat4 u_CharShadowMatrix;      // do espaço desenhado para a textura do mapa
+uniform float u_CharShadowTexel;
+uniform float u_CharShadowStrength;   // 0 desligado
 uniform bool u_DepthOnly;        // pré-passada de profundidade: descarta como sempre e para antes da luz
 uniform bool u_KeepVisible;      // portas: nenhum corte de visão as remove
 
@@ -535,6 +661,118 @@ bool sightCarved()
     return (1.0 - keep) * u_SightActive > roomDither();
 }
 
+// O quanto de um personagem está entre este ponto (espaço desenhado) e o sol: 0 nada, 1 tudo. A borda é nítida (3x3
+// texels só para não serrilhar); a opacidade cai com a distância, ao longo do raio, até a parte do corpo que faz a
+// sombra: forte junto aos pés, esmaecendo para a cabeça.
+uniform float u_CharShadowDepth;      // a profundidade do mapa, em blocos (converte a diferença de profundidade)
+uniform float u_CharShadowLength;     // até onde, ao longo do raio, a sombra esmaece (no máximo uns 4 blocos)
+uniform float u_CharShadowTail = 0.15; // a opacidade no fim do esmaecido (0 quando a sombra é comprida: some)
+float characterShadow(vec3 drawnPos, vec3 drawnNormal)
+{
+    vec4 p = u_CharShadowMatrix * vec4(drawnPos + drawnNormal * 0.04, 1.0);
+    vec3 c = p.xyz / p.w;
+    if (any(lessThan(c, vec3(0.0))) || any(greaterThan(c, vec3(1.0))))
+        return 0.0;
+    float bias = 0.0006;
+    float hidden = 0.0, gap = 0.0;
+    for (int dx = -1; dx <= 1; dx++)
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            float d = texture(u_CharShadowMap, c.xy + vec2(dx, dy) * u_CharShadowTexel).r;
+            if (c.z - bias > d) { hidden += 1.0; gap += c.z - d; }
+        }
+    if (hidden < 0.5)
+        return 0.0;
+    float along = clamp(gap / hidden * u_CharShadowDepth / u_CharShadowLength, 0.0, 1.0);   // 0 nos pés, 1 na cabeça
+    return hidden / 9.0 * mix(1.0, u_CharShadowTail, smoothstep(0.0, 1.0, along));   // escuro junto aos pés, cai depois
+}
+
+// A ambientação do mestre (/mestre, src/rendering/ambience.py), no fim de tudo: um tom por cima (a luz da hora, a
+// claridade e a cor), a saturação, a luz quente do grupo em volta do jogador (não escurece com a noite) e a névoa.
+// Nos padrões não muda nada.
+uniform vec3 u_EnvTint = vec3(1.0);
+uniform float u_EnvSaturation = 1.0;
+uniform float u_FogAmount = 0.0;      // 0 sem névoa
+uniform vec3 u_FogColor;
+uniform vec3 u_FogCenter;             // os pés do jogador, no espaço desenhado
+uniform float u_TorchAmount = 0.0;    // 0 sem a luz do grupo
+// a névoa de guerra (src/rendering/fog_of_war.py): 0 desligada, 1 o explorado fica limpo (u_FogWarMap), 2 só em volta
+uniform int u_FogWar = 0;
+uniform sampler2D u_FogWarMap;        // 1 explorado, 0 não; [z][x] a partir de u_FogWarOrigin, em blocos do mundo
+uniform mat4 u_FogInvModel;           // do espaço desenhado para o mundo
+uniform vec3 u_FogWarColor;
+uniform vec2 u_FogWarCenter;          // x, z (mundo) do personagem
+uniform float u_FogWarRadius;         // até onde ele enxerga
+uniform vec2 u_FogWarOrigin;
+uniform float u_FogWarSize;
+
+// os tufos da névoa: ruído que deriva com o tempo, de 0 a 1
+float fogWisps(vec2 xz)
+{
+    vec2 drift = xz * 0.11 + u_Time * vec2(0.22, 0.09);
+    return 0.62 * valueNoise(vec3(drift, u_Time * 0.05)) + 0.38 * valueNoise(vec3(drift * 2.3 + 17.0, u_Time * 0.08));
+}
+
+// o quanto a névoa de guerra cobre este ponto: 0 visto, 1 coberto. A borda anda com os tufos (não é um recorte).
+float fogWarCover(vec3 world, float wisps)
+{
+    float d = length(world.xz - u_FogWarCenter);
+    float seen = 1.0 - smoothstep(u_FogWarRadius - 3.0, u_FogWarRadius + 0.5, d + (wisps - 0.5) * 3.0);
+    if (u_FogWar == 1)
+    {
+        float m = texture(u_FogWarMap, (world.xz - u_FogWarOrigin) / u_FogWarSize).r;
+        seen = max(seen, smoothstep(0.25, 0.85, m + (wisps - 0.5) * 0.6));
+    }
+    return 1.0 - seen;
+}
+
+vec3 envGrade(vec3 color, vec3 albedo)
+{
+    color *= u_EnvTint;
+    vec3 offset = v_FragPos - u_FogCenter;
+    if (u_TorchAmount > 0.001)
+    {
+        float radius = 3.0 + 7.0 * u_TorchAmount;
+        float near = 1.0 - smoothstep(0.0, radius, length(offset * vec3(1.0, 1.6, 1.0)));
+        color += albedo * vec3(1.0, 0.70, 0.40) * near * near * (0.35 + 0.65 * u_TorchAmount);
+    }
+    float luma = dot(color, vec3(0.299, 0.587, 0.114));
+    color = max(mix(vec3(luma), color, u_EnvSaturation), 0.0);
+    if (u_FogAmount > 0.001)
+    {
+        // a névoa densa (estilo cidade na névoa): perto do jogador ainda se vê, e logo depois vira uma parede clara.
+        // Cai mais rente ao chão (mais grossa no que fica abaixo dos pés), e anda: tufos de ruído que derivam com o
+        // tempo. Muita névoa também traz um grão de filme por cima.
+        float amount = u_FogAmount;
+        float reach = max(length(offset.xz) - mix(3.0, 1.2, amount), 0.0);
+        float density = mix(0.035, 0.34, pow(amount, 1.4));
+        float low = 1.0 + 0.7 * clamp(-offset.y / 4.0, 0.0, 1.0);                  // os vales enchem primeiro
+        float wisps = fogWisps(v_FragPos.xz);
+        density *= low * mix(1.0, 0.55 + 0.9 * wisps, smoothstep(0.15, 0.6, amount));
+        float f = 1.0 - exp(-pow(reach * density, 1.5));
+        f *= min(1.0, amount * 1.6);                                                // pouca névoa nunca cobre tudo
+        color = mix(color, u_FogColor, clamp(f, 0.0, 1.0));
+        float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 7.13) * 97.0, vec2(12.9898, 78.233))) * 43758.5453);
+        color += (grain - 0.5) * 0.07 * smoothstep(0.45, 1.0, amount);
+    }
+    if (u_FogWar > 0)
+    {
+        // o que ninguém viu: uma névoa quase opaca, mais clara e mais escura nos tufos, com volume e grão
+        vec3 world = (u_FogInvModel * vec4(v_FragPos, 1.0)).xyz;
+        float wisps = fogWisps(world.xz);
+        float cover = fogWarCover(world, wisps);
+        if (cover > 0.001)
+        {
+            float rise = clamp((v_FragPos.y - u_FogCenter.y) / 6.0, 0.0, 1.0);    // os picos furam um pouco a névoa
+            vec3 mist = u_FogWarColor * (0.86 + 0.28 * wisps);
+            color = mix(color, mist, clamp(cover * (0.97 - 0.18 * rise * (1.0 - wisps)), 0.0, 1.0));
+            float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 5.31) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);
+            color += (grain - 0.5) * 0.05 * cover;
+        }
+    }
+    return color;
+}
+
 void main()
 {
     vec4 texColor = texture(u_TextureAtlas, v_TexCoord);
@@ -543,6 +781,8 @@ void main()
     if (texColor.a < 0.1) {
         discard;
     }
+    if (u_CastShadow)
+        return;   // o mapa de sombra dos personagens guarda só a profundidade (o transparente já foi descartado)
     bool water = u_WaterPass > 0 && isWaterTexel(v_TexCoord);
     if ((u_WaterPass == 1 && water) || (u_WaterPass == 2 && !water)) {
         discard;
@@ -669,6 +909,13 @@ void main()
                 }
             }
         }
+        if (u_CharShadowStrength > 0.001 && dot(norm, lightDir) > 0.02)  // a sombra do personagem, em qualquer face
+        {
+            // ela só tira o sol que chega (sunVis): onde ele não chega não há o que tirar. Numa caverna ou dentro de
+            // casa ela fica bem mais clara, quase some: ali a luz é a do ambiente, não a do sol
+            float place = (u_UndergroundMode ? 0.15 : 1.0) * (1.0 - 0.8 * clamp(u_RoomActive, 0.0, 1.0));
+            sunVis *= 1.0 - u_CharShadowStrength * place * characterShadow(v_FragPos, norm);
+        }
         lighting = worldLighting(norm, lightDir, v_FragPos.y, sunVis) * (1.0 - 0.34 * contact * u_ShadowStrength);
         if (waterAbove > 0.0)
         {
@@ -759,10 +1006,10 @@ void main()
         float glint = pow(max(dot(r, lightDir), 0.0), 140.0) * 1.8 * sunVis;
         vec3 color = mix(body * lighting, sky * mix(0.55, 1.0, sunVis), fresnel) + vec3(1.0, 0.95, 0.82) * glint;
         float alpha = clamp(mix(0.22, 0.90, deep) + fresnel * 0.40 + glint, 0.0, 1.0);
-        FragColor = vec4(color * roomFactor, alpha * u_Alpha);
+        FragColor = vec4(envGrade(color * roomFactor, body), alpha * u_Alpha);
         return;
     }
 
-    vec3 result = lighting * albedo * roomFactor;
+    vec3 result = envGrade(lighting * albedo * roomFactor, albedo * roomFactor);
     FragColor = vec4(result, texColor.a * u_Alpha);
 }
