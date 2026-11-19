@@ -10,6 +10,9 @@ in vec3 v_World;
 in float v_Shade;
 in float v_Alpha;
 in float v_Below;
+flat in vec3 v_PuffCenter;     // os tufos: a caixa deles (centro, meia medida, giro em y)
+flat in vec3 v_PuffHalf;
+flat in float v_PuffAngle;
 out vec4 FragColor;
 
 uniform vec3 u_Tint;
@@ -50,6 +53,12 @@ float blocky(float tufts, float dense) {
 }
 
 vec2 cellUV(vec2 xz) { return (xz / u_Cell - u_Origin) / u_Window; }
+
+// a distância até a caixa de quinas redondas de um tufo, no espaço dele (centrada, sem giro)
+float puffDistance(vec3 p, vec3 halfSize, float radius) {
+    vec3 q = abs(p) - (halfSize - radius);
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - radius;
+}
 
 float roundBox(vec3 p, vec3 bmin, vec3 bmax) {
     vec3 q = abs(p - (bmin + bmax) * 0.5) - ((bmax - bmin) * 0.5 - u_Round);
@@ -115,8 +124,8 @@ void main() {
     float d = texture(u_Distance, cellUV(v_World.xz)).r;
     float dense = smoothstep(0.02, 0.6, d);
     float alpha = mix(EDGE_ALPHA, CORE_ALPHA, dense) * (0.90 + 0.10 * tufts);
-    if (u_Moving)
-        alpha = 0.8 * v_Alpha;
+    if (u_Moving)   // os tufos têm a transparência da manta onde estão (ralos perto do aberto) e ainda somem
+        alpha = mix(EDGE_ALPHA, CORE_ALPHA, dense) * v_Alpha;
     vec3 white = mix(vec3(0.90, 0.94, 1.0), vec3(0.97, 0.98, 1.0), dense);   // a rala é mais fria e clara
     vec3 sun = clamp(u_Tint, 0.0, 1.15);
 
@@ -133,10 +142,30 @@ void main() {
     float rim = 0.0;
     vec3 hit = v_World;
     if (u_Moving) {
-        // os tufos que saem e voltam: caixinhas com a mesma luz (sem procurar a superfície)
-        n = normalize(cross(dFdx(v_World), dFdy(v_World)));
-        if (dot(n, u_ToCamera) < 0.0) n = -n;
-        gl_FragDepth = gl_FragCoord.z;
+        // os tufos que saem e voltam: a caixa de quinas redondas de cada um, girada, achada do mesmo jeito
+        float c = cos(v_PuffAngle), s = sin(v_PuffAngle);
+        mat3 toLocal = mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c);     // desfaz o giro em y (colunas)
+        vec3 dir = toLocal * -u_ToCamera;
+        vec3 p = toLocal * (v_World - v_PuffCenter) - dir * 0.02;
+        float radius = min(u_Round, 0.45 * min(v_PuffHalf.x, v_PuffHalf.y));
+        bool found = false;
+        for (int i = 0; i < 24; i++) {
+            float dist = puffDistance(p, v_PuffHalf, radius);
+            if (dist < 0.004) { found = true; break; }
+            p += dir * clamp(dist, 0.01, 1.0);
+        }
+        if (!found) discard;
+        const vec2 k = vec2(1.0, -1.0);
+        const float e = 0.01;
+        vec3 local = normalize(k.xyy * puffDistance(p + k.xyy * e, v_PuffHalf, radius)
+                             + k.yyx * puffDistance(p + k.yyx * e, v_PuffHalf, radius)
+                             + k.yxy * puffDistance(p + k.yxy * e, v_PuffHalf, radius)
+                             + k.xxx * puffDistance(p + k.xxx * e, v_PuffHalf, radius));
+        mat3 toWorld = transpose(toLocal);
+        n = toWorld * local;
+        hit = toWorld * p + v_PuffCenter;
+        vec4 clip = u_MVP * vec4(hit + u_ToCamera * 0.03, 1.0);
+        gl_FragDepth = clamp(clip.z / clip.w * 0.5 + 0.5, 0.0, 1.0);
     } else {
         // a caixa da malha é só onde procurar: o raio da câmera anda até a superfície da caixa redonda mais perto
         // (passos curtos, menores que meia célula, porque só as células em volta entram na conta); se sai da nuvem
@@ -180,9 +209,7 @@ void main() {
     color *= mix(vec3(1.0), vec3(0.72, 0.77, 0.88), ao);
     // o gradiente de transparência: rala perto do aberto (onde o grupo está) e opaca para dentro da manta, pela
     // distância até a beira no ponto achado
-    if (!u_Moving) {
-        float near = texture(u_Distance, cellUV(hit.xz)).r;
-        alpha = mix(SOFT_EDGE_ALPHA, 1.0, smoothstep(0.02, 0.7, near));
-    }
+    float near = texture(u_Distance, cellUV(hit.xz)).r;
+    alpha = mix(SOFT_EDGE_ALPHA, 1.0, smoothstep(0.02, 0.7, near)) * (u_Moving ? v_Alpha : 1.0);
     FragColor = vec4(color, alpha);
 }

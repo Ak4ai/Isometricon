@@ -32,6 +32,7 @@ ROUND = 0.35        # blocos: o raio das quinas e dos vértices de cada caixa da
 PUFF_DELAY = 0.4    # até quanto do tempo um tufo espera para começar (cada um no seu tempo)
 SHADES = {'top': 1.0, 'x': 0.86, 'z': 0.74}   # o sombreado chapado das nuvens do Minecraft
 FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
+PUFF_FLOATS = FLOATS + 7   # os tufos levam também o centro, a meia medida (x, y, z) e o giro da caixa deles
 FAR = 4             # células: daqui para dentro da manta a nuvem é densa
 SINK = 6            # células: a névoa mais alta desce em degraus até a altura padrão na beira do aberto
 UNIT = 8            # a unidade de textura do campo de distância (7 é a do cursor)
@@ -232,7 +233,7 @@ class CloudField:
         assentam com um quique e crescem até virar a célula inteira."""
         moving = [(cell, value) for cell, value in self.cover.items() if value < 1.0]
         if not moving:
-            return np.zeros((0, FLOATS), dtype=np.float32)
+            return np.zeros((0, PUFF_FLOATS), dtype=np.float32)
         sub = CELL / PUFFS
         rows = []   # (centro x, centro z, base da célula, topo, t do tufo, giro)
         for (cx, cz), value in moving:
@@ -248,7 +249,7 @@ class CloudField:
                     rows.append((cx * CELL + (i + 0.5) * sub, cz * CELL + (j + 0.5) * sub, bottom, top, local,
                                  (_hash(cz * 7 + j, cx * 5 + i) - 0.5) * 2.0))
         if not rows:
-            return np.zeros((0, FLOATS), dtype=np.float32)
+            return np.zeros((0, PUFF_FLOATS), dtype=np.float32)
         data = np.array(rows, dtype=np.float32)
         px, pz, bottom, top, t, spin = data.T
         cell_x = (np.floor(px / CELL) + 0.5) * CELL
@@ -266,6 +267,9 @@ class CloudField:
         y0 = y1 - height * scale
         alpha = 1.0 - _smooth(0.3, 1.0, t)
         angle = spin * 1.2 * t                                                           # gira devagar
+        # cada vértice leva também a caixa do tufo (centro, meia medida, giro): nas fofas, o shader acha nela a
+        # caixa de quinas redondas
+        box = np.stack([center_x, (y0 + y1) / 2, center_z, size / 2, (y1 - y0) / 2, size / 2, angle], axis=1)
         parts = []
         for face in ('top', (1, 0), (-1, 0), (0, 1), (0, -1)):
             quads = _quads(face, -size / 2, -size / 2, size, y0, y1, alpha)
@@ -274,8 +278,8 @@ class CloudField:
             x, z = quads[:, 0].copy(), quads[:, 2].copy()
             quads[:, 0] = x * c - z * s + np.repeat(center_x, 6)
             quads[:, 2] = x * s + z * c + np.repeat(center_z, 6)
-            parts.append(quads)
-        return np.concatenate(parts)
+            parts.append(np.concatenate([quads, np.repeat(box, 6, axis=0)], axis=1))
+        return np.concatenate(parts).astype(np.float32)
 
     def cell_boxes(self) -> np.ndarray:
         """As nuvens fofas: cada célula inteira como uma caixa, [iz, ix, 4] = (topo, fundo, lados que emendam, 1 se
@@ -379,7 +383,7 @@ class CloudFog:
         self.field = CloudField(height, explored, objects)
         self.shader = Shader(os.path.join(root, 'assets', 'shaders', 'cloud.vert'),
                              os.path.join(root, 'assets', 'shaders', 'cloud.frag'))
-        self._meshes = {'full': self._new_mesh(), 'moving': self._new_mesh()}
+        self._meshes = {'full': self._new_mesh(), 'moving': self._new_mesh(puffs=True)}
         self._built = None
         self._origin = (0, 0)
         self.texture_id = self._new_texture()
@@ -387,19 +391,23 @@ class CloudFog:
         self._soft = False
 
     @staticmethod
-    def _new_mesh():
+    def _new_mesh(puffs: bool = False):
         import ctypes
         import OpenGL.GL as gl
         vao, vbo = gl.glGenVertexArrays(1), gl.glGenBuffers(1)
         gl.glBindVertexArray(vao)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)
-        stride = FLOATS * 4
+        stride = (PUFF_FLOATS if puffs else FLOATS) * 4
         gl.glEnableVertexAttribArray(0)
         gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, stride, None)
         gl.glEnableVertexAttribArray(1)
         gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(12))
         gl.glEnableVertexAttribArray(2)
         gl.glVertexAttribPointer(2, 1, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(20))
+        if puffs:   # a caixa do tufo: centro, meia medida e giro
+            for location, size, offset in ((3, 3, 24), (4, 3, 36), (5, 1, 48)):
+                gl.glEnableVertexAttribArray(location)
+                gl.glVertexAttribPointer(location, size, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(offset))
         gl.glBindVertexArray(0)
         return {'vao': vao, 'vbo': vbo, 'count': 0}
 
