@@ -341,6 +341,10 @@ class CloudFog:
         gl.glEnable(gl.GL_CULL_FACE)
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        # puxa a nuvem um pouco para a câmera (as duas passadas igual): numa face no mesmo plano da face de um bloco,
+        # ganha sempre a nuvem, em vez de as duas piscarem uma sobre a outra
+        gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+        gl.glPolygonOffset(-1.0, -4.0)
         if full['count']:
             gl.glBindVertexArray(full['vao'])
             # 1. só a profundidade: a face da frente de cada ponto da manta
@@ -359,6 +363,7 @@ class CloudFog:
             gl.glBindVertexArray(moving['vao'])
             gl.glDrawArrays(gl.GL_TRIANGLES, 0, moving['count'])
         gl.glDepthMask(gl.GL_TRUE)
+        gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glBindVertexArray(0)
         (gl.glEnable if culling else gl.glDisable)(gl.GL_CULL_FACE)
         (gl.glEnable if blending else gl.glDisable)(gl.GL_BLEND)
