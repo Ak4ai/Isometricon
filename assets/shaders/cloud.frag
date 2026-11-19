@@ -5,7 +5,7 @@
 // As nuvens fofas (u_Soft): cada célula é uma caixa quadrada com as quinas e os vértices redondos, emendada nas
 // vizinhas da mesma altura (uma nuvem só, redonda por fora e nos degraus); a caixa da malha é só onde procurar, e o raio da câmera anda até a superfície redonda (a distância
 // até a caixa redonda mais perto, das células em volta em u_Boxes). A luz é lisa, de nuvem: o topo claro, o lado de
-// baixo azulado como o céu, o sol que dá a volta, a borda que brilha um pouco e a sombra no vão entre as caixas.
+// baixo azulado como o céu, o sol que dá a volta e a sombra no vão entre as caixas.
 in vec3 v_World;
 in float v_Shade;
 in float v_Alpha;
@@ -77,6 +77,16 @@ float cloudDistance(vec3 p) {
     return min(min(boxDistance(c, p), boxDistance(c + sx, p)), min(boxDistance(c + sz, p), boxDistance(c + sx + sz, p)));
 }
 
+// quanto tem nuvem logo ali (0 nada, 1 encostado): a sombra de contato
+float occlusion(vec3 p) { return 1.0 - clamp(cloudDistance(p) / 0.45, 0.0, 1.0); }
+
+// a luz de uma face da nuvem: o céu (claro por cima, azulado por baixo) e o sol que dá a volta
+vec3 faceLight(vec3 dir, vec3 L, vec3 warm) {
+    float wrap = clamp((dot(dir, L) + 0.45) / 1.45, 0.0, 1.0);
+    vec3 sky = mix(vec3(0.50, 0.58, 0.74), vec3(1.0, 1.0, 1.0), smoothstep(-0.4, 0.95, dir.y));
+    return sky * 0.78 * clamp(u_Tint, 0.25, 1.1) + warm * wrap * 0.28;
+}
+
 vec3 cloudNormal(vec3 p) {
     const vec2 k = vec2(1.0, -1.0);
     const float e = 0.02;
@@ -140,12 +150,21 @@ void main() {
     }
 
     // a luz de uma nuvem: o céu por cima (branco) e por baixo (azulado), o sol que dá a volta, e a borda que brilha
-    float wrap = clamp((dot(n, L) + 0.45) / 1.45, 0.0, 1.0);
-    vec3 sky = mix(vec3(0.50, 0.58, 0.74), vec3(1.0, 1.0, 1.0), smoothstep(-0.4, 0.95, n.y));
-    vec3 color = sky * 0.78 * clamp(u_Tint, 0.25, 1.1) + warm * wrap * 0.28;
-    color += warm * pow(rim, 3.0) * 0.12;
+    // a luz de cada face (as seis direções), misturada pela normal: a curva da quina fica sempre entre as cores das
+    // duas faces que ela liga (com a luz pela normal curva, a quina virada para o sol acendia numa linha clara)
+    vec3 w = n * n;
+    vec3 color = w.x * faceLight(vec3(sign(n.x), 0.0, 0.0), L, warm)
+               + w.y * faceLight(vec3(0.0, sign(n.y), 0.0), L, warm)
+               + w.z * faceLight(vec3(0.0, 0.0, sign(n.z)), L, warm);
     // a sombra de contato: no vão entre duas caixas e no pé de um degrau, escurece e azula
-    float ao = u_Moving ? 0.0 : 1.0 - clamp(cloudDistance(hit + n * 0.45) / 0.45, 0.0, 1.0);
+    // (por face, como a luz: a curva da quina leva a sombra das faces que ela liga)
+    float ao = 0.0;
+    if (!u_Moving) {
+        vec3 w = n * n;
+        ao = w.x * occlusion(hit + vec3(sign(n.x) * 0.45, 0.0, 0.0))
+           + w.y * occlusion(hit + vec3(0.0, sign(n.y) * 0.45, 0.0))
+           + w.z * occlusion(hit + vec3(0.0, 0.0, sign(n.z) * 0.45));
+    }
     color *= mix(vec3(1.0), vec3(0.72, 0.77, 0.88), ao);
     // opaca, como blocos de nuvem (onde duas caixas da malha acham a mesma superfície, não clareia em dobro)
     alpha = u_Moving ? alpha : 1.0;
