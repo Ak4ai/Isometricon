@@ -2121,7 +2121,7 @@ def main() -> None:
                 # debaixo da beira rala aparece através dela)
                 cloud_fog.field.configure(ambience.war_height, ambience.war_objects)
                 cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
-                                 float(player_token.position[2]), dt)
+                                 float(player_token.position[2]), dt, soft=ambience.war_style == 2)
                 cloud_fog.render(projection, view, model, ambience.tint(), window.time,
                                  light=ambience.light_direction(), soft=ambience.war_style == 2)
                 shader.use()

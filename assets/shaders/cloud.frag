@@ -2,9 +2,10 @@
 // Nuvens de blocos, como as do Minecraft, translúcidas: ralas na beira da manta e densas no miolo (o campo de
 // distância até o aberto, u_Distance), com volume (o lado escurece para baixo, o topo tem tufos claros e escuros que
 // derivam devagar) e a luz da hora (douradas no entardecer, escuras à noite).
-// As nuvens fofas (u_Soft) são as mesmas caixas, mas com a luz de uma nuvem de verdade: a normal se curva perto das
-// quinas (parecem arredondadas), o lado do sol é claro e quente, o da sombra é azulado como o céu, a borda rala brilha
-// com a luz que atravessa, e um grão fino de algodão por cima.
+// As nuvens fofas (u_Soft): cada célula é uma caixa quadrada com as quinas e os vértices redondos, emendada nas
+// vizinhas da mesma altura (uma nuvem só, redonda por fora e nos degraus); a caixa da malha é só onde procurar, e o raio da câmera anda até a superfície redonda (a distância
+// até a caixa redonda mais perto, das células em volta em u_Boxes). A luz é lisa, de nuvem: o topo claro, o lado de
+// baixo azulado como o céu, o sol que dá a volta, a borda que brilha um pouco e a sombra no vão entre as caixas.
 in vec3 v_World;
 in float v_Shade;
 in float v_Alpha;
@@ -18,9 +19,12 @@ uniform vec2 u_Origin;          // a célula do canto da manta
 uniform float u_Window;         // células de lado
 uniform float u_Cell;           // blocos por célula
 uniform bool u_Moving;          // os tufos das células que estão se desfazendo (ou se formando)
-uniform bool u_Soft;            // as nuvens fofas: bordas arredondadas pela luz, luz do sol que atravessa e grão
+uniform bool u_Soft;            // as nuvens fofas: caixas de quinas e vértices redondos
 uniform vec3 u_Light;           // para onde está o sol (no espaço do mundo)
 uniform vec3 u_ToCamera;        // para onde está a câmera (no espaço do mundo; a vista é ortográfica)
+uniform sampler2D u_Boxes;      // as fofas: por célula (topo, fundo, lados que emendam, 1 se tem nuvem)
+uniform float u_Round;          // o raio das quinas e dos vértices, em blocos
+uniform mat4 u_MVP;
 
 const float EDGE_ALPHA = 0.42;
 const float CORE_ALPHA = 0.97;
@@ -46,6 +50,40 @@ float blocky(float tufts, float dense) {
 
 vec2 cellUV(vec2 xz) { return (xz / u_Cell - u_Origin) / u_Window; }
 
+// a distância até a caixa redonda da célula c (muito longe se a célula não tem nuvem)
+float boxDistance(ivec2 c, vec3 p) {
+    if (c.x < 0 || c.y < 0 || c.x >= int(u_Window) || c.y >= int(u_Window)) return 1e3;
+    vec4 box = texelFetch(u_Boxes, c, 0);
+    if (box.a < 0.5) return 1e3;
+    vec2 lo = (vec2(c) + u_Origin) * u_Cell, hi = lo + u_Cell;
+    // onde emenda com a vizinha (da mesma altura ou mais alta), a caixa entra nela: as duas viram uma nuvem só
+    int joins = int(box.b + 0.5);
+    float reach = u_Round + 0.2;
+    if ((joins & 1) != 0) hi.x += reach;
+    if ((joins & 2) != 0) lo.x -= reach;
+    if ((joins & 4) != 0) hi.y += reach;
+    if ((joins & 8) != 0) lo.y -= reach;
+    vec3 bmin = vec3(lo.x, box.g - 2.0, lo.y), bmax = vec3(hi.x, box.r, hi.y);
+    vec3 q = abs(p - (bmin + bmax) * 0.5) - ((bmax - bmin) * 0.5 - u_Round);
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - u_Round;
+}
+
+// a distância até a nuvem: a caixa da célula do ponto e as três vizinhas do lado dele
+float cloudDistance(vec3 p) {
+    vec2 f = p.xz / u_Cell - u_Origin;
+    ivec2 c = ivec2(floor(f));
+    vec2 inside = fract(f);
+    ivec2 sx = ivec2(inside.x < 0.5 ? -1 : 1, 0), sz = ivec2(0, inside.y < 0.5 ? -1 : 1);
+    return min(min(boxDistance(c, p), boxDistance(c + sx, p)), min(boxDistance(c + sz, p), boxDistance(c + sx + sz, p)));
+}
+
+vec3 cloudNormal(vec3 p) {
+    const vec2 k = vec2(1.0, -1.0);
+    const float e = 0.02;
+    return normalize(k.xyy * cloudDistance(p + k.xyy * e) + k.yyx * cloudDistance(p + k.yyx * e) +
+                     k.yxy * cloudDistance(p + k.yxy * e) + k.xxx * cloudDistance(p + k.xxx * e));
+}
+
 void main() {
     // pixels de 1/4 de bloco: o ar de textura do jogo
     vec2 p = floor(v_World.xz * 4.0 + 0.5) / 4.0;
@@ -61,48 +99,55 @@ void main() {
     vec3 sun = clamp(u_Tint, 0.0, 1.15);
 
     if (!u_Soft) {
+        gl_FragDepth = gl_FragCoord.z;
         FragColor = vec4(white * blocky(tufts, dense) * sun, alpha);
         return;
     }
 
     // ---- as nuvens fofas ----
-    vec3 n = normalize(cross(dFdx(v_World), dFdy(v_World)));
-    if (dot(n, u_ToCamera) < 0.0) n = -n;                  // a face que se vê
-    vec3 up = vec3(0.0, 1.0, 0.0);
-    // quanto falta até a quina, em blocos: no topo, até a beira da manta (pelo campo de distância); no lado, até o topo
-    float edge;
-    if (n.y > 0.5) {
-        edge = max(d * 4.0 - 0.5, 0.0) * u_Cell;
-        float texel = 1.0 / u_Window;
-        vec2 uv = cellUV(v_World.xz);
-        vec2 grad = vec2(texture(u_Distance, uv + vec2(texel, 0)).r - texture(u_Distance, uv - vec2(texel, 0)).r,
-                         texture(u_Distance, uv + vec2(0, texel)).r - texture(u_Distance, uv - vec2(0, texel)).r);
-        vec2 outward = length(grad) > 1e-4 ? -normalize(grad) : vec2(0.0);
-        if (u_Moving) { edge = 0.35; outward = vec2(0.0); }
-        n = normalize(n + vec3(outward.x, 0.0, outward.y) * (1.0 - smoothstep(0.0, 1.1, edge)) * 1.4);
-    } else {
-        edge = v_Below;
-        n = normalize(n + up * (1.0 - smoothstep(0.0, 1.1, edge)) * 1.4);
-    }
-    float round_edge = 1.0 - smoothstep(0.0, 1.1, edge);
-
     vec3 L = normalize(u_Light);
-    float wrap = clamp((dot(n, L) + 0.5) / 1.5, 0.0, 1.0);          // a luz dá a volta (a nuvem espalha a luz)
-    vec3 sky = mix(vec3(0.55, 0.64, 0.82), vec3(0.93, 0.96, 1.0), n.y * 0.5 + 0.5);   // embaixo azulado, em cima claro
     vec3 warm = sun * vec3(1.05, 1.0, 0.94);
-    vec3 color = white * (sky * 0.72 * clamp(u_Tint, 0.25, 1.1) + warm * wrap * 0.48);
-    color += warm * round_edge * 0.10;                               // a quina arredondada pega mais luz
-    // a borda rala e as quinas brilham: o sol atravessa onde a nuvem é fina
-    float thin = (1.0 - dense) * 0.6 + round_edge * 0.4;
-    color += warm * thin * pow(clamp(dot(L, -u_ToCamera) * 0.5 + 0.7, 0.0, 1.0), 2.0) * 0.22;
-    float rim = pow(1.0 - clamp(dot(n, u_ToCamera), 0.0, 1.0), 2.5);
-    color += vec3(1.0) * rim * 0.16 * sun;
-    // o algodão: um ruído fino e contínuo (no topo pelo chão, no lado pela altura), e os tufos grandes que passam
-    vec2 face = n.y > 0.5 ? v_World.xz : vec2(v_World.x + v_World.z, v_World.y);
-    float cotton = noise(face * 7.0) * 0.6 + noise(face * 17.0 + 3.1) * 0.4;
-    color *= (0.95 + 0.08 * cotton) * (0.96 + 0.06 * tufts);
-    // mais densa que a de blocos, e a quina arredondada um pouco mais rala: o contorno não corta seco
-    alpha = u_Moving ? alpha : mix(0.55, CORE_ALPHA, dense);
-    alpha *= mix(0.75, 1.0, smoothstep(0.0, 0.8, edge));
+    vec3 n;
+    float rim = 0.0;
+    vec3 hit = v_World;
+    if (u_Moving) {
+        // os tufos que saem e voltam: caixinhas com a mesma luz (sem procurar a superfície)
+        n = normalize(cross(dFdx(v_World), dFdy(v_World)));
+        if (dot(n, u_ToCamera) < 0.0) n = -n;
+        gl_FragDepth = gl_FragCoord.z;
+    } else {
+        // a caixa da malha é só onde procurar: o raio da câmera anda até a superfície da caixa redonda mais perto
+        // (passos curtos, menores que meia célula, porque só as células em volta entram na conta); se sai da nuvem
+        // sem achar, aqui é a quina redonda e não tem nuvem
+        vec3 dir = -u_ToCamera;
+        vec3 p = v_World - dir * 0.02;
+        float travelled = 0.0;
+        bool found = false;
+        for (int i = 0; i < 48; i++) {
+            float dist = cloudDistance(p);
+            if (dist < 0.004) { found = true; break; }
+            float step = clamp(dist, 0.01, 0.5);
+            p += dir * step;
+            travelled += step;
+            if (travelled > 2.5 * u_Cell) break;
+        }
+        if (!found) discard;
+        hit = p;
+        n = cloudNormal(hit);
+        vec4 clip = u_MVP * vec4(hit + u_ToCamera * 0.03, 1.0);
+        gl_FragDepth = clamp(clip.z / clip.w * 0.5 + 0.5, 0.0, 1.0);
+        rim = 1.0 - clamp(dot(n, u_ToCamera), 0.0, 1.0);
+    }
+
+    // a luz de uma nuvem: o céu por cima (branco) e por baixo (azulado), o sol que dá a volta, e a borda que brilha
+    float wrap = clamp((dot(n, L) + 0.45) / 1.45, 0.0, 1.0);
+    vec3 sky = mix(vec3(0.50, 0.58, 0.74), vec3(1.0, 1.0, 1.0), smoothstep(-0.4, 0.95, n.y));
+    vec3 color = sky * 0.78 * clamp(u_Tint, 0.25, 1.1) + warm * wrap * 0.28;
+    color += warm * pow(rim, 3.0) * 0.12;
+    // a sombra de contato: no vão entre duas caixas e no pé de um degrau, escurece e azula
+    float ao = u_Moving ? 0.0 : 1.0 - clamp(cloudDistance(hit + n * 0.45) / 0.45, 0.0, 1.0);
+    color *= mix(vec3(1.0), vec3(0.72, 0.77, 0.88), ao);
+    // opaca, como blocos de nuvem (onde duas caixas da malha acham a mesma superfície, não clareia em dobro)
+    alpha = u_Moving ? alpha : 1.0;
     FragColor = vec4(color, alpha);
 }

@@ -27,6 +27,8 @@ RECENTER = 12       # células: recentra quando o jogador se afasta isto do cent
 CLEARANCE = 2       # padrão: o topo fica isto acima do bloco mais alto da célula (cobre o capim e as flores)
 FADE_SECONDS = 0.9   # o tempo de uma célula se desfazer em tufos (ou se formar de novo)
 PUFFS = 2           # cada célula se parte em PUFFS x PUFFS tufos
+BOX_UNIT = 9        # a unidade de textura das caixas das nuvens fofas
+ROUND = 0.35        # blocos: o raio das quinas e dos vértices de cada caixa das nuvens fofas
 PUFF_DELAY = 0.4    # até quanto do tempo um tufo espera para começar (cada um no seu tempo)
 SHADES = {'top': 1.0, 'x': 0.86, 'z': 0.74}   # o sombreado chapado das nuvens do Minecraft
 FLOATS = 6          # x, y, z, sombra, opacidade, abaixo do topo
@@ -275,6 +277,29 @@ class CloudField:
             parts.append(quads)
         return np.concatenate(parts)
 
+    def cell_boxes(self) -> np.ndarray:
+        """As nuvens fofas: cada célula inteira como uma caixa, [iz, ix, 4] = (topo, fundo, lados que emendam, 1 se
+        tem nuvem). O shader faz de cada uma uma caixa de quinas e vértices redondos; um lado "emenda" (bit 1 +x, 2 -x,
+        4 +z, 8 -z) quando a vizinha dali também tem nuvem e é da mesma altura ou mais alta: a caixa se estica para
+        dentro dela e as duas viram uma nuvem só, redonda só por fora e nos degraus."""
+        full, bottom, top = self._full_grid()
+        out = np.zeros((WINDOW, WINDOW, 4), dtype=np.float32)
+        if full.any():
+            top = top + self.lift()
+            joins = np.zeros((WINDOW, WINDOW), dtype=np.float32)
+            for bit, (dx, dz) in ((1, (1, 0)), (2, (-1, 0)), (4, (0, 1)), (8, (0, -1))):
+                near_full = np.zeros_like(full)
+                near_top = np.zeros_like(top)
+                src = (slice(max(dx, 0), WINDOW + min(dx, 0)), slice(max(dz, 0), WINDOW + min(dz, 0)))
+                dst = (slice(max(-dx, 0), WINDOW + min(-dx, 0)), slice(max(-dz, 0), WINDOW + min(-dz, 0)))
+                near_full[dst], near_top[dst] = full[src], top[src]
+                joins += np.where(full & near_full & (near_top >= top), bit, 0)
+            out[..., 0] = np.where(full, top, 0.0).T
+            out[..., 1] = np.where(full, bottom, 0.0).T
+            out[..., 2] = joins.T
+            out[..., 3] = full.T
+        return np.ascontiguousarray(out)
+
     def edge_distance(self) -> np.ndarray:
         """Quantas células cada nuvem inteira está da beira (do aberto), [ix, iz]; 0 no aberto."""
         if self._distance is not None and self._distance[0] == self.revision:
@@ -356,6 +381,8 @@ class CloudFog:
         self._built = None
         self._origin = (0, 0)
         self.texture_id = self._new_texture()
+        self.boxes_id = 0
+        self._soft = False
 
     @staticmethod
     def _new_mesh():
@@ -395,11 +422,15 @@ class CloudFog:
             gl.glBindBuffer(gl.GL_ARRAY_BUFFER, mesh['vbo'])
             gl.glBufferData(gl.GL_ARRAY_BUFFER, data.nbytes, data, gl.GL_DYNAMIC_DRAW)
 
-    def update(self, mode: int, x: float, z: float, dt: float) -> None:
+    def update(self, mode: int, x: float, z: float, dt: float, soft: bool = False) -> None:
         import OpenGL.GL as gl
         self.field.update(mode, x, z, dt)
+        if soft != self._soft:
+            self._soft, self._built = soft, None
         if self._built != self.field.revision:
             self._upload(self._meshes['full'], self.field.full_mesh())
+            if soft:
+                self._upload_boxes(self.field.cell_boxes())
             distance = np.ascontiguousarray(self.field.distance_map(), dtype=np.float32)
             gl.glActiveTexture(gl.GL_TEXTURE0 + UNIT)
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture_id)
@@ -409,6 +440,21 @@ class CloudFog:
             self._origin = self.field.origin or (0, 0)
             self._built = self.field.revision
         self._upload(self._meshes['moving'], self.field.moving_mesh())
+
+    def _upload_boxes(self, data: np.ndarray) -> None:
+        import OpenGL.GL as gl
+        gl.glActiveTexture(gl.GL_TEXTURE0 + BOX_UNIT)
+        if not self.boxes_id:
+            self.boxes_id = gl.glGenTextures(1)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.boxes_id)
+            for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
+                                (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
+                gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA32F, WINDOW, WINDOW, 0, gl.GL_RGBA, gl.GL_FLOAT, None)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.boxes_id)
+        gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
+        gl.glTexSubImage2D(gl.GL_TEXTURE_2D, 0, 0, 0, WINDOW, WINDOW, gl.GL_RGBA, gl.GL_FLOAT, data)
+        gl.glActiveTexture(gl.GL_TEXTURE0)
 
     def render(self, projection, view, model, tint, time: float, light=(0.55, 0.26, 0.7), soft: bool = False) -> None:
         """``light``: para onde está o sol, no espaço desenhado (o ``u_LightDir``); ``soft``: as nuvens fofas."""
@@ -433,6 +479,11 @@ class CloudFog:
                                   np.array([0.0, 0.0, 1.0]))
             self.shader.set_vec3('u_Light', *(sun / max(np.linalg.norm(sun), 1e-9)))
             self.shader.set_vec3('u_ToCamera', *(eye / max(np.linalg.norm(eye), 1e-9)))
+            gl.glActiveTexture(gl.GL_TEXTURE0 + BOX_UNIT)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.boxes_id)
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            self.shader.set_int('u_Boxes', BOX_UNIT)
+            self.shader.set_float('u_Round', ROUND)
         gl.glActiveTexture(gl.GL_TEXTURE0 + UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -445,7 +496,12 @@ class CloudFog:
         # ganha sempre a nuvem, em vez de as duas piscarem uma sobre a outra
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glPolygonOffset(-1.0, -4.0)
-        if full['count']:
+        if full['count'] and soft:
+            # as fofas: uma passada só, que procura a superfície redonda e grava a profundidade dela (quase opaca)
+            gl.glBindVertexArray(full['vao'])
+            self.shader.set_bool('u_Moving', False)
+            gl.glDrawArrays(gl.GL_TRIANGLES, 0, full['count'])
+        elif full['count']:
             gl.glBindVertexArray(full['vao'])
             # 1. só a profundidade: a face da frente de cada ponto da manta
             gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
@@ -473,7 +529,8 @@ class CloudFog:
         for mesh in self._meshes.values():
             gl.glDeleteVertexArrays(1, [mesh['vao']])
             gl.glDeleteBuffers(1, [mesh['vbo']])
-        if self.texture_id:
-            gl.glDeleteTextures([self.texture_id])
-            self.texture_id = 0
+        for name in ('texture_id', 'boxes_id'):
+            if getattr(self, name):
+                gl.glDeleteTextures([getattr(self, name)])
+                setattr(self, name, 0)
         self.shader.delete()
