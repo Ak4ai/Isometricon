@@ -281,13 +281,15 @@ class CloudField:
         """As nuvens fofas: cada célula inteira como uma caixa, [iz, ix, 4] = (topo, fundo, lados que emendam, 1 se
         tem nuvem). O shader faz de cada uma uma caixa de quinas e vértices redondos; um lado "emenda" (bit 1 +x, 2 -x,
         4 +z, 8 -z) quando a vizinha dali também tem nuvem e é da mesma altura ou mais alta: a caixa se estica para
-        dentro dela e as duas viram uma nuvem só, redonda só por fora e nos degraus."""
+        dentro dela e as duas viram uma nuvem só, redonda só por fora e nos degraus. As diagonais (16 +x+z, 32 -x+z,
+        64 +x-z, 128 -x-z) dizem se o canto também emenda; se não, a caixa se estica em L e não invade o canto."""
         full, bottom, top = self._full_grid()
         out = np.zeros((WINDOW, WINDOW, 4), dtype=np.float32)
         if full.any():
             top = top + self.lift()
             joins = np.zeros((WINDOW, WINDOW), dtype=np.float32)
-            for bit, (dx, dz) in ((1, (1, 0)), (2, (-1, 0)), (4, (0, 1)), (8, (0, -1))):
+            for bit, (dx, dz) in ((1, (1, 0)), (2, (-1, 0)), (4, (0, 1)), (8, (0, -1)),
+                                  (16, (1, 1)), (32, (-1, 1)), (64, (1, -1)), (128, (-1, -1))):
                 near_full = np.zeros_like(full)
                 near_top = np.zeros_like(top)
                 src = (slice(max(dx, 0), WINDOW + min(dx, 0)), slice(max(dz, 0), WINDOW + min(dz, 0)))

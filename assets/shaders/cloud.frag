@@ -50,22 +50,33 @@ float blocky(float tufts, float dense) {
 
 vec2 cellUV(vec2 xz) { return (xz / u_Cell - u_Origin) / u_Window; }
 
-// a distância até a caixa redonda da célula c (muito longe se a célula não tem nuvem)
+float roundBox(vec3 p, vec3 bmin, vec3 bmax) {
+    vec3 q = abs(p - (bmin + bmax) * 0.5) - ((bmax - bmin) * 0.5 - u_Round);
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - u_Round;
+}
+
+// a distância até a caixa redonda da célula c (muito longe se a célula não tem nuvem). Onde emenda com a vizinha (da
+// mesma altura ou mais alta), a caixa entra nela e as duas viram uma nuvem só; conta só o lado e o canto em que o
+// ponto está: se emenda dos dois lados mas o canto entre eles não tem nuvem, a caixa se estica em L (as duas caixas
+// esticadas, uma para cada lado) e o canto côncavo fica limpo
 float boxDistance(ivec2 c, vec3 p) {
     if (c.x < 0 || c.y < 0 || c.x >= int(u_Window) || c.y >= int(u_Window)) return 1e3;
     vec4 box = texelFetch(u_Boxes, c, 0);
     if (box.a < 0.5) return 1e3;
     vec2 lo = (vec2(c) + u_Origin) * u_Cell, hi = lo + u_Cell;
-    // onde emenda com a vizinha (da mesma altura ou mais alta), a caixa entra nela: as duas viram uma nuvem só
     int joins = int(box.b + 0.5);
     float reach = u_Round + 0.2;
-    if ((joins & 1) != 0) hi.x += reach;
-    if ((joins & 2) != 0) lo.x -= reach;
-    if ((joins & 4) != 0) hi.y += reach;
-    if ((joins & 8) != 0) lo.y -= reach;
-    vec3 bmin = vec3(lo.x, box.g - 2.0, lo.y), bmax = vec3(hi.x, box.r, hi.y);
-    vec3 q = abs(p - (bmin + bmax) * 0.5) - ((bmax - bmin) * 0.5 - u_Round);
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - u_Round;
+    bool east = p.x > lo.x + u_Cell * 0.5, south = p.z > lo.y + u_Cell * 0.5;
+    bool joinX = (joins & (east ? 1 : 2)) != 0, joinZ = (joins & (south ? 4 : 8)) != 0;
+    bool joinXZ = (joins & (east ? (south ? 16 : 64) : (south ? 32 : 128))) != 0;
+    vec2 ex = vec2(0.0), ez = vec2(0.0);          // (para baixo, para cima) em x e em z
+    if (joinX) { if (east) ex.y = reach; else ex.x = reach; }
+    if (joinZ) { if (south) ez.y = reach; else ez.x = reach; }
+    float y0 = box.g - 2.0, y1 = box.r;
+    if (joinX && joinZ && !joinXZ)
+        return min(roundBox(p, vec3(lo.x - ex.x, y0, lo.y), vec3(hi.x + ex.y, y1, hi.y)),
+                   roundBox(p, vec3(lo.x, y0, lo.y - ez.x), vec3(hi.x, y1, hi.y + ez.y)));
+    return roundBox(p, vec3(lo.x - ex.x, y0, lo.y - ez.x), vec3(hi.x + ex.y, y1, hi.y + ez.y));
 }
 
 // a distância até a nuvem: a caixa da célula do ponto e as três vizinhas do lado dele
