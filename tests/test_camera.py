@@ -643,3 +643,15 @@ def test_page_keys_do_not_tilt_the_orthographic_camera():
     camera = IsometricCamera()
     before = camera.pitch
     assert camera.handle_key(266, 1) is False and camera.pitch == before
+
+
+def test_perspective_far_plane_follows_zoom_out():
+    from src.camera.camera import IsometricCamera
+    from src.math import vec3
+    camera = IsometricCamera(target=vec3(0.0, 0.0, 0.0), ortho_size=100.0, far=400.0)
+    camera.perspective = True
+    projection = camera.get_projection_matrix(1280, 720)
+    view = camera.get_view_matrix()
+    clip = projection @ view @ np.array([0.0, 0.0, 0.0, 1.0])
+    assert -clip[3] <= clip[2] <= clip[3]
+    assert camera.eye_distance > camera.far  # o zoom levou a câmera para além do far antigo

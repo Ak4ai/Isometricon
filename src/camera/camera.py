@@ -200,7 +200,11 @@ class IsometricCamera:
         aspect = float(width) / float(height)
         if self.perspective:
             fovy = math.radians(self.fov_degrees)
-            return mat4_perspective(fovy, aspect, self.near, self.far)
+            # O zoom afasta a câmera (eye_distance cresce junto com
+            # ortho_size). O far fixo em 400 cortava o mundo no zoom máximo;
+            # mantenha o plano além do foco e da geometria carregada.
+            far = max(self.far, self.eye_distance + 250.0)
+            return mat4_perspective(fovy, aspect, self.near, far)
         vertical_size = self.ortho_size
         horizontal_size = vertical_size * aspect
         return mat4_ortho(

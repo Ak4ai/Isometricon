@@ -306,6 +306,17 @@ licença OFL e carregadas por `src/core/fonts.py`; o editor e o painel de
 construções rasterizam suas HUDs em 2× para manter o texto nítido em telas
 Retina. Detalhes em [`assets/fonts/README.md`](assets/fonts/README.md).
 
+### ⚡ Desempenho e zoom
+
+O mundo é **fragment-bound** perto do personagem: quanto mais a tela é coberta por
+terreno, maior o custo por pixel. A sombra do sol em qualidade alta chega a 18
+raios por pixel, cada um percorrendo até 56 células; é o ajuste mais pesado da
+cena. Ao afastar o zoom, o terreno ocupa menos pixels e o FPS sobe.
+
+Em máquinas mais lentas, use **Sombras do sol: Média/Baixa**, **Escala da
+resolução: 75%** e **MSAA: 2×**. O plano `far` da câmera em perspectiva agora
+acompanha o zoom, então o mundo não desaparece mais no zoom máximo.
+
 ### 🕹️ Controles
 
 | Ação | Controle |
