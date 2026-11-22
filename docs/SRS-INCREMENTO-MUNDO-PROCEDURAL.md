@@ -67,6 +67,8 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-061** | Quando o token estiver dentro de um objeto ou de um mapa carregado, o sistema deve tornar translúcidas as partes acima dos pés do token, mantendo o personagem visível. | Desejável | Demonstração, teste |
 | **FR-062** | O sistema deve permitir nomear o objeto antes/depois da criação e usar esse nome no arquivo exportado, preservando acentos no nome interno e gerando um nome de arquivo seguro. | Desejável | Teste, demonstração |
 | **FR-063** | O menu inicial deve oferecer uma opção que abra o editor de mapa sem criar um mundo salvo. | Essencial | Teste, demonstração |
+| **FR-064** | O editor deve exibir as texturas como uma grade de miniaturas reais, com seleção por clique e indicação da textura ativa. | Desejável | Teste, demonstração |
+| **FR-065** | O editor deve oferecer uma roda HSV com barra de brilho, paleta de atalhos e histórico de cores recentes. | Desejável | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -140,6 +142,8 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-061 | FR-011, FR-058 | `RoomRevealRenderer`, `world.room_reveal` |
 | FR-062 | FR-041, FR-043 | `MapEditor` (`N`), `ConstructionPanel` (`N`), `object_names.py` |
 | FR-063 | FR-035, FR-003 | `GameMenus`, `main.py` |
+| FR-064 | FR-038, FR-043 | `EditorHud` (aba Texturas), `MaterialAtlas.atlas_image` |
+| FR-065 | FR-037, FR-048 | `color_wheel.py`, `EditorHud` (aba Cores) |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `ConstructionPanel` |
 | DR-008 | FR-041 | JSON `isometricon-structures` (v2; lê o formato antigo) |
@@ -154,5 +158,6 @@ Funcionalidade: Colocar objeto no mundo procedural
 - `tests/test_construction_panel.py, tests/test_structure_save.py` — persistência, colisão do provider,
   colocação, remoção, arquivo inválido, sobreposição com token e atalhos.
 - `tests/test_game_menus.py` — opção **Editor de mapa** no menu.
+- `tests/test_editor_color_wheel.py` — roda HSV e conversão de cor.
 - Teste manual: `--terrain --object=assets/objects/casa_exemplo.json`.
 - Regressão: fluxo de mapa independente (`--map-editor` e `--terrain --map`).

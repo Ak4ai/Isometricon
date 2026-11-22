@@ -8,6 +8,7 @@ duplicar/excluir).
 
 from __future__ import annotations
 
+import colorsys
 import math
 import os
 import time
@@ -17,6 +18,7 @@ from typing import Optional
 import glfw
 import numpy as np
 import OpenGL.GL as gl
+from PIL import Image
 
 from src.camera import IsometricCamera
 from src.editor.editor_hud import PANEL_HEIGHT, PANEL_WIDTH, EditorHud
@@ -117,7 +119,18 @@ class MapEditor:
         self.name_replace = False
         self.colour_index = 0
         self.custom_colour: tuple[int, int, int] | None = None
+        self.hsv = (0.0, 0.0, 1.0)
+        self.recent_colours: list[tuple[int, int, int]] = []
+        self.active_tab = "colors"
         self.texture_index = 0
+        self.texture_thumbs: list[tuple[str, Image.Image]] = []
+        for index, name in enumerate(self.atlas.tile_names):
+            column, row = index % self.atlas.GRID_COLS, index // self.atlas.GRID_COLS
+            tile = self.atlas.atlas_image.crop((
+                column * self.atlas.TILE_SIZE, row * self.atlas.TILE_SIZE,
+                (column + 1) * self.atlas.TILE_SIZE, (row + 1) * self.atlas.TILE_SIZE,
+            )).resize((48, 48), Image.Resampling.NEAREST).convert("RGBA")
+            self.texture_thumbs.append((name, tile))
         self.brush_size = 1
         self.grid_spacing = 1
         self.cursor: tuple[int, int, int] | None = None
@@ -485,13 +498,61 @@ class MapEditor:
     # ------------------------------------------------------------------
     # Mouse / teclado
     # ------------------------------------------------------------------
+    def _remember_colour(self, colour: tuple[int, int, int]) -> None:
+        colour = tuple(int(max(0, min(255, channel))) for channel in colour)
+        self.recent_colours = [colour] + [item for item in self.recent_colours if item != colour]
+        del self.recent_colours[8:]
+
+    def _set_custom_rgb(self, colour: tuple[int, int, int], remember: bool = True) -> None:
+        self.custom_colour = tuple(int(channel) for channel in colour)
+        self.hsv = colorsys.rgb_to_hsv(*(channel / 255.0 for channel in self.custom_colour))
+        self.active_tab = "colors"
+        if remember:
+            self._remember_colour(self.custom_colour)
+        self._cursor_preview_dirty = True
+
     def select_colour(self, index: int) -> bool:
         if not 0 <= int(index) < len(PALETTE):
             return False
         self.colour_index = int(index)
         self.custom_colour = None
+        rgb = PALETTE[self.colour_index][1]
+        self.hsv = colorsys.rgb_to_hsv(*(channel / 255.0 for channel in rgb))
+        self._remember_colour(rgb)
+        self.active_tab = "colors"
         self._cursor_preview_dirty = True
         self.status = f"Cor: {PALETTE[self.colour_index][0]}."
+        self._update_hud()
+        return True
+
+    def select_texture(self, index: int) -> bool:
+        if not 0 <= int(index) < len(self.atlas.tile_names):
+            return False
+        self.texture_index = int(index)
+        self.active_tab = "textures"
+        self._cursor_preview_dirty = True
+        self.status = f"Textura: {self.texture}."
+        self._update_hud()
+        return True
+
+    def _wheel_click(self, kind: str, first: float, second: float) -> None:
+        if kind == "wheel":
+            hue, saturation = first, second
+            value = self.hsv[2]
+        else:
+            hue, saturation = self.hsv[0], self.hsv[1]
+            value = first
+        rgb = colorsys.hsv_to_rgb(hue % 1.0, max(0.0, min(1.0, saturation)),
+                                  max(0.0, min(1.0, value)))
+        self._set_custom_rgb(tuple(round(channel * 255) for channel in rgb))
+        self.status = f"Cor personalizada: #{self.custom_colour[0]:02x}{self.custom_colour[1]:02x}{self.custom_colour[2]:02x}."
+        self._update_hud()
+
+    def select_recent(self, index: int) -> bool:
+        if not 0 <= int(index) < len(self.recent_colours):
+            return False
+        self._set_custom_rgb(self.recent_colours[index])
+        self.status = "Cor recente selecionada."
         self._update_hud()
         return True
 
@@ -518,11 +579,28 @@ class MapEditor:
                 if 12 <= x <= 12 + PANEL_WIDTH and 12 <= y <= 12 + PANEL_HEIGHT:
                     local_x, local_y = x - 12, y - 12
                     if self.hud is not None:
-                        colour = self.hud.hit_colour(local_x, local_y)
-                        if colour is not None:
-                            self.select_colour(colour)
+                        button = self.hud.hit(local_x, local_y)
+                        if button is not None:
+                            self._hud_action(button)
                             return True
-                    self._hud_action(self.hud.hit(local_x, local_y) if self.hud is not None else None)
+                        wheel = self.hud.hit_wheel(local_x, local_y)
+                        if wheel is not None:
+                            self._wheel_click(*wheel)
+                            return True
+                        if self.active_tab == "colors":
+                            colour = self.hud.hit_colour(local_x, local_y)
+                            if colour is not None:
+                                self.select_colour(colour)
+                                return True
+                            recent = self.hud.hit_recent(local_x, local_y)
+                            if recent is not None:
+                                self.select_recent(recent)
+                                return True
+                        else:
+                            texture = self.hud.hit_texture(local_x, local_y)
+                            if texture is not None:
+                                self.select_texture(texture)
+                                return True
                     return True
             now = time.monotonic()
             if now - self._last_click_time < CLICK_COOLDOWN:
@@ -603,6 +681,10 @@ class MapEditor:
             self.status = f"Grade: {'ligada' if self.show_grid else 'desligada'}."
         elif action == "base":
             self.fill_base()
+        elif action == "tab:colors":
+            self.active_tab = "colors"
+        elif action == "tab:textures":
+            self.active_tab = "textures"
         self._update_hud()
 
     def handle_char(self, codepoint: int) -> bool:
@@ -647,10 +729,10 @@ class MapEditor:
         except ValueError:
             self.status = "Cor hexadecimal inválida."
             return False
-        self.custom_colour = ((value >> 16) & 255, (value >> 8) & 255, value & 255)
+        self._set_custom_rgb(((value >> 16) & 255, (value >> 8) & 255, value & 255))
         self.hex_mode = False
         self.hex_buffer = ""
-        self._cursor_preview_dirty = True
+        self.active_tab = "colors"
         self.status = f"Cor personalizada: #{value:06x}"
         return True
 
@@ -757,13 +839,22 @@ class MapEditor:
         if key == glfw.KEY_C and not control:
             self.custom_colour = None
             self.colour_index = (self.colour_index + (-1 if shift else 1)) % len(PALETTE)
+            self.hsv = colorsys.rgb_to_hsv(*(channel / 255.0 for channel in PALETTE[self.colour_index][1]))
+            self._remember_colour(PALETTE[self.colour_index][1])
+            self.active_tab = "colors"
             self._cursor_preview_dirty = True
             self.status = f"Cor: {PALETTE[self.colour_index][0]}."
             return True
         if key == glfw.KEY_X and not control:
             self.texture_index = (self.texture_index + (-1 if shift else 1)) % len(self.atlas.tile_names)
+            self.active_tab = "textures"
             self._cursor_preview_dirty = True
             self.status = f"Textura: {self.texture}."
+            return True
+        if key == glfw.KEY_K and not control:
+            self.active_tab = "textures" if self.active_tab == "colors" else "colors"
+            self.status = "Aba: " + ("Texturas." if self.active_tab == "textures" else "Cores.")
+            self._update_hud()
             return True
         if key == glfw.KEY_R and not control:
             if self.selected is not None:
@@ -1002,15 +1093,17 @@ class MapEditor:
             entries.append(("↑/↓ escolhe  Enter carimba  D duplica  Del exclui  F4 fecha", (245, 210, 120)))
             self.hud.set_state("BIBLIOTECA DE OBJETOS", entries, swatch=self.colour,
                                active_tool=self.tool, palette=PALETTE,
-                               colour_index=self.colour_index, custom_colour=self.custom_colour)
+                               colour_index=self.colour_index, custom_colour=self.custom_colour,
+                               textures=self.texture_thumbs, texture_index=self.texture_index,
+                               active_tab=self.active_tab, recent_colours=self.recent_colours,
+                               hsv=self.hsv)
             return
         display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
             (f"Ferramenta: {TOOL_LABELS[self.tool]} [Tab]  Pincel: {self.brush_size} [-/+]", (225, 230, 238)),
             (f"Cor: {self.colour_name} [C]  Textura: {self.texture} [X]", (200, 210, 220)),
             (f"Grid: {self.grid_size[0]}x{self.grid_size[1]}x{self.grid_size[2]} [F6/F7] passo {self.grid_spacing} [/] max 64", (200, 210, 220)),
-            (f"Objetos: {len(self.objects)}  Selecionado: {selected}", (200, 210, 220)),
-            (f"Nome do objeto: {display_name} [N]", (200, 210, 220)),
+            (f"Objetos: {len(self.objects)}  Nome: {display_name} [N]  Sel: {selected}", (200, 210, 220)),
             (f"Cursor: {cursor}  Voxels: {self.project.voxel_count}", (200, 210, 220)),
             (self.status, (245, 210, 120)),
         ]
@@ -1022,7 +1115,10 @@ class MapEditor:
             lines[-1] = (f"Hexadecimal: #{self.hex_buffer}_  (Enter aplica, Esc cancela)", (245, 210, 120))
         self.hud.set_state("EDITOR DE MAPA — ISOMETRICON", lines, swatch=self.colour,
                            active_tool=self.tool, palette=PALETTE,
-                           colour_index=self.colour_index, custom_colour=self.custom_colour)
+                           colour_index=self.colour_index, custom_colour=self.custom_colour,
+                           textures=self.texture_thumbs, texture_index=self.texture_index,
+                           active_tab=self.active_tab, recent_colours=self.recent_colours,
+                           hsv=self.hsv)
 
     def _common_shader(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray) -> None:
         shader.use()

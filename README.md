@@ -249,8 +249,9 @@ entrar em uma casa, a **revelação de cômodo** do jogo ilumina o espaço fecha
 o corredor da câmera abre onde algo tapa o personagem.
 
 Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
-a paleta clicável ou `C` escolhe a cor, `X` escolhe a textura, `H` digita cor
-hexadecimal, `-`/`=` mudam o pincel,
+as abas **Cores**/**Texturas** (ou `K`) trocam o painel; a roda HSV, a paleta e as
+cores recentes selecionam a cor; a grade de miniaturas seleciona a textura;
+`H` digita cor hexadecimal, `-`/`=` mudam o pincel,
 `[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
 selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso

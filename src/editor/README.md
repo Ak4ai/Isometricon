@@ -15,7 +15,8 @@ shader; os voxels formam uma malha iluminada e texturizada comum, usando o mesmo
 | `platform.py` | Plataforma: superfície, grade, borda e cursor em um único draw. |
 | `selection.py` | Caixa delimitadora do objeto selecionado. |
 | `map_editor.py` | Ferramentas, picking, seleção, histórico, arquivos, câmera e render. |
-| `editor_hud.py` | Painel 2D com ferramenta, material, grid, objeto e atalhos. |
+| `editor_hud.py` | Painel 2D com abas Cores/Texturas, roda HSV, miniaturas e atalhos. |
+| `color_wheel.py` | Roda HSV gerada com Pillow, hit-test por ângulo/raio. |
 
 Shaders em `assets/shaders/platform.vert` e `platform.frag`. Documentação de uso
 em [`docs/EDITOR.md`](../../docs/EDITOR.md).

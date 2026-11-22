@@ -175,3 +175,19 @@ def test_palette_selection_sets_colour(tmp_path):
     assert editor.colour_index == 3
     assert editor.custom_colour is None
     assert editor.colour == (205, 55, 55)
+
+
+def test_texture_tab_and_recent_colours(tmp_path):
+    editor = _editor(tmp_path)
+    assert editor.select_texture(6)
+    assert editor.active_tab == "textures"
+    assert editor.texture == "bricks"
+    assert editor.select_colour(3)
+    assert editor.active_tab == "colors"
+    assert editor.recent_colours[0] == (205, 55, 55)
+    editor.hsv = (0.0, 1.0, 1.0)
+    editor._wheel_click("wheel", 0.0, 1.0)
+    assert editor.custom_colour == (255, 0, 0)
+    assert editor.recent_colours[0] == (255, 0, 0)
+    assert editor.select_recent(1)
+    assert editor.custom_colour == (205, 55, 55)

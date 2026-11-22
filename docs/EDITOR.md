@@ -38,7 +38,10 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 |---|---|
 | Aplicar ferramenta | Clique esquerdo |
 | Trocar ferramenta (construir → apagar → pintar → carimbar → selecionar) | `Tab` / `Shift+Tab` |
-| Escolher cor na paleta | clique no quadradinho |
+| Escolher cor na roda HSV | clique na roda; barra abaixo ajusta o brilho |
+| Escolher cor na paleta/recentes | clique no quadradinho |
+| Alternar abas Cores/Texturas | clique nas abas ou `K` |
+| Escolher textura pela grade | clique na miniatura |
 | Próxima cor / anterior | `C` / `Shift+C` |
 | Cor hexadecimal livre | `H`, digite 6 dígitos, `Enter` |
 | Próxima textura / anterior | `X` / `Shift+X` |
@@ -71,9 +74,10 @@ apagar, aponte diretamente para o voxel.
 ## 🔁 Fluxo de trabalho
 
 1. **Criar** o objeto/mapa no volume padrão (16×16×16). `F7`/`F6` mudam o volume.
-2. **Material**: escolha a cor clicando na paleta (ou `C`/`H`) e a textura com
-   `X`; a combinação é o material do voxel. Cada voxel guarda seu próprio índice
-   de material. A paleta tem 16 cores e mostra o quadrado atual no topo.
+2. **Material**: use a aba **Cores** (roda HSV, paleta de 16 cores, recentes ou
+   `C`/`H`) e a aba **Texturas** (grade de miniaturas reais, ou `X`); a combinação
+   é o material do voxel. Cada voxel guarda seu próprio índice de material. A
+   cor atual aparece no quadrado do topo e o nome da textura fica no HUD.
 3. **Nomear** com `N`: o nome interno fica no JSON e vira o nome do arquivo
    (sem acentos/espaços). **Exportar** com `F2`: grava
    `saves/objetos/<nome>.json`.
