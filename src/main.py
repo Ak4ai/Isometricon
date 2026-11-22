@@ -1128,7 +1128,7 @@ def main() -> None:
 
         if construction_panel is not None and not chat_console.is_open and not character_editor.is_open:
             if construction_panel.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT),
-                                                      window.get_cursor_pos(), window.width):
+                                                      window.get_cursor_pos(), window.get_window_size()[0]):
                 return
 
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
@@ -1798,8 +1798,9 @@ def main() -> None:
             map_editor.process_click()
             map_editor.update_drag()
             map_editor.update_hud_drag()
+            hud_width, hud_height = window.get_window_size()
             map_editor.render(shader, projection, view, model, window.time,
-                              window.width, window.height)
+                              hud_width, hud_height)
         elif terrain_demo:
             # Espaço fechado do jogador: a máscara e a suavização do efeito. Enxerga o terreno, as construções do
             # /schem e também os objetos e o mapa do editor (viram construções só para este cálculo).
@@ -2179,7 +2180,8 @@ def main() -> None:
             context_cursor.update(dt, cursor_mode)
             shader.use()
             if construction_panel is not None:
-                construction_panel.render(window.width, window.height)
+                hud_width, hud_height = window.get_window_size()
+                construction_panel.render(hud_width, hud_height)
             if master_panel is not None and not character_editor.is_open:
                 master_panel.render(window.width, window.height)
         elif char_demo:

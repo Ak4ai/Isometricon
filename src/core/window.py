@@ -145,8 +145,12 @@ class Window:
         return glfw.get_mouse_button(self._window, button) == glfw.PRESS
 
     def get_cursor_pos(self) -> Tuple[float, float]:
-        """Retorna a posição atual do cursor (x, y)."""
+        """Retorna a posição atual do cursor em coordenadas lógicas da janela."""
         return glfw.get_cursor_pos(self._window)
+
+    def get_window_size(self) -> Tuple[int, int]:
+        """Retorna a largura/altura lógicas da janela (sem escala Retina)."""
+        return glfw.get_window_size(self._window)
 
     def get_cursor_pos_framebuffer(self) -> Tuple[float, float]:
         """Retorna o cursor na mesma escala em pixels usada pelo viewport."""
