@@ -56,3 +56,20 @@ def test_structure_lights_find_exported_lamp():
     lights = collect_structure_lights([Placed()])
     assert lights
     assert all(light.position[0] >= 3 and light.position[2] >= 5 for light in lights)
+
+
+def test_structure_mesh_marks_luminous_blocks_as_emissive():
+    from src.world.schematic import Schematic
+    from src.world.structure_mesher import StructureMesher
+    schematic = Schematic.load_from_file("assets/schematics/29455.schem")
+    vertices, _ = StructureMesher.build_arrays(schematic, lambda name, face: (0.0, 0.0, 1.0, 1.0))
+    vertices = vertices.reshape(-1, 11)
+    assert (vertices[:, 8:11] > 1.0).any()
+
+
+def test_object_mesh_marks_lamp_material_as_emissive():
+    from src.editor.material_atlas import MaterialAtlas
+    from src.editor.object_mesher import build_mesh_data
+    lamp = VoxelObject.load("assets/objects/lampiao.json")
+    data = build_mesh_data(lamp, MaterialAtlas())
+    assert (data.vertices[:, 8:11] > 1.0).any()

@@ -2068,10 +2068,12 @@ def main() -> None:
             if map_world is None:
                 from src.editor.lighting import apply_lights, collect_structure_lights
                 structures = schematic_tool.layer.structures
-                light_key = tuple((id(item), getattr(item, "revision", 0)) for item in structures)
+                light_key = (tuple(round(float(v)) for v in player_token.position),
+                             tuple((id(item), getattr(item, "revision", 0)) for item in structures))
                 if light_key != structure_light_cache["key"]:
                     structure_light_cache["key"] = light_key
-                    structure_light_cache["lights"] = collect_structure_lights(structures)
+                    structure_light_cache["lights"] = collect_structure_lights(
+                    structures, near=tuple(player_token.position))
                 apply_lights(shader, structure_light_cache["lights"])
             view_projection = projection @ view
             shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)

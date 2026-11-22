@@ -9,6 +9,7 @@ from typing import Callable, Dict, Optional, Tuple
 import numpy as np
 
 from src.world.block_shapes import Quad, box_face_quad, chest_hinge, is_chest_lid, quad_vertices, shape_for
+from src.world.light_blocks import light_for_block
 from src.world.schematic import Schematic
 
 # (u0, v0, u1, v1) de um bloco e face
@@ -97,11 +98,23 @@ class StructureMesher:
         vertex_offset = 0
 
         tints = getattr(schematic, "tints", None)   # a cor de cada célula (objetos do editor); sem ela, branco
+        stored_lights = getattr(schematic, "lights", None)
 
         # argwhere devolve [y, z, x] na ordem de varredura (y, z, x)
         for y, z, x in np.argwhere(occupied):
             block = schematic.grid[y, z, x]
             tint = (1.0, 1.0, 1.0) if tints is None else tuple(float(c) for c in tints[y, z, x])
+            light = int(stored_lights[y, z, x]) if stored_lights is not None else 0
+            inferred = light_for_block(block) if light <= 0 else None
+            if inferred is not None:
+                light, warm = inferred
+            elif light > 0:
+                warm = (1.0, 0.78, 0.38)
+            if light > 0:
+                # O shader trata canais > 1 como emissão: o bloco luminoso
+                # não fica apenas iluminado pelo sol, ele próprio brilha.
+                boost = 1.0 + 0.9 * light / 15.0
+                tint = tuple(max(tint[channel], warm[channel] * boost) for channel in range(3))
             block_pos = np.array([x, y, z], dtype=np.float32) - offset
             if block not in shapes:
                 shapes[block] = shape_for(block)

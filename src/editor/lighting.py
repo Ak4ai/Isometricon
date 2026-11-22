@@ -15,6 +15,7 @@ import numpy as np
 
 from src.editor.map_project import MapProject
 from src.editor.voxel_object import EMPTY, VoxelObject
+from src.world.light_blocks import light_for_block
 
 MAX_POINT_LIGHTS = 8
 
@@ -83,32 +84,26 @@ def apply_lights(shader, lights: Sequence[PointLight], model=None) -> None:
 
 
 # Luz aproximada para schematics que não guardam materiais do editor.
-_LIGHT_BLOCKS = {
-    "glowstone": (15, (1.0, 0.78, 0.35)),
-    "sea_lantern": (15, (0.55, 0.92, 1.0)),
-    "shroomlight": (15, (1.0, 0.55, 0.25)),
-    "jack_o_lantern": (15, (1.0, 0.55, 0.15)),
-    "lantern": (12, (1.0, 0.78, 0.38)),
-    "torch": (12, (1.0, 0.65, 0.22)),
-    "campfire": (12, (1.0, 0.52, 0.18)),
-    "candle": (8, (1.0, 0.82, 0.5)),
-    "glow_lichen": (6, (0.5, 0.9, 0.65)),
-}
+def _spread(lights: List[PointLight], limit: int) -> List[PointLight]:
+    """Escolhe luzes ao longo de toda a estrutura, em vez das primeiras oito."""
+    if len(lights) <= limit:
+        return lights
+    if limit <= 1:
+        return lights[:1]
+    return [lights[round(index * (len(lights) - 1) / (limit - 1))] for index in range(limit)]
 
 
-def _light_block(name: str):
-    base = str(name).split("[", 1)[0].split(":", 1)[-1]
-    for key, value in _LIGHT_BLOCKS.items():
-        if key in base:
-            return value
-    return None
+def collect_structure_lights(structures: Sequence, limit: int = MAX_POINT_LIGHTS,
+                             near: Sequence[float] | None = None) -> List[PointLight]:
+    """Luzes de construções colocadas no mundo.
 
+    ``near`` (jogador/câmera) escolhe as luzes mais próximas; sem ele, as
+    luzes são espalhadas pela estrutura."""
 
-def collect_structure_lights(structures: Sequence, limit: int = MAX_POINT_LIGHTS) -> List[PointLight]:
-    """Luzes de construções colocadas no mundo (``PlacedStructure`` ou equivalentes)."""
     lights: List[PointLight] = []
+    gather_limit = 512
     for placed in structures:
-        if len(lights) >= limit:
+        if len(lights) >= gather_limit:
             break
         schematic = getattr(placed, "schematic", None)
         origin = getattr(placed, "origin", (0, 0, 0))
@@ -119,7 +114,7 @@ def collect_structure_lights(structures: Sequence, limit: int = MAX_POINT_LIGHTS
         grid = schematic.grid
         for y, z, x in np.argwhere(grid != "minecraft:air"):
             light = int(stored[y, z, x]) if stored is not None else 0
-            inferred = _light_block(grid[y, z, x]) if light <= 0 else None
+            inferred = light_for_block(grid[y, z, x]) if light <= 0 else None
             if inferred is not None:
                 light, default_color = inferred
             elif light <= 0:
@@ -134,6 +129,10 @@ def collect_structure_lights(structures: Sequence, limit: int = MAX_POINT_LIGHTS
                 (origin[0] + int(x) + 0.5, origin[1] + int(y) + 0.5, origin[2] + int(z) + 0.5),
                 color, 5.0 + light * 0.55, light / 15.0,
             ))
-            if len(lights) >= limit:
+            if len(lights) >= gather_limit:
                 break
-    return lights
+    if near is not None:
+        origin = tuple(float(v) for v in near[:3])
+        lights.sort(key=lambda light: sum((light.position[i] - origin[i]) ** 2 for i in range(3)))
+        return lights[:limit]
+    return _spread(lights, limit)

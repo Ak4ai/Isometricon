@@ -85,7 +85,8 @@ def build_mesh_data(obj: VoxelObject, atlas: MaterialAtlas) -> ObjectMeshData:
             base = _TOP_UVS if face == 2 else _UVS
             uv_table[material_index, face, :, 0] = u0 + base[:, 0] * du
             uv_table[material_index, face, :, 1] = v0 + base[:, 1] * dv
-        colour_table[material_index] = np.asarray(material.color, dtype=np.float32) / 255.0
+        colour_table[material_index] = (np.asarray(material.color, dtype=np.float32) / 255.0
+                                        * (1.0 + 0.9 * material.light / 15.0))
 
     current = 0
     for face in range(6):

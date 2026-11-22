@@ -1078,5 +1078,7 @@ void main()
     }
 
     vec3 result = envGrade(lighting * albedo * roomFactor, albedo * roomFactor);
+    // Objetos/blocos luminosos carregam um fator > 1 na cor do vértice.
+    result += max(v_Color - vec3(1.0), vec3(0.0)) * 0.75;
     FragColor = vec4(result, texColor.a * u_Alpha);
 }
