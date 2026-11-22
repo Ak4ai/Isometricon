@@ -191,3 +191,29 @@ def test_texture_tab_and_recent_colours(tmp_path):
     assert editor.recent_colours[0] == (255, 0, 0)
     assert editor.select_recent(1)
     assert editor.custom_colour == (205, 55, 55)
+
+
+def test_texture_filter_and_eyedropper(tmp_path):
+    editor = _editor(tmp_path)
+    editor.select_texture_filter("Pedra")
+    assert editor.active_tab == "textures"
+    names = [name for _, name, _ in editor.texture_entries()]
+    assert names and all(name in ("stone", "cobblestone", "stone_bricks", "sandstone") for name in names)
+    material = editor.map.add_material((12, 34, 56), "bricks")
+    editor.map.set(2, 0, 3, material)
+    editor.hit_block = (2, 0, 3)
+    assert editor._pick_material((2, 0, 3))
+    assert editor.custom_colour == (12, 34, 56)
+    assert editor.texture == "bricks"
+    assert editor.active_tab == "colors"
+
+
+def test_alt_click_picks_material_from_canvas(tmp_path):
+    editor = _editor(tmp_path)
+    material = editor.map.add_material((9, 8, 7), "stone")
+    editor.map.set(0, 0, 0, material)
+    editor.hit_block = (0, 0, 0)
+    assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.PRESS, alt=True)
+    assert editor.custom_colour == (9, 8, 7)
+    assert editor.texture == "stone"
+    assert not editor.click_pending

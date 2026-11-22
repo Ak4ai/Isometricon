@@ -15,7 +15,7 @@ from src.editor.color_wheel import wheel_image
 from src.rendering.hud_quad import HudQuad
 
 PANEL_WIDTH = 470
-PANEL_HEIGHT = 440
+PANEL_HEIGHT = 450
 WHEEL_SIZE = 84
 WHEEL_BOX = (16, 268, 16 + WHEEL_SIZE, 268 + WHEEL_SIZE)
 VALUE_BOX = (16, 358, 16 + WHEEL_SIZE, 368)
@@ -49,6 +49,7 @@ class EditorHud:
         self._buttons: dict[str, tuple[int, int, int, int]] = {}
         self._colour_boxes: dict[int, tuple[int, int, int, int]] = {}
         self._texture_boxes: dict[int, tuple[int, int, int, int]] = {}
+        self._filter_boxes: dict[str, tuple[int, int, int, int]] = {}
         self._recent_boxes: dict[int, tuple[int, int, int, int]] = {}
         self._wheel_box: tuple[int, int, int, int] | None = None
         self._value_box: tuple[int, int, int, int] | None = None
@@ -82,18 +83,21 @@ class EditorHud:
                   palette: Iterable[tuple[str, tuple[int, int, int]]] = (),
                   colour_index: int = 0,
                   custom_colour: tuple[int, int, int] | None = None,
-                  textures: Iterable[tuple[str, Image.Image]] = (),
+                  textures: Iterable[tuple[int, str, Image.Image]] = (),
                   texture_index: int = 0,
                   active_tab: str = "colors",
                   recent_colours: Iterable[tuple[int, int, int]] = (),
-                  hsv: tuple[float, float, float] = (0.0, 0.0, 1.0)) -> None:
+                  hsv: tuple[float, float, float] = (0.0, 0.0, 1.0),
+                  filters: Iterable[str] = (),
+                  active_filter: str = "Todas") -> None:
         rows = tuple(lines)
         palette = tuple(palette)
         textures = tuple(textures)
+        filters = tuple(filters)
         recent = tuple(recent_colours)
-        texture_names = tuple(name for name, _ in textures)
+        texture_names = tuple((texture_id, name) for texture_id, name, _ in textures)
         key = (title, rows, swatch, active_tool, palette, colour_index, custom_colour,
-               texture_names, texture_index, active_tab, recent,
+               texture_names, texture_index, active_tab, recent, filters, active_filter,
                (round(hsv[0] * 360), round(hsv[1] * 100), round(hsv[2] * 100)))
         if key == self._key:
             return
@@ -133,24 +137,26 @@ class EditorHud:
 
         self._colour_boxes = {}
         self._texture_boxes = {}
+        self._filter_boxes = {}
         self._recent_boxes = {}
         self._wheel_box = None
         self._value_box = None
         if active_tab == "textures":
-            for index, (name, thumb) in enumerate(textures):
-                column, row = index % 8, index // 8
+            for position, (texture_id, name, thumb) in enumerate(textures):
+                column, row = position % 8, position // 8
                 box = (16 + column * 52, 268 + row * 54, 16 + column * 52 + 48, 268 + row * 54 + 48)
-                self._texture_boxes[index] = box
+                self._texture_boxes[texture_id] = box
                 if thumb.size != (48, 48):
                     thumb = thumb.resize((48, 48), Image.Resampling.NEAREST)
                 image.paste(thumb.convert("RGBA"), (box[0], box[1]))
-                active = index == texture_index
+                active = texture_id == texture_index
                 draw.rounded_rectangle(box, radius=3,
                                        outline=(255, 235, 160, 255) if active else (45, 55, 68, 255),
                                        width=3 if active else 1)
-            current = textures[texture_index][0] if textures else "—"
-            draw.text((16, 378), f"Textura selecionada: {current}   [X]", font=small_font,
-                      fill=(190, 202, 218, 255))
+            for index, label in enumerate(filters):
+                box = (16 + index * 88, 374, 16 + index * 88 + 84, 394)
+                self._filter_boxes[label] = box
+                self._button(draw, box, label, label == active_filter, small_font)
         else:
             if swatch is not None:
                 wheel = wheel_image(WHEEL_SIZE)
@@ -189,11 +195,11 @@ class EditorHud:
             draw.rounded_rectangle((PANEL_WIDTH - 62, 356, PANEL_WIDTH - 18, 372), radius=3,
                                    fill=(*current, 255), outline=(255, 255, 255, 200), width=1)
 
-        draw.text((16, 396),
+        draw.text((16, 412),
                   "F2 exportar  F3 objeto  F5 salvar  F9 carregar  Ctrl+Z desfazer",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, 414),
-                  "Botão esq: aplicar  R: girar  Tab: ferramenta  C/X: cor/textura  H: hex",
+        draw.text((16, 430),
+                  "Botão esq: aplicar  Alt+clique: conta-gotas  C/X: cor/textura  K: abas",
                   font=small_font, fill=(150, 160, 175, 255))
         self._image = image
         self._dirty = True
@@ -220,6 +226,12 @@ class EditorHud:
         for index, (x0, y0, x1, y1) in self._recent_boxes.items():
             if x0 <= x <= x1 and y0 <= y <= y1:
                 return index
+        return None
+
+    def hit_filter(self, x: float, y: float) -> str | None:
+        for label, (x0, y0, x1, y1) in self._filter_boxes.items():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return label
         return None
 
     def hit_wheel(self, x: float, y: float) -> tuple[str, float, float] | None:

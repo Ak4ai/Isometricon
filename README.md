@@ -251,7 +251,8 @@ o corredor da câmera abre onde algo tapa o personagem.
 Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
 as abas **Cores**/**Texturas** (ou `K`) trocam o painel; a roda HSV, a paleta e as
 cores recentes selecionam a cor; a grade de miniaturas seleciona a textura;
-`H` digita cor hexadecimal, `-`/`=` mudam o pincel,
+`H` digita cor hexadecimal, `Alt+clique` pega cor/textura de um voxel,
+`-`/`=` mudam o pincel,
 `[`/`]` o passo da grade, clique esquerdo aplica, `R` gira o objeto, setas movem o
 selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso

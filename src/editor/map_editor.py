@@ -63,6 +63,14 @@ CLICK_COOLDOWN = 0.20
 DRAG_ARM_DELAY = 0.14
 DRAG_DISTANCE = 6.0
 MAX_GRID_SPACING = 8
+TEXTURE_FILTERS = ("Todas", "Pedra", "Madeira", "Concreto", "Natureza")
+TEXTURE_CATEGORY = {
+    "stone": "Pedra", "cobblestone": "Pedra", "stone_bricks": "Pedra", "sandstone": "Pedra",
+    "oak_planks": "Madeira", "spruce_planks": "Madeira", "oak_log": "Madeira",
+    "white_concrete": "Concreto", "red_concrete": "Concreto", "blue_concrete": "Concreto",
+    "yellow_concrete": "Concreto", "green_concrete": "Concreto", "black_concrete": "Concreto",
+    "dirt": "Natureza", "grass_block_side": "Natureza",
+}
 
 
 def _display_path(path: str) -> str:
@@ -123,6 +131,7 @@ class MapEditor:
         self.recent_colours: list[tuple[int, int, int]] = []
         self.active_tab = "colors"
         self.texture_index = 0
+        self.texture_filter = "Todas"
         self.texture_thumbs: list[tuple[str, Image.Image]] = []
         for index, name in enumerate(self.atlas.tile_names):
             column, row = index % self.atlas.GRID_COLS, index // self.atlas.GRID_COLS
@@ -154,6 +163,8 @@ class MapEditor:
         self._drag_armed = False
         self._last_drag_mouse: tuple[float, float] | None = None
         self._last_click_time = 0.0
+        self.hit_block: tuple[int, int, int] | None = None
+        self.hud_drag = False
         self.last_mouse: tuple[float, float] | None = None
         self.last_mouse_window: tuple[float, float] | None = None
         self.hex_mode = False
@@ -332,6 +343,7 @@ class MapEditor:
                 self.last_mouse_window = None
         ray = screen_to_world_ray(mouse_x, mouse_y, width, height, view, projection, model)
         hit = raycast_voxels(ray, _ObjectProvider(self.project), max_distance=512.0)
+        self.hit_block = hit.block if hit is not None else None
         if self.tool == "select":
             self.cursor = hit.block if hit is not None else None
             self.cursor_normal = hit.normal if hit is not None else (0, 1, 0)
@@ -535,6 +547,46 @@ class MapEditor:
         self._update_hud()
         return True
 
+    def texture_entries(self) -> list[tuple[int, str, Image.Image]]:
+        entries = []
+        for index, (name, thumb) in enumerate(self.texture_thumbs):
+            if self.texture_filter == "Todas" or TEXTURE_CATEGORY.get(name) == self.texture_filter:
+                entries.append((index, name, thumb))
+        return entries
+
+    def select_texture_filter(self, name: str) -> None:
+        if name in TEXTURE_FILTERS:
+            self.texture_filter = name
+            self.active_tab = "textures"
+            self.status = f"Filtro de texturas: {name}."
+            self._update_hud()
+
+    def _pick_material(self, block: tuple[int, int, int]) -> bool:
+        x, y, z = block
+        index = self.project.object_at(x, y, z)
+        material = None
+        if index is not None:
+            placed = self.objects[index]
+            local = placed.local_cell(x, y, z)
+            if local is not None:
+                material_index = placed.object.get(*local)
+                if material_index >= 0:
+                    material = placed.object.materials[material_index]
+        elif self.map.in_bounds(x, y, z):
+            material_index = self.map.get(x, y, z)
+            if material_index >= 0:
+                material = self.map.materials[material_index]
+        if material is None:
+            self.status = "Nenhum material nesse voxel."
+            return False
+        self._set_custom_rgb(material.color)
+        if material.texture in self.atlas.tile_names:
+            self.texture_index = self.atlas.tile_names.index(material.texture)
+        self.active_tab = "colors"
+        self.status = f"Conta-gotas: {material.texture} + #{material.color[0]:02x}{material.color[1]:02x}{material.color[2]:02x}."
+        self._update_hud()
+        return True
+
     def _wheel_click(self, kind: str, first: float, second: float) -> None:
         if kind == "wheel":
             hue, saturation = first, second
@@ -570,7 +622,7 @@ class MapEditor:
         self._after_change(f"Base plana criada com {len(cells)} voxels.")
         return True
 
-    def handle_mouse_button(self, button: int, action: int, shift: bool = False) -> bool:
+    def handle_mouse_button(self, button: int, action: int, shift: bool = False, alt: bool = False) -> bool:
         if button != glfw.MOUSE_BUTTON_LEFT:
             return False
         if action == glfw.PRESS and not shift:
@@ -585,6 +637,7 @@ class MapEditor:
                             return True
                         wheel = self.hud.hit_wheel(local_x, local_y)
                         if wheel is not None:
+                            self.hud_drag = True
                             self._wheel_click(*wheel)
                             return True
                         if self.active_tab == "colors":
@@ -597,11 +650,17 @@ class MapEditor:
                                 self.select_recent(recent)
                                 return True
                         else:
+                            texture_filter = self.hud.hit_filter(local_x, local_y)
+                            if texture_filter is not None:
+                                self.select_texture_filter(texture_filter)
+                                return True
                             texture = self.hud.hit_texture(local_x, local_y)
                             if texture is not None:
                                 self.select_texture(texture)
                                 return True
                     return True
+            if alt and self.hit_block is not None:
+                return self._pick_material(self.hit_block)
             now = time.monotonic()
             if now - self._last_click_time < CLICK_COOLDOWN:
                 return True
@@ -614,6 +673,7 @@ class MapEditor:
             self.click_pending = True
             return True
         if action == glfw.RELEASE:
+            self.hud_drag = False
             self.dragging = False
             self._drag_armed = False
             self._press_mouse = None
@@ -655,6 +715,16 @@ class MapEditor:
             self._last_drag_cell = self.cursor
             self._last_drag_mouse = self.last_mouse
             self.apply_current_tool()
+
+    def update_hud_drag(self) -> None:
+        if not self.hud_drag or self.hud is None or self.last_mouse_window is None:
+            return
+        x, y = self.last_mouse_window
+        if not (12 <= x <= 12 + PANEL_WIDTH and 12 <= y <= 12 + PANEL_HEIGHT):
+            return
+        wheel = self.hud.hit_wheel(x - 12, y - 12)
+        if wheel is not None:
+            self._wheel_click(*wheel)
 
     def _hud_action(self, action: str | None) -> None:
         if action is None:
@@ -847,6 +917,7 @@ class MapEditor:
             return True
         if key == glfw.KEY_X and not control:
             self.texture_index = (self.texture_index + (-1 if shift else 1)) % len(self.atlas.tile_names)
+            self.texture_filter = "Todas"
             self.active_tab = "textures"
             self._cursor_preview_dirty = True
             self.status = f"Textura: {self.texture}."
@@ -1094,9 +1165,9 @@ class MapEditor:
             self.hud.set_state("BIBLIOTECA DE OBJETOS", entries, swatch=self.colour,
                                active_tool=self.tool, palette=PALETTE,
                                colour_index=self.colour_index, custom_colour=self.custom_colour,
-                               textures=self.texture_thumbs, texture_index=self.texture_index,
+                               textures=self.texture_entries(), texture_index=self.texture_index,
                                active_tab=self.active_tab, recent_colours=self.recent_colours,
-                               hsv=self.hsv)
+                               hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter)
             return
         display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
@@ -1116,9 +1187,9 @@ class MapEditor:
         self.hud.set_state("EDITOR DE MAPA — ISOMETRICON", lines, swatch=self.colour,
                            active_tool=self.tool, palette=PALETTE,
                            colour_index=self.colour_index, custom_colour=self.custom_colour,
-                           textures=self.texture_thumbs, texture_index=self.texture_index,
+                           textures=self.texture_entries(), texture_index=self.texture_index,
                            active_tab=self.active_tab, recent_colours=self.recent_colours,
-                           hsv=self.hsv)
+                           hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter)
 
     def _common_shader(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray) -> None:
         shader.use()

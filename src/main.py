@@ -1116,7 +1116,9 @@ def main() -> None:
                 return
 
         if map_editor is not None:
-            if map_editor.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT)):
+            if map_editor.handle_mouse_button(
+                    button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT),
+                    alt=(window.is_key_pressed(glfw.KEY_LEFT_ALT) or window.is_key_pressed(glfw.KEY_RIGHT_ALT))):
                 return
 
         if (master_panel is not None and master_panel.is_open and not character_editor.is_open
@@ -1795,6 +1797,7 @@ def main() -> None:
                                      mouse_window=window.get_cursor_pos())
             map_editor.process_click()
             map_editor.update_drag()
+            map_editor.update_hud_drag()
             map_editor.render(shader, projection, view, model, window.time,
                               window.width, window.height)
         elif terrain_demo:
