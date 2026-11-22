@@ -1,13 +1,16 @@
 """Compilador e gerenciador de Shaders GLSL 330 core para PyOpenGL."""
 
 import os
-from typing import Sequence, Union
+from typing import Dict, Sequence, Tuple, Union
 import OpenGL.GL as gl
 import numpy as np
 
 
 class Shader:
     """Carrega, compila e gerencia programas de shaders GLSL."""
+
+    # Unidade de textura fixa de samplers adicionais do shader do mundo (u_RoomMask: máscara 3D do espaço)
+    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3}
 
     def __init__(self, vertex_path: str, fragment_path: str):
         """Inicializa e compila o programa de shader a partir de arquivos no disco.
@@ -19,21 +22,47 @@ class Shader:
         self.vertex_path = vertex_path
         self.fragment_path = fragment_path
         self._uniform_cache: dict[str, int] = {}
+        self.defines: Tuple[str, ...] = ()
+        self._variants: Dict[Tuple[str, ...], Tuple[int, dict]] = {}
+        self.program_id = self._build(())
+        self._variants[()] = (self.program_id, self._uniform_cache)
 
-        vertex_source = self._read_source(vertex_path)
-        fragment_source = self._read_source(fragment_path)
+    @staticmethod
+    def _with_defines(source: str, defines: Tuple[str, ...]) -> str:
+        """O código com ``#define`` de cada nome logo depois do ``#version`` (a primeira linha)."""
+        if not defines:
+            return source
+        head, _, rest = source.partition("\n")
+        return head + "\n" + "".join(f"#define {name}\n" for name in defines) + rest
+
+    def set_defines(self, defines: Sequence[str]) -> None:
+        """Troca para a variante do programa compilada com estes ``#define`` (compila na primeira vez). Os valores
+        dos uniforms da variante atual passam para a nova: quem desenha não percebe a troca."""
+        key = tuple(sorted(defines))
+        if key == self.defines:
+            return
+        if key not in self._variants:
+            self._variants[key] = (self._build(key), {})
+        old = self.program_id
+        self.program_id, self._uniform_cache = self._variants[key]
+        self.defines = key
+        _copy_uniforms(old, self.program_id)
+
+    def _build(self, defines: Tuple[str, ...]) -> int:
+        vertex_source = self._with_defines(self._read_source(self.vertex_path), defines)
+        fragment_source = self._with_defines(self._read_source(self.fragment_path), defines)
 
         vert_shader = self._compile_shader(gl.GL_VERTEX_SHADER, vertex_source)
         frag_shader = self._compile_shader(gl.GL_FRAGMENT_SHADER, fragment_source)
 
-        self.program_id = gl.glCreateProgram()
-        gl.glAttachShader(self.program_id, vert_shader)
-        gl.glAttachShader(self.program_id, frag_shader)
-        gl.glLinkProgram(self.program_id)
+        program_id = gl.glCreateProgram()
+        gl.glAttachShader(program_id, vert_shader)
+        gl.glAttachShader(program_id, frag_shader)
+        gl.glLinkProgram(program_id)
 
-        if not gl.glGetProgramiv(self.program_id, gl.GL_LINK_STATUS):
-            error_log = gl.glGetProgramInfoLog(self.program_id).decode("utf-8")
-            gl.glDeleteProgram(self.program_id)
+        if not gl.glGetProgramiv(program_id, gl.GL_LINK_STATUS):
+            error_log = gl.glGetProgramInfoLog(program_id).decode("utf-8")
+            gl.glDeleteProgram(program_id)
             gl.glDeleteShader(vert_shader)
             gl.glDeleteShader(frag_shader)
             raise RuntimeError(f"Erro ao linkar Shader Program:\n{error_log}")
@@ -41,6 +70,16 @@ class Shader:
         # Shaders individuais podem ser liberados após a linkagem bem-sucedida
         gl.glDeleteShader(vert_shader)
         gl.glDeleteShader(frag_shader)
+
+        # Samplers que não são do atlas (unidade 0) precisam de unidade própria desde já: um sampler3D
+        # que ficasse na 0, junto do sampler2D do atlas, faria o OpenGL recusar qualquer desenho.
+        gl.glUseProgram(program_id)
+        for sampler, unit in self.EXTRA_SAMPLER_UNITS.items():
+            location = gl.glGetUniformLocation(program_id, sampler)
+            if location >= 0:
+                gl.glUniform1i(location, unit)
+        gl.glUseProgram(0)
+        return program_id
 
     def _read_source(self, path: str) -> str:
         """Lê o conteúdo de um arquivo de shader."""
@@ -179,3 +218,45 @@ class Shader:
             self.delete()
         except Exception:
             pass
+
+
+_FLOAT_TYPES = {gl.GL_FLOAT: 1, gl.GL_FLOAT_VEC2: 2, gl.GL_FLOAT_VEC3: 3, gl.GL_FLOAT_VEC4: 4,
+                gl.GL_FLOAT_MAT3: 9, gl.GL_FLOAT_MAT4: 16}
+_INT_TYPES = {gl.GL_INT: 1, gl.GL_INT_VEC2: 2, gl.GL_INT_VEC3: 3, gl.GL_INT_VEC4: 4, gl.GL_BOOL: 1,
+              gl.GL_SAMPLER_2D: 1, gl.GL_SAMPLER_3D: 1}
+
+
+def _copy_uniforms(source: int, target: int) -> None:
+    """Passa os valores dos uniforms ativos de um programa para outro (os que existem nos dois)."""
+    import ctypes
+    count = gl.glGetProgramiv(source, gl.GL_ACTIVE_UNIFORMS)
+    previous = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
+    gl.glUseProgram(target)
+    for index in range(int(count)):
+        name, size, kind = gl.glGetActiveUniform(source, index)
+        name = name.decode() if isinstance(name, bytes) else str(name)
+        base = name[:-3] if name.endswith("[0]") else name
+        for element in range(int(size)):
+            element_name = f"{base}[{element}]" if size > 1 else name
+            src_loc = gl.glGetUniformLocation(source, element_name)
+            dst_loc = gl.glGetUniformLocation(target, element_name)
+            if src_loc < 0 or dst_loc < 0:
+                continue
+            if kind in _FLOAT_TYPES:
+                n = _FLOAT_TYPES[kind]
+                value = (ctypes.c_float * n)()
+                gl.glGetUniformfv(source, src_loc, value)
+                data = np.array(value, dtype=np.float32)
+                if kind == gl.GL_FLOAT_MAT4:
+                    gl.glUniformMatrix4fv(dst_loc, 1, gl.GL_FALSE, data)
+                elif kind == gl.GL_FLOAT_MAT3:
+                    gl.glUniformMatrix3fv(dst_loc, 1, gl.GL_FALSE, data)
+                else:
+                    (gl.glUniform1fv, gl.glUniform2fv, gl.glUniform3fv, gl.glUniform4fv)[n - 1](dst_loc, 1, data)
+            elif kind in _INT_TYPES:
+                n = _INT_TYPES[kind]
+                value = (ctypes.c_int * n)()
+                gl.glGetUniformiv(source, src_loc, value)
+                data = np.array(value, dtype=np.int32)
+                (gl.glUniform1iv, gl.glUniform2iv, gl.glUniform3iv, gl.glUniform4iv)[n - 1](dst_loc, 1, data)
+    gl.glUseProgram(int(previous))

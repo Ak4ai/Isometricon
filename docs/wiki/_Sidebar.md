@@ -11,18 +11,22 @@
 
 **👗 Sistema de Roupas e Customização**
 * [[👗 Sistema de Roupas (WrapLayer & HSR)|Sistema-de-Roupas]]
-* [[📊 Validação com Roblox Studio|Validacao-com-Roblox]]
 * [[🧥 Camadas e Sapatos|Camadas-e-Sapatos]]
 * [[🧑 Corpo Masculino e Cages|Corpo-Masculino]]
 * [[💇 Cabelos e Acessórios|Cabelos-e-Acessorios]]
 * [[🦴 Animação e Esqueleto|Animacao-e-Esqueleto]]
-* [[🧪 Bateria de Robustez|Bateria-de-Robustez]]
 * [[💬 Comandos do Chat|Comandos-do-Chat]]
 * [[🧑‍🎨 Criação de Personagem|Criacao-de-Personagem]]
-* [[🧪 Histórico de Experimentos|Historico-de-Experimentos]]
 * [[📌 Pendências e Roadmap|Pendencias]]
 * [[🧰 Scripts do Projeto|Scripts-do-Projeto]]
 * [[📜 Proposta do Motor Universal de Roupas|Proposta-do-Motor-Universal-de-Roupas]]
+
+**🤖 Testes com o Claude**
+* [[🤖 Testes e Verificações com o Claude|Testes-e-Verificacoes-com-o-Claude]]
+* [[🗺️ Mapa de Testes e Ajustes|Mapa-de-Testes-e-Ajustes]]
+* [[🧪 Bateria de Robustez|Bateria-de-Robustez]]
+* [[📊 Validação com Roblox Studio|Validacao-com-Roblox]]
+* [[🧪 Histórico de Experimentos|Historico-de-Experimentos]]
 
 **🔗 Integração**
 * [[🔗 Contrato de Integração A↔B|Contrato-de-Integracao]]

@@ -10,15 +10,22 @@ Bem-vindo à documentação oficial do motor de **Virtual Tabletop (VTT)** 3D em
 
 | Documento | Foco Principal | Público-Alvo |
 | :--- | :--- | :--- |
-| [📋 **Proposta Acadêmica**](../proposta.md) | Escopo geral, prazos (30 dias) e modelo dual 2x3. | Professor & Equipes |
+| [📋 **Proposta Acadêmica**](wiki/Proposta-do-Projeto.md) | Escopo geral, prazos (30 dias) e modelo dual 2x3. | Professor & Equipes |
 | [🏛️ **Arquitetura do Motor**](ARCHITECTURE.md) | Estrutura de Chunks 3D, Face Culling na CPU e Pipeline OpenGL. | Equipe A (Mundo) |
 | [🔗 **Contrato de Integração**](INTEGRATION_SPEC.md) | Interfaces `VoxelGridProvider`, Raycasting 3D e Matrizes de Câmera. | Equipe A & Equipe B |
 | [🎨 **Guia de Shaders GLSL**](SHADERS.md) | Shaders GLSL 330 core, modelo de iluminação Lambertiana e Destaques. | Equipe A & Equipe B |
+| [📋 **Requisitos (SRS)**](requirements/README.md) | Requisitos implementados, incremento do editor voxel e 108 fichas atômicas com critérios Gherkin. | Professor & Equipes |
 | [🗺️ **Editor de Mapa/Objetos**](EDITOR.md) | Plataforma em shader, voxels com cor/textura, exportar/carimbar objetos e salvar mapa. | Equipe & Avaliação |
 | [🌍 **Mundo Procedural + Objetos**](SRS-INCREMENTO-MUNDO-PROCEDURAL.md) | Requisitos dos dois destinos: mapa independente e construções no `--terrain` infinito. | Equipe & Avaliação |
 | [📖 **Wiki do Projeto**](wiki/Home.md) | Roupas do Roblox, animação, bateria de robustez, comandos do chat e histórico de experimentos. | Equipe B |
 
 </div>
+
+### Requisitos em detalhe
+
+- [SRS — estado implementado](SRS.md)
+- [Incremento — editor de mapa e objetos voxel](SRS-INCREMENTO-EDITOR-VOXEL.md)
+- [Índice das 108 fichas atômicas](requirements/README.md)
 
 ---
 

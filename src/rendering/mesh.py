@@ -127,6 +127,48 @@ class Mesh:
 DEFERRED = threading.local()
 
 
+class _GLNames:
+    """Nomes de VAO e buffer guardados para reuso.
+
+    Pedir um nome novo ao driver (``glGen*``) ou devolvê-lo (``glDelete*``) faz o driver sincronizar com a GPU:
+    5-10 ms por malha de chunk nesta máquina. Os nomes saem daqui em lotes e voltam para cá."""
+
+    BATCH = 32
+    KEEP = 256  # acima disso, devolve ao driver (cada buffer guardado segura a memória da última malha)
+
+    def __init__(self) -> None:
+        self.vaos: list = []
+        self.buffers: list = []
+
+    def vao(self) -> int:
+        if not self.vaos:
+            self.vaos = [int(v) for v in np.atleast_1d(gl.glGenVertexArrays(self.BATCH))]
+            for name in self.vaos:  # o driver só cria o objeto no primeiro bind: cria o lote de uma vez
+                gl.glBindVertexArray(name)
+            gl.glBindVertexArray(0)
+        return self.vaos.pop()
+
+    def buffer(self) -> int:
+        if not self.buffers:
+            self.buffers = [int(v) for v in np.atleast_1d(gl.glGenBuffers(self.BATCH))]
+        return self.buffers.pop()
+
+    def release_vao(self, name: int) -> None:
+        if len(self.vaos) < self.KEEP:
+            self.vaos.append(name)
+        else:
+            gl.glDeleteVertexArrays(1, [name])
+
+    def release_buffer(self, name: int) -> None:
+        if len(self.buffers) < self.KEEP:
+            self.buffers.append(name)
+        else:
+            gl.glDeleteBuffers(1, [name])
+
+
+GL_NAMES = _GLNames()
+
+
 class TexturedMesh:
     """Representa uma malha 3D texturizada com suporte a Texture Atlas (Layout: Pos3, Norm3, UV2, Col3 = 44 bytes)."""
 
@@ -172,8 +214,8 @@ class TexturedMesh:
 
     def _upload(self, v_data: np.ndarray, indices: Optional[np.ndarray]) -> None:
         if not self.vao:
-            self.vao = gl.glGenVertexArrays(1)
-            self.vbo = gl.glGenBuffers(1)
+            self.vao = GL_NAMES.vao()
+            self.vbo = GL_NAMES.buffer()
 
         gl.glBindVertexArray(self.vao)
 
@@ -184,7 +226,7 @@ class TexturedMesh:
             i_data = np.ascontiguousarray(indices, dtype=np.uint32)
             self.index_count = len(i_data)
             if self.ebo is None:
-                self.ebo = gl.glGenBuffers(1)
+                self.ebo = GL_NAMES.buffer()
             gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.ebo)
             gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, i_data.nbytes, i_data, self.usage)
         else:
@@ -295,18 +337,22 @@ class TexturedMesh:
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
 
     def delete(self) -> None:
-        """Libera os buffers de GPU."""
+        """Libera os buffers de GPU (os nomes voltam para ``GL_NAMES``)."""
         self._pending = None
+        skinned = bool(getattr(self, "skin_vbo", 0))
         if hasattr(self, "vao") and self.vao:
-            gl.glDeleteVertexArrays(1, [self.vao])
+            if skinned:
+                gl.glDeleteVertexArrays(1, [self.vao])  # tem atributos de pele ligados: não serve a outra malha
+            else:
+                GL_NAMES.release_vao(self.vao)
             self.vao = 0
         if hasattr(self, "vbo") and self.vbo:
-            gl.glDeleteBuffers(1, [self.vbo])
+            GL_NAMES.release_buffer(self.vbo)
             self.vbo = 0
         if hasattr(self, "ebo") and self.ebo:
-            gl.glDeleteBuffers(1, [self.ebo])
+            GL_NAMES.release_buffer(self.ebo)
             self.ebo = None
-        if getattr(self, "skin_vbo", 0):
+        if skinned:
             gl.glDeleteBuffers(1, [self.skin_vbo])
             self.skin_vbo = 0
         self._skin = None

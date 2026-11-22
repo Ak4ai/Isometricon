@@ -3,6 +3,11 @@
 Permite abrir a barra de chat com [T] ou [/], digitar comandos de personalização
 em tempo real (ex: '/skin olhos vermelho', '/skin top sweater', '/skin vestir <id>')
 e visualizar o feedback colorido na interface gráfica. Os comandos ficam em skin_commands.
+
+Durante um combate (``set_combat_log``) a mesma caixa vira o registro do combate: com o chat fechado ela mostra as
+linhas da luta (coloridas por pedaço, com título, borda dourada e a conta da última rolagem embaixo) no lugar das
+mensagens, e se estica para a direita até ``right`` (a borda do menu de combate), aproveitando a largura da janela.
+Aberto com [T], volta a ser o chat de sempre, também sem passar de ``right``.
 """
 
 from dataclasses import dataclass
@@ -29,6 +34,22 @@ class ChatMessage:
     timestamp: float = 0.0
 
 
+Segment = Tuple[str, Tuple[int, int, int]]
+
+
+@dataclass
+class CombatLogView:
+    """O que a caixa do chat mostra no lugar das mensagens durante um combate."""
+    title: str
+    lines: List[List[Segment]]
+    detail: str = ""
+    right: Optional[int] = None   # até onde (x, em pixels) a caixa pode ir; None: a largura de sempre
+
+
+COMBAT_LINES = 9            # linhas do registro que cabem na caixa
+COMBAT_MIN_WIDTH = 240
+
+
 # Os comandos (execução, autocompletar e ajuda) vêm de um quadro único em skin_commands.
 from src.interactive.skin_commands import COMMAND_TREE, SkinCommandHandler, expects_args  # noqa: E402,F401
 
@@ -50,9 +71,6 @@ class ChatConsole:
         self.max_messages = max_messages
         self.glfw_window = glfw_window
 
-        self.loading_frame: int = 0
-        self.loading_timer: float = 0.0
-        self.SPINNER_FRAMES = ["|", "/", "-", "\\"]
 
         self.is_open: bool = False
         self.input_text: str = ""
@@ -77,6 +95,10 @@ class ChatConsole:
         self._tab_cycle_active: bool = False
         self._tab_base_text: str = ""
         self._ignore_chars: set = set()
+
+        self.combat_log: Optional[CombatLogView] = None
+        self.left = 16   # a margem esquerda da caixa (a tela de criação aberta empurra o chat para o lado dela)
+        self._combat_key: Any = None
 
         self.hud_dirty: bool = True
         self.hud_tex_id: Optional[int] = None
@@ -688,18 +710,9 @@ class ChatConsole:
             self.add_message(f"> {cmd}", (255, 255, 255))
 
     def update(self, dt: float) -> None:
-        """Atualiza temporizador do cursor, processa callbacks na thread principal e anima spinner."""
+        """Atualiza temporizador do cursor, processa callbacks na thread principal."""
         if self.command_handler is not None:
             self.command_handler.process_pending_callbacks()
-
-        # Atualiza animação do loading spinner se estiver importando roupa em background
-        is_importing = bool(self.command_handler and self.command_handler.busy_status)
-        if is_importing:
-            self.loading_timer += dt
-            if self.loading_timer >= 0.12:
-                self.loading_timer = 0.0
-                self.loading_frame = (self.loading_frame + 1) % len(self.SPINNER_FRAMES)
-                self.hud_dirty = True
 
         if self.is_open:
             self.cursor_timer += dt
@@ -707,6 +720,27 @@ class ChatConsole:
                 self.cursor_timer = 0.0
                 self.cursor_visible = not self.cursor_visible
                 self.hud_dirty = True
+
+    def set_combat_log(self, view: Optional[CombatLogView]) -> None:
+        """Liga (``view``) ou desliga (``None``) o modo registro de combate; só redesenha quando algo mudou."""
+        key = None if view is None else (view.title, tuple(tuple(line) for line in view.lines), view.detail,
+                                         view.right)
+        if key != self._combat_key:
+            self._combat_key = key
+            self.combat_log = view
+            self.hud_dirty = True
+
+    def set_left(self, left: int) -> None:
+        """Muda a margem esquerda da caixa (e redesenha só quando ela muda)."""
+        if left != self.left:
+            self.left, self.hud_dirty = left, True
+
+    def _box_width(self, width: int) -> int:
+        """A largura da caixa: a de sempre; no combate, da margem esquerda até a borda do menu de combate."""
+        if self.combat_log is None:
+            return min(740, width - self.left - 16)
+        right = self.combat_log.right if self.combat_log.right is not None else width - 16
+        return max(COMBAT_MIN_WIDTH, min(width - 32, int(right) - 16 - 6 - 10))
 
     def render(self, window_width: int, window_height: int) -> None:
         """Renderiza a caixa de chat e mensagens na tela usando OpenGL 3.3 Core."""
@@ -720,8 +754,7 @@ class ChatConsole:
             if self.is_open or (now - m.timestamp < 8.0)
         ]
 
-        is_importing = bool(self.command_handler and self.command_handler.busy_status)
-        if not self.is_open and not visible_messages and not is_importing:
+        if not self.is_open and not visible_messages and self.combat_log is None:
             return
 
         import OpenGL.GL as gl
@@ -796,6 +829,78 @@ class ChatConsole:
             lines.append(current)
         return lines
 
+    def _measure(self, draw: Any, text: str, font: Any = None) -> float:
+        try:
+            return draw.textlength(text, font=font or self.font)
+        except AttributeError:
+            return len(text) * 9
+
+    def _wrap_segments(self, draw: Any, segments: List[Segment], width: int, font: Any = None) -> List[List[Segment]]:
+        """Quebra uma linha colorida (pedaços de texto e cor) em linhas que cabem em ``width``, palavra por palavra."""
+        words: List[Segment] = []
+        for text, color in segments:
+            for i, word in enumerate(text.split(" ")):
+                if i > 0:
+                    words.append((" ", color))
+                if word:
+                    words.append((word, color))
+        lines: List[List[Segment]] = [[]]
+        used = 0.0
+        for word, color in words:
+            if word == " " and not lines[-1]:
+                continue
+            size = self._measure(draw, word, font)
+            if word != " " and used + size > width and lines[-1]:
+                while lines[-1] and lines[-1][-1][0] == " ":
+                    lines[-1].pop()
+                lines.append([("  ", color)])           # a continuação entra recuada, como no chat
+                used = self._measure(draw, "  ", font)
+            lines[-1].append((word, color))
+            used += size
+        return lines
+
+    def _draw_combat_log(self, img: Image.Image, width: int, height: int) -> None:
+        """A caixa do chat como registro do combate (com o chat fechado): um pergaminho como o das telas do jogo,
+        título em Georgia, as linhas em Segoe com as cores da luta passadas para tinta."""
+        from src.interactive import combat_style as st
+        view = self.combat_log
+        draw = ImageDraw.Draw(img)
+        body = st.font(14)
+        box_x = self.left
+        box_w = self._box_width(width)
+        line_height = 20
+        rows: List[List[Segment]] = []
+        for line in view.lines:
+            rows.extend(self._wrap_segments(draw, line, box_w - 32, body))
+        rows = rows[-COMBAT_LINES:]
+        title_h = 34
+        detail_h = 18 if view.detail else 0
+        hint_h = 28
+        total_h = 14 + title_h + len(rows) * line_height + detail_h + hint_h + 8
+        box_y = height - total_h - 14
+        left = box_x - 6
+        card, pad = st.card(box_w + 12, total_h, radius=12)
+        img.alpha_composite(card, (left - pad, box_y - pad))
+        draw = ImageDraw.Draw(img)
+        x0, x1 = box_x + 18, box_x + box_w - 14     # longe dos cantos de metal
+        y = box_y + 14
+        st.write(draw, (x0, y), st.fit(view.title, 16, box_w - 40, heading=True), 16, st.INK, heading=True)
+        y += 26
+        draw.line((x0, y, x1 - 10, y), fill=(*st.LINE, 255))
+        st.diamond(draw, x1 - 4, y, 3)
+        y += 8
+        for row in rows:
+            x = float(x0)
+            for text, color in row:
+                x += st.write(draw, (x, y), text, 14, st.ink(color))
+            y += line_height
+        if view.detail:
+            st.write(draw, (x0, y + 2), st.fit(view.detail, 11, x1 - x0), 11, st.MUTED)
+            y += detail_h
+        y += 4
+        st.badge(draw, x0, y, "T", True, size=18)
+        st.write(draw, (x0 + 25, y + 3), "abre o chat durante o combate", 11, st.MUTED)
+
     def _generate_hud_image(
         self,
         width: int,
@@ -806,9 +911,13 @@ class ChatConsole:
         img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # Dimensões da caixa de chat (canto inferior esquerdo)
-        box_x = 16
-        box_w = min(740, width - 32)
+        if self.combat_log is not None and not self.is_open:
+            self._draw_combat_log(img, width, height)
+            return img
+
+        # Dimensões da caixa de chat (canto inferior esquerdo; no combate, até a borda do menu de combate)
+        box_x = self.left
+        box_w = self._box_width(width)
         line_height = 20
         max_lines = 8
         # Each message takes as many lines as it has (and its long lines wrap): the newest lines show.
@@ -941,36 +1050,6 @@ class ChatConsole:
         else:
             hint_text = "[T] Abrir Chat / Comandos | [/] Digitar Comando"
             draw.text((box_x, box_y + hist_h + 2), hint_text, font=self.font, fill=(160, 160, 170, 160))
-
-        # Badge animada de Loading / Importando em segundo plano (canto superior direito)
-        if self.command_handler and self.command_handler.busy_status:
-            spinner = self.SPINNER_FRAMES[self.loading_frame % len(self.SPINNER_FRAMES)]
-            status_text = self.command_handler.busy_status
-            badge_text = f"[ {spinner} ] {status_text}"
-
-            try:
-                badge_w = int(draw.textlength(badge_text, font=self.font)) + 24
-            except AttributeError:
-                badge_w = len(badge_text) * 10 + 24
-            badge_h = 32
-            badge_x = width - badge_w - 20
-            badge_y = 20
-
-            # Fundo translúcido estilizado com borda neon ciano
-            draw.rounded_rectangle(
-                [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
-                radius=6,
-                fill=(12, 22, 34, 230),
-                outline=(85, 255, 255, 240),
-                width=2,
-            )
-            # Texto e spinner em ciano neon brilhante
-            draw.text(
-                (badge_x + 12, badge_y + 7),
-                badge_text,
-                font=self.font,
-                fill=(85, 255, 255, 255),
-            )
 
         return img
 

@@ -9,6 +9,7 @@ from typing import Protocol
 import numpy as np
 
 from src.world import BlockType
+from src.world.block import is_solid
 
 
 class VoxelLookup(Protocol):
@@ -26,7 +27,8 @@ class VoxelCollisionConfig:
     height: float = 0.98
     gravity: float = -24.0
     max_fall_speed: float = 32.0
-    step_height: float = 1.02
+    # Sem subida automática: andar contra um bloco para o personagem (para subir, salta-se)
+    step_height: float = 0.0
     skin: float = 0.001
     world_floor_y: int = -64
 
@@ -82,7 +84,7 @@ class VoxelCollisionController:
             block = BlockType(self.provider.get_block_at(x, y, z))
         except (TypeError, ValueError):
             return False
-        return block not in (BlockType.AIR, BlockType.WATER)
+        return is_solid(block)
 
     def _candidate_ranges(
         self,
@@ -216,7 +218,7 @@ class VoxelCollisionController:
         axis: int,
         grounded: bool,
     ) -> tuple[np.ndarray, bool, bool]:
-        """Move em um único eixo sem atravessar voxels, permitindo degraus."""
+        """Move em um único eixo sem atravessar voxels (com ``step_height`` > 0, sobe degraus)."""
         if abs(delta) <= self._EPSILON:
             return position, False, grounded
 
@@ -300,8 +302,13 @@ class VoxelCollisionController:
         horizontal_delta: np.ndarray,
         dt: float,
         vertical_velocity: float,
+        climbing: bool = False,
     ) -> CollisionResult:
-        """Aplica movimento, colisão horizontal e gravidade em um frame."""
+        """Aplica movimento, colisão horizontal e gravidade em um frame.
+
+        ``climbing``: o personagem está numa escada de mão; a gravidade não age e ``vertical_velocity`` é a
+        velocidade de subida (positiva) ou descida (negativa) escolhida por quem chama.
+        """
         if dt < 0.0 or not math.isfinite(float(dt)):
             raise ValueError("dt deve ser finito e não negativo.")
 
@@ -332,7 +339,8 @@ class VoxelCollisionController:
         )
 
         vy = float(vertical_velocity)
-        vy += self.config.gravity * float(dt)
+        if not climbing:
+            vy += self.config.gravity * float(dt)
         vy = max(vy, -self.config.max_fall_speed)
 
         vertical_delta = vy * float(dt)
@@ -371,8 +379,7 @@ class VoxelCollisionController:
                 grounded = True
                 grounded_block = self._has_support(pos)
             elif vy > 0.0:
-                # Não há salto hoje, mas a resolução evita atravessar tetos se a
-                # movimentação vertical for usada futuramente.
+                # Salto ou escada contra o teto: encosta a cabeça e zera a subida.
                 ceiling_y = min(by for _, by, _ in vertical_collisions)
                 pos[1] = float(ceiling_y) - self.config.height
                 vy = 0.0

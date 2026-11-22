@@ -620,3 +620,26 @@ def test_camera_foreground_not_clipped_by_near_plane():
     # No espaço de visualização OpenGL, a câmera olha para -Z.
     # Pontos à frente da câmera devem ter Z negativo e magnitude > near.
     assert view_pos[2] < -camera.near
+
+
+def test_perspective_camera_follows_the_isocraft_defaults_and_tilts_within_limits():
+    import math
+    from src.camera.camera import IsometricCamera
+    camera = IsometricCamera(ortho_size=4.5)
+    camera.perspective = True
+    camera.pitch = math.radians(30.0)
+    # o FOV é fixo em 18°: o zoom muda a distância, e a meia-altura visível no foco continua sendo o ortho_size
+    assert math.isclose(camera.eye_distance * math.tan(math.radians(9.0)), 4.5, rel_tol=1e-6)
+    for _ in range(30):
+        camera.handle_key(266, 1)            # Page Up
+    assert math.isclose(camera.pitch_degrees, 75.0, abs_tol=1e-6)
+    for _ in range(30):
+        camera.handle_key(267, 1)            # Page Down
+    assert math.isclose(camera.pitch_degrees, 15.0, abs_tol=1e-6)
+
+
+def test_page_keys_do_not_tilt_the_orthographic_camera():
+    from src.camera.camera import IsometricCamera
+    camera = IsometricCamera()
+    before = camera.pitch
+    assert camera.handle_key(266, 1) is False and camera.pitch == before

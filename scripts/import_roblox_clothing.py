@@ -361,8 +361,9 @@ if __name__ == "__main__":
         process_and_import(sys.argv[1])
     else:
         # Importa as duas jaquetas baixadas por padrão
-        p1 = r"C:\Users\Henrique\Downloads\92028318196252.rbxm"
-        p2 = r"C:\Users\Henrique\Downloads\101906182070448.rbxm"
+        downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+        p1 = os.path.join(downloads, "92028318196252.rbxm")
+        p2 = os.path.join(downloads, "101906182070448.rbxm")
         if os.path.exists(p1):
             process_and_import(p1)
         if os.path.exists(p2):

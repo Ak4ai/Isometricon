@@ -11,7 +11,7 @@
 
 **Um motor gráfico 3D isométrico baseado em blocos (Voxel-based Virtual Tabletop Engine) para mesas de RPG tático.**
 
-[📖 GitHub Wiki](https://github.com/Ak4ai/Isometricon/wiki) • [🏛️ Arquitetura A](docs/ARCHITECTURE.md) • [🟦 Arquitetura B](docs/EQUIPE_B_ARCHITECTURE.md) • [🎨 Shaders](docs/SHADERS.md) • [🔗 Integração](docs/INTEGRATION_SPEC.md) • [📋 Proposta](proposta.md)
+[📖 GitHub Wiki](https://github.com/Ak4ai/Isometricon/wiki) • [🏛️ Arquitetura A](docs/ARCHITECTURE.md) • [🟦 Arquitetura B](docs/EQUIPE_B_ARCHITECTURE.md) • [🎨 Shaders](docs/SHADERS.md) • [🔗 Integração](docs/INTEGRATION_SPEC.md) • [📋 Requisitos](docs/SRS.md) • [📋 Proposta](proposta.md)
 
 </div>
 
@@ -78,7 +78,7 @@ Isometricon/
 │   ├── test_rendering.py      # 🟩 Testes de renderização
 │   ├── test_version.py        # 🟩 Testes de versão
 │   └── test_interaction.py    # 🟦 Testes do motor interativo (Equipe B)
-├── proposta.md                # Proposta acadêmica original
+├── docs/wiki/Proposta-do-Projeto.md  # Proposta acadêmica original
 ├── CONTRIBUTING.md            # Guia de contribuição
 ├── LICENSE
 └── README.md
@@ -209,6 +209,9 @@ gantt
 
 > 💡 **GPU Dedicada:** O programa detecta e usa automaticamente sua GPU NVIDIA/AMD dedicada via driver hints (NVIDIA Optimus / AMD PowerXpress).
 
+O jogo abre no menu de boas-vindas: crie um mundo por nome e seed, continue um mundo salvo, configure controles ou consulte os créditos. Durante a partida, **ESC** abre a pausa. Veja [Menus e mundos](docs/MENUS.md) para os dados salvos e as opções disponíveis.
+
+Os modos de diagnóstico continuam acessíveis com `python src/main.py --terrain` e `python src/main.py --char`.
 ### 🗺️ Editor de mapa/objetos
 
 O modo `--map-editor` abre uma plataforma com shader próprio para construir
@@ -257,7 +260,7 @@ botões clicáveis para as ferramentas e ações principais. Detalhes em
 | Toggle grid | `G` *(Equipe B)* |
 | Selecionar bloco | `Clique esquerdo` *(Equipe B)* |
 | Mover miniatura | `Clique no destino` *(Equipe B)* |
-| Sair | `ESC` |
+| Pausar / retomar | `ESC` |
 
 ### 🧪 Executando os Testes Unitários
 ```bash

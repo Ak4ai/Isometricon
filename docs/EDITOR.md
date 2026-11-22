@@ -126,15 +126,25 @@ python src/main.py --terrain --map=saves/mapa.json
 python src/main.py --terrain --object=assets/objects/casa_exemplo.json
 ```
 
-No mundo procedural: `P` ou o botão **Colocar** do HUD ativa/desativa a
-colocação, `F3` troca o objeto, `N` escolhe o nome da próxima colocação,
-`R` gira, `Esc` cancela, clique esquerdo coloca no topo do bloco, `V` ou o botão
-**Selecionar** seleciona e `Delete` remove.
-Ao entrar em uma casa, o cutaway deixa telhado/paredes acima dos pés do token
-translúcidos, mantendo o personagem visível — o mesmo comportamento do modo
-subterrâneo. A persistência é por seed:
-`saves/mundos/mundo_<seed>.json`. Se o arquivo estiver corrompido, o mundo abre
-sem objetos e mostra o aviso no HUD.
+No mundo procedural os objetos entram pelo **painel de construções**, o mesmo dos
+`.schem` (ver `src/interactive/construction_panel.py`). Ele fica escondido até
+rodar `/schem` no chat (ou abrir com `--object=...`):
+
+- a lista (`F4` ou o botão **Construção**; `F3` pega a próxima) mistura os `.schem`
+  de `assets/schematics/`, a vitrine `formas` e os objetos JSON do editor;
+- o holograma segue o mouse no topo do terreno (caixa verde se cabe, vermelha se
+  não) e o clique esquerdo fixa; as setas e `Shift`+`↑`/`↓` ajustam bloco a bloco;
+- `R` gira (portas, escadas e baús giram junto), `V` ou **Selecionar** escolhe uma
+  construção já colocada, `Delete` a remove, `N` dá nome, `Esc` fecha o painel.
+
+Um objeto do editor vira uma construção como um `.schem`: tem colisão, entra na
+revelação de cômodo e o terreno da caixa dele é cortado ao fixar. As cores dos
+materiais vão junto; a textura de cada material é a do Minecraft com o mesmo nome.
+
+As construções colocadas são salvas: no save do mundo (aberto pelo menu) ou, no
+`--terrain` direto, em `saves/mundos/mundo_<seed>.json` (o arquivo antigo dos
+objetos é lido e convertido). Uma construção cujo arquivo sumiu é pulada com um
+aviso no chat.
 
 Detalhes de requisitos em
 [`SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](SRS-INCREMENTO-MUNDO-PROCEDURAL.md).
@@ -177,7 +187,7 @@ tabuleiro gira com `Q/E`.
 ```bash
 pytest -q tests/test_editor_voxel_object.py tests/test_editor_mesher.py \
          tests/test_editor_map_editor.py tests/test_editor_map_project.py \
-         tests/test_editor_map_world.py tests/test_editor_world_objects.py
+         tests/test_editor_map_world.py tests/test_construction_panel.py
 ```
 
 Cobrem: paleta e materiais, get/set, redimensionamento, rotação, colagem,

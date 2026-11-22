@@ -16,11 +16,11 @@ uniform mat4 u_Model;
 uniform mat4 u_View;
 uniform mat4 u_Projection;
 uniform bool u_Skinned;    // the mesh is in its bind pose and u_Bones poses it
-uniform mat4 u_Bones[24];
+uniform mat4 u_Bones[64];   // 64: os modelos .glb têm esqueletos maiores que o do personagem montado
 
 out vec3 v_FragPos;
 out vec3 v_Normal;
-out vec2 v_TexCoord;
+centroid out vec2 v_TexCoord;  // centroid: com MSAA, a borda do bloco não lê o ladrilho vizinho do atlas
 out vec3 v_Color;
 out vec3 v_BindPos;        // where the vertex is on the unposed body (patterns that stay on the skin)
 

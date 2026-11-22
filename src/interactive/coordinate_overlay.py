@@ -1,4 +1,4 @@
-"""HUD de coordenadas em segmentos, independente de fontes externas."""
+"""HUD de coordenadas: com a fonte do Minecraft do jogador, no estilo do jogo; sem ela, em segmentos (reserva)."""
 
 from __future__ import annotations
 
@@ -57,10 +57,26 @@ def _glyph_vertices(char: str, x: float, y: float, scale: float) -> list[tuple[f
     return vertices
 
 
+def coordinate_text(position) -> str:
+    """O texto das coordenadas: ``X: 0.5  Y: 13.0  Z: 0.5``."""
+    return f"X: {position[0]:.1f}  Y: {position[1]:.1f}  Z: {position[2]:.1f}"
+
+
 class CoordinateOverlayRenderer:
     """Desenha a posição do token no canto superior esquerdo da janela."""
 
+    MARGIN = 12      # pixels da borda da janela
+    SCALE = 2        # cada pixel da fonte do jogo vira 2x2 (a escala de interface 2 do Minecraft)
+
     def __init__(self) -> None:
+        self._font_quad = None
+        self._text = None
+        from src.rendering.mc_font import default_font
+        self.font = default_font()
+        if self.font is not None:
+            from src.rendering.hud_quad import HudQuad
+            self._font_quad = HudQuad()
+            return
         self.shader = Shader(
             os.path.join(PROJECT_ROOT, "assets", "shaders", "coordinate_overlay.vert"),
             os.path.join(PROJECT_ROOT, "assets", "shaders", "coordinate_overlay.frag"),
@@ -89,6 +105,13 @@ class CoordinateOverlayRenderer:
         return np.asarray(vertices, dtype=np.float32).reshape(-1, 2)
 
     def render(self, viewport_width: int, viewport_height: int, position: np.ndarray) -> None:
+        if self._font_quad is not None:
+            text = coordinate_text(position)
+            if text != self._text:   # a imagem só é refeita quando o texto muda
+                self._font_quad.set_image(self.font.render(text, scale=self.SCALE))
+                self._text = text
+            self._font_quad.draw(self.MARGIN, self.MARGIN, viewport_width, viewport_height)
+            return
         vertices = self._build_vertices(position)
         self.vertex_count = len(vertices)
         if self.vertex_count == 0:
@@ -109,6 +132,10 @@ class CoordinateOverlayRenderer:
         gl.glEnable(gl.GL_DEPTH_TEST)
 
     def delete(self) -> None:
+        if self._font_quad is not None:
+            self._font_quad.delete()
+            self._font_quad = None
+            return
         if self.vao:
             gl.glDeleteVertexArrays(1, [self.vao])
             gl.glDeleteBuffers(1, [self.vbo])

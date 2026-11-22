@@ -208,6 +208,13 @@ class Window:
         """Processa eventos da fila do sistema operacional."""
         glfw.poll_events()
 
+    def set_vsync(self, enabled: bool) -> None:
+        """Atualiza o intervalo somente quando a preferência muda."""
+        enabled = bool(enabled)
+        if enabled != self.vsync:
+            glfw.swap_interval(1 if enabled else 0)
+            self.vsync = enabled
+
     def swap_buffers(self) -> None:
         """Troca os buffers frontal e traseiro (Double Buffering)."""
         glfw.swap_buffers(self._window)
