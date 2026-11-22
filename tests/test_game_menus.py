@@ -226,3 +226,11 @@ def test_gpu_menu_updates_only_changed_controls_and_keeps_texture_correct(tmp_pa
     menus.go('create')
     menus.render(1280,720)
     assert menus.quad.uploads[-1] is None
+
+
+def test_welcome_has_editor_entry_and_action(tmp_path):
+    menus = GameMenus('test', Preferences(tmp_path/'prefs.json'), WorldLibrary(tmp_path/'worlds'), create_gl=False)
+    menus.render(1320, 876)
+    assert 'editor' in {action for _, action in menus.hits}
+    menus.activate('editor')
+    assert menus.result == ('editor', None)

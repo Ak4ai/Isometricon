@@ -211,7 +211,9 @@ gantt
 
 O jogo abre no menu de boas-vindas: crie um mundo por nome e seed, continue um mundo salvo, configure controles ou consulte os créditos. Durante a partida, **ESC** abre a pausa. Veja [Menus e mundos](docs/MENUS.md) para os dados salvos e as opções disponíveis.
 
-Os modos de diagnóstico continuam acessíveis com `python src/main.py --terrain` e `python src/main.py --char`.
+O menu inicial também tem o botão **Editor de mapa**, além dos modos de diagnóstico
+`--terrain` e `--char`.
+
 ### 🗺️ Editor de mapa/objetos
 
 O modo `--map-editor` abre uma plataforma com shader próprio para construir
@@ -230,13 +232,21 @@ O mesmo objeto também pode ser colocado **dentro do mundo procedural infinito**
 python src/main.py --terrain --object=assets/objects/casa_exemplo.json
 ```
 
-Dentro do `--terrain`: `P` ou o botão **Colocar** do HUD ativa a colocação,
-`F3` troca o objeto, `N` escolhe o nome, `R` gira, `Esc` cancela, clique esquerdo
-confirma no topo de um bloco, `V` ou o botão **Selecionar** seleciona, e
-`Delete` remove. Os objetos são salvos por seed em
-`saves/mundos/mundo_<seed>.json` e recarregados ao abrir a mesma seed. Ao entrar
-em uma casa, as paredes/teto acima dos pés do token ficam translúcidos para o
-personagem continuar visível.
+No `--terrain`, as construções entram pelo **painel de construções** do `/schem`
+(ou o `--object=...` já abre o painel com o objeto):
+
+```text
+/schem
+```
+
+Depois: `P` coloca, `F4` abre a lista, `F3` pega a próxima, `R` gira, `N` nomeia,
+`V` seleciona, `Delete` remove e `Esc` fecha. O painel mistura os `.schem` de
+`assets/schematics/`, a vitrine de formas e os objetos JSON do editor.
+
+As construções são salvas no mundo do menu ou, no `--terrain` direto, em
+`saves/mundos/mundo_<seed>.json` (o formato antigo é lido e convertido). Ao
+entrar em uma casa, a **revelação de cômodo** do jogo ilumina o espaço fechado e
+o corredor da câmera abre onde algo tapa o personagem.
 
 Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
 a paleta clicável ou `C` escolhe a cor, `X` escolhe a textura, `H` digita cor

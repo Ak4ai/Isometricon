@@ -188,6 +188,8 @@ class GameMenus:
                 self.hits = []
             elif action == 'discard':
                 self.go(self.return_page)
+            elif action == 'editor':
+                self.result = ('editor', None)
             elif action == 'exit':
                 self.result = ('exit', None)
             elif action == 'save_exit':
@@ -441,7 +443,7 @@ class GameMenus:
             thumbnail = action.startswith('load:')
             decorated = self.page == 'welcome' or danger or action == 'game'
             inset = 100 if thumbnail else 50 if decorated else 16
-            kind = 'create' if action=='create_world' else action.split(':')[0]
+            kind = 'create' if action in ('create_world', 'editor') else action.split(':')[0]
             if decorated:
                 icon(draw,kind,bx+16,by+(height-22)//2,22,color)
             if thumbnail:
@@ -525,10 +527,11 @@ class GameMenus:
             text((x,200),'A aventura espera.',30,INK,True)
             button(278,'Nova aventura','create','Toda história começa com uma semente',True)
             button(384,'Continuar aventura','worlds','O mundo aguarda seu retorno')
-            draw.line((x,500,end,500),fill=LINE)
-            button(530,'Configurações','settings')
-            button(598,'Sobre','credits',bx=x,ex=x+207)
-            button(598,'Sair','exit',bx=x+225,ex=end)
+            button(474,'Editor de mapa','editor')
+            draw.line((x,540,end,540),fill=LINE)
+            button(556,'Configurações','settings')
+            button(624,'Sobre','credits',bx=x,ex=x+207)
+            button(624,'Sair','exit',bx=x+225,ex=end)
             text((x,711),'Explore. Crie. Volte para contar.',14,MUTED)
             text((96,742),'Versão '+self.version,14,'#D3D9C6')
         else:

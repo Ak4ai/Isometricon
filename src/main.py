@@ -414,9 +414,15 @@ def main() -> None:
             shader.delete()
             window.close()
             return
-        selected_world = menus.result[1]
-        custom_seed = selected_world['seed']
-        terrain_demo, char_demo = True, False
+        if menus.result[0] == 'editor':
+            selected_world = None
+            editor_mode = True
+            terrain_demo, char_demo = False, False
+            custom_seed = None
+        else:
+            selected_world = menus.result[1]
+            custom_seed = selected_world['seed']
+            terrain_demo, char_demo = True, False
     menus.go('game')
     menus.result = None
     if "--no-vsync" in sys.argv:  # medir o custo real do quadro, sem esperar a tela

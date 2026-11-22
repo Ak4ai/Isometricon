@@ -66,6 +66,7 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-060** | O sistema deve renderizar os objetos com o mesmo shader iluminado/texturizado do terreno, independentemente do streaming dos chunks. | Essencial | Inspeção, teste |
 | **FR-061** | Quando o token estiver dentro de um objeto ou de um mapa carregado, o sistema deve tornar translúcidas as partes acima dos pés do token, mantendo o personagem visível. | Desejável | Demonstração, teste |
 | **FR-062** | O sistema deve permitir nomear o objeto antes/depois da criação e usar esse nome no arquivo exportado, preservando acentos no nome interno e gerando um nome de arquivo seguro. | Desejável | Teste, demonstração |
+| **FR-063** | O menu inicial deve oferecer uma opção que abra o editor de mapa sem criar um mundo salvo. | Essencial | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -114,8 +115,8 @@ Funcionalidade: Colocar objeto no mundo procedural
    mover célula a célula fica para um próximo incremento.
 6. A colocação é limitada a superfícies atingidas pelo raycast em chunks
    carregados.
-7. O modo é ativado por **`P` no teclado ou pelo botão “Colocar” no HUD**;
-   o HUD também expõe Selecionar, Objeto, Girar, Remover e Sair.
+7. O painel de construções é aberto por **`/schem`** ou por `--object=...`;
+   dentro dele, `P`/botão Colocar, `V`, `F3`/`F4`, `R`, `N`, `Delete` e `Esc`.
 8. Ao entrar em um objeto/mapa, vale a revelação de cômodo do modo terreno
    (a mesma das construções `/schem`): o espaço fechado se revela e o resto
    escurece, e o corredor da câmera abre onde algo tapa o personagem.
@@ -129,18 +130,19 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-051 | FR-041, FR-042, FR-045 | `docs/EDITOR.md`, `src/editor/map_project.py`, `src/interactive/construction_panel.py` |
 | FR-052 | FR-035, FR-043 | `ConstructionPanel`, `--object` |
 | FR-053 | FR-012, FR-048 | `ConstructionPanel.update_cursor`, HUD |
-| FR-054 | FR-012, FR-016 | `WorldObjectProvider`, validação de células |
-| FR-055 | FR-042 | `ConstructionPanel.handle_key` |
-| FR-056 | FR-042, FR-047 | `WorldObjectStore`, `PlacedObject` |
-| FR-057 | FR-045, FR-007 | `WorldObjectStore.load_seed/save` |
-| FR-058 | FR-016, FR-012 | `WorldObjectProvider`, `player_token.update` |
+| FR-054 | FR-012, FR-016 | `SchematicTool.fits`, `StructureLayer` |
+| FR-055 | FR-042 | `ConstructionPanel.handle_key`, `SchematicTool.rotate` |
+| FR-056 | FR-042, FR-047 | `SchematicTool.confirm`, `StructureLayer` |
+| FR-057 | FR-045, FR-007 | `SeedStore`, `structure_save`, save do mundo |
+| FR-058 | FR-016, FR-012 | `SchematicTool.lookup`, `player_token.update` |
 | FR-059 | FR-047 | seleção/remoção no `ConstructionPanel` |
-| FR-060 | FR-010, FR-011, FR-007 | `WorldObjectRenderer` |
-| FR-061 | FR-011, FR-058 | `WorldObjectRenderer`, `MapWorld.render` |
+| FR-060 | FR-010, FR-011, FR-007 | `StructureMeshes`, `StructureMesher` |
+| FR-061 | FR-011, FR-058 | `RoomRevealRenderer`, `world.room_reveal` |
 | FR-062 | FR-041, FR-043 | `MapEditor` (`N`), `ConstructionPanel` (`N`), `object_names.py` |
+| FR-063 | FR-035, FR-003 | `GameMenus`, `main.py` |
 | PR-011 | FR-056 | medição manual |
-| UR-008 | FR-048 | `WorldObjectHud` |
-| DR-008 | FR-041 | JSON `isometricon-world-objects` |
+| UR-008 | FR-048 | `ConstructionPanel` |
+| DR-008 | FR-041 | JSON `isometricon-structures` (v2; lê o formato antigo) |
 | CR-013 | CR-010, CR-011 | mesmo `VoxelObject`/OpenGL |
 | AR-013 | FR-016, FR-058 | testes de colisão |
 | AR-014 | FR-057 | round-trip de objetos |
@@ -151,5 +153,6 @@ Funcionalidade: Colocar objeto no mundo procedural
 
 - `tests/test_construction_panel.py, tests/test_structure_save.py` — persistência, colisão do provider,
   colocação, remoção, arquivo inválido, sobreposição com token e atalhos.
+- `tests/test_game_menus.py` — opção **Editor de mapa** no menu.
 - Teste manual: `--terrain --object=assets/objects/casa_exemplo.json`.
 - Regressão: fluxo de mapa independente (`--map-editor` e `--terrain --map`).

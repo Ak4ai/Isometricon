@@ -63,6 +63,15 @@ DRAG_DISTANCE = 6.0
 MAX_GRID_SPACING = 8
 
 
+def _display_path(path: str) -> str:
+    """Caminho curto e legível para o HUD, relativo à raiz do projeto."""
+    try:
+        relative = os.path.relpath(os.path.abspath(path), PROJECT_ROOT)
+    except ValueError:
+        relative = os.path.abspath(path)
+    return relative.replace(os.sep, "/")
+
+
 class _ObjectProvider:
     """VoxelLookup do projeto inteiro (base + objetos colocados)."""
 
@@ -821,7 +830,7 @@ class MapEditor:
             name = obj.name.strip() or "objeto"
             path = obj.save(os.path.join(self.export_dir, f"{slugify(name)}.json"))
             self.export_path = path
-            self.status = f"Objeto exportado: {os.path.basename(path)}."
+            self.status = f"Objeto exportado: {_display_path(path)}."
             return path
         except Exception as exc:
             self.status = f"Falha ao exportar: {exc}"
@@ -830,7 +839,7 @@ class MapEditor:
     def save_map(self) -> str | None:
         try:
             path = self.project.save(self.save_path)
-            self.status = f"Mapa salvo: {os.path.basename(path)} ({len(self.objects)} objetos)."
+            self.status = f"Mapa salvo: {_display_path(path)} ({len(self.objects)} objetos)."
             return path
         except Exception as exc:
             self.status = f"Falha ao salvar: {exc}"
@@ -844,7 +853,7 @@ class MapEditor:
             self.undo_stack.clear()
             self.redo_stack.clear()
             self._mesh_dirty = True
-            self._after_change(f"Mapa carregado: {os.path.basename(self.save_path)}.")
+            self._after_change(f"Mapa carregado: {_display_path(self.save_path)}.")
             if self.camera is not None:
                 self.bind_camera(self.camera)
             return True

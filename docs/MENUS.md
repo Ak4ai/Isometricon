@@ -2,7 +2,7 @@
 
 Execute `python src/main.py` para abrir o menu inicial. `--menu` também força o menu; `--terrain`, `--char` e as capturas com `--frames` mantêm os modos de diagnóstico existentes.
 
-- Boas-vindas: painel horizontal para desktop, com criar mundo, continuar, configurações, créditos e sair.
+- Boas-vindas: painel horizontal para desktop, com criar mundo, continuar, editor de mapa, configurações, créditos e sair. O editor abre no modo `--map-editor`, sem criar um mundo salvo.
 - Lista de mundos: botão Excluir por mundo, com confirmação e opção de cancelar; exclui somente o save escolhido.
 - Criação: nome e seed numérica ou textual. Seed vazia gera um número aleatório; texto usa SHA-256, de forma estável entre execuções.
 - Opções do terreno na criação (0 a 100%): cavernas (0 desliga), planície (100 é chão liso), água (a parte do chão coberta; o nível do mar sai das alturas da própria seed), vegetação (50 é a de sempre) e tamanho do relevo. Ficam em `world["terrain"]` (`src/world/terrain_options.py`); mundos sem elas usam o gerador de sempre. Clique ou arraste a trilha; ← → andam de 5 em 5.

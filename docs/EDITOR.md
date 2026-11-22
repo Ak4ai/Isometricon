@@ -11,6 +11,8 @@ renderizada por shader e permite exportar o objeto e carimbá-lo em outro mapa.
 
 ## ▶️ Como abrir
 
+O editor também pode ser aberto pelo botão **Editor de mapa** no menu inicial.
+
 ```bash
 # editor vazio (16×16×16)
 python src/main.py --map-editor
