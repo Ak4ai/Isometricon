@@ -258,9 +258,21 @@ selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objet
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso
 base, `F4` abre a biblioteca, `N` nomeia o objeto e `Ctrl+Z`/`Ctrl+Y`
 desfazem/refazem. O `F2` grava `saves/objetos/<nome>.json`. O painel tem
-botões clicáveis para as ferramentas e ações principais. Detalhes em
+botões clicáveis para as ferramentas e ações principais. `F10` (ou o botão
+**Menu**) pede confirmação para salvar o mapa e voltar ao menu; `Shift+F10` volta
+sem salvar. Assim o fluxo menu → editor → menu → nova aventura funciona na mesma
+execução, e o objeto exportado já aparece em `/schem` na aventura seguinte.
+Detalhes em
 [`docs/EDITOR.md`](docs/EDITOR.md) e
 [`docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md).
+
+### 🔤 Fontes
+
+A interface usa **Inter** no texto comum e **JetBrains Mono** em coordenadas,
+chat e rótulos técnicos. As duas fontes são empacotadas em `assets/fonts/` com
+licença OFL e carregadas por `src/core/fonts.py`; o editor e o painel de
+construções rasterizam suas HUDs em 2× para manter o texto nítido em telas
+Retina. Detalhes em [`assets/fonts/README.md`](assets/fonts/README.md).
 
 ### 🕹️ Controles
 

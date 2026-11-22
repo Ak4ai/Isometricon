@@ -176,6 +176,9 @@ class MapEditor:
         self.hex_mode = False
         self.hex_buffer = ""
         self.pending_shrink: tuple[tuple[int, int, int], int] | None = None
+        self.exit_pending = False
+        self.exit_requested = False
+        self.dirty = False
         self.undo_stack: list[MapProject] = []
         self.redo_stack: list[MapProject] = []
         self._mesh_dirty = True
@@ -273,6 +276,7 @@ class MapEditor:
     def _after_change(self, message: str) -> None:
         if message:
             self.status = message
+        self.dirty = True
         self._mesh_dirty = True
         self._cursor_preview_dirty = True
         self._update_hud()
@@ -790,6 +794,13 @@ class MapEditor:
             self.status = f"Grade: {'ligada' if self.show_grid else 'desligada'}."
         elif action == "base":
             self.fill_base()
+        elif action == "menu":
+            if self.exit_pending:
+                if self.save_map() is not None:
+                    self.exit_requested = True
+            else:
+                self.exit_pending = True
+                self.status = "F10/Enter salva e volta; Shift+F10 sai sem salvar; Esc cancela."
         elif action == "tab:colors":
             self.active_tab = "colors"
         elif action == "tab:textures":
@@ -877,6 +888,16 @@ class MapEditor:
                 self.status = f"Hexadecimal: #{self.hex_buffer}"
                 return True
             return False
+        if key == glfw.KEY_F10:
+            if self.exit_pending:
+                if shift:
+                    self.exit_requested = True
+                elif self.save_map() is not None:
+                    self.exit_requested = True
+            else:
+                self.exit_pending = True
+                self.status = "F10/Enter salva e volta; Shift+F10 sai sem salvar; Esc cancela."
+            return True
         if self.library_open:
             paths = self._library_paths()
             if key == glfw.KEY_F4 or key == glfw.KEY_ESCAPE:
@@ -939,6 +960,18 @@ class MapEditor:
                 elif self.name_buffer:
                     self.name_buffer = self.name_buffer[:-1]
                 return True
+            return True
+        if self.exit_pending and key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER):
+            if self.save_map() is not None:
+                self.exit_requested = True
+            return True
+        if key == glfw.KEY_ESCAPE:
+            if self.exit_pending:
+                self.exit_pending = False
+                self.status = "Saída cancelada."
+            else:
+                self.exit_pending = True
+                self.status = "F10/Enter salva e volta; Shift+F10 sai sem salvar; Esc cancela."
             return True
         if control and key == glfw.KEY_Z:
             self.undo()
@@ -1083,6 +1116,7 @@ class MapEditor:
     def save_map(self) -> str | None:
         try:
             path = self.project.save(self.save_path)
+            self.dirty = False
             self.status = f"Mapa salvo: {_display_path(path)} ({len(self.objects)} objetos)."
             return path
         except Exception as exc:
@@ -1098,6 +1132,7 @@ class MapEditor:
             self.redo_stack.clear()
             self._mesh_dirty = True
             self._after_change(f"Mapa carregado: {_display_path(self.save_path)}.")
+            self.dirty = False
             if self.camera is not None:
                 self.bind_camera(self.camera)
             return True

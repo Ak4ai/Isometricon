@@ -5,7 +5,7 @@ renderizada por shader e permite exportar o objeto e carimbá-lo em outro mapa.
 É um modo **aditivo**: não altera `--terrain`, `--char` nem o editor de personagem.
 
 > **Estado:** implementação na branch `feat/voxel-editor`. Cobre `FR-035` a
-> `FR-048` (com biblioteca textual sem miniaturas e base plana em vez de terreno
+> `FR-073` (com biblioteca textual sem miniaturas e base plana em vez de terreno
 > procedural). `.vox` (`FR-049`) e geração procedural (`FR-050`) continuam fora
 > do escopo.
 
@@ -24,6 +24,18 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json
 # joga um mapa salvo no mundo isométrico (com colisão do token)
 python src/main.py --terrain --map=saves/mapa.json
 ```
+
+O botão **Editor de mapa** do menu abre o editor vazio. `F9` carrega um mapa
+salvo. Ao terminar:
+
+- `F2` exporta o objeto para `saves/objetos/<nome>.json`;
+- `F5` salva o mapa em `saves/mapa.json`;
+- `F10` ou o botão **Menu** pede confirmação, salva o mapa e volta ao menu;
+- `Shift+F10` volta sem salvar;
+- `Esc` abre a mesma confirmação.
+
+Depois de voltar, **Nova aventura** cria o mundo e `/schem` já lista o objeto
+exportado, sem fechar a aplicação.
 
 O modo também funciona com `--frames`/`--screenshot`, útil para capturas:
 
@@ -61,6 +73,9 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 | Abrir/fechar a lista da biblioteca | `F4` |
 | Salvar mapa | `F5` |
 | Carregar mapa | `F9` |
+| Voltar ao menu (salvando o mapa) | `F10` ou botão **Menu**, confirmar com `F10` |
+| Voltar ao menu sem salvar | `Shift+F10` |
+| Cancelar a saída | `Esc` |
 | Mover objeto selecionado | setas; `PageUp`/`PageDown` no Y |
 | Duplicar / excluir objeto | `Ctrl+D` / `Delete` |
 | Biblioteca: escolher / carimbar | `↑`/`↓` / `Enter` |

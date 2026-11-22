@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
+from src.core.fonts import ui_font
 from src.editor.color_wheel import wheel_image
+from src.rendering.scaled_draw import RENDER_SCALE, ScaledDraw
 from src.rendering.hud_quad import HudQuad
 
 PANEL_WIDTH = 470
@@ -26,7 +28,7 @@ TOOLS = (
 ACTIONS = (
     ("save", "Salvar"), ("load", "Abrir"), ("export", "Export"),
     ("library", "Objeto"), ("undo", "Undo"), ("redo", "Redo"),
-    ("grid", "Grade"), ("base", "Base"),
+    ("grid", "Grade"), ("base", "Base"), ("menu", "Menu"),
 )
 TABS = (("colors", "Cores"), ("textures", "Texturas"))
 MIN_UI_SCALE = 0.45
@@ -43,12 +45,7 @@ def fit_panel_scale(window_width: int, window_height: int,
     return max(MIN_UI_SCALE, min(1.0, available_w / panel_width, available_h / panel_height))
 
 
-_FONT_CANDIDATES = (
-    "consola.ttf", "consolas.ttf", "C:/Windows/Fonts/consola.ttf",
-    "segoeui.ttf", "arial.ttf",
-    "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "/System/Library/Fonts/Supplemental/Menlo.ttf",
-)
+RENDER_SCALE = 2  # mantido para os testes/leitores que importam daqui
 
 
 class EditorHud:
@@ -73,12 +70,7 @@ class EditorHud:
         self._panel_size = (float(PANEL_WIDTH), float(PANEL_HEIGHT))
 
     def _font(self, size: int) -> Any:
-        for candidate in _FONT_CANDIDATES:
-            try:
-                return ImageFont.truetype(candidate, size)
-            except Exception:
-                continue
-        return ImageFont.load_default()
+        return ui_font(size)
 
     def _button(self, draw, box, label: str, active: bool, font) -> None:
         x0, y0, x1, y1 = box
@@ -87,7 +79,7 @@ class EditorHud:
                                outline=(240, 205, 120, 255) if active else (80, 95, 115, 255), width=1)
         text_colour = (20, 24, 30, 255) if active else (210, 218, 228, 255)
         try:
-            width = draw.textbbox((0, 0), label, font=font)[2]
+            width = draw.textbbox((0, 0), label, font=font)[2] / RENDER_SCALE
         except Exception:
             width = len(label) * 6
         draw.text(((x0 + x1 - width) / 2, y0 + 5), label, font=font, fill=text_colour)
@@ -127,14 +119,14 @@ class EditorHud:
         if key == self._key:
             return
         self._key = key
-        image = Image.new("RGBA", (PANEL_WIDTH, PANEL_HEIGHT), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(image)
+        image = Image.new("RGBA", (PANEL_WIDTH * RENDER_SCALE, PANEL_HEIGHT * RENDER_SCALE), (0, 0, 0, 0))
+        draw = ScaledDraw(ImageDraw.Draw(image), RENDER_SCALE)
         draw.rounded_rectangle((0, 0, PANEL_WIDTH - 1, PANEL_HEIGHT - 1), radius=10,
                                fill=(13, 18, 26, 238), outline=(232, 186, 76, 255), width=2)
-        title_font = self._font(18)
-        body_font = self._font(14)
-        small_font = self._font(11)
-        button_font = self._font(11)
+        title_font = self._font(18 * RENDER_SCALE)
+        body_font = self._font(14 * RENDER_SCALE)
+        small_font = self._font(11 * RENDER_SCALE)
+        button_font = self._font(11 * RENDER_SCALE)
         draw.text((16, 12), title, font=title_font, fill=(240, 208, 120, 255))
         y = 42
         for text, colour in rows:
@@ -150,7 +142,7 @@ class EditorHud:
             self._buttons[key_id] = box
             self._button(draw, box, label, key_id == active_tool, button_font)
         for index, (key_id, label) in enumerate(ACTIONS):
-            box = (14 + index * 55, 198, 14 + index * 55 + 51, 224)
+            box = (14 + index * 50, 198, 14 + index * 50 + 46, 224)
             self._buttons[key_id] = box
             self._button(draw, box, label, False, button_font)
 
@@ -173,9 +165,9 @@ class EditorHud:
                 column, row = position % 8, position // 8
                 box = (16 + column * 52, 268 + row * 54, 16 + column * 52 + 48, 268 + row * 54 + 48)
                 self._texture_boxes[texture_id] = box
-                if thumb.size != (48, 48):
-                    thumb = thumb.resize((48, 48), Image.Resampling.NEAREST)
-                image.paste(thumb.convert("RGBA"), (box[0], box[1]))
+                if thumb.size != (48 * RENDER_SCALE, 48 * RENDER_SCALE):
+                    thumb = thumb.resize((48 * RENDER_SCALE, 48 * RENDER_SCALE), Image.Resampling.NEAREST)
+                image.paste(thumb.convert("RGBA"), (box[0] * RENDER_SCALE, box[1] * RENDER_SCALE))
                 active = texture_id == texture_index
                 draw.rounded_rectangle(box, radius=3,
                                        outline=(255, 235, 160, 255) if active else (45, 55, 68, 255),
@@ -206,8 +198,8 @@ class EditorHud:
                           fill=(190, 202, 218, 255))
         else:
             if swatch is not None:
-                wheel = wheel_image(WHEEL_SIZE)
-                image.alpha_composite(wheel, (WHEEL_BOX[0], WHEEL_BOX[1]))
+                wheel = wheel_image(WHEEL_SIZE * RENDER_SCALE)
+                image.alpha_composite(wheel, (WHEEL_BOX[0] * RENDER_SCALE, WHEEL_BOX[1] * RENDER_SCALE))
                 self._wheel_box = WHEEL_BOX
                 # Barra de valor: preta -> cor de matiz/saturação atual.
                 vx0, vy0, vx1, vy1 = VALUE_BOX
@@ -215,8 +207,9 @@ class EditorHud:
                 r, g, b = colorsys.hsv_to_rgb(hsv[0] % 1.0, max(0.0, min(1.0, hsv[1])), 1.0)
                 for x in range(vx0, vx1):
                     t = (x - vx0) / max(1, vx1 - vx0 - 1)
-                    draw.line((x, vy0, x, vy1), fill=(round(r * 255 * t), round(g * 255 * t),
-                                                      round(b * 255 * t), 255))
+                    draw.line((x, vy0, x, vy1), width=RENDER_SCALE,
+                              fill=(round(r * 255 * t), round(g * 255 * t),
+                                    round(b * 255 * t), 255))
                 self._value_box = VALUE_BOX
                 knob = vx0 + round((vx1 - vx0 - 1) * max(0.0, min(1.0, hsv[2])))
                 draw.rectangle((knob - 1, vy0 - 2, knob + 1, vy1 + 2), fill=(255, 255, 255, 255))
@@ -246,7 +239,7 @@ class EditorHud:
                   "F2 exportar  F3 objeto  F5 salvar  F9 carregar  Ctrl+Z desfazer",
                   font=small_font, fill=(150, 160, 175, 255))
         draw.text((16, 458),
-                  "Botão esq: aplicar  Alt+clique: conta-gotas  C/X: cor/textura  S/F: busca/favorito",
+                  "Botão esq: aplicar  Alt+clique: conta-gotas  F10: menu",
                   font=small_font, fill=(150, 160, 175, 255))
         self._image = image
         self._dirty = True

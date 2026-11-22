@@ -4,8 +4,9 @@ import copy
 import json
 import time
 from functools import lru_cache
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import glfw
+from src.core.fonts import ui_font
 from src.core.game_storage import ACTIONS, Preferences, WorldLibrary, seed_value
 from src.interactive.menu_style import atmosphere, icon, world_thumbnail, menu_base
 from src.interactive import settings_screen
@@ -23,13 +24,7 @@ LINE = '#CFC5AB'
 
 @lru_cache(maxsize=64)
 def font(size, heading=False):
-    candidates = ['georgia.ttf', 'DejaVuSerif.ttf'] if heading else ['segoeui.ttf', 'DejaVuSans.ttf']
-    for name in candidates:
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            pass
-    return ImageFont.load_default()
+    return ui_font(size, heading=heading)
 
 
 @lru_cache(maxsize=1024)
@@ -75,6 +70,7 @@ class GameMenus:
         self._raster_state = None
         self._rendered_pressed = None
         self._control_bounds = {}
+        self.construction_requested = False
         self._layout_hits = []
         self.scene_image = None
         self.scene_owner = None
@@ -190,6 +186,9 @@ class GameMenus:
                 self.go(self.return_page)
             elif action == 'editor':
                 self.result = ('editor', None)
+            elif action == 'constructions':
+                self.construction_requested = True
+                self.go('game')
             elif action == 'exit':
                 self.result = ('exit', None)
             elif action == 'save_exit':
@@ -542,6 +541,7 @@ class GameMenus:
             button(240, 'Voltar ao jogo', 'game', primary=True)
             button(306, 'Configurações', 'settings')
             button(372, 'Salvar e voltar ao menu', 'save_exit')
+            button(438, 'Construções', 'constructions')
             if self.world:
                 text((x, 485), self.world['name'], 24, heading=True)
                 text((x, 535), 'Seed: ' + str(self.world['seed']), 15, MUTED)

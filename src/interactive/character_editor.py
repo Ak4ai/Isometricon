@@ -1246,13 +1246,8 @@ class CharacterEditor:
 
     # ------------------------------------------------------------------ desenho
     def _font(self, size: int) -> Any:
-        from PIL import ImageFont
-        for name in ("segoeui.ttf", "C:/Windows/Fonts/segoeui.ttf", "arial.ttf", "DejaVuSans.ttf"):
-            try:
-                return ImageFont.truetype(name, size)
-            except Exception:
-                continue
-        return ImageFont.load_default()
+        from src.core.fonts import ui_font
+        return ui_font(size)
 
     def _picture(self, path: str, size: Tuple[int, int]) -> Any:
         """A imagem de um item, cortada ao centro e reduzida ao tamanho do quadro (com cache)."""

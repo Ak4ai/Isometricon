@@ -13,20 +13,16 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Optional, Tuple
 
 import glfw
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
+from src.core.fonts import ui_font
+from src.rendering.scaled_draw import RENDER_SCALE, ScaledDraw
 from src.world import BlockType
 
 PANEL_WIDTH = 440
 PANEL_HEIGHT = 220
 MARGIN = 16
 LIST_ROWS = 7
-_FONT_CANDIDATES = (
-    "consola.ttf", "consolas.ttf", "C:/Windows/Fonts/consola.ttf",
-    "segoeui.ttf", "arial.ttf",
-    "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "/System/Library/Fonts/Supplemental/Menlo.ttf",
-)
 ACTIONS = (
     ("place", "Colocar"),
     ("select", "Selecionar"),
@@ -39,12 +35,7 @@ HELP = "P/V modo  F3/F4 construção  R girar  N nome  Del remover  Esc sair"
 
 
 def _font(size: int):
-    for candidate in _FONT_CANDIDATES:
-        try:
-            return ImageFont.truetype(candidate, size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
+    return ui_font(size)
 
 
 class ConstructionPanel:
@@ -324,14 +315,14 @@ class ConstructionPanel:
         if key == self._key:
             return
         self._key = key
-        image = Image.new("RGBA", (PANEL_WIDTH, PANEL_HEIGHT), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(image)
+        image = Image.new("RGBA", (PANEL_WIDTH * RENDER_SCALE, PANEL_HEIGHT * RENDER_SCALE), (0, 0, 0, 0))
+        draw = ScaledDraw(ImageDraw.Draw(image), RENDER_SCALE)
         draw.rounded_rectangle((0, 0, PANEL_WIDTH - 1, PANEL_HEIGHT - 1), radius=10,
                                fill=(13, 18, 26, 238), outline=(232, 186, 76, 255), width=2)
-        draw.text((14, 10), "CONSTRUÇÕES — ISOMETRICON", font=_font(16), fill=(240, 208, 120, 255))
+        draw.text((14, 10), "CONSTRUÇÕES — ISOMETRICON", font=_font(16 * RENDER_SCALE), fill=(240, 208, 120, 255))
         y = 36
         for text, colour in lines:
-            draw.text((14, y), text, font=_font(13), fill=(*colour, 255))
+            draw.text((14, y), text, font=_font(13 * RENDER_SCALE), fill=(*colour, 255))
             y += 18
         active_action = "library" if self.list_open else self.mode
         for action, label in ACTIONS:
@@ -342,10 +333,10 @@ class ConstructionPanel:
                                    outline=(240, 205, 120, 255) if active else (80, 95, 115, 255), width=1)
             colour = (20, 24, 30, 255) if active else (210, 218, 228, 255)
             try:
-                width = draw.textbbox((0, 0), label, font=_font(10))[2]
+                width = draw.textbbox((0, 0), label, font=_font(10 * RENDER_SCALE))[2]
             except Exception:
                 width = len(label) * 6
-            draw.text((box[0] + (box[2] - box[0] - width) / 2, box[1] + 6), label, font=_font(10), fill=colour)
+            draw.text((box[0] + (box[2] - box[0] - width) / 2, box[1] + 6), label, font=_font(10 * RENDER_SCALE), fill=colour)
         self._image = image
         self._dirty = True
 

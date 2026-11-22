@@ -245,6 +245,131 @@ def print_system_info(version_info: VersionInfo) -> None:
     print("⌨️  [Q/E] Rotacionar | [G] Grid | [Mouse Wheel] Zoom | [Shift + Arrastar / MMB] Pan | [ESC] Pausar\n")
 
 
+def run_editor_session(window, shader, map_path: str | None = None,
+                       screenshot_path: str | None = None, max_frames: int | None = None) -> None:
+    """Abrir o editor numa sessão própria e devolver o controle ao menu.
+
+    O editor não deve encerrar a janela: ele libera suas malhas, HUD e câmera e
+    volta para o menu principal. A janela/contexto OpenGL continuam vivos.
+    """
+    from src.editor.map_editor import MapEditor
+
+    camera = IsometricCamera(target=vec3(8.0, 5.6, 8.0), ortho_size=12.0, near=0.1, far=400.0)
+    camera.board_rotation = 0
+    camera.current_rotation = 0.0
+    editor = MapEditor(camera=camera, map_path=map_path, create_gl=True)
+    pan = {"active": False, "last": None}
+    frame_index = 0
+    # Automação de conferência: o mesmo roteiro de --mouse/--keys usado no
+    # jogo, agora dentro da sessão do editor.
+    mouse_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--mouse=")), "")
+    mouse_steps = [step.split(",") for step in mouse_script.split(";") if step.strip()]
+    key_script = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--keys=")), "")
+    key_steps = {}
+    for step in key_script.split(";"):
+        frame_text, _, key_name = step.strip().partition(":")
+        key_code = getattr(glfw, "KEY_" + key_name.strip().upper(), None)
+        if key_code is not None and frame_text.isdigit():
+            key_steps.setdefault(int(frame_text), []).append(key_code)
+
+    def on_key(key, scancode, action, mods):
+        del scancode
+        if action not in (glfw.PRESS, glfw.REPEAT):
+            return False
+        if editor.handle_key(key, action, mods):
+            return True
+        return camera.handle_key(key, action)
+
+    def on_char(codepoint):
+        editor.handle_char(codepoint)
+
+    def on_mouse(button, action, mods):
+        del mods
+        shift = window.is_key_pressed(glfw.KEY_LEFT_SHIFT)
+        alt = (window.is_key_pressed(glfw.KEY_LEFT_ALT) or window.is_key_pressed(glfw.KEY_RIGHT_ALT))
+        if button == glfw.MOUSE_BUTTON_MIDDLE or (button == glfw.MOUSE_BUTTON_LEFT and shift):
+            if action == glfw.PRESS:
+                pan["active"] = True
+                pan["last"] = window.get_cursor_pos()
+            elif action == glfw.RELEASE:
+                pan["active"] = False
+            return
+        editor.handle_mouse_button(button, action, shift, alt=alt)
+
+    def on_cursor(x, y):
+        if pan["active"] and pan["last"] is not None:
+            camera.pan_screen(x - pan["last"][0], y - pan["last"][1])
+            pan["last"] = (x, y)
+
+    def on_scroll(x_offset, y_offset):
+        camera.handle_scroll(x_offset, y_offset)
+
+    window.add_key_callback(on_key)
+    window.add_char_callback(on_char)
+    window.add_mouse_button_callback(on_mouse)
+    window.add_cursor_pos_callback(on_cursor)
+    window.add_scroll_callback(on_scroll)
+    gl.glClearColor(0.055, 0.070, 0.095, 1.0)
+    shader.use()
+    shader.set_vec3("u_LightDir", 0.5, 1.0, 0.7)
+    shader.set_vec3("u_LightColor", 0.95, 0.95, 0.95)
+    shader.set_vec3("u_AmbientColor", 0.38, 0.38, 0.40)
+    try:
+        while not window.should_close() and not editor.exit_requested:
+            dt = window.update_delta_time()
+            window.poll_events()
+            if frame_index >= 10:
+                step_index = frame_index - 10
+                if step_index < len(mouse_steps):
+                    step = mouse_steps[step_index]
+                    try:
+                        mx, my = float(step[0]), float(step[1])
+                        glfw.set_cursor_pos(window._window, mx, my)
+                        if len(step) > 2 and step[2] == "press":
+                            on_mouse(glfw.MOUSE_BUTTON_LEFT, glfw.PRESS, 0)
+                        elif len(step) > 2 and step[2] == "release":
+                            on_mouse(glfw.MOUSE_BUTTON_LEFT, glfw.RELEASE, 0)
+                    except (ValueError, IndexError):
+                        pass
+            for key_code in key_steps.get(frame_index, ()):
+                on_key(key_code, 0, glfw.PRESS, 0)
+                on_key(key_code, 0, glfw.RELEASE, 0)
+            camera.update(dt)
+            projection = camera.get_projection_matrix(window.width, window.height)
+            view = camera.get_view_matrix()
+            model = camera.get_animated_model_matrix()
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
+            editor.update_cursor(
+                mouse_x, mouse_y, window.width, window.height, view, projection, model,
+                mouse_window=window.get_cursor_pos(),
+            )
+            editor.process_click()
+            editor.update_drag()
+            editor.update_hud_drag()
+            hud_width, hud_height = window.get_window_size()
+            editor.render(shader, projection, view, model, window.time, hud_width, hud_height)
+            frame_index += 1
+            if max_frames is not None and frame_index >= max_frames:
+                if screenshot_path:
+                    fb_w, fb_h = glfw.get_framebuffer_size(window._window)
+                    gl.glFinish()
+                    pixels = gl.glReadPixels(0, 0, fb_w, fb_h, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
+                    image = Image.frombytes("RGBA", (fb_w, fb_h), pixels).transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+                    os.makedirs(os.path.dirname(os.path.abspath(screenshot_path)), exist_ok=True)
+                    image.save(screenshot_path)
+                    print(f"[Screenshot] Frame capturado salvo em: {screenshot_path}")
+                break
+            window.swap_buffers()
+    finally:
+        window._key_callbacks.clear()
+        window._char_callbacks.clear()
+        window._mouse_button_callbacks.clear()
+        window._cursor_pos_callbacks.clear()
+        window._scroll_callbacks.clear()
+        editor.delete()
+
+
 def main() -> None:
     """Loop principal de execução da engine gráfica."""
 
@@ -382,14 +507,26 @@ def main() -> None:
     if show_menu:
         if screenshot_path:
             menus.prepare_background(wait=True)
+
         def menu_mouse(button, action, mods):
             if button == glfw.MOUSE_BUTTON_LEFT:
                 menus.mouse_button(*window.get_cursor_pos_framebuffer(), action)
-        window.add_key_callback(lambda key, scan, action, mods: menus.key(key, action, mods))
-        window.add_char_callback(menus.char)
-        window.add_mouse_button_callback(menu_mouse)
-        window.add_cursor_pos_callback(lambda x, y: menus.hover(*window.get_cursor_pos_framebuffer()))
-        window.add_scroll_callback(lambda x_offset, y_offset: menus.wheel(y_offset))
+
+        def bind_menu_callbacks():
+            window.add_key_callback(lambda key, scan, action, mods: menus.key(key, action, mods))
+            window.add_char_callback(menus.char)
+            window.add_mouse_button_callback(menu_mouse)
+            window.add_cursor_pos_callback(lambda x, y: menus.hover(*window.get_cursor_pos_framebuffer()))
+            window.add_scroll_callback(lambda x_offset, y_offset: menus.wheel(y_offset))
+
+        def clear_menu_callbacks():
+            window._key_callbacks.clear()
+            window._char_callbacks.clear()
+            window._mouse_button_callbacks.clear()
+            window._cursor_pos_callbacks.clear()
+            window._scroll_callbacks.clear()
+
+        bind_menu_callbacks()
         menu_frames = 0
         while not window.should_close() and menus.result is None:
             window.poll_events()
@@ -403,18 +540,27 @@ def main() -> None:
                     pixels = gl.glReadPixels(0, 0, window.width, window.height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
                     Image.frombytes('RGBA', (window.width, window.height), pixels).transpose(Image.Transpose.FLIP_TOP_BOTTOM).save(screenshot_path)
                 menus.result = ('exit', None)
+            # O editor é uma sessão própria: ao sair, o menu volta no mesmo
+            # contexto OpenGL, sem encerrar a aplicação.
+            if menus.result and menus.result[0] == 'editor':
+                menus.result = None
+                clear_menu_callbacks()
+                run_editor_session(window, shader)
+                if window.should_close():
+                    break
+                menus.go('welcome')
+                menus.result = None
+                bind_menu_callbacks()
+                continue
             window.swap_buffers()
-        window._key_callbacks.clear()
-        window._char_callbacks.clear()
-        window._mouse_button_callbacks.clear()
-        window._cursor_pos_callbacks.clear()
-        window._scroll_callbacks.clear()
-        if window.should_close() or menus.result[0] == 'exit':
+        clear_menu_callbacks()
+        if window.should_close() or menus.result is None or menus.result[0] == 'exit':
             menus.delete()
             shader.delete()
             window.close()
             return
         if menus.result[0] == 'editor':
+            # Fallback: em versões antigas o resultado podia chegar aqui.
             selected_world = None
             editor_mode = True
             terrain_demo, char_demo = False, False
@@ -423,6 +569,13 @@ def main() -> None:
             selected_world = menus.result[1]
             custom_seed = selected_world['seed']
             terrain_demo, char_demo = True, False
+            editor_mode = False
+    if editor_mode and not show_menu:
+        run_editor_session(window, shader, map_path, screenshot_path, max_frames)
+        menus.delete()
+        shader.delete()
+        window.close()
+        return
     menus.go('game')
     menus.result = None
     if "--no-vsync" in sys.argv:  # medir o custo real do quadro, sem esperar a tela
@@ -1382,6 +1535,10 @@ def main() -> None:
             window.swap_buffers()
             frame_limiter.wait(menus.preferences.data["fps_limit"])
             continue
+        if menus.construction_requested:
+            menus.construction_requested = False
+            if construction_panel is not None:
+                construction_panel.open()
         if menus.world is not None:
             menus.world['played'] += dt
         camera.update(dt)

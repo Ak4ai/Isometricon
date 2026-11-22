@@ -236,3 +236,27 @@ def test_texture_search_and_favourites(tmp_path):
     editor.select_texture_filter("Favoritas")
     names = [name for _, name, _ in editor.texture_entries()]
     assert "bricks" in names and all("brick" in name for name in names)
+
+
+def test_f10_asks_then_saves_and_requests_menu(tmp_path):
+    editor = _editor(tmp_path)
+    material = editor.map.add_material((200, 50, 40), "bricks")
+    editor.map.set(0, 0, 0, material)
+    editor._after_change("teste")
+    assert editor.handle_key(glfw.KEY_F10, glfw.PRESS, 0)
+    assert editor.exit_pending and not editor.exit_requested
+    assert editor.handle_key(glfw.KEY_F10, glfw.PRESS, 0)
+    assert editor.exit_requested
+    assert not editor.dirty
+    from pathlib import Path
+    assert Path(editor.save_path).exists()
+
+
+def test_escape_prompts_to_leave_and_escape_again_cancels(tmp_path):
+    editor = _editor(tmp_path)
+    assert editor.handle_key(glfw.KEY_ESCAPE, glfw.PRESS, 0)
+    assert editor.exit_pending
+    assert not editor.exit_requested
+    assert editor.handle_key(glfw.KEY_ESCAPE, glfw.PRESS, 0)
+    assert not editor.exit_pending
+    assert not editor.exit_requested

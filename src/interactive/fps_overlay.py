@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
+from src.core.fonts import mono_font
+from src.rendering.hud_quad import HudQuad
 from src.rendering.mc_font import default_font
 
 INTERVAL = 0.5       # segundos entre uma leitura e outra: o número não pisca a cada quadro
@@ -38,7 +40,7 @@ class FpsOverlay:
     def _image(self, text: str) -> Image.Image:
         if self.font is not None:
             return self.font.render(text, scale=self.SCALE)
-        font = ImageFont.load_default()          # sem a fonte do jogo: a de reserva do PIL, branca com sombra
+        font = mono_font(12)
         image = Image.new("RGBA", (8 * len(text) + 2, 14), (0, 0, 0, 0))
         pen = ImageDraw.Draw(image)
         pen.text((1, 1), text, font=font, fill=(40, 40, 40, 255))
@@ -47,7 +49,6 @@ class FpsOverlay:
 
     def render(self, width: int, height: int, top: float = MARGIN) -> None:
         """Desenha o contador com o canto de cima à esquerda em (``MARGIN``, ``top``)."""
-        from src.rendering.hud_quad import HudQuad
         if self._quad is None:
             self._quad = HudQuad()
         text = self.text

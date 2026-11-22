@@ -172,5 +172,10 @@ assets/minecraft_models/
 # Ladrilhos do baú recortados das texturas de entidade do jogo (arte da Mojang), só nesta máquina
 assets/textures/blocks/chest_*.png
 
-# Folha da fonte do Minecraft (arte da Mojang), só nesta máquina
-assets/fonts/
+# Folha da fonte do Minecraft (arte da Mojang), só nesta máquina; as fontes
+# OFL empacotadas do projeto são exceções.
+assets/fonts/*
+!assets/fonts/Inter-Variable.ttf
+!assets/fonts/JetBrainsMono-Variable.ttf
+!assets/fonts/OFL-*.txt
+!assets/fonts/README.md

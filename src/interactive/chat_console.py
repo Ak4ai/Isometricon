@@ -17,8 +17,9 @@ import time
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
+from src.core.fonts import mono_font
 from src.math import mat4_ortho
 from src.rendering import Shader
 
@@ -250,20 +251,8 @@ class ChatConsole:
             pass
 
     def _load_font(self, size: int = 15) -> Any:
-        """Carrega fonte Consolas ou TrueType equivalente do sistema."""
-        font_candidates = [
-            "consola.ttf",
-            "consolas.ttf",
-            "C:/Windows/Fonts/consola.ttf",
-            "segoeui.ttf",
-            "arial.ttf",
-        ]
-        for f in font_candidates:
-            try:
-                return ImageFont.truetype(f, size)
-            except Exception:
-                continue
-        return ImageFont.load_default()
+        """Carrega a fonte monoespaçada empacotada (JetBrains Mono)."""
+        return mono_font(size)
 
     def _init_gl(self) -> None:
         """Inicializa shaders e buffers OpenGL para o quad 2D do HUD."""

@@ -11,7 +11,7 @@ import math
 from typing import Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 KEY_SIZE = 13          # lado da tecla, em pixels de arte (antes da escala)
 SCALE = 3              # cada pixel de arte vira SCALE x SCALE na tela
@@ -20,12 +20,7 @@ HEAD_HEIGHT = 2.25     # acima dos pés, onde a tecla fica presa
 
 
 def _font(size: int):
-    for name in ("consolab.ttf", "C:/Windows/Fonts/consolab.ttf", "arialbd.ttf", "consola.ttf", "arial.ttf"):
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
+    return mono_font(size, bold=True)
 
 
 def key_image(letter: str = "F", label: str = "") -> Image.Image:

@@ -11,8 +11,9 @@ import colorsys
 from functools import lru_cache
 from typing import Optional, Sequence, Tuple
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter
 
+from src.core.fonts import ui_font
 from src.interactive.menu_style import paper
 
 Color = Tuple[int, int, int]
@@ -45,17 +46,7 @@ HP_GOOD, HP_MID, HP_LOW = (78, 138, 85), (201, 149, 47), (168, 69, 47)
 
 @lru_cache(maxsize=64)
 def font(size: int, heading: bool = False, bold: bool = False):
-    if heading:
-        names = ["georgiab.ttf", "georgia.ttf", "DejaVuSerif-Bold.ttf", "DejaVuSerif.ttf"] if bold else \
-            ["georgia.ttf", "DejaVuSerif.ttf"]
-    else:
-        names = ["segoeuib.ttf", "DejaVuSans-Bold.ttf", "segoeui.ttf"] if bold else ["segoeui.ttf", "DejaVuSans.ttf"]
-    for name in names:
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            pass
-    return ImageFont.load_default()
+    return ui_font(size, heading=heading, bold=bold)
 
 
 def measure(text: str, size: int, heading: bool = False, bold: bool = False) -> int:
