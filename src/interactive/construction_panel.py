@@ -76,6 +76,7 @@ class ConstructionPanel:
         self._key = None
         self._image: Optional[Image.Image] = None
         self._dirty = False
+        self._scale = 1.0
 
     def library(self) -> List[Tuple[str, dict]]:
         """(rótulo, entrada) de tudo que dá para colocar, lida da pasta ao abrir o painel."""
@@ -256,16 +257,25 @@ class ConstructionPanel:
             self.name_buffer += character
         return True
 
+    @staticmethod
+    def _panel_scale(window_width: int) -> float:
+        """Escala o painel apenas quando a janela é estreita demais."""
+        available = max(1.0, float(window_width) - 2.0 * MARGIN)
+        return max(0.55, min(1.0, available / PANEL_WIDTH))
+
     def contains(self, x: float, y: float, window_width: int) -> bool:
-        x0 = window_width - PANEL_WIDTH - MARGIN
-        return x0 <= x <= x0 + PANEL_WIDTH and MARGIN <= y <= MARGIN + PANEL_HEIGHT
+        scale = self._panel_scale(window_width)
+        x0 = window_width - PANEL_WIDTH * scale - MARGIN
+        return x0 <= x <= x0 + PANEL_WIDTH * scale and MARGIN <= y <= MARGIN + PANEL_HEIGHT * scale
 
     def handle_mouse_button(self, button: int, action: int, shift: bool, mouse_window, window_width: int) -> bool:
         if not self.is_open or button != glfw.MOUSE_BUTTON_LEFT or action != glfw.PRESS or shift:
             return False
         if mouse_window is not None and self.contains(mouse_window[0], mouse_window[1], window_width):
-            x = mouse_window[0] - (window_width - PANEL_WIDTH - MARGIN)
-            y = mouse_window[1] - MARGIN
+            scale = self._panel_scale(window_width)
+            x0 = window_width - PANEL_WIDTH * scale - MARGIN
+            x = (mouse_window[0] - x0) / scale
+            y = (mouse_window[1] - MARGIN) / scale
             for name, (x0, y0, x1, y1) in self.buttons.items():
                 if x0 <= x <= x1 and y0 <= y <= y1:
                     self._action(name)
@@ -348,7 +358,13 @@ class ConstructionPanel:
         if self._dirty:
             self.quad.set_image(self._image)
             self._dirty = False
-        self.quad.draw(float(window_width - PANEL_WIDTH - MARGIN), float(MARGIN), window_width, window_height)
+        self._scale = self._panel_scale(window_width)
+        width = PANEL_WIDTH * self._scale
+        height = PANEL_HEIGHT * self._scale
+        self.quad.draw(
+            float(window_width) - width - MARGIN, float(MARGIN), window_width, window_height,
+            size=(width, height),
+        )
 
     def delete(self) -> None:
         if self.quad is not None:

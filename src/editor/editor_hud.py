@@ -29,6 +29,19 @@ ACTIONS = (
     ("grid", "Grade"), ("base", "Base"),
 )
 TABS = (("colors", "Cores"), ("textures", "Texturas"))
+MIN_UI_SCALE = 0.45
+
+def fit_panel_scale(window_width: int, window_height: int,
+                    panel_width: int = PANEL_WIDTH, panel_height: int = PANEL_HEIGHT) -> float:
+    """Escala apenas para baixo: a HUD cabe em janelas pequenas.
+
+    Em telas grandes o tamanho lógico atual já é confortável; ampliar deixaria
+    o painel grande demais e cobriria a plataforma.
+    """
+    available_w = max(1.0, float(window_width) - 24.0)
+    available_h = max(1.0, float(window_height) - 24.0)
+    return max(MIN_UI_SCALE, min(1.0, available_w / panel_width, available_h / panel_height))
+
 
 _FONT_CANDIDATES = (
     "consola.ttf", "consolas.ttf", "C:/Windows/Fonts/consola.ttf",
@@ -55,6 +68,9 @@ class EditorHud:
         self._texture_names: dict[int, str] = {}
         self._wheel_box: tuple[int, int, int, int] | None = None
         self._value_box: tuple[int, int, int, int] | None = None
+        self._scale = 1.0
+        self._panel_origin = (12.0, 12.0)
+        self._panel_size = (float(PANEL_WIDTH), float(PANEL_HEIGHT))
 
     def _font(self, size: int) -> Any:
         for candidate in _FONT_CANDIDATES:
@@ -292,12 +308,34 @@ class EditorHud:
                 return "value", max(0.0, min(1.0, (x - x0) / max(1, x1 - x0))), 0.0
         return None
 
+    def _fit_scale(self, window_width: int, window_height: int) -> float:
+        return fit_panel_scale(window_width, window_height)
+
+    def local_point(self, x: float, y: float) -> tuple[float, float] | None:
+        """Converte coordenadas de janela para o espaço lógico do painel."""
+        if self._scale <= 0.0:
+            return None
+        x0, y0 = self._panel_origin
+        px = (float(x) - x0) / self._scale
+        py = (float(y) - y0) / self._scale
+        if 0.0 <= px <= PANEL_WIDTH and 0.0 <= py <= PANEL_HEIGHT:
+            return px, py
+        return None
+
+    def contains_window(self, x: float, y: float) -> bool:
+        return self.local_point(x, y) is not None
+
     def render(self, window_width: int, window_height: int) -> None:
         if self._image is not None and self.quad is not None:
             if self._dirty:
                 self.quad.set_image(self._image)
                 self._dirty = False
-            self.quad.draw(12.0, 12.0, window_width, window_height)
+            self._scale = self._fit_scale(window_width, window_height)
+            self._panel_size = (PANEL_WIDTH * self._scale, PANEL_HEIGHT * self._scale)
+            self.quad.draw(
+                self._panel_origin[0], self._panel_origin[1], window_width, window_height,
+                size=self._panel_size,
+            )
 
     def delete(self) -> None:
         if self.quad is not None:

@@ -21,7 +21,7 @@ import OpenGL.GL as gl
 from PIL import Image
 
 from src.camera import IsometricCamera
-from src.editor.editor_hud import PANEL_HEIGHT, PANEL_WIDTH, EditorHud
+from src.editor.editor_hud import EditorHud
 from src.editor.map_project import MapProject, PlacedObject
 from src.editor.material_atlas import MaterialAtlas
 from src.editor.object_mesher import ObjectMeshData, build_mesh_data
@@ -660,10 +660,11 @@ class MapEditor:
         if button != glfw.MOUSE_BUTTON_LEFT:
             return False
         if action == glfw.PRESS and not shift:
-            if self.last_mouse_window is not None:
+            if self.last_mouse_window is not None and self.hud is not None:
                 x, y = self.last_mouse_window
-                if 12 <= x <= 12 + PANEL_WIDTH and 12 <= y <= 12 + PANEL_HEIGHT:
-                    local_x, local_y = x - 12, y - 12
+                local = self.hud.local_point(x, y)
+                if local is not None:
+                    local_x, local_y = local
                     if self.hud is not None:
                         button = self.hud.hit(local_x, local_y)
                         if button is not None:
@@ -757,9 +758,10 @@ class MapEditor:
         if not self.hud_drag or self.hud is None or self.last_mouse_window is None:
             return
         x, y = self.last_mouse_window
-        if not (12 <= x <= 12 + PANEL_WIDTH and 12 <= y <= 12 + PANEL_HEIGHT):
+        local = self.hud.local_point(x, y)
+        if local is None:
             return
-        wheel = self.hud.hit_wheel(x - 12, y - 12)
+        wheel = self.hud.hit_wheel(*local)
         if wheel is not None:
             self._wheel_click(*wheel)
 
@@ -1233,9 +1235,9 @@ class MapEditor:
             return
         self.hover_texture = ""
         if self.active_tab == "textures" and self.last_mouse_window is not None:
-            hx, hy = self.last_mouse_window
-            if 12 <= hx <= 12 + PANEL_WIDTH and 12 <= hy <= 12 + PANEL_HEIGHT:
-                self.hover_texture = self.hud.texture_at(hx - 12, hy - 12) or ""
+            local = self.hud.local_point(*self.last_mouse_window)
+            if local is not None:
+                self.hover_texture = self.hud.texture_at(*local) or ""
         cursor = "—" if self.cursor is None else f"({self.cursor[0]}, {self.cursor[1]}, {self.cursor[2]})"
         selected = self.selected.name if self.selected is not None else "nenhum"
         if self.library_open:

@@ -173,6 +173,14 @@ O painel do editor tem botões clicáveis para ferramentas, salvar/carregar,
 exportar, biblioteca, undo/redo, grade e base. A lista da biblioteca (`F4`) ainda
 não gera miniaturas voxel; mostra nome e seleção por teclado.
 
+## 📐 HUD adaptativa
+
+O painel do editor usa uma escala lógica que diminui quando a janela é pequena.
+A escala é aplicada à imagem e às hitboxes juntas, então clicar em uma miniatura
+ou na roda continua funcionando em qualquer resolução. Em janelas grandes o
+tamanho lógico é mantido; em janelas estreitas o painel encolhe para não sair da
+tela. O painel de construções do `--terrain` segue a mesma regra para a largura.
+
 ## 🏗️ Arquitetura
 
 | Arquivo | Papel |
