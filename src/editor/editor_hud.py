@@ -15,7 +15,7 @@ from src.editor.color_wheel import wheel_image
 from src.rendering.hud_quad import HudQuad
 
 PANEL_WIDTH = 470
-PANEL_HEIGHT = 450
+PANEL_HEIGHT = 472
 WHEEL_SIZE = 84
 WHEEL_BOX = (16, 268, 16 + WHEEL_SIZE, 268 + WHEEL_SIZE)
 VALUE_BOX = (16, 358, 16 + WHEEL_SIZE, 368)
@@ -51,6 +51,8 @@ class EditorHud:
         self._texture_boxes: dict[int, tuple[int, int, int, int]] = {}
         self._filter_boxes: dict[str, tuple[int, int, int, int]] = {}
         self._recent_boxes: dict[int, tuple[int, int, int, int]] = {}
+        self._search_box: tuple[int, int, int, int] | None = None
+        self._texture_names: dict[int, str] = {}
         self._wheel_box: tuple[int, int, int, int] | None = None
         self._value_box: tuple[int, int, int, int] | None = None
 
@@ -89,15 +91,22 @@ class EditorHud:
                   recent_colours: Iterable[tuple[int, int, int]] = (),
                   hsv: tuple[float, float, float] = (0.0, 0.0, 1.0),
                   filters: Iterable[str] = (),
-                  active_filter: str = "Todas") -> None:
+                  active_filter: str = "Todas",
+                  texture_search: str = "",
+                  search_mode: bool = False,
+                  favourites: Iterable[str] = (),
+                  hover_texture: str = "",
+                  texture_name: str = "") -> None:
         rows = tuple(lines)
         palette = tuple(palette)
         textures = tuple(textures)
         filters = tuple(filters)
         recent = tuple(recent_colours)
         texture_names = tuple((texture_id, name) for texture_id, name, _ in textures)
+        favourites = tuple(sorted(favourites))
         key = (title, rows, swatch, active_tool, palette, colour_index, custom_colour,
                texture_names, texture_index, active_tab, recent, filters, active_filter,
+               texture_search, search_mode, favourites, hover_texture, texture_name,
                (round(hsv[0] * 360), round(hsv[1] * 100), round(hsv[2] * 100)))
         if key == self._key:
             return
@@ -139,6 +148,8 @@ class EditorHud:
         self._texture_boxes = {}
         self._filter_boxes = {}
         self._recent_boxes = {}
+        self._search_box = None
+        self._texture_names = {texture_id: name for texture_id, name, _ in textures}
         self._wheel_box = None
         self._value_box = None
         if active_tab == "textures":
@@ -153,10 +164,30 @@ class EditorHud:
                 draw.rounded_rectangle(box, radius=3,
                                        outline=(255, 235, 160, 255) if active else (45, 55, 68, 255),
                                        width=3 if active else 1)
+                if name in favourites:
+                    draw.ellipse((box[2] - 9, box[1] + 3, box[2] - 3, box[1] + 9),
+                                 fill=(240, 200, 90, 255), outline=(40, 34, 20, 255))
+            # Busca textual: campo próprio, sem depender de janela nativa.
+            self._search_box = (16, 374, 250, 394)
+            draw.rounded_rectangle(self._search_box, radius=4, fill=(25, 33, 44, 255),
+                                   outline=(100, 118, 140, 255), width=1)
+            query = (f"Buscar: {texture_search}_" if search_mode else
+                     (f"Buscar: {texture_search}" if texture_search else "Buscar textura… [S]"))
+            draw.text((23, 378), query, font=small_font,
+                      fill=(240, 228, 195, 255) if search_mode else (165, 178, 195, 255))
             for index, label in enumerate(filters):
-                box = (16 + index * 88, 374, 16 + index * 88 + 84, 394)
+                box = (14 + index * 74, 400, 14 + index * 74 + 70, 420)
                 self._filter_boxes[label] = box
                 self._button(draw, box, label, label == active_filter, small_font)
+            if not textures:
+                draw.text((16, 426), "Nenhuma textura neste filtro.", font=small_font,
+                          fill=(245, 120, 100, 255))
+            elif hover_texture:
+                draw.text((16, 426), f"Sobre: {hover_texture}", font=small_font,
+                          fill=(240, 205, 140, 255))
+            else:
+                draw.text((16, 426), f"Textura: {texture_name}", font=small_font,
+                          fill=(190, 202, 218, 255))
         else:
             if swatch is not None:
                 wheel = wheel_image(WHEEL_SIZE)
@@ -195,11 +226,11 @@ class EditorHud:
             draw.rounded_rectangle((PANEL_WIDTH - 62, 356, PANEL_WIDTH - 18, 372), radius=3,
                                    fill=(*current, 255), outline=(255, 255, 255, 200), width=1)
 
-        draw.text((16, 412),
+        draw.text((16, 442),
                   "F2 exportar  F3 objeto  F5 salvar  F9 carregar  Ctrl+Z desfazer",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, 430),
-                  "Botão esq: aplicar  Alt+clique: conta-gotas  C/X: cor/textura  K: abas",
+        draw.text((16, 458),
+                  "Botão esq: aplicar  Alt+clique: conta-gotas  C/X: cor/textura  S/F: busca/favorito",
                   font=small_font, fill=(150, 160, 175, 255))
         self._image = image
         self._dirty = True
@@ -232,6 +263,18 @@ class EditorHud:
         for label, (x0, y0, x1, y1) in self._filter_boxes.items():
             if x0 <= x <= x1 and y0 <= y <= y1:
                 return label
+        return None
+
+    def hit_search(self, x: float, y: float) -> bool:
+        if self._search_box is None:
+            return False
+        x0, y0, x1, y1 = self._search_box
+        return x0 <= x <= x1 and y0 <= y <= y1
+
+    def texture_at(self, x: float, y: float) -> str | None:
+        for texture_id, (x0, y0, x1, y1) in self._texture_boxes.items():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return self._texture_names.get(texture_id)
         return None
 
     def hit_wheel(self, x: float, y: float) -> tuple[str, float, float] | None:

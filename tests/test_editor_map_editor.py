@@ -217,3 +217,22 @@ def test_alt_click_picks_material_from_canvas(tmp_path):
     assert editor.custom_colour == (9, 8, 7)
     assert editor.texture == "stone"
     assert not editor.click_pending
+
+
+def test_texture_search_and_favourites(tmp_path):
+    editor = _editor(tmp_path)
+    editor.open_texture_search()
+    assert editor.search_mode
+    for char in "brick":
+        assert editor.handle_char(ord(char))
+    assert editor.texture_search == "brick"
+    names = [name for _, name, _ in editor.texture_entries()]
+    assert "bricks" in names and all("brick" in name for name in names)
+    assert editor.handle_key(glfw.KEY_ENTER, glfw.PRESS, 0)
+    assert not editor.search_mode
+    editor.select_texture(6)
+    editor.toggle_favourite_texture()
+    assert "bricks" in editor.favourite_textures
+    editor.select_texture_filter("Favoritas")
+    names = [name for _, name, _ in editor.texture_entries()]
+    assert "bricks" in names and all("brick" in name for name in names)

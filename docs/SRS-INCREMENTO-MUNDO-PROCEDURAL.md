@@ -71,6 +71,8 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-065** | O editor deve oferecer uma roda HSV com barra de brilho, paleta de atalhos e histórico de cores recentes. | Desejável | Teste, demonstração |
 | **FR-066** | O editor deve permitir copiar cor e textura de um voxel existente com `Alt`+clique. | Desejável | Teste, demonstração |
 | **FR-067** | A grade de texturas deve permitir filtrar por categoria. | Desejável | Teste, demonstração |
+| **FR-068** | A grade de texturas deve permitir busca textual por nome. | Desejável | Teste, demonstração |
+| **FR-069** | O usuário deve poder favoritar texturas e filtrar somente as favoritas. | Desejável | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -148,6 +150,8 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-065 | FR-037, FR-048 | `color_wheel.py`, `EditorHud` (aba Cores) |
 | FR-066 | FR-037, FR-038 | `MapEditor._pick_material` |
 | FR-067 | FR-038, FR-043 | `MapEditor.texture_entries`, `EditorHud` filtros |
+| FR-068 | FR-038, FR-043 | `MapEditor.open_texture_search`, `EditorHud` busca |
+| FR-069 | FR-038, FR-043 | `MapEditor.favourite_textures`, `EditorHud` favoritos |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `ConstructionPanel` |
 | DR-008 | FR-041 | JSON `isometricon-structures` (v2; lê o formato antigo) |
@@ -163,5 +167,6 @@ Funcionalidade: Colocar objeto no mundo procedural
   colocação, remoção, arquivo inválido, sobreposição com token e atalhos.
 - `tests/test_game_menus.py` — opção **Editor de mapa** no menu.
 - `tests/test_editor_color_wheel.py` — roda HSV e conversão de cor.
+- `test_texture_search_and_favourites` — busca e favoritos.
 - Teste manual: `--terrain --object=assets/objects/casa_exemplo.json`.
 - Regressão: fluxo de mapa independente (`--map-editor` e `--terrain --map`).

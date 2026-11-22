@@ -42,7 +42,9 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 | Escolher cor na paleta/recentes | clique no quadradinho |
 | Alternar abas Cores/Texturas | clique nas abas ou `K` |
 | Escolher textura pela grade | clique na miniatura |
-| Filtrar texturas | Todas / Pedra / Madeira / Concreto / Natureza |
+| Filtrar texturas | Todas / Pedra / Madeira / Concreto / Natureza / Favoritas |
+| Buscar textura | `S` ou clique no campo Buscar |
+| Favoritar textura atual | `F` |
 | Conta-gotas de material | `Alt` + clique no voxel |
 | Próxima cor / anterior | `C` / `Shift+C` |
 | Cor hexadecimal livre | `H`, digite 6 dígitos, `Enter` |
@@ -80,8 +82,8 @@ apagar, aponte diretamente para o voxel.
    `C`/`H`) e a aba **Texturas** (grade de miniaturas reais, ou `X`); a combinação
    é o material do voxel. Cada voxel guarda seu próprio índice de material. A
    cor atual aparece no quadrado do topo e o nome da textura fica no HUD. A grade
-   tem filtros por categoria e o conta-gotas (`Alt`+clique) copia cor e textura
-   de um voxel existente.
+   tem filtros por categoria, busca textual (`S`), favoritos (`F`) e o
+   conta-gotas (`Alt`+clique) copia cor e textura de um voxel existente.
 3. **Nomear** com `N`: o nome interno fica no JSON e vira o nome do arquivo
    (sem acentos/espaços). **Exportar** com `F2`: grava
    `saves/objetos/<nome>.json`.

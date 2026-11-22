@@ -63,7 +63,7 @@ CLICK_COOLDOWN = 0.20
 DRAG_ARM_DELAY = 0.14
 DRAG_DISTANCE = 6.0
 MAX_GRID_SPACING = 8
-TEXTURE_FILTERS = ("Todas", "Pedra", "Madeira", "Concreto", "Natureza")
+TEXTURE_FILTERS = ("Todas", "Pedra", "Madeira", "Concreto", "Natureza", "Favoritas")
 TEXTURE_CATEGORY = {
     "stone": "Pedra", "cobblestone": "Pedra", "stone_bricks": "Pedra", "sandstone": "Pedra",
     "oak_planks": "Madeira", "spruce_planks": "Madeira", "oak_log": "Madeira",
@@ -132,6 +132,12 @@ class MapEditor:
         self.active_tab = "colors"
         self.texture_index = 0
         self.texture_filter = "Todas"
+        self.texture_search = ""
+        self.search_mode = False
+        self.search_buffer = ""
+        self.search_replace = False
+        self.favourite_textures: set[str] = set()
+        self.hover_texture = ""
         self.texture_thumbs: list[tuple[str, Image.Image]] = []
         for index, name in enumerate(self.atlas.tile_names):
             column, row = index % self.atlas.GRID_COLS, index // self.atlas.GRID_COLS
@@ -549,8 +555,12 @@ class MapEditor:
 
     def texture_entries(self) -> list[tuple[int, str, Image.Image]]:
         entries = []
+        query = self.texture_search.strip().lower()
         for index, (name, thumb) in enumerate(self.texture_thumbs):
-            if self.texture_filter == "Todas" or TEXTURE_CATEGORY.get(name) == self.texture_filter:
+            category_ok = (self.texture_filter == "Todas"
+                           or (self.texture_filter == "Favoritas" and name in self.favourite_textures)
+                           or TEXTURE_CATEGORY.get(name) == self.texture_filter)
+            if category_ok and (not query or query in name.lower()):
                 entries.append((index, name, thumb))
         return entries
 
@@ -560,6 +570,30 @@ class MapEditor:
             self.active_tab = "textures"
             self.status = f"Filtro de texturas: {name}."
             self._update_hud()
+
+    def open_texture_search(self) -> None:
+        self.active_tab = "textures"
+        self.search_mode = True
+        self.search_replace = True
+        self.search_buffer = self.texture_search
+        self.status = "Buscar textura: digite e Enter; Esc limpa."
+        self._update_hud()
+
+    def update_texture_search(self, text: str) -> None:
+        self.texture_search = text
+        self.active_tab = "textures"
+        self._update_hud()
+
+    def toggle_favourite_texture(self) -> None:
+        name = self.texture
+        if name in self.favourite_textures:
+            self.favourite_textures.remove(name)
+            self.status = f"Textura removida dos favoritos: {name}."
+        else:
+            self.favourite_textures.add(name)
+            self.status = f"Textura favoritada: {name}."
+        self.active_tab = "textures"
+        self._update_hud()
 
     def _pick_material(self, block: tuple[int, int, int]) -> bool:
         x, y, z = block
@@ -650,6 +684,9 @@ class MapEditor:
                                 self.select_recent(recent)
                                 return True
                         else:
+                            if self.hud.hit_search(local_x, local_y):
+                                self.open_texture_search()
+                                return True
                             texture_filter = self.hud.hit_filter(local_x, local_y)
                             if texture_filter is not None:
                                 self.select_texture_filter(texture_filter)
@@ -758,6 +795,19 @@ class MapEditor:
         self._update_hud()
 
     def handle_char(self, codepoint: int) -> bool:
+        if self.search_mode:
+            character = chr(codepoint)
+            if character.isprintable() and len(self.search_buffer) < 32:
+                if self.search_replace:
+                    self.search_buffer = character
+                    self.search_replace = False
+                else:
+                    self.search_buffer += character
+                self.texture_search = self.search_buffer
+                self.status = f"Busca: {self.texture_search}"
+                self._update_hud()
+                return True
+            return False
         if self.name_mode:
             character = chr(codepoint)
             if character.isprintable() and character not in "/\\" and len(self.name_buffer) < 40:
@@ -847,6 +897,30 @@ class MapEditor:
             if key in (glfw.KEY_DELETE, glfw.KEY_BACKSPACE):
                 self._library_delete()
                 return True
+        if self.search_mode:
+            if key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER):
+                self.search_mode = False
+                self.texture_search = self.search_buffer
+                self.status = f"Busca: {self.texture_search or 'tudo'}."
+                self._update_hud()
+                return True
+            if key == glfw.KEY_ESCAPE:
+                self.search_mode = False
+                self.search_buffer = ""
+                self.texture_search = ""
+                self.status = "Busca limpa."
+                self._update_hud()
+                return True
+            if key == glfw.KEY_BACKSPACE:
+                if self.search_replace:
+                    self.search_buffer = ""
+                    self.search_replace = False
+                else:
+                    self.search_buffer = self.search_buffer[:-1]
+                self.texture_search = self.search_buffer
+                self._update_hud()
+                return True
+            return True
         if self.name_mode:
             if key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER):
                 self._apply_name()
@@ -872,6 +946,12 @@ class MapEditor:
             return True
         if control and key == glfw.KEY_D:
             return self._duplicate_selected()
+        if key == glfw.KEY_S and not control:
+            self.open_texture_search()
+            return True
+        if key == glfw.KEY_F and not control:
+            self.toggle_favourite_texture()
+            return True
         if key == glfw.KEY_N and not control:
             self.name_mode = True
             self.name_replace = True
@@ -1151,6 +1231,11 @@ class MapEditor:
     def _update_hud(self) -> None:
         if self.hud is None:
             return
+        self.hover_texture = ""
+        if self.active_tab == "textures" and self.last_mouse_window is not None:
+            hx, hy = self.last_mouse_window
+            if 12 <= hx <= 12 + PANEL_WIDTH and 12 <= hy <= 12 + PANEL_HEIGHT:
+                self.hover_texture = self.hud.texture_at(hx - 12, hy - 12) or ""
         cursor = "—" if self.cursor is None else f"({self.cursor[0]}, {self.cursor[1]}, {self.cursor[2]})"
         selected = self.selected.name if self.selected is not None else "nenhum"
         if self.library_open:
@@ -1167,7 +1252,10 @@ class MapEditor:
                                colour_index=self.colour_index, custom_colour=self.custom_colour,
                                textures=self.texture_entries(), texture_index=self.texture_index,
                                active_tab=self.active_tab, recent_colours=self.recent_colours,
-                               hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter)
+                               hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter,
+                               texture_search=self.texture_search, search_mode=self.search_mode,
+                               favourites=self.favourite_textures, hover_texture=self.hover_texture,
+                               texture_name=self.texture)
             return
         display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
@@ -1189,7 +1277,10 @@ class MapEditor:
                            colour_index=self.colour_index, custom_colour=self.custom_colour,
                            textures=self.texture_entries(), texture_index=self.texture_index,
                            active_tab=self.active_tab, recent_colours=self.recent_colours,
-                           hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter)
+                           hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter,
+                           texture_search=self.texture_search, search_mode=self.search_mode,
+                           favourites=self.favourite_textures, hover_texture=self.hover_texture,
+                           texture_name=self.texture)
 
     def _common_shader(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray) -> None:
         shader.use()
