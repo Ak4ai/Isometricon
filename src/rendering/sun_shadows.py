@@ -254,15 +254,13 @@ class SunShadowRenderer:
     def active(self) -> bool:
         return self.enabled and self._uploaded is not None
 
-    def apply(self, shader, base_model: np.ndarray) -> None:
-        """Liga as sombras no shader do mundo (antes de desenhar o terreno e as construções)."""
-        # a água usa a matriz mesmo sem sombras (a normal das ondas vai do mundo para o espaço desenhado)
-        inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64)).astype(np.float32)
-        shader.set_mat4("u_ShadowInvModel", inverse_model)
-        # Cria e vincula as texturas 3D mesmo quando a sombra está inativa:
-        # o shader completo continua sendo usado pelo passe da sombra dos
-        # personagens antes deste apply. Unidade 3D sem textura completa falha
-        # a pipeline no Metal/OpenGL do macOS.
+    def bind_samplers(self, shader) -> None:
+        """Vincula as texturas e as unidades sem refazer a matriz nem o estado da sombra.
+
+        O passe de profundidade dos personagens usa o shader do mundo antes de
+        ``apply``. Chamar só esta parte evita recalcular origem/uniformes e
+        mantém todas as unidades completas para o driver do macOS.
+        """
         self._ensure_texture()
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
@@ -278,10 +276,6 @@ class SunShadowRenderer:
         log_texture_unit(SHADOW_UNIT, "sun-shadow mask", gl.GL_TEXTURE_2D_ARRAY)
         log_texture_unit(SHAPE_IDS_UNIT, "sun-shadow shape ids", gl.GL_TEXTURE_2D_ARRAY)
         log_texture_unit(HORIZON_UNIT, "sun-shadow horizon", gl.GL_TEXTURE_2D)
-        # Ainda que a sombra esteja inativa (fora do alcance ou desligada),
-        # os uniforms precisam apontar para as texturas que acabaram de ser
-        # vinculadas. Se ficarem no valor padrão, um sampler3D aponta para
-        # uma unidade vazia e o driver recusa a pipeline.
         shader.set_int("u_ShadowMask", SHADOW_UNIT)
         shader.set_int("u_ShadowShapeIds", SHAPE_IDS_UNIT)
         shader.set_int("u_ShadowShapes", SHAPES_UNIT)
@@ -290,6 +284,14 @@ class SunShadowRenderer:
         shader.set_float("u_ShadowHorizonRise", self.rise)
         shader.set_int("u_ShadowSteps", int(self.steps))
         shader.set_int("u_ShadowQuality", int(self.quality))
+
+    def apply(self, shader, base_model: np.ndarray) -> None:
+        """Liga as sombras no shader do mundo (antes de desenhar o terreno e as construções)."""
+        # a água usa a matriz mesmo sem sombras (a normal das ondas vai do mundo para o espaço desenhado)
+        inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64)).astype(np.float32)
+        shader.set_mat4("u_ShadowInvModel", inverse_model)
+        # Cria e vincula as texturas 3D mesmo quando a sombra está inativa.
+        self.bind_samplers(shader)
         if not self.active:
             shader.set_float("u_ShadowStrength", 0.0)
             return

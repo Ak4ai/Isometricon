@@ -241,7 +241,10 @@ No `--terrain`, as construções entram pelo **painel de construções** do `/sc
 
 Depois: `P` coloca, `F4` abre a lista, `F3` pega a próxima, `R` gira, `N` nomeia,
 `V` seleciona, `Delete` remove e `Esc` fecha. O painel mistura os `.schem` de
-`assets/schematics/`, a vitrine de formas e os objetos JSON do editor.
+`assets/schematics/`, a vitrine de formas e os objetos JSON do editor. A lista
+tem miniaturas isométricas, filtros **Tudo / Exportados / Schem**, clique na
+linha para escolher e clique na prévia para abrir a biblioteca. `E`/`T` também
+trocam o filtro. As miniaturas são geradas uma vez e ficam em cache.
 
 As construções são salvas no mundo do menu ou, no `--terrain` direto, em
 `saves/mundos/mundo_<seed>.json` (o formato antigo é lido e convertido). Ao

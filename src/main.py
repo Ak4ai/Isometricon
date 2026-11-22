@@ -2042,8 +2042,8 @@ def main() -> None:
                 # O passe de profundidade dos personagens usa o mesmo shader
                 # do mundo. Deixe todas as unidades 3D completas antes dele;
                 # no macOS, uma unidade 3D vazia derruba a pipeline.
-                shadow_renderer.apply(shader, model)
-                room_renderer.apply(shader, model, view)
+                shadow_renderer.bind_samplers(shader)
+                room_renderer.bind_samplers(shader)
                 shadow_casters = []
                 if shadow_renderer.enabled and not character_editor.is_open:
                     gl.glActiveTexture(gl.GL_TEXTURE0)

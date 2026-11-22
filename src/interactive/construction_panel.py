@@ -16,13 +16,15 @@ import glfw
 from PIL import Image, ImageDraw
 
 from src.core.fonts import ui_font
+from src.interactive.construction_thumb import thumbnail_for
 from src.rendering.scaled_draw import RENDER_SCALE, ScaledDraw
 from src.world import BlockType
 
-PANEL_WIDTH = 440
-PANEL_HEIGHT = 220
+PANEL_WIDTH = 620
+PANEL_HEIGHT = 360
 MARGIN = 16
-LIST_ROWS = 7
+LIST_ROWS = 8
+FILTERS = (("todos", "Tudo"), ("exportados", "Exportados"), ("schem", "Schem"))
 ACTIONS = (
     ("place", "Colocar"),
     ("select", "Selecionar"),
@@ -31,7 +33,7 @@ ACTIONS = (
     ("remove", "Remover"),
     ("close", "Sair"),
 )
-HELP = "P/V modo  F3/F4 construção  R girar  N nome  Del remover  Esc sair"
+HELP = "P/V modo  F3/F4 biblioteca  R girar  N nome  Del remover  Esc sair"
 
 
 def _font(size: int):
@@ -59,7 +61,15 @@ class ConstructionPanel:
         self.name_buffer = ""
         self.status = ""
         self.buttons: Dict[str, Tuple[int, int, int, int]] = {
-            action: (12 + i * 70, 176, 12 + i * 70 + 66, 206) for i, (action, _) in enumerate(ACTIONS)}
+            action: (12 + i * 100, 310, 12 + i * 100 + 94, 340) for i, (action, _) in enumerate(ACTIONS)}
+        self.filters: Dict[str, Tuple[int, int, int, int]] = {}
+        self.list_rows: Dict[int, Tuple[int, int, int, int]] = {}
+        self.preview_box = (428, 36, 608, 196)
+        self.filter_mode = "todos"
+        self._filter_items: Optional[List[Tuple[str, dict]]] = None
+        self._thumb_entry = None
+        self._thumb_image: Optional[Image.Image] = None
+        self._thumb_key = None
         self.quad = None
         if create_gl:
             from src.rendering.hud_quad import HudQuad
@@ -70,15 +80,35 @@ class ConstructionPanel:
         self._scale = 1.0
 
     def library(self) -> List[Tuple[str, dict]]:
-        """(rótulo, entrada) de tudo que dá para colocar, lida da pasta ao abrir o painel."""
+        """(rótulo, entrada) da biblioteca, filtrada pela categoria ativa."""
         if self._items is None:
             self._items = list(self._read_library())
-        return self._items
+        if self._filter_items is None:
+            if self.filter_mode == "exportados":
+                self._filter_items = [(label, entry) for label, entry in self._items
+                                      if entry.get("kind") == "object"]
+            elif self.filter_mode == "schem":
+                self._filter_items = [(label, entry) for label, entry in self._items
+                                      if entry.get("kind") == "schem"]
+            else:
+                self._filter_items = list(self._items)
+        return self._filter_items
+
+    def select_filter(self, mode: str) -> None:
+        if mode not in {key for key, _ in FILTERS}:
+            return
+        self.filter_mode = mode
+        self._filter_items = None
+        self.list_index = 0
+        self.list_open = True
+        self.status = "Filtro: " + dict(FILTERS)[mode] + "."
+        self._dirty = True
 
     # ------------------------------------------------------------------ abrir e fechar
     def open(self, entry: Optional[dict] = None) -> None:
         """Abre em modo Colocar; com ``entry``, já com essa construção no holograma."""
         self._items = None   # relê: um .schem ou objeto novo aparece sem reiniciar o jogo
+        self._filter_items = None
         self.is_open = True
         self.mode = self.PLACE
         self.selected = None
@@ -155,6 +185,8 @@ class ConstructionPanel:
             self.list_open = not self.list_open
             labels = [e for _, e in self.library()]
             self.list_index = labels.index(self.entry) if self.entry in labels else 0
+            if self.list_open:
+                self.status = f"{len(self.library())} construção(ões) na biblioteca."
         elif action == "rotate":
             if self.mode == self.PLACE:
                 self.tool.rotate_preview()
@@ -207,6 +239,12 @@ class ConstructionPanel:
             return True
         if self.list_open:
             items = self.library()
+            if key == glfw.KEY_E:
+                self.select_filter("exportados")
+                return True
+            if key == glfw.KEY_T:
+                self.select_filter("todos")
+                return True
             if key in (glfw.KEY_UP, glfw.KEY_DOWN) and items:
                 self.list_index = (self.list_index + (1 if key == glfw.KEY_DOWN else -1)) % len(items)
             elif key in (glfw.KEY_ENTER, glfw.KEY_KP_ENTER) and items:
@@ -270,7 +308,22 @@ class ConstructionPanel:
             for name, (x0, y0, x1, y1) in self.buttons.items():
                 if x0 <= x <= x1 and y0 <= y <= y1:
                     self._action(name)
-                    break
+                    return True
+            if self.list_open:
+                for mode, (x0, y0, x1, y1) in self.filters.items():
+                    if x0 <= x <= x1 and y0 <= y <= y1:
+                        self.select_filter(mode)
+                        return True
+                for index, (x0, y0, x1, y1) in self.list_rows.items():
+                    if x0 <= x <= x1 and y0 <= y <= y1:
+                        items = self.library()
+                        if 0 <= index < len(items):
+                            self.list_open = False
+                            self._take(items[index][1])
+                        return True
+            elif self.preview_box[0] <= x <= self.preview_box[2] and self.preview_box[1] <= y <= self.preview_box[3]:
+                self._action("library")
+                return True
             return True   # o painel come o clique: nada é colocado atrás dele
         if self.mode == self.PLACE:
             self._place()
@@ -285,12 +338,10 @@ class ConstructionPanel:
     def _lines(self) -> List[Tuple[str, Tuple[int, int, int]]]:
         if self.list_open:
             items = self.library()
-            start = max(0, min(self.list_index - LIST_ROWS // 2, len(items) - LIST_ROWS))
-            rows = []
-            for i, (label, _) in enumerate(items[start:start + LIST_ROWS], start):
-                mark = "›" if i == self.list_index else " "
-                rows.append((f"{mark} {label}", (245, 210, 120) if i == self.list_index else (200, 210, 220)))
-            return rows + [("↑/↓ escolhe · Enter pega · Esc volta", (150, 160, 175))]
+            if not items:
+                return [("Nenhuma construção neste filtro.", (245, 120, 100)),
+                        ("Clique em Tudo/Exportados/Schem para trocar.", (150, 160, 175))]
+            return [("Use ↑/↓ ou clique numa linha.", (150, 160, 175))]
         preview = self.tool.preview
         mode = "colocar" if self.mode == self.PLACE else "selecionar"
         cursor = "—" if self.cursor is None else f"({self.cursor[0]}, {self.cursor[1]}, {self.cursor[2]})"
@@ -303,15 +354,39 @@ class ConstructionPanel:
             (f"Cursor: {cursor}   {validity}", (200, 210, 220)),
             (f"Nome: {name} [N]", (200, 210, 220)),
             (self.status, (245, 210, 120)),
-            (HELP, (150, 160, 175)),
         ]
         if self.name_mode:
             lines[-1] = (f"Nome: {self.name_buffer}_  (Enter aplica, Esc cancela)", (245, 210, 120))
         return lines
 
+    def _thumbnail(self, entry: Optional[dict]) -> Optional[Image.Image]:
+        if entry is None:
+            return None
+        key = (str(entry.get("kind", "")), str(entry.get("name", "")), id(entry))
+        if key == self._thumb_key:
+            return self._thumb_image
+        self._thumb_key = key
+        self._thumb_image = None
+        try:
+            from src.world.structure_sources import load_entry
+            schematic = load_entry(entry, self.tool.schematics_dir)
+            self._thumb_image = thumbnail_for(schematic, (164 * RENDER_SCALE, 124 * RENDER_SCALE))
+        except Exception:
+            self._thumb_image = None
+        return self._thumb_image
+
     def _draw_image(self) -> None:
         lines = tuple(self._lines())
-        key = (lines, self.mode)
+        items = self.library()
+        start = max(0, min(self.list_index - LIST_ROWS // 2, len(items) - LIST_ROWS)) if items else 0
+        preview_entry = None
+        if self.list_open and items:
+            preview_entry = items[min(self.list_index, len(items) - 1)][1]
+        elif not self.list_open:
+            preview_entry = self.entry
+        preview = self._thumbnail(preview_entry)
+        key = (lines, self.mode, self.list_open, self.list_index, self.filter_mode,
+               len(items), tuple(label for label, _ in items), preview_entry is not None)
         if key == self._key:
             return
         self._key = key
@@ -319,11 +394,73 @@ class ConstructionPanel:
         draw = ScaledDraw(ImageDraw.Draw(image), RENDER_SCALE)
         draw.rounded_rectangle((0, 0, PANEL_WIDTH - 1, PANEL_HEIGHT - 1), radius=10,
                                fill=(13, 18, 26, 238), outline=(232, 186, 76, 255), width=2)
-        draw.text((14, 10), "CONSTRUÇÕES — ISOMETRICON", font=_font(16 * RENDER_SCALE), fill=(240, 208, 120, 255))
-        y = 36
-        for text, colour in lines:
-            draw.text((14, y), text, font=_font(13 * RENDER_SCALE), fill=(*colour, 255))
-            y += 18
+        draw.text((14, 10), "CONSTRUÇÕES — ISOMETRICON", font=_font(16 * RENDER_SCALE),
+                  fill=(240, 208, 120, 255))
+        draw.line((14, 30, PANEL_WIDTH - 14, 30), fill=(80, 95, 115, 255), width=1)
+
+        # Cartão da construção selecionada: miniatura + tipo/tamanho.
+        draw.rounded_rectangle(self.preview_box, radius=7, fill=(20, 27, 36, 255),
+                               outline=(90, 105, 125, 255), width=1)
+        if preview is not None:
+            image.paste(preview, (436 * RENDER_SCALE, 44 * RENDER_SCALE))
+        else:
+            draw.text((452, 92), "sem prévia", font=_font(12 * RENDER_SCALE), fill=(120, 132, 148, 255))
+        if preview_entry is not None:
+            kind = {"object": "exportado", "schem": "schem", "formas": "vitrine"}.get(
+                preview_entry.get("kind"), "construção")
+            draw.text((436, 174), f"{kind} · {preview_entry.get('name', '—')}"[:40],
+                      font=_font(11 * RENDER_SCALE), fill=(225, 208, 160, 255))
+
+        self.list_rows = {}
+        self.filters = {}
+        if self.list_open:
+            y = 40
+            if not items:
+                draw.text((14, y), "Nenhuma construção neste filtro.", font=_font(13 * RENDER_SCALE),
+                          fill=(245, 120, 100, 255))
+            for i in range(start, min(len(items), start + LIST_ROWS)):
+                label, entry = items[i]
+                box = (14, y, 414, y + 20)
+                self.list_rows[i] = box
+                active = i == self.list_index
+                draw.rounded_rectangle(box, radius=4,
+                                       fill=(196, 150, 45, 255) if active else (27, 35, 46, 255),
+                                       outline=(240, 205, 120, 255) if active else (50, 62, 78, 255), width=1)
+                tag = "obj" if entry.get("kind") == "object" else "schem"
+                draw.text((20, y + 3), f"[{tag}] {label}"[:48],
+                          font=_font(11 * RENDER_SCALE),
+                          fill=(20, 24, 30, 255) if active else (200, 210, 220, 255))
+                y += 22
+            draw.text((14, 232), "Filtro", font=_font(11 * RENDER_SCALE), fill=(150, 162, 178, 255))
+            for index, (mode, label) in enumerate(FILTERS):
+                box = (62 + index * 122, 228, 62 + index * 122 + 114, 250)
+                self.filters[mode] = box
+                active = mode == self.filter_mode
+                draw.rounded_rectangle(box, radius=4,
+                                       fill=(196, 150, 45, 255) if active else (32, 41, 54, 255),
+                                       outline=(240, 205, 120, 255) if active else (80, 95, 115, 255), width=1)
+                draw.text((box[0] + 8, box[1] + 5), label, font=_font(10 * RENDER_SCALE),
+                          fill=(20, 24, 30, 255) if active else (210, 218, 228, 255))
+            draw.text((14, 262), f"{len(items)} construção(ões) · ↑/↓ ou clique · Enter pega",
+                      font=_font(10 * RENDER_SCALE), fill=(150, 160, 175, 255))
+        else:
+            y = 40
+            for text, colour in lines:
+                draw.text((14, y), text, font=_font(12 * RENDER_SCALE), fill=(*colour, 255))
+                y += 19
+            draw.text((14, 246), f"Biblioteca: {len(items)} · clique na prévia para abrir",
+                      font=_font(10 * RENDER_SCALE), fill=(150, 160, 175, 255))
+            for index, (mode, label) in enumerate(FILTERS):
+                box = (14 + index * 122, 266, 14 + index * 122 + 114, 288)
+                self.filters[mode] = box
+                active = mode == self.filter_mode
+                draw.rounded_rectangle(box, radius=4,
+                                       fill=(196, 150, 45, 255) if active else (32, 41, 54, 255),
+                                       outline=(240, 205, 120, 255) if active else (80, 95, 115, 255), width=1)
+                draw.text((box[0] + 8, box[1] + 5), label, font=_font(10 * RENDER_SCALE),
+                          fill=(20, 24, 30, 255) if active else (210, 218, 228, 255))
+            draw.text((14, 292), HELP, font=_font(10 * RENDER_SCALE), fill=(150, 160, 175, 255))
+
         active_action = "library" if self.list_open else self.mode
         for action, label in ACTIONS:
             box = self.buttons[action]
@@ -333,10 +470,11 @@ class ConstructionPanel:
                                    outline=(240, 205, 120, 255) if active else (80, 95, 115, 255), width=1)
             colour = (20, 24, 30, 255) if active else (210, 218, 228, 255)
             try:
-                width = draw.textbbox((0, 0), label, font=_font(10 * RENDER_SCALE))[2]
+                width = draw.textbbox((0, 0), label, font=_font(10 * RENDER_SCALE))[2] / RENDER_SCALE
             except Exception:
                 width = len(label) * 6
-            draw.text((box[0] + (box[2] - box[0] - width) / 2, box[1] + 6), label, font=_font(10 * RENDER_SCALE), fill=colour)
+            draw.text((box[0] + (box[2] - box[0] - width) / 2, box[1] + 6), label,
+                      font=_font(10 * RENDER_SCALE), fill=colour)
         self._image = image
         self._dirty = True
 

@@ -108,19 +108,21 @@ class RoomRevealRenderer:
     def visible(self) -> bool:
         return self.level > 0.0 and self._shown is not None
 
+    def bind_samplers(self, shader) -> None:
+        """Vincula a textura da máscara sem refazer tampas nem atualizar o nível."""
+        self._ensure_texture()
+        gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
+        gl.glActiveTexture(gl.GL_TEXTURE0)
+        log_texture_unit(MASK_UNIT, "room mask", gl.GL_TEXTURE_2D_ARRAY)
+        shader.set_int("u_RoomMask", MASK_UNIT)
+
     def apply(self, shader, base_model: np.ndarray, view: np.ndarray) -> None:
         """Liga o efeito no shader do mundo (chamar antes de desenhar o terreno e as construções)."""
         if not self.visible:
-            # Mesmo inativo, o sampler3D precisa de uma textura completa
-            # enquanto o shader ainda é usado por outros passes (a sombra dos
-            # personagens, por exemplo); unidade vazia derruba a pipeline no
-            # driver Metal do macOS.
-            self._ensure_texture()
-            gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
-            gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
-            gl.glActiveTexture(gl.GL_TEXTURE0)
-            log_texture_unit(MASK_UNIT, "room mask", gl.GL_TEXTURE_2D_ARRAY)
-            shader.set_int("u_RoomMask", MASK_UNIT)
+            # Mesmo inativo, a sampler2DArray precisa de uma textura completa
+            # enquanto o shader é usado por outros passes.
+            self.bind_samplers(shader)
             shader.set_float("u_RoomActive", 0.0)
             return
         inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64))

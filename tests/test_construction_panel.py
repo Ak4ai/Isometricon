@@ -185,3 +185,21 @@ def test_arrow_nudges_survive_until_the_mouse_points_elsewhere(panel):
     assert panel.tool.preview.origin == [start[0] + 1, start[1], start[2]]
     panel.update_cursor(hit(30, 4, 20), None)
     assert panel.tool.preview.origin[0] == start[0] + 20
+
+
+def test_list_filters_and_mouse_selection(panel):
+    panel.open()
+    panel.render(WIDTH, HEIGHT)
+    assert panel.filters
+    panel.select_filter("exportados")
+    assert panel.library() == []              # a biblioteca de teste não tem objetos exportados
+    panel.select_filter("todos")
+    assert len(panel.library()) == len(LIBRARY)
+    panel.render(WIDTH, HEIGHT)
+    assert panel.list_rows
+    index = min(2, max(panel.list_rows))
+    x0, y0, x1, y1 = panel.list_rows[index]
+    left = WIDTH - PANEL_WIDTH - 16
+    assert click(panel, (left + (x0 + x1) / 2, 16 + (y0 + y1) / 2))
+    assert not panel.list_open
+    assert panel.tool.preview.entry == LIBRARY[index][1]
