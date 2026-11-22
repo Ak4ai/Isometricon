@@ -15,6 +15,7 @@ import OpenGL.GL as gl
 
 from src.rendering.mesh import TexturedMesh
 from src.world.room_caps import build_caps
+from src.rendering.diagnostics import log_texture_unit
 from src.world.room_reveal import WINDOW, RoomMask, RoomRevealTracker
 
 MASK_UNIT = 2          # unidade de textura da máscara (a 0 é o atlas)
@@ -80,14 +81,14 @@ class RoomRevealRenderer:
         if self.texture_id:
             return
         self.texture_id = gl.glGenTextures(1)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
         for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
                             (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
                             (gl.GL_TEXTURE_WRAP_R, gl.GL_CLAMP_TO_EDGE)):
-            gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D_ARRAY, name, value)
         sx, sy, sz = WINDOW
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
+        gl.glTexImage3D(gl.GL_TEXTURE_2D_ARRAY, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx), dtype=np.uint8))
 
     def _upload(self, mask: RoomMask) -> None:
@@ -96,9 +97,9 @@ class RoomRevealRenderer:
         # a máscara é [x, y, z]; a textura 3D quer (profundidade z, altura y, largura x)
         data = np.ascontiguousarray(mask.data.transpose(2, 1, 0))
         gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
+        gl.glTexSubImage3D(gl.GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         self._uploaded = mask
 
@@ -110,6 +111,16 @@ class RoomRevealRenderer:
     def apply(self, shader, base_model: np.ndarray, view: np.ndarray) -> None:
         """Liga o efeito no shader do mundo (chamar antes de desenhar o terreno e as construções)."""
         if not self.visible:
+            # Mesmo inativo, o sampler3D precisa de uma textura completa
+            # enquanto o shader ainda é usado por outros passes (a sombra dos
+            # personagens, por exemplo); unidade vazia derruba a pipeline no
+            # driver Metal do macOS.
+            self._ensure_texture()
+            gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
+            gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
+            gl.glActiveTexture(gl.GL_TEXTURE0)
+            log_texture_unit(MASK_UNIT, "room mask", gl.GL_TEXTURE_2D_ARRAY)
+            shader.set_int("u_RoomMask", MASK_UNIT)
             shader.set_float("u_RoomActive", 0.0)
             return
         inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64))
@@ -120,8 +131,9 @@ class RoomRevealRenderer:
         self._update_caps(view_dir)  # pode trocar a máscara mostrada (junto com as tampas dela)
         ox, oy, oz = self._shown.origin
         gl.glActiveTexture(gl.GL_TEXTURE0 + MASK_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
+        log_texture_unit(MASK_UNIT, "room mask", gl.GL_TEXTURE_2D_ARRAY)
         shader.set_int("u_RoomMask", MASK_UNIT)
         shader.set_mat4("u_RoomInvModel", inverse_model.astype(np.float32))
         shader.set_vec3("u_RoomOrigin", float(ox), float(oy), float(oz))

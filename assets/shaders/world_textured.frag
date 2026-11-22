@@ -46,9 +46,9 @@ uniform int u_CutawayPass;      // 0 = opaco; 1 = transparentes acima
 uniform bool u_WorldStyle;
 
 // Sombras do sol (ver src/rendering/sun_shadows.py): blocos sólidos em volta do jogador, em coordenadas do mundo.
-uniform sampler3D u_ShadowMask;
+uniform sampler2DArray u_ShadowMask;
 uniform sampler2D u_ShadowShapes;   // as caixas de cada forma de bloco parcial (ver shadow_shapes.py)
-uniform sampler3D u_ShadowShapeIds; // o número da forma de cada célula parcial ou planta (byte de baixo, de cima)
+uniform sampler2DArray u_ShadowShapeIds; // o número da forma de cada célula parcial ou planta (byte de baixo, de cima)
 uniform sampler2D u_ShadowPlants;   // os desenhos das plantas, 16 x 16 um embaixo do outro
 uniform vec3 u_ShadowOrigin;
 uniform vec3 u_ShadowSize;
@@ -208,6 +208,44 @@ bool shapeBlocks(int shape, vec3 start, vec3 dir, float tEnter, float tExit, boo
 // água deixa passar, perdendo um pouco a cada bloco atravessado (o fundo de um lago fundo recebe menos sol). Num
 // bloco parcial o raio só é cortado se cruza uma das caixas dele ou o desenho da planta (ver shapeBlocks).
 const float WATER_TRANSMIT = 0.82;
+#ifdef COMPAT_SUN_SHADOWS
+// Versão compatível com o driver Metal do macOS: mantém máscara e horizonte,
+// mas sem o caminho das formas parciais (que quebra a pipeline).
+float traceSun(vec3 worldPos, vec3 dir)
+{
+    vec3 q = worldPos - u_ShadowOrigin;
+    ivec3 cell = ivec3(floor(q));
+    ivec3 size = ivec3(u_ShadowSize);
+    vec3 safe = vec3(abs(dir.x) < 1e-5 ? 1e-5 : dir.x, abs(dir.y) < 1e-5 ? 1e-5 : dir.y, abs(dir.z) < 1e-5 ? 1e-5 : dir.z);
+    ivec3 stepDir = ivec3(sign(safe));
+    vec3 tDelta = abs(1.0 / safe);
+    vec3 frac = q - floor(q);
+    vec3 tMax = vec3(safe.x > 0.0 ? 1.0 - frac.x : frac.x,
+                     safe.y > 0.0 ? 1.0 - frac.y : frac.y,
+                     safe.z > 0.0 ? 1.0 - frac.z : frac.z) * tDelta;
+    vec4 quadrant = vec4(stepDir.x > 0 && stepDir.z > 0, stepDir.x > 0 && stepDir.z <= 0,
+                         stepDir.x <= 0 && stepDir.z > 0, stepDir.x <= 0 && stepDir.z <= 0);
+    bool useHorizon = stepDir.y > 0 && safe.y >= u_ShadowHorizonRise * length(safe.xz);
+    float light = 1.0;
+    for (int i = 0; i < 32; i++)
+    {
+        if (i >= u_ShadowSteps) break;
+        if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size))) return light;
+        if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
+            return light;
+        float value = texelFetch(u_ShadowMask, cell, 0).r;
+        // Na variante compatível, um bloco parcial (laje, planta) bloqueia
+        // a célula inteira em vez de testar a caixa exata. O driver Metal do
+        // macOS não monta a pipeline do caminho de formas detalhadas.
+        if (value > 0.7) return 0.0;
+        if (value > 0.25 && value < 0.6) light *= 0.82;
+        if (tMax.x < tMax.y && tMax.x < tMax.z) { cell.x += stepDir.x; tMax.x += tDelta.x; }
+        else if (tMax.y < tMax.z) { cell.y += stepDir.y; tMax.y += tDelta.y; }
+        else { cell.z += stepDir.z; tMax.z += tDelta.z; }
+    }
+    return light;
+}
+#else
 float traceSun(vec3 worldPos, vec3 dir)
 {
     vec3 q = worldPos - u_ShadowOrigin;                       // em células da janela
@@ -256,6 +294,7 @@ float traceSun(vec3 worldPos, vec3 dir)
     }
     return light;
 }
+#endif
 
 // --------------------------------------------------------------------------------------------------- água
 // A água é desenhada em duas passadas (ver src/main.py): na 1 (opaca) ela é descartada e o fundo recebe a luz que a
@@ -445,7 +484,7 @@ vec3 worldLighting(vec3 n, vec3 l, float worldY, float sunVis)
 
 // Revelação do espaço do jogador (cômodo, caverna): ver src/world/room_reveal.py.
 uniform float u_RoomActive;     // 0 = desligado; 0..1 = intensidade do efeito
-uniform sampler3D u_RoomMask;   // 255 espaço do jogador, 192 móvel/degrau, 128 casca, 64 borda pela quina, 0 fora
+uniform sampler2DArray u_RoomMask;   // 255 espaço do jogador, 192 móvel/degrau, 128 casca, 64 borda pela quina, 0 fora
 uniform vec3 u_RoomOrigin;      // célula do mundo do canto (0,0,0) da máscara
 uniform vec3 u_RoomSize;        // tamanho da máscara em células
 uniform vec3 u_ViewDir;         // para onde a câmera olha, em coordenadas do mundo

@@ -60,8 +60,13 @@ class Window:
         glfw.make_context_current(self._window)
         glfw.swap_interval(1 if self.vsync else 0)
 
-        # Configurar Viewport inicial baseado no framebuffer real
+        # O tamanho público da janela é o do framebuffer. Antes ele ficava no
+        # tamanho lógico (1280x720) até o primeiro resize e só então virava
+        # 2560x1440 no Retina; isso deixava a cena e a HUD em sistemas de
+        # coordenadas diferentes. get_window_size() continua devolvendo o
+        # tamanho lógico para as HUDs desenhadas com Pillow.
         fb_w, fb_h = glfw.get_framebuffer_size(self._window)
+        self.width, self.height = int(fb_w), int(fb_h)
         gl.glViewport(0, 0, fb_w, fb_h)
 
         # Registrar callbacks internos do GLFW

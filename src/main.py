@@ -414,6 +414,9 @@ def main() -> None:
     )
 
     shader = Shader(shader_vert, shader_frag)
+    if "--gl-log" in sys.argv:
+        from src.rendering.diagnostics import log_context
+        log_context()
     argv = sys.argv[1:]
     explicit_editor = "--map-editor" in argv or "--editor-mapa" in argv
     terrain_requested = "--terrain" in argv
@@ -488,6 +491,13 @@ def main() -> None:
         elif arg.startswith("--chat-text="):
             chat_text = arg.split("=", 1)[1]
             open_chat = True
+
+    # O driver OpenGL/Metal do macOS não monta a pipeline do caminho
+    # completo de sombra por voxels (formas parciais). A variante compatível
+    # mantém a máscara, o horizonte e a revelação de cômodo.
+    compat_shadows = sys.platform == "darwin" and "--full-shadows" not in sys.argv
+    if "--compat-shadows" in sys.argv:
+        compat_shadows = True
 
     editor_mode = explicit_editor or (map_path is not None and not terrain_requested)
     if editor_mode:
@@ -689,6 +699,9 @@ def main() -> None:
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
+        shadow_renderer.compat = compat_shadows
+        if compat_shadows:
+            shader.set_defines(("COMPAT_SUN_SHADOWS",))
         from src.rendering.cast_shadow import CharacterShadowMap
         character_shadows = CharacterShadowMap()   # a sombra do personagem e dos NPCs em qualquer face de bloco
         # a cena do jogo num framebuffer próprio: MSAA, escala de resolução e FXAA mudam na hora (Configurações)
@@ -2026,6 +2039,11 @@ def main() -> None:
             grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
             gl.glClearColor(*ambience.background(), 1.0)
             if character_shadows is not None:
+                # O passe de profundidade dos personagens usa o mesmo shader
+                # do mundo. Deixe todas as unidades 3D completas antes dele;
+                # no macOS, uma unidade 3D vazia derruba a pipeline.
+                shadow_renderer.apply(shader, model)
+                room_renderer.apply(shader, model, view)
                 shadow_casters = []
                 if shadow_renderer.enabled and not character_editor.is_open:
                     gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -2050,6 +2068,10 @@ def main() -> None:
             shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
             shadow_renderer.apply(shader, model)
             room_renderer.apply(shader, model, view)
+            if "--gl-log" in sys.argv:
+                from src.rendering.diagnostics import log_shader_sampler_values, log_units
+                log_shader_sampler_values(shader.program_id, "world before terrain")
+                log_units(label="world before terrain")
             mark("room_apply_caps")
             # água: na passada 1 (esta) ela é descartada e o fundo recebe a luz que a atravessa; a 2 vem no fim
             shader.set_vec4("u_WaterRect", *water_rect)

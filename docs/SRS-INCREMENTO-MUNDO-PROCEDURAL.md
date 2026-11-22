@@ -77,6 +77,8 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-071** | O fluxo menu → editor → salvar/exportar → menu → nova aventura deve ocorrer na mesma execução, sem encerrar a aplicação, e o objeto exportado deve aparecer na biblioteca de construções. | Essencial | Teste, demonstração |
 | **FR-072** | As UIs devem usar fontes empacotadas com a aplicação (Inter e JetBrains Mono, licença OFL), sem depender de fontes instaladas no sistema. | Desejável | Teste, inspeção |
 | **FR-073** | As HUDs do editor e das construções devem rasterizar a fonte em 2× para manter legibilidade em telas de alta densidade. | Desejável | Inspeção, demonstração |
+| **FR-074** | Em macOS, o mundo normal deve usar uma variante de shader compatível com o driver Metal, preservando máscara de sombra, horizonte e revelação de cômodo. | Essencial | Teste, demonstração |
+| **FR-075** | A janela deve separar tamanho de framebuffer (cena 3D) de tamanho lógico (HUDs), mantendo cliques e viewport alinhados em Retina. | Essencial | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -160,6 +162,8 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-071 | FR-063, FR-067 | `run_editor_session`, loop do menu, `ConstructionPanel` |
 | FR-072 | — | `src/core/fonts.py`, `assets/fonts/` |
 | FR-073 | FR-048 | `src/rendering/scaled_draw.py`, `EditorHud`, `ConstructionPanel` |
+| FR-074 | FR-052, FR-056 | `world_textured.frag`, `SunShadowRenderer.compat`, `--compat-shadows` |
+| FR-075 | FR-048 | `Window`, `get_window_size`, `SceneTarget` |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `ConstructionPanel` |
 | DR-008 | FR-041 | JSON `isometricon-structures` (v2; lê o formato antigo) |

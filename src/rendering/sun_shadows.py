@@ -12,6 +12,7 @@ import OpenGL.GL as gl
 
 from src.world.block import BlockType
 from src.world.room_reveal import WINDOW, RoomRevealTracker
+from src.rendering.diagnostics import log_texture_unit
 from src.world.shadow_shapes import TABLE
 
 SHADOW_UNIT = 3  # unidade de textura da máscara de sombra (0 atlas, 2 máscara do espaço)
@@ -138,6 +139,7 @@ class SunShadowRenderer:
 
     def __init__(self, strength: float = 1.0, sun_direction=(0.55, 0.26, 0.7)) -> None:
         self.enabled = True
+        self.compat = False   # macOS/Metal: variante sem o caminho das formas
         self.sun_direction = tuple(float(v) for v in sun_direction)   # o u_LightDir do terreno (cast_shadow usa)
         # a subida mínima dos raios do sol (o u_LightDir do terreno, girado só em torno de y: a elevação não muda);
         # se o sol for outro, o shader só deixa de usar o atalho nos raios que sobem menos
@@ -160,7 +162,10 @@ class SunShadowRenderer:
         sem o caminho das formas)."""
         detail = max(DETAIL_CUBES, min(DETAIL_FULL, int(detail)))
         if shader is not None:
-            shader.set_defines(() if detail == DETAIL_CUBES else ("SHADOW_SHAPES",))
+            if self.compat:
+                shader.set_defines(("COMPAT_SUN_SHADOWS",))
+            else:
+                shader.set_defines(() if detail == DETAIL_CUBES else ("SHADOW_SHAPES",))
         if detail != self.detail:
             self.detail = detail
             self._uploaded = None     # a mesma janela, outra máscara
@@ -176,13 +181,13 @@ class SunShadowRenderer:
         values = mask_values(mask.window, self.detail)
         data = np.ascontiguousarray(values.transpose(2, 1, 0))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
+        gl.glTexSubImage3D(gl.GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
         ids = np.ascontiguousarray(shape_texels(mask.window, self.detail).transpose(2, 1, 0, 3))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
-        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RG, gl.GL_UNSIGNED_BYTE, ids)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.shape_ids_id)
+        gl.glTexSubImage3D(gl.GL_TEXTURE_2D_ARRAY, 0, 0, 0, 0, sx, sy, sz, gl.GL_RG, gl.GL_UNSIGNED_BYTE, ids)
         # [x, z, 4] -> a textura 2D quer (altura z, largura x, canais)
         horizons = np.ascontiguousarray((column_horizons(values, self.rise)).astype(np.uint8).transpose(1, 0, 2))
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
@@ -210,23 +215,23 @@ class SunShadowRenderer:
             return
         self.texture_id = gl.glGenTextures(1)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
         for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
                             (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
                             (gl.GL_TEXTURE_WRAP_R, gl.GL_CLAMP_TO_EDGE)):
-            gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D_ARRAY, name, value)
         sx, sy, sz = WINDOW
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
-        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
+        gl.glTexImage3D(gl.GL_TEXTURE_2D_ARRAY, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx), dtype=np.uint8))
         self.shape_ids_id = gl.glGenTextures(1)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.shape_ids_id)
         for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
                             (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
                             (gl.GL_TEXTURE_WRAP_R, gl.GL_CLAMP_TO_EDGE)):
-            gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
-        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_RG8, sx, sy, sz, 0, gl.GL_RG, gl.GL_UNSIGNED_BYTE,
+            gl.glTexParameteri(gl.GL_TEXTURE_2D_ARRAY, name, value)
+        gl.glTexImage3D(gl.GL_TEXTURE_2D_ARRAY, 0, gl.GL_RG8, sx, sy, sz, 0, gl.GL_RG, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx, 2), dtype=np.uint8))
         self.horizon_id = gl.glGenTextures(1)
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
@@ -254,11 +259,13 @@ class SunShadowRenderer:
         # a água usa a matriz mesmo sem sombras (a normal das ondas vai do mundo para o espaço desenhado)
         inverse_model = np.linalg.inv(np.asarray(base_model, dtype=np.float64)).astype(np.float32)
         shader.set_mat4("u_ShadowInvModel", inverse_model)
-        if not self.active:
-            shader.set_float("u_ShadowStrength", 0.0)
-            return
+        # Cria e vincula as texturas 3D mesmo quando a sombra está inativa:
+        # o shader completo continua sendo usado pelo passe da sombra dos
+        # personagens antes deste apply. Unidade 3D sem textura completa falha
+        # a pipeline no Metal/OpenGL do macOS.
+        self._ensure_texture()
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.texture_id)
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPES_UNIT)
@@ -266,8 +273,15 @@ class SunShadowRenderer:
         gl.glActiveTexture(gl.GL_TEXTURE0 + PLANTS_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.plants_id)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_ARRAY, self.shape_ids_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
+        log_texture_unit(SHADOW_UNIT, "sun-shadow mask", gl.GL_TEXTURE_2D_ARRAY)
+        log_texture_unit(SHAPE_IDS_UNIT, "sun-shadow shape ids", gl.GL_TEXTURE_2D_ARRAY)
+        log_texture_unit(HORIZON_UNIT, "sun-shadow horizon", gl.GL_TEXTURE_2D)
+        # Ainda que a sombra esteja inativa (fora do alcance ou desligada),
+        # os uniforms precisam apontar para as texturas que acabaram de ser
+        # vinculadas. Se ficarem no valor padrão, um sampler3D aponta para
+        # uma unidade vazia e o driver recusa a pipeline.
         shader.set_int("u_ShadowMask", SHADOW_UNIT)
         shader.set_int("u_ShadowShapeIds", SHAPE_IDS_UNIT)
         shader.set_int("u_ShadowShapes", SHAPES_UNIT)
@@ -276,6 +290,9 @@ class SunShadowRenderer:
         shader.set_float("u_ShadowHorizonRise", self.rise)
         shader.set_int("u_ShadowSteps", int(self.steps))
         shader.set_int("u_ShadowQuality", int(self.quality))
+        if not self.active:
+            shader.set_float("u_ShadowStrength", 0.0)
+            return
         shader.set_vec3("u_ShadowOrigin", float(self._origin[0]), float(self._origin[1]), float(self._origin[2]))
         shader.set_vec3("u_ShadowSize", float(WINDOW[0]), float(WINDOW[1]), float(WINDOW[2]))
         shader.set_float("u_ShadowStrength", self.strength)

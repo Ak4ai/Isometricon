@@ -5,12 +5,33 @@ from typing import Dict, Sequence, Tuple, Union
 import OpenGL.GL as gl
 import numpy as np
 
+from src.rendering.diagnostics import log_samplers, sampler_type_name
+
 
 class Shader:
     """Carrega, compila e gerencia programas de shaders GLSL."""
 
-    # Unidade de textura fixa de samplers adicionais do shader do mundo (u_RoomMask: máscara 3D do espaço)
-    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3}
+    # Unidades fixas dos samplers do shader do mundo. Qualquer sampler novo é
+    # atribuído automaticamente a uma unidade livre; misturar sampler2D e
+    # sampler3D na mesma unidade é inválido no OpenGL (e derrubava o pipeline
+    # no driver Metal do macOS).
+    EXTRA_SAMPLER_UNITS = {
+        "u_TextureAtlas": 0,
+        "u_ShadowShapeIds": 1,
+        "u_RoomMask": 2,
+        "u_ShadowMask": 3,
+        "u_ShadowHorizon": 4,
+        "u_CharShadowMap": 5,
+        "u_FogWarMap": 6,
+        "u_ShadowShapes": 10,
+        "u_ShadowPlants": 11,
+        "u_Distance": 8,
+        "u_Boxes": 9,
+    }
+    SAMPLER_TYPES = {
+        gl.GL_SAMPLER_1D, gl.GL_SAMPLER_2D, gl.GL_SAMPLER_3D,
+        gl.GL_SAMPLER_CUBE, gl.GL_SAMPLER_2D_ARRAY,
+    }
 
     def __init__(self, vertex_path: str, fragment_path: str):
         """Inicializa e compila o programa de shader a partir de arquivos no disco.
@@ -24,6 +45,7 @@ class Shader:
         self._uniform_cache: dict[str, int] = {}
         self.defines: Tuple[str, ...] = ()
         self._variants: Dict[Tuple[str, ...], Tuple[int, dict]] = {}
+        self.sampler_units: dict[str, int] = {}
         self.program_id = self._build(())
         self._variants[()] = (self.program_id, self._uniform_cache)
 
@@ -46,7 +68,14 @@ class Shader:
         old = self.program_id
         self.program_id, self._uniform_cache = self._variants[key]
         self.defines = key
+        # _assign_sampler_units envia glUniform1i e precisa do programa novo
+        # ativo; sem isso, no macOS o glUniform ia para o programa antigo e
+        # deixava a variante com sampler3D na unidade 0 (draw inválido).
+        previous = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
+        gl.glUseProgram(self.program_id)
+        self.sampler_units = self._assign_sampler_units(self.program_id)
         _copy_uniforms(old, self.program_id)
+        gl.glUseProgram(int(previous))
 
     def _build(self, defines: Tuple[str, ...]) -> int:
         vertex_source = self._with_defines(self._read_source(self.vertex_path), defines)
@@ -71,15 +100,45 @@ class Shader:
         gl.glDeleteShader(vert_shader)
         gl.glDeleteShader(frag_shader)
 
-        # Samplers que não são do atlas (unidade 0) precisam de unidade própria desde já: um sampler3D
-        # que ficasse na 0, junto do sampler2D do atlas, faria o OpenGL recusar qualquer desenho.
+        # Todo sampler precisa de uma unidade própria e estável. Em especial,
+        # um sampler3D com unidade padrão 0 colide com o sampler2D do atlas e
+        # o driver recusa o draw (GL_INVALID_OPERATION) no macOS.
         gl.glUseProgram(program_id)
-        for sampler, unit in self.EXTRA_SAMPLER_UNITS.items():
-            location = gl.glGetUniformLocation(program_id, sampler)
-            if location >= 0:
-                gl.glUniform1i(location, unit)
+        self.sampler_units = self._assign_sampler_units(program_id)
         gl.glUseProgram(0)
+        log_samplers(program_id, self.sampler_units, os.path.basename(self.fragment_path))
         return program_id
+
+    def _assign_sampler_units(self, program_id: int) -> dict[str, int]:
+        """Atribui uma unidade única a cada sampler ativo e devolve o mapa."""
+        count = gl.glGetProgramiv(program_id, gl.GL_ACTIVE_UNIFORMS)
+        active: list[tuple[str, int, int]] = []
+        for index in range(int(count)):
+            name, _size, kind = gl.glGetActiveUniform(program_id, index)
+            if kind not in self.SAMPLER_TYPES:
+                continue
+            if isinstance(name, bytes):
+                name = name.decode("utf-8", "replace")
+            name = name.split("[", 1)[0]
+            location = gl.glGetUniformLocation(program_id, name)
+            if location >= 0:
+                active.append((name, kind, location))
+        used: dict[int, str] = {}
+        result: dict[str, int] = {}
+        for name, kind, location in active:
+            preferred = self.EXTRA_SAMPLER_UNITS.get(name)
+            if preferred is not None and preferred not in used:
+                unit = preferred
+            else:
+                unit = next((candidate for candidate in range(1, 16) if candidate not in used), -1)
+                if unit < 0:
+                    raise RuntimeError(f"Sem unidade de textura livre para {name}")
+            used[unit] = name
+            result[name] = unit
+            gl.glUniform1i(location, unit)
+        # Variantes futuras (SHADOW_SHAPES etc.) reutilizam o mesmo mapa.
+        self.sampler_units = result
+        return result
 
     def _read_source(self, path: str) -> str:
         """Lê o conteúdo de um arquivo de shader."""
@@ -232,8 +291,12 @@ def _copy_uniforms(source: int, target: int) -> None:
     count = gl.glGetProgramiv(source, gl.GL_ACTIVE_UNIFORMS)
     previous = gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM)
     gl.glUseProgram(target)
+    sampler_types = {gl.GL_SAMPLER_1D, gl.GL_SAMPLER_2D, gl.GL_SAMPLER_3D,
+                     gl.GL_SAMPLER_CUBE, gl.GL_SAMPLER_2D_ARRAY}
     for index in range(int(count)):
         name, size, kind = gl.glGetActiveUniform(source, index)
+        if kind in sampler_types:
+            continue  # as unidades da variante nova são atribuídas por _assign_sampler_units
         name = name.decode() if isinstance(name, bytes) else str(name)
         base = name[:-3] if name.endswith("[0]") else name
         for element in range(int(size)):

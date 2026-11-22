@@ -266,6 +266,35 @@ Detalhes em
 [`docs/EDITOR.md`](docs/EDITOR.md) e
 [`docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md`](docs/SRS-INCREMENTO-MUNDO-PROCEDURAL.md).
 
+### 🍎 macOS e HiDPI
+
+A janela usa o tamanho do framebuffer internamente e mantém o tamanho lógico
+separado para as HUDs. Isso corrige a cena que aparecia em apenas um canto da
+tela e os cliques desalinhados no Retina.
+
+O driver OpenGL/Metal do macOS não monta a pipeline completa das sombras por
+voxels com formas parciais. O jogo detecta Darwin e usa automaticamente uma
+variante compatível, que preserva:
+
+- sombra do sol pela máscara e pelo horizonte;
+- revelação de cômodo;
+- sombra 2D dos personagens;
+- terreno, água e construções.
+
+Nessa variante, blocos parciais (laje, planta) fazem sombra como se ocupassem a
+célula inteira. Use `--compat-shadows` para forçar o modo em qualquer sistema ou
+`--full-shadows` para tentar o caminho completo no macOS (hoje ele cai para
+software neste driver).
+
+Para diagnosticar:
+
+```bash
+python src/main.py --terrain --seed=777 --gl-log
+```
+
+O log mostra contexto, unidades de textura e samplers. Detalhes em
+[`docs/MENUS.md`](docs/MENUS.md).
+
 ### 🔤 Fontes
 
 A interface usa **Inter** no texto comum e **JetBrains Mono** em coordenadas,
