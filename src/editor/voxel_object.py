@@ -41,10 +41,15 @@ def _colour(value: Sequence[int]) -> tuple[int, int, int]:
 
 @dataclass(frozen=True)
 class VoxelMaterial:
-    """Cor e textura de um voxel. ``texture`` é o nome do tile no atlas."""
+    """Cor, textura e luz de um voxel.
+
+    ``light`` é a intensidade emissiva (0 a 15); materiais com luz também
+    alimentam as luzes pontuais do shader do editor.
+    """
 
     color: tuple[int, int, int]
     texture: str = "white_concrete"
+    light: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "color", _colour(self.color))
@@ -52,15 +57,21 @@ class VoxelMaterial:
         if not texture:
             texture = "white_concrete"
         object.__setattr__(self, "texture", texture)
+        light = int(self.light)
+        if not 0 <= light <= 15:
+            raise ValueError("A luz do material deve estar entre 0 e 15.")
+        object.__setattr__(self, "light", light)
 
     def to_dict(self) -> dict:
-        return {"color": list(self.color), "texture": self.texture}
+        return {"color": list(self.color), "texture": self.texture, "light": self.light}
 
     @classmethod
     def from_dict(cls, data: dict) -> "VoxelMaterial":
         if not isinstance(data, dict):
             raise ValueError("Material inválido.")
-        return cls(tuple(data.get("color", (255, 255, 255))), str(data.get("texture", "white_concrete")))
+        return cls(tuple(data.get("color", (255, 255, 255))),
+                   str(data.get("texture", "white_concrete")),
+                   int(data.get("light", 0)))
 
 
 class VoxelObject:
@@ -98,11 +109,12 @@ class VoxelObject:
     # ------------------------------------------------------------------
     # Dimensões e paleta
     # ------------------------------------------------------------------
-    def add_material(self, material: VoxelMaterial | tuple[int, int, int], texture: str | None = None) -> int:
+    def add_material(self, material: VoxelMaterial | tuple[int, int, int], texture: str | None = None,
+                     light: int = 0) -> int:
         """Acrescenta (ou reutiliza) um material e devolve seu índice."""
         if not isinstance(material, VoxelMaterial):
-            material = VoxelMaterial(material, texture or "white_concrete")
-        key = (material.color, material.texture)
+            material = VoxelMaterial(material, texture or "white_concrete", light)
+        key = (material.color, material.texture, material.light)
         if key in self._material_lookup:
             return self._material_lookup[key]
         if len(self.materials) >= MAX_MATERIALS:
@@ -112,9 +124,9 @@ class VoxelObject:
         self._material_lookup[key] = index
         return index
 
-    def material_index(self, color: Sequence[int], texture: str) -> int:
-        """Índice do material (cor, textura), criando-o se necessário."""
-        return self.add_material(VoxelMaterial(_colour(color), texture))
+    def material_index(self, color: Sequence[int], texture: str, light: int = 0) -> int:
+        """Índice do material (cor, textura, luz), criando-o se necessário."""
+        return self.add_material(VoxelMaterial(_colour(color), texture, light))
 
     def material(self, index: int) -> VoxelMaterial:
         if not 0 <= int(index) < len(self.materials):
@@ -216,7 +228,7 @@ class VoxelObject:
             if not self.in_bounds(tx, ty, tz):
                 continue
             material = source.material(int(source.blocks[x, y, z]))
-            self.blocks[tx, ty, tz] = self.material_index(material.color, material.texture)
+            self.blocks[tx, ty, tz] = self.material_index(material.color, material.texture, material.light)
             placed += 1
         return placed
 

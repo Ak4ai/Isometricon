@@ -671,6 +671,7 @@ def main() -> None:
         # a construção fixada ocupa a caixa dela: o terreno ali dentro vira ar (como colar no Minecraft)
         schematic_tool.on_place = lambda placed: world_manager.clear_box(*placed.bounds())
         schematic_tool.on_remove = lambda placed: world_manager.restore_box(*placed.bounds())
+        structure_light_cache = {"key": None, "lights": []}
         terrain_lookup = lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
         if map_world is not None:
             voxel_provider = VoxelGridProvider(block_lookup=map_world.get_block_at)
@@ -2064,6 +2065,14 @@ def main() -> None:
             gl.glActiveTexture(gl.GL_TEXTURE0)
             gl.glBindTexture(gl.GL_TEXTURE_2D, atlas.texture_id)
             shader.set_int("u_TextureAtlas", 0)
+            if map_world is None:
+                from src.editor.lighting import apply_lights, collect_structure_lights
+                structures = schematic_tool.layer.structures
+                light_key = tuple((id(item), getattr(item, "revision", 0)) for item in structures)
+                if light_key != structure_light_cache["key"]:
+                    structure_light_cache["key"] = light_key
+                    structure_light_cache["lights"] = collect_structure_lights(structures)
+                apply_lights(shader, structure_light_cache["lights"])
             view_projection = projection @ view
             shader.set_bool("u_WorldStyle", True)  # luz e cor do mundo (o personagem usa a luz de sempre)
             shadow_renderer.apply(shader, model)

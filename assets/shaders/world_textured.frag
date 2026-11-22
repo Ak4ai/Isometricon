@@ -19,6 +19,14 @@ uniform vec3 u_LightDir;     // Direção da luz do sol
 uniform vec3 u_LightColor;   // Cor da luz do sol
 uniform vec3 u_AmbientColor; // Luz ambiente
 
+// Luzes pontuais do editor/mapa: lampiões, lanternas e tochas.
+// Posições no espaço local da cena (o mesmo dos vértices do objeto).
+const int MAX_POINT_LIGHTS = 8;
+uniform int u_PointLightCount;
+uniform vec3 u_PointLightPosition[MAX_POINT_LIGHTS];
+uniform vec3 u_PointLightColor[MAX_POINT_LIGHTS];
+uniform float u_PointLightRadius[MAX_POINT_LIGHTS];
+
 // Vitiligo: how much of the skin has lost its colour (0 = none), which pattern, and the skin's own
 // colour (only what has that colour is skin: eyes, mouth and eyebrows on the head's texture are not).
 uniform float u_Vitiligo;
@@ -1047,6 +1055,26 @@ void main()
         float alpha = clamp(mix(0.22, 0.90, deep) + fresnel * 0.40 + glint, 0.0, 1.0);
         FragColor = vec4(envGrade(color * roomFactor, body), alpha * u_Alpha);
         return;
+    }
+
+    // Luz das lâmpadas: atenuação quadrática suave e Lambert por face.
+    // Não altera o caminho do sol; é somada por cima da iluminação global.
+    if (u_PointLightCount > 0)
+    {
+        vec3 pointLight = vec3(0.0);
+        for (int i = 0; i < MAX_POINT_LIGHTS; i++)
+        {
+            if (i >= u_PointLightCount)
+                break;
+            vec3 delta = u_PointLightPosition[i] - v_FragPos;
+            float distance = length(delta);
+            float radius = max(u_PointLightRadius[i], 0.01);
+            float falloff = clamp(1.0 - distance / radius, 0.0, 1.0);
+            falloff *= falloff;
+            float ndl = max(dot(norm, normalize(delta)), 0.0);
+            pointLight += u_PointLightColor[i] * (falloff * ndl);
+        }
+        lighting += pointLight;
     }
 
     vec3 result = envGrade(lighting * albedo * roomFactor, albedo * roomFactor);

@@ -22,6 +22,7 @@ from PIL import Image
 
 from src.camera import IsometricCamera
 from src.editor.editor_hud import EditorHud
+from src.editor.lighting import apply_lights, collect_lights
 from src.editor.map_project import MapProject, PlacedObject
 from src.editor.material_atlas import MaterialAtlas
 from src.editor.object_mesher import ObjectMeshData, build_mesh_data
@@ -127,6 +128,7 @@ class MapEditor:
         self.name_replace = False
         self.colour_index = 0
         self.custom_colour: tuple[int, int, int] | None = None
+        self.current_light = 0
         self.hsv = (0.0, 0.0, 1.0)
         self.recent_colours: list[tuple[int, int, int]] = []
         self.active_tab = "colors"
@@ -181,6 +183,7 @@ class MapEditor:
         self.dirty = False
         self.undo_stack: list[MapProject] = []
         self.redo_stack: list[MapProject] = []
+        self._lights_cache = None
         self._mesh_dirty = True
         self._preview_dirty = True
         self._cursor_preview_dirty = True
@@ -234,7 +237,7 @@ class MapEditor:
         camera.ortho_size = max(width, depth, height * 1.1) * 0.95
 
     def current_material(self) -> VoxelMaterial:
-        return VoxelMaterial(self.colour, self.texture)
+        return VoxelMaterial(self.colour, self.texture, self.current_light)
 
     # ------------------------------------------------------------------
     # Histórico
@@ -279,6 +282,7 @@ class MapEditor:
         self.dirty = True
         self._mesh_dirty = True
         self._cursor_preview_dirty = True
+        self._lights_cache = None
         self._update_hud()
 
     # ------------------------------------------------------------------
@@ -618,6 +622,7 @@ class MapEditor:
             self.status = "Nenhum material nesse voxel."
             return False
         self._set_custom_rgb(material.color)
+        self.current_light = material.light
         if material.texture in self.atlas.tile_names:
             self.texture_index = self.atlas.tile_names.index(material.texture)
         self.active_tab = "colors"
@@ -984,6 +989,11 @@ class MapEditor:
         if key == glfw.KEY_S and not control:
             self.open_texture_search()
             return True
+        if key == glfw.KEY_L and not control:
+            self.current_light = 15 if self.current_light == 0 else 0
+            self.status = f"Luz do material: {'ligada' if self.current_light else 'desligada'}."
+            self._update_hud()
+            return True
         if key == glfw.KEY_F and not control:
             self.toggle_favourite_texture()
             return True
@@ -1297,7 +1307,7 @@ class MapEditor:
         display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
             (f"Ferramenta: {TOOL_LABELS[self.tool]} [Tab]  Pincel: {self.brush_size} [-/+]", (225, 230, 238)),
-            (f"Cor: {self.colour_name} [C]  Textura: {self.texture} [X]", (200, 210, 220)),
+            (f"Cor: {self.colour_name} [C]  Textura: {self.texture} [X]  Luz: {'on' if self.current_light else 'off'} [L]", (200, 210, 220)),
             (f"Grid: {self.grid_size[0]}x{self.grid_size[1]}x{self.grid_size[2]} [F6/F7] passo {self.grid_spacing} [/] max 64", (200, 210, 220)),
             (f"Objetos: {len(self.objects)}  Nome: {display_name} [N]  Sel: {selected}", (200, 210, 220)),
             (f"Cursor: {cursor}  Voxels: {self.project.voxel_count}", (200, 210, 220)),
@@ -1334,6 +1344,9 @@ class MapEditor:
         gl.glActiveTexture(gl.GL_TEXTURE0)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.atlas.texture_id)
         shader.set_int("u_TextureAtlas", 0)
+        if self._lights_cache is None:
+            self._lights_cache = collect_lights(self.project)
+        apply_lights(shader, self._lights_cache, model)
 
     def _draw_alpha_mesh(self, shader, projection, view, model, mesh, origin, alpha: float) -> None:
         if mesh is None:
@@ -1356,10 +1369,12 @@ class MapEditor:
         if not self.create_gl:
             return
         self.update()
+        if self._lights_cache is None:
+            self._lights_cache = collect_lights(self.project)
         if self.platform is not None:
             self.platform.render(projection, view, model, (self.project.size[0], self.project.size[2]),
                                  None if self.cursor is None else (self.cursor[0], self.cursor[2]),
-                                 time, self.show_grid, self.grid_spacing)
+                                 time, self.show_grid, self.grid_spacing, lights=self._lights_cache)
         self._common_shader(shader, projection, view, model)
         if self.mesh is not None and self.mesh_data.vertex_count:
             shader.set_mat4("u_Model", model)

@@ -10,6 +10,7 @@ def test_world_shader_uses_arrays_and_has_macos_variant():
     assert "sampler3D" not in source
     assert "sampler2DArray u_ShadowMask" in source
     assert "COMPAT_SUN_SHADOWS" in source
+    assert "u_PointLightCount" in source
 
 
 def test_shadow_samplers_have_unique_units():

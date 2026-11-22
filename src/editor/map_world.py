@@ -11,6 +11,7 @@ import os
 import numpy as np
 import OpenGL.GL as gl
 
+from src.editor.lighting import apply_lights, collect_lights
 from src.editor.map_project import MapProject
 from src.editor.material_atlas import MaterialAtlas
 from src.editor.object_mesher import ObjectMeshData, build_mesh_data
@@ -30,6 +31,7 @@ class MapWorld:
         self.object_meshes: list[tuple[object, TexturedMesh | None]] = []
         self._room_structures: list | None = None
         self._room_cache = ObjectStructureCache()
+        self._lights_cache = None
         if create_gl:
             self._rebuild()
 
@@ -88,6 +90,9 @@ class MapWorld:
         gl.glActiveTexture(gl.GL_TEXTURE0)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.atlas.texture_id)
         shader.set_int("u_TextureAtlas", 0)
+        if self._lights_cache is None:
+            self._lights_cache = collect_lights(self.project)
+        apply_lights(shader, self._lights_cache, model)
         if self.mesh is not None:
             self.mesh.draw()
         for placed, mesh in self.object_meshes:

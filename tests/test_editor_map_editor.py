@@ -260,3 +260,13 @@ def test_escape_prompts_to_leave_and_escape_again_cancels(tmp_path):
     assert editor.handle_key(glfw.KEY_ESCAPE, glfw.PRESS, 0)
     assert not editor.exit_pending
     assert not editor.exit_requested
+
+
+def test_light_toggle_marks_current_material_emissive(tmp_path):
+    editor = _editor(tmp_path)
+    assert not editor.current_light
+    assert editor.handle_key(glfw.KEY_L, glfw.PRESS, 0)
+    assert editor.current_light == 15
+    assert editor.current_material().light == 15
+    assert editor.handle_key(glfw.KEY_L, glfw.PRESS, 0)
+    assert editor.current_light == 0

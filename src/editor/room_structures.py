@@ -25,6 +25,7 @@ def object_schematic(obj: VoxelObject, name: str = "objeto") -> Schematic:
     sx, sy, sz = obj.size
     grid = np.full((sy, sz, sx), AIR, dtype=object)
     tints = np.ones((sy, sz, sx, 3), dtype=np.float32)
+    lights = np.zeros((sy, sz, sx), dtype=np.uint8)
     cells = np.argwhere(obj.blocks != EMPTY)            # (n, 3): x, y, z
     if len(cells):
         names = np.array([f"minecraft:{material.texture}" for material in obj.materials], dtype=object)
@@ -33,8 +34,10 @@ def object_schematic(obj: VoxelObject, name: str = "objeto") -> Schematic:
         x, y, z = cells[:, 0], cells[:, 1], cells[:, 2]
         grid[y, z, x] = names[index]
         tints[y, z, x] = colours[index]
+        lights[y, z, x] = np.array([material.light for material in obj.materials], dtype=np.uint8)[index]
     schematic = Schematic(sx, sy, sz, grid, {}, name)
     schematic.tints = tints
+    schematic.lights = lights
     return schematic
 
 

@@ -1,0 +1,57 @@
+{
+ "format": "isometricon-voxel-object",
+ "version": 1,
+ "kind": "object",
+ "name": "tocha",
+ "size": [
+  1,
+  4,
+  1
+ ],
+ "materials": [
+  {
+   "color": [
+    104,
+    71,
+    40
+   ],
+   "texture": "oak_log",
+   "light": 0
+  },
+  {
+   "color": [
+    255,
+    176,
+    54
+   ],
+   "texture": "yellow_concrete",
+   "light": 15
+  }
+ ],
+ "voxels": [
+  [
+   0,
+   0,
+   0,
+   0
+  ],
+  [
+   0,
+   1,
+   0,
+   0
+  ],
+  [
+   0,
+   2,
+   0,
+   1
+  ],
+  [
+   0,
+   3,
+   0,
+   1
+  ]
+ ]
+}

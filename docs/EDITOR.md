@@ -58,6 +58,8 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 | Buscar textura | `S` ou clique no campo Buscar |
 | Favoritar textura atual | `F` |
 | Conta-gotas de material | `Alt` + clique no voxel |
+| Ligar/desligar luz do material | `L` |
+| Objetos de luz padrão | `lampiao`, `lanterna`, `tocha` (biblioteca `F4`) |
 | Próxima cor / anterior | `C` / `Shift+C` |
 | Cor hexadecimal livre | `H`, digite 6 dígitos, `Enter` |
 | Próxima textura / anterior | `X` / `Shift+X` |

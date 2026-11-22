@@ -81,4 +81,7 @@ def rotate_schematic(schematic: Schematic, turns: int) -> Schematic:
     tints = getattr(schematic, "tints", None)
     if tints is not None:
         rotated.tints = _turn_grid(tints, turns).copy()
+    lights = getattr(schematic, "lights", None)
+    if lights is not None:
+        rotated.lights = _turn_grid(lights, turns).copy()
     return rotated

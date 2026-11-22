@@ -17,6 +17,12 @@ uniform float u_GridOn;
 uniform float u_GridSpacing;
 uniform float u_Time;
 
+const int MAX_POINT_LIGHTS = 8;
+uniform int u_PointLightCount;
+uniform vec3 u_PointLightPosition[MAX_POINT_LIGHTS];
+uniform vec3 u_PointLightColor[MAX_POINT_LIGHTS];
+uniform float u_PointLightRadius[MAX_POINT_LIGHTS];
+
 float grid_line(vec2 p)
 {
     vec2 scaled = p / max(u_GridSpacing, 1.0);
@@ -63,6 +69,24 @@ void main()
     vec3 cursor_rgb = u_CursorColor.rgb * pulse;
     colour = mix(colour, cursor_rgb, cursor_inner * u_CursorColor.a);
     alpha = max(alpha, cursor_inner * u_CursorColor.a);
+
+    // A luz das lâmpadas também ilumina a superfície da plataforma.
+    if (u_PointLightCount > 0)
+    {
+        vec3 point = vec3(0.0);
+        vec3 here = vec3(v_Local.x, 0.0, v_Local.y);
+        for (int i = 0; i < MAX_POINT_LIGHTS; i++)
+        {
+            if (i >= u_PointLightCount)
+                break;
+            vec3 delta = u_PointLightPosition[i] - here;
+            float distance = length(delta);
+            float falloff = clamp(1.0 - distance / max(u_PointLightRadius[i], 0.01), 0.0, 1.0);
+            falloff *= falloff;
+            point += u_PointLightColor[i] * falloff;
+        }
+        colour += point * 0.55;
+    }
 
     if (alpha < 0.01)
         discard;
