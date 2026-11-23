@@ -26,7 +26,10 @@ python src/main.py --terrain --map=saves/mapa.json
 ```
 
 O botão **Editor de mapa** do menu abre o editor vazio. `F9` carrega um mapa
-salvo. Ao terminar:
+salvo. No editor gráfico, `N` e `F2` abrem o mesmo modal de nome/exportação; o
+modal mostra o caminho final, avisa quando vai substituir um arquivo e, após
+exportar, lembra o caminho `Menu → Nova aventura → /schem → Exportados`. Ao
+terminar:
 
 - `F2` exporta o objeto para `saves/objetos/<nome>.json`;
 - `F5` salva o mapa em `saves/mapa.json`;
@@ -69,8 +72,9 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
 | Ligar/desligar grade da plataforma | `G` |
 | Aumentar / diminuir o volume | `F7` / `F6` |
 | Criar piso base plano | `F8` |
-| Nomear objeto | `N`, digitar, `Enter` |
-| Exportar objeto atual | `F2` → `saves/objetos/<nome>.json` |
+| Nomear/exportar objeto (modal) | `N` ou `F2` |
+| Exportar pelo modal | digitar nome, `Enter` ou botão Exportar |
+| Exportar objeto atual | `F2`/botão Exportar → modal → `saves/objetos/<nome>.json` |
 | Carregar próximo objeto da biblioteca | `F3` |
 | Abrir/fechar a lista da biblioteca | `F4` |
 | Salvar mapa | `F5` |

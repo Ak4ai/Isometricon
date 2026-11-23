@@ -26,7 +26,7 @@ TOOLS = (
     ("stamp", "Carimbar"), ("select", "Selecionar"),
 )
 ACTIONS = (
-    ("save", "Salvar"), ("load", "Abrir"), ("export", "Export"),
+    ("save", "Salvar"), ("load", "Abrir"), ("export", "Exportar"),
     ("library", "Objeto"), ("undo", "Undo"), ("redo", "Redo"),
     ("grid", "Grade"), ("base", "Base"), ("menu", "Menu"),
 )

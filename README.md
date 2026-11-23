@@ -260,8 +260,11 @@ cores recentes selecionam a cor; a grade de miniaturas seleciona a textura;
 selecionado, `Ctrl+D` duplica, `Delete` exclui, `F2` exporta, `F3` carrega objeto,
 `F5`/`F9` salvam/carregam o mapa, `F6`/`F7` mudam o volume, `F8` cria um piso
 base, `F4` abre a biblioteca, `N` nomeia o objeto e `Ctrl+Z`/`Ctrl+Y`
-desfazem/refazem. O `F2` grava `saves/objetos/<nome>.json`. O painel tem
-botões clicáveis para as ferramentas e ações principais. A biblioteca inclui
+desfazem/refazem. `F2` ou o botão **Exportar** abre o modal **Salvar objeto**: nome editável,
+caminho ao vivo em `saves/objetos/<slug>.json`, aviso de sobrescrita e
+confirmação. O mesmo modal abre com `N`; depois de exportar, ele mostra o caminho
+e o atalho `Menu → Nova aventura → /schem → Exportados`. O painel tem botões
+clicáveis para as ferramentas e ações principais. A biblioteca inclui
 **lampiao**, **lanterna** e **tocha** em `assets/objects/`; `L` marca o material
 atual como luminoso (0–15). Esses voxels alimentam até 8 luzes pontuais no
 shader do editor e no mapa jogável. `F10` (ou o botão

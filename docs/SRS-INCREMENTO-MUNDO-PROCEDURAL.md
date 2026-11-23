@@ -83,6 +83,7 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-077** | A geração de miniaturas e a vinculação das texturas de sombra/cômodo devem ser cacheadas ou feitas uma vez por quadro. | Desejável | Inspeção, medição |
 | **FR-078** | O material do editor deve poder ser marcado como luminoso e alimentar luzes pontuais no shader. | Desejável | Teste, demonstração |
 | **FR-079** | O editor deve oferecer objetos padrão de lampião, lanterna e tocha, e o mapa jogável deve preservar suas luzes. | Desejável | Teste, demonstração |
+| **FR-080** | O editor deve oferecer um modal responsivo para nomear e exportar o objeto, com caminho, aviso de sobrescrita e confirmação. | Desejável | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -172,6 +173,7 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-077 | FR-052, FR-056 | `ConstructionPanel`, `bind_samplers` |
 | FR-078 | FR-037, FR-038 | `VoxelMaterial.light`, `lighting.py`, `world_textured.frag` |
 | FR-079 | FR-038, FR-043 | `assets/objects/lampiao.json`, `lanterna.json`, `tocha.json`, `MapWorld` |
+| FR-080 | FR-042, FR-043 | `ExportDialog`, `MapEditor.open_export_dialog` |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `ConstructionPanel` |
 | DR-008 | FR-041 | JSON `isometricon-structures` (v2; lê o formato antigo) |

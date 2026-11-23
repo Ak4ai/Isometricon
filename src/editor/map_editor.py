@@ -22,6 +22,7 @@ from PIL import Image
 
 from src.camera import IsometricCamera
 from src.editor.editor_hud import EditorHud
+from src.editor.export_dialog import ExportDialog
 from src.editor.lighting import apply_lights, collect_lights
 from src.editor.map_project import MapProject, PlacedObject
 from src.editor.material_atlas import MaterialAtlas
@@ -114,6 +115,7 @@ class MapEditor:
         self.highlight = BlockHighlightRenderer() if self.create_gl else None
         self.selection_box = SelectionBoxRenderer() if self.create_gl else None
         self.hud = EditorHud() if self.create_gl else None
+        self.export_dialog = ExportDialog() if self.create_gl else None
         self.mesh: TexturedMesh | None = None
         self.object_meshes: list[tuple[PlacedObject, TexturedMesh | None, ObjectMeshData]] = []
         self.mesh_data: ObjectMeshData = ObjectMeshData(np.empty((0, 11), np.float32), np.empty(0, np.uint32), 0)
@@ -669,6 +671,18 @@ class MapEditor:
         if button != glfw.MOUSE_BUTTON_LEFT:
             return False
         if action == glfw.PRESS and not shift:
+            if self.export_dialog is not None and self.export_dialog.is_open:
+                if self.last_mouse_window is not None:
+                    local = self.export_dialog.local_point(*self.last_mouse_window)
+                    if local is not None:
+                        target = self.export_dialog.hit(*local)
+                        if target == "name":
+                            self.export_dialog.focus_name()
+                        elif target == "export":
+                            self._export_from_dialog()
+                        elif target in ("cancel", "continue"):
+                            self.export_dialog.close()
+                return True
             if self.last_mouse_window is not None and self.hud is not None:
                 x, y = self.last_mouse_window
                 local = self.hud.local_point(x, y)
@@ -787,7 +801,7 @@ class MapEditor:
         elif action == "load":
             self.load_map()
         elif action == "export":
-            self.export_object()
+            self.open_export_dialog()
         elif action == "library":
             self.open_library()
         elif action == "undo":
@@ -879,6 +893,13 @@ class MapEditor:
             return False
         control = bool(mods & (glfw.MOD_CONTROL | getattr(glfw, "MOD_SUPER", 0)))
         shift = bool(mods & glfw.MOD_SHIFT)
+        if self.export_dialog is not None and self.export_dialog.is_open:
+            dialog_action = self.export_dialog.handle_key(key, mods)
+            if dialog_action == "export":
+                self._export_from_dialog()
+            elif dialog_action in ("cancel", "continue"):
+                self.export_dialog.close()
+            return True
         if self.hex_mode:
             if key == glfw.KEY_ENTER or key == glfw.KEY_KP_ENTER:
                 self._apply_hex()
@@ -998,6 +1019,9 @@ class MapEditor:
             self.toggle_favourite_texture()
             return True
         if key == glfw.KEY_N and not control:
+            if self.export_dialog is not None:
+                self.open_export_dialog()
+                return True
             self.name_mode = True
             self.name_replace = True
             self.name_buffer = (self.selected.name if self.selected is not None else self.object_name)
@@ -1080,7 +1104,10 @@ class MapEditor:
             self.status = f"Pincel: {self.brush_size}."
             return True
         if key == glfw.KEY_F2 and not control:
-            self.export_object()
+            if self.export_dialog is not None:
+                self.open_export_dialog()
+            else:
+                self.export_object()
             return True
         if key == glfw.KEY_F3 and not control:
             self._load_next_library()
@@ -1105,6 +1132,33 @@ class MapEditor:
     # ------------------------------------------------------------------
     # Arquivos
     # ------------------------------------------------------------------
+    def open_export_dialog(self) -> None:
+        """Abre o modal de nome/exportação; no modo sem GL, exporta direto."""
+        name = self.selected.name if self.selected is not None else self.object_name
+        if self.export_dialog is None:
+            self.export_object()
+            return
+        materials = len(self.project.base.materials) + sum(
+            len(item.object.materials) for item in self.project.objects)
+        self.export_dialog.open(name, self.project.size, self.project.voxel_count, materials)
+
+    def _export_from_dialog(self) -> None:
+        if self.export_dialog is None:
+            return
+        name = self.export_dialog.name.strip()
+        if not name:
+            self.export_dialog.set_error("Digite um nome para o objeto.")
+            return
+        self.object_name = name
+        if self.selected is not None:
+            self.selected.name = name
+        path = self.export_object()
+        if path is None:
+            self.export_dialog.set_error(self.status)
+            return
+        self.export_dialog.mark_done(path)
+        self._update_hud()
+
     def export_object(self) -> str | None:
         try:
             if self.selected is not None:
@@ -1407,6 +1461,8 @@ class MapEditor:
         if self.hud is not None:
             self._update_hud()
             self.hud.render(window_width, window_height)
+        if self.export_dialog is not None and self.export_dialog.is_open:
+            self.export_dialog.render(window_width, window_height)
 
     def delete(self) -> None:
         for mesh in [self.mesh, self.preview_mesh, self.cursor_preview_mesh] + [item[1] for item in self.object_meshes]:
@@ -1428,4 +1484,7 @@ class MapEditor:
         if self.hud is not None:
             self.hud.delete()
             self.hud = None
+        if self.export_dialog is not None:
+            self.export_dialog.delete()
+            self.export_dialog = None
         self.atlas.delete()
