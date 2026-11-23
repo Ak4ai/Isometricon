@@ -53,6 +53,9 @@ class EditorHud:
 
     def __init__(self) -> None:
         self.quad: HudQuad | None = HudQuad()
+        self.backdrop: HudQuad | None = HudQuad()
+        if self.backdrop is not None:
+            self.backdrop.set_image(Image.new("RGBA", (1, 1), (13, 18, 26, 255)))
         self._key: tuple | None = None
         self._image: Image.Image | None = None
         self._dirty = False
@@ -122,7 +125,7 @@ class EditorHud:
         image = Image.new("RGBA", (PANEL_WIDTH * RENDER_SCALE, PANEL_HEIGHT * RENDER_SCALE), (0, 0, 0, 0))
         draw = ScaledDraw(ImageDraw.Draw(image), RENDER_SCALE)
         draw.rounded_rectangle((0, 0, PANEL_WIDTH - 1, PANEL_HEIGHT - 1), radius=10,
-                               fill=(13, 18, 26, 238), outline=(232, 186, 76, 255), width=2)
+                               fill=(13, 18, 26, 255), outline=(232, 186, 76, 255), width=2)
         title_font = self._font(18 * RENDER_SCALE)
         body_font = self._font(14 * RENDER_SCALE)
         small_font = self._font(11 * RENDER_SCALE)
@@ -302,7 +305,17 @@ class EditorHud:
         return None
 
     def _fit_scale(self, window_width: int, window_height: int) -> float:
-        return fit_panel_scale(window_width, window_height)
+        """Escala do painel dockado à direita, deixando uma área de canvas."""
+        available_w = min(float(PANEL_WIDTH), max(300.0, float(window_width) * 0.40))
+        available_h = max(1.0, float(window_height) - 24.0)
+        return max(MIN_UI_SCALE, min(1.0, available_w / PANEL_WIDTH, available_h / PANEL_HEIGHT))
+
+    def canvas_rect(self, window_width: int, window_height: int) -> tuple[int, int, int, int]:
+        """Área do mundo (x, y, largura, altura) à esquerda da barra lateral."""
+        scale = self._fit_scale(window_width, window_height)
+        panel_width = PANEL_WIDTH * scale
+        right = max(1, int(round(window_width - panel_width - 24)))
+        return 12, 12, max(1, right - 12), max(1, window_height - 24)
 
     def local_point(self, x: float, y: float) -> tuple[float, float] | None:
         """Converte coordenadas de janela para o espaço lógico do painel."""
@@ -325,12 +338,18 @@ class EditorHud:
                 self._dirty = False
             self._scale = self._fit_scale(window_width, window_height)
             self._panel_size = (PANEL_WIDTH * self._scale, PANEL_HEIGHT * self._scale)
-            self.quad.draw(
-                self._panel_origin[0], self._panel_origin[1], window_width, window_height,
-                size=self._panel_size,
-            )
+            x = float(window_width) - self._panel_size[0] - 12.0
+            y = 12.0
+            self._panel_origin = (x, y)
+            if self.backdrop is not None:
+                self.backdrop.draw(x, 0.0, window_width, window_height,
+                                   size=(self._panel_size[0] + 12.0, float(window_height)))
+            self.quad.draw(x, y, window_width, window_height, size=self._panel_size)
 
     def delete(self) -> None:
         if self.quad is not None:
             self.quad.delete()
             self.quad = None
+        if self.backdrop is not None:
+            self.backdrop.delete()
+            self.backdrop = None

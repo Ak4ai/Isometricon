@@ -335,20 +335,57 @@ def run_editor_session(window, shader, map_path: str | None = None,
                 on_key(key_code, 0, glfw.PRESS, 0)
                 on_key(key_code, 0, glfw.RELEASE, 0)
             camera.update(dt)
-            projection = camera.get_projection_matrix(window.width, window.height)
+            hud_width, hud_height = window.get_window_size()
+            canvas = (editor.hud.canvas_rect(hud_width, hud_height)
+                      if editor.hud is not None else (0, 0, hud_width, hud_height))
+            canvas_x, canvas_y, canvas_w, canvas_h = canvas
+            fb_w, fb_h = glfw.get_framebuffer_size(window._window)
+            sx = fb_w / max(1.0, float(hud_width))
+            sy = fb_h / max(1.0, float(hud_height))
+            viewport_x = int(round(canvas_x * sx))
+            viewport_y_top = int(round(canvas_y * sy))
+            viewport_w = max(1, int(round(canvas_w * sx)))
+            viewport_h = max(1, int(round(canvas_h * sy)))
+            viewport_y = fb_h - viewport_y_top - viewport_h
+            projection = camera.get_projection_matrix(viewport_w, viewport_h)
             view = camera.get_view_matrix()
             model = camera.get_animated_model_matrix()
+            # Fundo externo + canvas; o painel lateral é desenhado depois.
+            gl.glDisable(gl.GL_SCISSOR_TEST)
+            gl.glViewport(0, 0, fb_w, fb_h)
+            gl.glClearColor(0.080, 0.100, 0.130, 1.0)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+            gl.glEnable(gl.GL_SCISSOR_TEST)
+            gl.glScissor(viewport_x, viewport_y, viewport_w, viewport_h)
+            gl.glViewport(viewport_x, viewport_y, viewport_w, viewport_h)
+            gl.glClearColor(0.055, 0.070, 0.095, 1.0)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             mouse_x, mouse_y = window.get_cursor_pos_framebuffer()
             editor.update_cursor(
                 mouse_x, mouse_y, window.width, window.height, view, projection, model,
                 mouse_window=window.get_cursor_pos(),
+                viewport=(viewport_x, viewport_y_top, viewport_w, viewport_h),
             )
             editor.process_click()
             editor.update_drag()
             editor.update_hud_drag()
-            hud_width, hud_height = window.get_window_size()
-            editor.render(shader, projection, view, model, window.time, hud_width, hud_height)
+            editor.render_world(shader, projection, view, model, window.time)
+            # Moldura sólida do canvas, como uma janela de editor de imagem.
+            gl.glEnable(gl.GL_SCISSOR_TEST)
+            gl.glClearColor(0.18, 0.23, 0.29, 1.0)
+            border = max(1, int(round(2.0 * sx)))
+            for bx, by, bw, bh in (
+                (viewport_x - border, viewport_y, viewport_w + border * 2, border),
+                (viewport_x - border, viewport_y + viewport_h, viewport_w + border * 2, border),
+                (viewport_x - border, viewport_y, border, viewport_h),
+                (viewport_x + viewport_w, viewport_y, border, viewport_h),
+            ):
+                if bw > 0 and bh > 0:
+                    gl.glScissor(bx, by, bw, bh)
+                    gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+            gl.glDisable(gl.GL_SCISSOR_TEST)
+            gl.glViewport(0, 0, fb_w, fb_h)
+            editor.render_hud(hud_width, hud_height)
             frame_index += 1
             if max_frames is not None and frame_index >= max_frames:
                 if screenshot_path:

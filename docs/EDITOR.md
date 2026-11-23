@@ -47,6 +47,17 @@ python src/main.py --map-editor=assets/objects/casa_exemplo.json \
   --frames=3 --screenshot=artifacts/editor.png
 ```
 
+## 🖥️ Layout tipo editor de imagem
+
+O mundo não ocupa mais a janela inteira. Ele é desenhado num canvas delimitado
+por uma moldura, à esquerda; ferramentas, ações, cores e texturas ficam numa
+barra lateral sólida à direita. O canvas usa um viewport OpenGL próprio, então
+a câmera, o raycast, o arrasto e o clique são calculados dentro dele — clicar na
+barra lateral não coloca voxels atrás da UI.
+
+A largura da barra e o canvas se ajustam à janela. O painel é rasterizado em 2×
+e a moldura/área de desenho acompanham a resolução.
+
 ## 🕹️ Controles
 
 | Ação | Controle |

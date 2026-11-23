@@ -251,6 +251,11 @@ As construções são salvas no mundo do menu ou, no `--terrain` direto, em
 entrar em uma casa, a **revelação de cômodo** do jogo ilumina o espaço fechado e
 o corredor da câmera abre onde algo tapa o personagem.
 
+A UI do editor agora é dockada como um editor de imagem: o mundo 3D fica num
+canvas próprio, com moldura, e as ferramentas/cores/texturas ocupam uma barra
+lateral sólida à direita. O canvas encolhe junto com a janela; os cliques do
+mundo são convertidos para o viewport do canvas e não para a janela inteira.
+
 Controles do editor: `Tab` troca a ferramenta (construir/apagar/pintar/carimbar/selecionar),
 as abas **Cores**/**Texturas** (ou `K`) trocam o painel; a roda HSV, a paleta e as
 cores recentes selecionam a cor; a grade de miniaturas seleciona a textura;

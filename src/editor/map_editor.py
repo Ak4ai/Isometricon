@@ -347,7 +347,8 @@ class MapEditor:
     # ------------------------------------------------------------------
     def update_cursor(self, mouse_x: float, mouse_y: float, width: int, height: int,
                       view: np.ndarray, projection: np.ndarray, model: np.ndarray,
-                      mouse_window: tuple[float, float] | None = None) -> None:
+                      mouse_window: tuple[float, float] | None = None,
+                      viewport: tuple[int, int, int, int] | None = None) -> None:
         self.last_mouse = (float(mouse_x), float(mouse_y))
         if mouse_window is not None:
             self.last_mouse_window = (float(mouse_window[0]), float(mouse_window[1]))
@@ -357,6 +358,16 @@ class MapEditor:
                 self.last_mouse_window = glfw.get_cursor_pos(context) if context is not None else None
             except Exception:
                 self.last_mouse_window = None
+        if viewport is not None:
+            vx, vy, vw, vh = viewport
+            if not (vx <= mouse_x < vx + vw and vy <= mouse_y < vy + vh):
+                self.hit_block = None
+                self.cursor = None
+                self.stamp_valid = None
+                return
+            mouse_x -= vx
+            mouse_y -= vy
+            width, height = vw, vh
         ray = screen_to_world_ray(mouse_x, mouse_y, width, height, view, projection, model)
         hit = raycast_voxels(ray, _ObjectProvider(self.project), max_distance=512.0)
         self.hit_block = hit.block if hit is not None else None
@@ -1418,8 +1429,9 @@ class MapEditor:
         gl.glDisable(gl.GL_BLEND)
         shader.set_float("u_Alpha", 1.0)
 
-    def render(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray,
-               time: float, window_width: int, window_height: int) -> None:
+    def render_world(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray,
+                     time: float) -> None:
+        """Desenha só a cena do editor; a HUD é chamada depois, em outro viewport."""
         if not self.create_gl:
             return
         self.update()
@@ -1458,11 +1470,17 @@ class MapEditor:
                 colour = (1.0, 0.85, 0.30)
             self.highlight.render(view, projection, model, x, y, z, time=time, base_color=colour)
 
+    def render_hud(self, window_width: int, window_height: int) -> None:
         if self.hud is not None:
             self._update_hud()
             self.hud.render(window_width, window_height)
         if self.export_dialog is not None and self.export_dialog.is_open:
             self.export_dialog.render(window_width, window_height)
+
+    def render(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray,
+               time: float, window_width: int, window_height: int) -> None:
+        self.render_world(shader, projection, view, model, time)
+        self.render_hud(window_width, window_height)
 
     def delete(self) -> None:
         for mesh in [self.mesh, self.preview_mesh, self.cursor_preview_mesh] + [item[1] for item in self.object_meshes]:
