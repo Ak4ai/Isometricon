@@ -95,6 +95,7 @@ e a moldura/área de desenho acompanham a resolução.
 | Cancelar a saída | `Esc` |
 | Mover objeto selecionado | setas; `PageUp`/`PageDown` no Y |
 | Duplicar / excluir objeto | `Ctrl+D` / `Delete` |
+| Excluir carimbo apontado | `Delete` ou botão direito |
 | Biblioteca: escolher / carimbar | `↑`/`↓` / `Enter` |
 | Biblioteca: duplicar / excluir arquivo | `D` / `Delete` (duas vezes) |
 | Desfazer / refazer | `Ctrl+Z` / `Ctrl+Y` |
@@ -259,3 +260,16 @@ atalhos).
 - A base e os objetos colidem no `--terrain --map`, mas não há grid tático sobre
   o mapa carregado.
 - O teto de materiais é 512 por objeto; o volume máximo é 64³.
+
+
+## 🧱 Carimbos e construções
+
+No editor, o **Carimbar** coloca um objeto independente. Para remover sem trocar
+de ferramenta, aponte para ele e use `Delete` ou **botão direito**. O `Delete`
+continua removendo o objeto selecionado quando há um.
+
+No mundo, `/schem` abre a biblioteca primeiro; escolha uma construção na lista
+(objetos exportados aparecem no filtro **Exportados**). O painel é modal:
+enquanto está aberto, o personagem não anda nem interage com o mundo. Para
+selecionar uma construção já fixada use `V` e clique nela; `Del` ou **botão
+direito** remove a selecionada/apontada.

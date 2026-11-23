@@ -487,7 +487,9 @@ class MapEditor:
             self._push_undo()
             placed = self.project.add_object(self.stamp, self.cursor, self.stamp_rotation, Path(self.stamp_name).stem)
             self.selected_index = len(self.objects) - 1
-            self._after_change(f"{placed.object.voxel_count} voxels de {placed.name} colocados.")
+            self._after_change(
+                f"{placed.object.voxel_count} voxels de {placed.name} colocados. "
+                "Botão direito ou Delete remove.")
             return True
         return False
 
@@ -525,11 +527,26 @@ class MapEditor:
         self._after_change("Objeto duplicado.")
         return True
 
-    def _delete_selected(self) -> bool:
-        if self.selected is None:
+    def _delete_object_at_cursor(self) -> bool:
+        """Remove o objeto carimbado sob o cursor, sem trocar de ferramenta."""
+        if self.cursor is None:
+            self.status = "Aponte para um objeto carimbado para remover."
+            return False
+        index = self.project.object_at(*self.cursor)
+        if index is None:
+            self.status = "Não há objeto carimbado neste ponto."
             return False
         self._push_undo()
-        self.project.remove_object(self.selected_index)  # type: ignore[arg-type]
+        self.project.remove_object(index)
+        self.selected_index = None
+        self._after_change("Objeto carimbado removido.")
+        return True
+
+    def _delete_selected(self) -> bool:
+        if self.selected_index is None:
+            return self._delete_object_at_cursor()
+        self._push_undo()
+        self.project.remove_object(self.selected_index)
         self.selected_index = None
         self._after_change("Objeto excluído.")
         return True
@@ -679,6 +696,12 @@ class MapEditor:
         return True
 
     def handle_mouse_button(self, button: int, action: int, shift: bool = False, alt: bool = False) -> bool:
+        if button == glfw.MOUSE_BUTTON_RIGHT:
+            if action == glfw.PRESS and not shift:
+                if self.export_dialog is not None and self.export_dialog.is_open:
+                    return True
+                return self._delete_object_at_cursor()
+            return False
         if button != glfw.MOUSE_BUTTON_LEFT:
             return False
         if action == glfw.PRESS and not shift:
@@ -1052,7 +1075,7 @@ class MapEditor:
                 self._load_next_library()
             self.status = f"Ferramenta: {TOOL_LABELS[self.tool]}."
             return True
-        if key in (glfw.KEY_DELETE, glfw.KEY_BACKSPACE) and self.selected is not None:
+        if key in (glfw.KEY_DELETE, glfw.KEY_BACKSPACE):
             return self._delete_selected()
         if key == glfw.KEY_LEFT and self.selected is not None:
             return self._move_selected(-1, 0, 0)

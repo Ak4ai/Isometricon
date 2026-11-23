@@ -85,6 +85,7 @@ editor → F8 base → F3 objeto → clique → F5 salvar mapa
 | **FR-079** | O editor deve oferecer objetos padrão de lampião, lanterna e tocha, e o mapa jogável deve preservar suas luzes. | Desejável | Teste, demonstração |
 | **FR-080** | O editor deve oferecer um modal responsivo para nomear e exportar o objeto, com caminho, aviso de sobrescrita e confirmação. | Desejável | Teste, demonstração |
 | **FR-081** | O editor deve separar o canvas 3D da barra lateral de opções, com viewport, raycast e cliques restritos ao canvas. | Desejável | Teste, demonstração |
+| **FR-082** | O editor deve remover um carimbo apontado por `Delete`/botão direito; o `/schem` deve abrir a biblioteca e travar o personagem enquanto o painel estiver aberto. | Desejável | Teste, demonstração |
 | **PR-011** | A confirmação de um objeto de até 32³ voxels deve concluir em até 1 frame em 95% das medições e não deve pausar a aplicação por mais de 100 ms. | Desejável | Medição |
 | **UR-008** | O HUD deve exibir modo, objeto selecionado, posição válida/inválida, rotação e teclas de confirmar/cancelar durante a colocação. | Essencial | Demonstração |
 | **DR-008** | Os objetos do mundo procedural devem ser persistidos em JSON versionado com seed, objeto, posição, rotação, nome e origem; a gravação deve ser atômica e arquivo inválido não deve encerrar a aplicação. | Essencial | Teste |
@@ -176,6 +177,7 @@ Funcionalidade: Colocar objeto no mundo procedural
 | FR-079 | FR-038, FR-043 | `assets/objects/lampiao.json`, `lanterna.json`, `tocha.json`, `MapWorld` |
 | FR-080 | FR-042, FR-043 | `ExportDialog`, `MapEditor.open_export_dialog` |
 | FR-081 | FR-048 | `EditorHud.canvas_rect`, `MapEditor.render_world`, `run_editor_session` |
+| FR-082 | FR-043, FR-044 | `MapEditor._delete_object_at_cursor`, `ConstructionPanel._remove_target`, `main` |
 | PR-011 | FR-056 | medição manual |
 | UR-008 | FR-048 | `ConstructionPanel` |
 | DR-008 | FR-041 | JSON `isometricon-structures` (v2; lê o formato antigo) |

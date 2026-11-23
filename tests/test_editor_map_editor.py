@@ -270,3 +270,20 @@ def test_light_toggle_marks_current_material_emissive(tmp_path):
     assert editor.current_material().light == 15
     assert editor.handle_key(glfw.KEY_L, glfw.PRESS, 0)
     assert editor.current_light == 0
+
+
+def test_right_click_removes_stamped_object(tmp_path):
+    import glfw
+
+    editor = _editor(tmp_path)
+    editor.stamp = VoxelObject.load("assets/objects/casa_exemplo.json")
+    editor.stamp_name = "casa_exemplo.json"
+    editor.tool = "stamp"
+    editor.cursor = (0, 0, 0)
+    assert editor.apply_current_tool()
+    assert len(editor.objects) == 1
+    editor.cursor = (0, 0, 0)
+    assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_RIGHT, glfw.PRESS)
+    assert not editor.objects
+    assert editor.undo()
+    assert len(editor.objects) == 1

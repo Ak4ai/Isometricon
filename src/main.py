@@ -1207,6 +1207,13 @@ def main() -> None:
             keys_pressed.clear()
             return True
 
+        # Com o /schem aberto o painel é modal: o personagem não anda nem
+        # interage enquanto o jogador escolhe/posiciona a construção.
+        if (construction_panel is not None and construction_panel.is_open
+                and not chat_console.is_open and not character_editor.is_open):
+            keys_pressed.clear()
+            return True
+
         if key == glfw.KEY_ESCAPE and action == glfw.PRESS:
             chest_session.close()
             keys_pressed.clear()
@@ -1334,6 +1341,8 @@ def main() -> None:
             if construction_panel.handle_mouse_button(button, action, window.is_key_pressed(glfw.KEY_LEFT_SHIFT),
                                                       window.get_cursor_pos(), window.get_window_size()[0]):
                 return
+            if construction_panel.is_open:
+                return   # modal: nenhum clique chega ao personagem/câmera
 
         is_middle = (button == glfw.MOUSE_BUTTON_MIDDLE)
         is_left_with_shift = (button == glfw.MOUSE_BUTTON_LEFT and window.is_key_pressed(menus.preferences.data['bindings']['pan_modifier']))
@@ -1399,6 +1408,8 @@ def main() -> None:
             menus.wheel(y_offset)
             return
         if character_editor.handle_scroll(window.get_cursor_pos()[0], y_offset):
+            return
+        if construction_panel is not None and construction_panel.is_open and not chat_console.is_open:
             return
         camera.handle_scroll(x_offset, y_offset)
 
@@ -1592,6 +1603,9 @@ def main() -> None:
                 construction_panel.open()
         if menus.world is not None:
             menus.world['played'] += dt
+        if (construction_panel is not None and construction_panel.is_open
+                and not chat_console.is_open):
+            keys_pressed.clear()
         camera.update(dt)
         if menus.preferences.data['reduce_motion']:
             camera.current_rotation = float(camera.board_rotation)

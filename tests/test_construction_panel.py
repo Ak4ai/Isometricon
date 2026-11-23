@@ -37,6 +37,10 @@ def click(panel, point=WORLD_POINT, shift=False):
     return panel.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.PRESS, shift, point, WIDTH)
 
 
+def choose_first(panel):
+    panel._take(panel.library()[0][1])
+
+
 def test_closed_panel_takes_no_key_nor_click(panel):
     for key in (glfw.KEY_P, glfw.KEY_V, glfw.KEY_R, glfw.KEY_N, glfw.KEY_DELETE, glfw.KEY_ESCAPE, glfw.KEY_F3,
                 glfw.KEY_F4):
@@ -47,14 +51,16 @@ def test_closed_panel_takes_no_key_nor_click(panel):
     assert panel.tool.preview is None
 
 
-def test_open_starts_placing_the_first_construction(panel):
+def test_open_starts_in_the_library_without_a_huge_automatic_preview(panel):
     panel.open()
     assert panel.is_open and panel.mode == "place"
-    assert panel.tool.preview.entry == LIBRARY[0][1]
+    assert panel.list_open
+    assert panel.tool.preview is None
 
 
 def test_click_places_only_where_it_fits(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20), None)
     assert panel.valid
     assert click(panel)
@@ -68,6 +74,7 @@ def test_click_places_only_where_it_fits(panel):
 
 def test_no_place_on_water_or_on_a_wall(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20, block=BlockType.WATER), None)
     assert not panel.valid
     panel.update_cursor(hit(10, 4, 20, normal=(1, 0, 0)), None)
@@ -78,6 +85,7 @@ def test_no_place_on_water_or_on_a_wall(panel):
 
 def test_no_place_on_the_player(panel):
     panel.open()
+    choose_first(panel)
     preview = panel.tool.preview.schematic
     panel.update_cursor(hit(10, 4, 20), ((10, 5, 20), (10, 6, 20)))
     assert not panel.valid, preview.name
@@ -85,6 +93,7 @@ def test_no_place_on_the_player(panel):
 
 def test_click_on_the_panel_does_not_place_behind_it(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20), None)
     assert click(panel, PANEL_POINT)                         # o painel come o clique
     assert len(panel.tool.layer) == 0
@@ -92,6 +101,7 @@ def test_click_on_the_panel_does_not_place_behind_it(panel):
 
 def test_r_rotates_the_preview(panel):
     panel.open()
+    choose_first(panel)
     before = panel.tool.preview.rotation
     assert press(panel, glfw.KEY_R)
     assert panel.tool.preview.rotation == (before + 1) % 4
@@ -99,6 +109,7 @@ def test_r_rotates_the_preview(panel):
 
 def test_select_rotate_and_remove(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20), None)
     click(panel)
     placed = panel.tool.layer.structures[0]
@@ -120,7 +131,8 @@ def test_select_rotate_and_remove(panel):
 
 def test_list_picks_the_third_entry(panel):
     panel.open()
-    assert press(panel, glfw.KEY_F4) and panel.list_open
+    assert panel.list_open
+    panel.list_index = 0
     press(panel, glfw.KEY_DOWN)
     press(panel, glfw.KEY_DOWN)
     press(panel, glfw.KEY_ENTER)
@@ -130,12 +142,14 @@ def test_list_picks_the_third_entry(panel):
 
 def test_f3_takes_the_next_entry(panel):
     panel.open()
+    panel.list_index = 0
     press(panel, glfw.KEY_F3)
     assert panel.tool.preview.entry == LIBRARY[1][1]
 
 
 def test_name_the_selected_construction(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20), None)
     click(panel)
     panel.selected = panel.tool.layer.structures[0]
@@ -151,12 +165,14 @@ def test_name_the_selected_construction(panel):
 
 def test_arrows_and_wasd_are_left_to_the_game_and_the_tool(panel):
     panel.open()
+    choose_first(panel)
     for key in (glfw.KEY_UP, glfw.KEY_LEFT, glfw.KEY_W, glfw.KEY_A, glfw.KEY_ENTER):
         assert not press(panel, key)
 
 
 def test_escape_closes_and_keeps_what_was_placed(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20), None)
     click(panel)
     assert press(panel, glfw.KEY_ESCAPE)
@@ -176,6 +192,7 @@ def test_open_with_an_entry_and_buttons(panel):
 
 def test_arrow_nudges_survive_until_the_mouse_points_elsewhere(panel):
     panel.open()
+    choose_first(panel)
     panel.update_cursor(hit(10, 4, 20), None)
     start = list(panel.tool.preview.origin)
     panel.tool.move(dx=1)                                     # a seta empurra um bloco
@@ -203,3 +220,22 @@ def test_list_filters_and_mouse_selection(panel):
     assert click(panel, (left + (x0 + x1) / 2, 16 + (y0 + y1) / 2))
     assert not panel.list_open
     assert panel.tool.preview.entry == LIBRARY[index][1]
+
+
+def test_right_click_removes_the_aimed_construction(panel):
+    panel.open()
+    choose_first(panel)
+    panel.update_cursor(hit(10, 4, 20), None)
+    click(panel)
+    placed = panel.tool.layer.structures[0]
+    x0, y0, z0 = placed.origin
+    panel.update_cursor(hit(x0, y0, z0), None)
+    panel.mode = panel.SELECT
+    # O canto pode ser ar; aponta para uma célula ocupada da construção.
+    import numpy as np
+    if panel.tool.layer.structure_at(x0, y0, z0) is None:
+        y, z, x = np.argwhere(placed.schematic.occupied_mask)[0]
+        panel.update_cursor(hit(x0 + x, y0 + y, z0 + z), None)
+    assert panel.handle_mouse_button(glfw.MOUSE_BUTTON_RIGHT, glfw.PRESS, False, WORLD_POINT, WIDTH)
+    assert len(panel.tool.layer) == 0
+    assert panel.selected is None

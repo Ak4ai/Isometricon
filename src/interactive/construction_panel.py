@@ -33,7 +33,7 @@ ACTIONS = (
     ("remove", "Remover"),
     ("close", "Sair"),
 )
-HELP = "P/V modo  F3/F4 biblioteca  R girar  N nome  Del remover  Esc sair"
+HELP = "Clique no chão: colocar  ·  V: selecionar  ·  Del/botão direito: remover  ·  Esc: sair"
 
 
 def _font(size: int):
@@ -70,6 +70,7 @@ class ConstructionPanel:
         self._thumb_entry = None
         self._thumb_image: Optional[Image.Image] = None
         self._thumb_key = None
+        self._last_entry = None
         self.quad = None
         if create_gl:
             from src.rendering.hud_quad import HudQuad
@@ -116,11 +117,20 @@ class ConstructionPanel:
             self._take(entry)
         elif self.tool.preview is not None:
             self.entry = self.tool.preview.entry
+            self.list_open = False
         else:
             items = self.library()
             if items:
-                self._take(items[0][1])
+                # Abrir na lista evita começar com um .schem enorme e fora de
+                # escala (29455) sem o jogador ter escolhido nada.
+                self.entry = None
+                self.list_open = True
+                self.list_index = self._default_index(items)
+                if self._last_entry in [entry for _, entry in items]:
+                    self.list_index = [entry for _, entry in items].index(self._last_entry)
+                self.status = "Escolha uma construção na lista; clique nela e depois no chão."
             else:
+                self.list_open = False
                 self.status = "Nenhuma construção na biblioteca."
 
     def close(self) -> None:
@@ -133,11 +143,32 @@ class ConstructionPanel:
         self.cursor = None
         self.valid = False
 
+    def _default_index(self, items: List[Tuple[str, dict]]) -> int:
+        """Um padrão pequeno: objeto exportado, vitrine, ou o menor .schem."""
+        for index, (_, entry) in enumerate(items):
+            if entry.get("kind") == "object":
+                return index
+        for index, (_, entry) in enumerate(items):
+            if entry.get("kind") == "formas":
+                return index
+        sizes = []
+        import os
+        for index, (_, entry) in enumerate(items):
+            if entry.get("kind") == "schem":
+                path = os.path.join(self.tool.schematics_dir, str(entry.get("name", "")) + ".schem")
+                try:
+                    sizes.append((os.path.getsize(path), index))
+                except OSError:
+                    pass
+        return min(sizes)[1] if sizes else 0
+
     def _take(self, entry: dict, rotation: int = 0) -> bool:
         ok, message = self.tool.load_entry(entry)
         self.status = message.split(". ")[0] + "." if ok else message
         if ok:
             self.entry = entry
+            self._last_entry = entry
+            self.list_open = False
             self.mode = self.PLACE
             self.selected = None
             for _ in range(rotation % 4):
@@ -180,7 +211,7 @@ class ConstructionPanel:
         elif action == "select":
             self.mode = self.SELECT
             self.tool.cancel(silent=True)
-            self.status = "Clique numa construção para selecionar."
+            self.status = "Clique numa construção para selecionar; Del ou botão direito remove."
         elif action == "library":
             self.list_open = not self.list_open
             labels = [e for _, e in self.library()]
@@ -195,11 +226,26 @@ class ConstructionPanel:
                 ok, self.status = self.tool.rotate_placed(self.selected)
                 self.selected = self.tool.layer.structures[index] if ok else self.selected
         elif action == "remove":
-            if self.selected is not None:
-                _, self.status = self.tool.remove(self.selected)
-                self.selected = None
+            self._remove_target()
         elif action == "close":
             self.close()
+
+    def _remove_target(self) -> bool:
+        """Remove a construção selecionada ou, no modo Selecionar, a apontada."""
+        target = self.selected
+        if target is None and self.mode == self.SELECT and self.cursor is not None:
+            target = self.tool.layer.structure_at(*self.cursor)
+        if target is None:
+            if self.mode != self.SELECT:
+                self.status = "Entre em Selecionar (V) e clique numa construção para remover."
+            else:
+                self.status = "Nenhuma construção neste ponto."
+            return False
+        ok, message = self.tool.remove(target)
+        self.status = message
+        if ok:
+            self.selected = None
+        return ok
 
     def _place(self) -> None:
         if not self.valid or self.tool.preview is None:
@@ -239,6 +285,10 @@ class ConstructionPanel:
             return True
         if self.list_open:
             items = self.library()
+            if key == glfw.KEY_F3 and items:
+                self.list_index = (self.list_index + 1) % len(items)
+                self._take(items[self.list_index][1])
+                return True
             if key == glfw.KEY_E:
                 self.select_filter("exportados")
                 return True
@@ -298,7 +348,16 @@ class ConstructionPanel:
         return x0 <= x <= x0 + PANEL_WIDTH * scale and MARGIN <= y <= MARGIN + PANEL_HEIGHT * scale
 
     def handle_mouse_button(self, button: int, action: int, shift: bool, mouse_window, window_width: int) -> bool:
-        if not self.is_open or button != glfw.MOUSE_BUTTON_LEFT or action != glfw.PRESS or shift:
+        if not self.is_open or action != glfw.PRESS or shift:
+            return False
+        if button == glfw.MOUSE_BUTTON_RIGHT:
+            # Botão direito remove direto a construção apontada, sem caçar o botão.
+            if self.mode == self.SELECT and self.cursor is not None:
+                self._remove_target()
+            elif self.mode == self.PLACE:
+                self.status = "Botão direito remove no modo Selecionar (V)."
+            return True
+        if button != glfw.MOUSE_BUTTON_LEFT:
             return False
         if mouse_window is not None and self.contains(mouse_window[0], mouse_window[1], window_width):
             scale = self._panel_scale(window_width)
@@ -326,6 +385,9 @@ class ConstructionPanel:
                 return True
             return True   # o painel come o clique: nada é colocado atrás dele
         if self.mode == self.PLACE:
+            if self.list_open:
+                self.status = "Escolha uma construção na lista primeiro."
+                return True
             self._place()
             return True
         if self.cursor is not None:

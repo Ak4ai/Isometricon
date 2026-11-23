@@ -984,9 +984,10 @@ class SkinCommandHandler:
         sub = SCHEM_ALIASES.get(args[0].lower()) if args else None
         if sub is None and not args and panel is not None:
             panel.open()
-            return True, "[Schem] Painel de construções aberto. Esc fecha.", GREEN
+            return True, ("[Schem] Painel aberto: escolha uma construção, clique no chão para colocar; "
+                           "V seleciona; Del/botão direito remove; Esc fecha."), GREEN
         if sub is None:
-            return True, "Uso: /schem load <nome|caminho> [x y z] | list | place | cancel | remove | clear | info", GOLD
+            return True, "Uso: /schem load <nome|caminho> [x y z] | list | place | cancel | remove [nome] | clear | info", GOLD
         rest = args[1:]
         if sub == "list":
             names = [label for label, _ in panel.library()] if panel is not None else tool.names()
@@ -1005,7 +1006,30 @@ class SkinCommandHandler:
         if sub == "info":
             lines = tool.describe()
             return True, "[Schem] " + ("\n".join(lines) if lines else "nada colocado."), CYAN
-        action = {"place": tool.confirm, "cancel": tool.cancel, "remove": tool.remove_last, "clear": tool.clear}[sub]
+        if sub == "remove":
+            target = panel.selected if panel is not None else None
+            if target is None and rest:
+                wanted = " ".join(rest).strip().lower()
+                target = next((item for item in tool.layer.structures
+                               if item.name.lower() == wanted), None)
+                if target is None:
+                    return False, f"[Schem] Nenhuma construção chamada '{' '.join(rest)}'. Use /schem info.", RED
+            if target is None:
+                ok, message = tool.remove_last()
+            else:
+                ok, message = tool.remove(target)
+                if panel is not None and panel.selected is target:
+                    panel.selected = None
+            return ok, "[Schem] " + message, GREEN if ok else RED
+        if sub == "cancel":
+            if panel is not None:
+                panel.close()
+            tool.cancel(silent=True)
+            return True, "[Schem] Prévia cancelada.", GREEN
+        if sub == "clear":
+            if panel is not None:
+                panel.close()
+        action = {"place": tool.confirm, "clear": tool.clear}[sub]
         ok, message = action()
         return ok, "[Schem] " + message, GREEN if ok else RED
 
@@ -1972,7 +1996,7 @@ ROOT_COMMANDS: List[Command] = [
     Command(("revelar", "reveal"), "/revelar [on|off|escuro <0-1>|teto <0-1>]",
             "revela só o espaço fechado em que o jogador está", SkinCommandHandler.reveal,
             ["on", "off", "escuro", "teto"]),
-    Command(("schem", "schematic", "estrutura"), "/schem [load|list|place|cancel|remove|clear|info]",
+    Command(("schem", "schematic", "estrutura"), "/schem [load|list|place|cancel|remove [nome]|clear|info]",
             "coloca construções (.schem) no terreno", SkinCommandHandler.schem, None),
 ]
 
