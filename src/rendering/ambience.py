@@ -53,6 +53,8 @@ class Ambience:
     mist_where: int = 0           # 0 em toda parte, 1 só perto da água e entre as árvores
     mist_wind: int = 30           # a velocidade com que os tufos derivam, 0 a 100
     mist_tone: int = 1            # 0 fria, 1 neutra, 2 quente
+    mist_rays: int = 0            # os feixes de luz na neblina (o sol passando entre troncos e copas), 0 a 100;
+                                  # pesados (um teste do sol por passo da neblina): desligados por padrão
 
     # ---- estado ----
     def to_dict(self) -> Dict[str, Any]:
@@ -92,6 +94,7 @@ class Ambience:
         self.mist_where = max(0, min(1, self.mist_where))
         self.mist_wind = max(0, min(100, self.mist_wind))
         self.mist_tone = max(0, min(2, self.mist_tone))
+        self.mist_rays = max(0, min(100, self.mist_rays))
 
     def reset(self) -> None:
         self.load(None)
@@ -207,6 +210,8 @@ class Ambience:
         shader.set_int("u_MistWhere", int(self.mist_where))
         shader.set_float("u_MistWind", self.mist_wind / 100.0)
         shader.set_vec3("u_MistColor", *self.mist_color())
+        shader.set_float("u_MistRays", self.mist_rays / 100.0 * max(0.0, min(1.0, self.sun_elevation() / 0.12)))
+        shader.set_vec3("u_MistSunColor", *self.daylight())
 
     @staticmethod
     def neutral(shader) -> None:
@@ -236,8 +241,14 @@ PRESETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
 
 # os presets da neblina (aba Neblina do /mestre): só mexem nos campos mist*
 MIST_PRESETS: Tuple[Tuple[str, Dict[str, int]], ...] = (
-    ("Beira d'água", dict(mist=75, mist_cover=100, mist_height=4, mist_where=1, mist_wind=25, mist_tone=1)),
-    ('Manhã neblinosa', dict(mist=55, mist_cover=70, mist_height=8, mist_where=0, mist_wind=30, mist_tone=2)),
-    ('Vale', dict(mist=70, mist_cover=100, mist_height=2, mist_where=0, mist_wind=15, mist_tone=0)),
-    ('Bruma alta', dict(mist=30, mist_cover=100, mist_height=24, mist_where=0, mist_wind=45, mist_tone=1)),
+    ("Beira d'água", dict(mist=75, mist_cover=100, mist_height=4, mist_where=1, mist_wind=25, mist_tone=1,
+                          mist_rays=0)),
+    ('Manhã neblinosa', dict(mist=55, mist_cover=70, mist_height=8, mist_where=0, mist_wind=30, mist_tone=2,
+                             mist_rays=0)),
+    ('Vale', dict(mist=70, mist_cover=100, mist_height=2, mist_where=0, mist_wind=15, mist_tone=0, mist_rays=0)),
+    ('Bruma alta', dict(mist=30, mist_cover=100, mist_height=24, mist_where=0, mist_wind=45, mist_tone=1,
+                        mist_rays=0)),
+    # a neblina alta e clara da mata: o sol entra em feixes entre os troncos e as copas
+    ('Raios na mata', dict(mist=45, mist_cover=100, mist_height=18, mist_where=0, mist_wind=15, mist_tone=2,
+                           mist_rays=100)),
 )

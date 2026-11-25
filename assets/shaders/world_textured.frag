@@ -784,6 +784,8 @@ uniform float u_MistSize;
 uniform float u_MistTop;              // a maior altura de chão do mapa + a altura da neblina (mundo)
 uniform mat4 u_MistInvModel;          // do espaço desenhado para o mundo
 uniform vec3 u_MistToCamera;          // do ponto para a câmera, no espaço desenhado (unitário)
+uniform float u_MistRays = 0.0;       // os feixes de luz: 0 a neblina toda na mesma luz; 1 o sol entra em feixes
+uniform vec3 u_MistSunColor;          // a cor da luz do sol na hora
 const int MIST_STEPS = 14;
 
 // as manchas da cobertura: largas e lentas, então uma conta por pixel basta (no meio do caminho do raio)
@@ -811,6 +813,21 @@ float mistDensity(vec3 w, vec2 drift)
     return vertical * region * (0.25 + 1.3 * wisps * wisps);
 }
 
+// O sol chega a este ponto da neblina? Uma marcha curta rumo ao sol na máscara das sombras (troncos e folhas tapam):
+// a neblina iluminada brilha e a da sombra fica apagada, e o contraste entre as duas desenha os feixes.
+float mistSunReach(vec3 w, vec3 sun)
+{
+    for (int k = 1; k <= 8; ++k)
+    {
+        vec3 q = w + sun * (float(k) * 2.0);
+        if (!insideShadowWindow(q))
+            return 1.0;                                  // saiu da janela das sombras: céu livre
+        if (shadowCell(q) > 0.94)
+            return 0.0;
+    }
+    return 1.0;
+}
+
 vec3 mistGrade(vec3 color)
 {
     vec3 p = (u_MistInvModel * vec4(v_FragPos, 1.0)).xyz;
@@ -827,12 +844,39 @@ vec3 mistGrade(vec3 color)
     float spread = mistPatch((p + d * length_ * 0.3).xz, drift);
     if (spread <= 0.001)
         return color;
-    float optical = 0.0;
-    for (int i = 0; i < MIST_STEPS; ++i)
-        optical += mistDensity(p + d * ds * (float(i) + jitter), drift);
     float amount = u_MistAmount * u_MistAmount;
-    float through = exp(-optical * spread * ds * mix(0.04, 0.42, amount));
-    return mix(u_MistColor, color, max(through, 1.0 - 0.94 * u_MistAmount));
+    float k = spread * ds * mix(0.04, 0.42, amount);
+    vec3 sun = normalize(mat3(u_MistInvModel) * u_LightDir);
+    bool rays = u_MistRays > 0.001 && u_ShadowStrength > 0.001;
+    // olhando contra o sol a neblina acende mais (a luz espalhada para a frente)
+    float forward = pow(max(dot(-sun, d), 0.0), 3.0);
+    vec3 sunGlow = u_MistColor * (0.55 + 0.45 * u_MistSunColor) * (0.55 + 0.9 * forward);
+    float through = 1.0;
+    vec3 gathered = vec3(0.0);
+    float lit = 1.0;                                     // o teste do sol vale para dois passos seguidos
+    // da câmera para o ponto: o que fica mais perto da câmera tapa o resto
+    for (int i = MIST_STEPS - 1; i >= 0; --i)
+    {
+        vec3 w = p + d * ds * (float(i) + jitter);
+        float a = 1.0 - exp(-mistDensity(w, drift) * k);
+        if (a < 0.0005)
+            continue;
+        vec3 light = u_MistColor;
+        if (rays)
+        {
+            if ((i & 1) == 1 || i == 0)
+                lit = mistSunReach(w, sun);
+            light = mix(u_MistColor, mix(u_MistColor * 0.26, u_MistColor * 0.8 + sunGlow * 1.5, lit), u_MistRays);
+        }
+        gathered += through * a * light;
+        through *= 1.0 - a;
+    }
+    // a neblina nunca cobre tudo: no máximo 94% com ela no máximo
+    float cover = 1.0 - through;
+    if (cover < 0.0005)
+        return color;
+    float limit = min(cover, 0.94 * u_MistAmount);
+    return mix(color, gathered / cover, limit);
 }
 
 vec3 envGrade(vec3 color, vec3 albedo)

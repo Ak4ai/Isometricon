@@ -829,7 +829,8 @@ class SkinCommandHandler:
                 panel.ambience.mist = int(wanted)
                 panel.activate("set")
                 return True, f"[Mestre] Neblina em {panel.ambience.mist}%.", CYAN
-            name = next((n for n, _ in MIST_PRESETS if _fold(n) == wanted or _fold(n).startswith(wanted)), None)
+            name = next((n for n, _ in MIST_PRESETS if _fold(n) == wanted or _fold(n).startswith(wanted)
+                         or _fold(n).split()[0] == wanted), None)
             if name is None:
                 return False, "[Mestre] Neblina: 0 a 100, ou " + ", ".join(n for n, _ in MIST_PRESETS) + ".", RED
             panel.activate("mist:" + name)

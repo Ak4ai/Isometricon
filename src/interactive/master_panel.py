@@ -36,6 +36,7 @@ MIST_SLIDERS = (
     ('mist_cover', 'Cobertura', 0, 100, lambda v: 'o mapa todo' if v == 100 else f'{v}% do mapa'),
     ('mist_height', 'Altura', 1, 40, lambda v: f'até {v} bloco' + ('s' if v > 1 else '')),
     ('mist_wind', 'Vento', 0, 100, lambda v: 'parado' if v == 0 else f'{v}%'),
+    ('mist_rays', 'Feixes de luz', 0, 100, lambda v: 'desligados (pesados)' if v == 0 else f'{v}%'),
 )
 FOG_SLIDERS = (
     ('fog', 'Névoa de distância', 0, 100, lambda v: 'sem' if v == 0 else f'{v}%'),
