@@ -29,38 +29,12 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 
 
 # ---------------------------------------------------------------------------
-# Forçar GPU dedicada (NVIDIA Optimus / AMD PowerXpress) ANTES do OpenGL/GLFW
-# No Windows, os drivers verificam esses símbolos exportados pelo executável.
-# Como Python não exporta esses símbolos nativamente, usamos ctypes para
-# carregar as DLLs de hint dos fabricantes antes de qualquer contexto GL.
+# A placa de vídeo (Configurações > Gráficos > Placa de vídeo), antes de qualquer OpenGL: num notebook com duas placas
+# o Windows dá a integrada a todo programa que não pede a outra. Ver src/core/gpu_preference.py.
 # ---------------------------------------------------------------------------
-if sys.platform == "win32":
-    import ctypes
+from src import gpu_preference
 
-    # Hint de variável de ambiente para pilhas de driver com suporte a GPU Switchable
-    os.environ.setdefault("SHIM_MCCOMPAT", "0x800000001")
-
-    # --- NVIDIA Optimus ---
-    # O driver NVIDIA expõe a DLL NvOptimusEnablement via nvapi64.
-    # Simplesmente carregar a DLL já sinaliza ao driver que queremos GPU discreta.
-    try:
-        _nv = ctypes.WinDLL("nvapi64.dll")
-        # Exportar o símbolo mágico que o driver verifica
-        _NvOptimusEnablement = ctypes.c_ulong(0x00000001)
-    except OSError:
-        pass  # NVIDIA não instalada ou não disponível
-
-    # --- AMD PowerXpress ---
-    # Mesmo mecanismo: carregar a DLL de hint do driver AMD.
-    try:
-        _amd = ctypes.WinDLL("amdxx64.dll")
-        _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
-    except OSError:
-        try:
-            _amd = ctypes.WinDLL("atiadlxx.dll")
-            _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
-        except OSError:
-            pass  # AMD não instalada ou não disponível
+gpu_preference.ensure(gpu_preference.saved_choice())
 
 # Inicializa o pacote e seleciona o backend antes de importar OpenGL.
 import src
@@ -2273,6 +2247,7 @@ def main() -> None:
                 except RuntimeError as error:            # a placa não aceita: segue sem
                     early_z["ok"] = False
                     print(f"[Render] Sem teste de profundidade antecipado: {error}")
+            shader.use()       # a variante pode ter trocado com outro programa em uso (as tampas, as construções)
             draw_solids()
             shader.set_define("EARLY_Z", False)
             gl.glDepthMask(gl.GL_TRUE)

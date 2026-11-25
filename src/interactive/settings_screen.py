@@ -81,6 +81,9 @@ def value_text(key: str, value) -> str:
         return ('Leve', 'Formas', 'Plantas', 'Completa')[value]
     if key == 'shadow_range':
         return {16: 'Curto', 32: 'Médio', 56: 'Longo'}.get(value, str(value))
+    if key == 'gpu':
+        return {'high': 'Dedicada (mais forte)', 'low': 'Integrada (economiza bateria)',
+                'auto': 'O Windows decide'}[value]
     if key == 'fps_limit':
         return 'Sem limite' if not value else f'{value} FPS'
     if key == 'sensitivity':
@@ -122,6 +125,13 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Mostra no canto superior esquerdo quantos quadros por segundo o jogo está desenhando, lido a cada '
                 'meio segundo.',
                 [('Custo', 'Nenhum')]),
+            Row('gpu', 'Placa de vídeo', 'Em notebooks com duas placas, qual o jogo usa', 'gauge', 'choice', None,
+                'gpu',
+                'Notebooks com duas placas (uma integrada, Intel ou AMD, e uma dedicada, NVIDIA ou AMD) põem os '
+                'programas na integrada, mais fraca. Na dedicada o jogo roda bem mais rápido; na integrada a bateria '
+                'dura mais. O jogo grava a escolha nas configurações de gráficos do Windows e vale na próxima vez que '
+                'ele abrir. Com uma placa só, não muda nada.',
+                [('Custo', 'Nenhum (a dedicada gasta mais bateria)')]),
             Row('fps_limit', 'Limite de FPS', 'Teto de quadros por segundo', 'gauge', 'choice', None, 'fps_limit',
                 'Segura o jogo num número fixo de quadros por segundo. Economiza bateria e deixa a placa mais fria, '
                 'e o ritmo dos quadros fica mais estável.',
