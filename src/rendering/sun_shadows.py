@@ -40,8 +40,10 @@ SOLID_VALUE, PARTIAL_VALUE, PLANT_VALUE, WATER_VALUE = 255, 224, 192, 128
 DETAIL_CUBES, DETAIL_SHAPES, DETAIL_PLANTS, DETAIL_FULL = 0, 1, 2, 3
 # O capim: está em quase todo bloco de grama, e contando como obstáculo sobe o mapa de alturas das colunas
 # (column_horizons) em um bloco no chão todo; o raio de cada pixel do chão, que parava no primeiro passo, tem de
-# andar várias células. Só no detalhe completo.
-HEAVY_PLANTS = ("minecraft:short_grass",)
+# andar várias células. Só no detalhe completo. Vale para a cobertura do chão de todo bioma: na taiga são as
+# samambaias e o arbusto de frutinhas (deixá-los de fora custava ~1 ms por quadro a mais que na planície).
+HEAVY_PLANTS = ("minecraft:short_grass", "minecraft:fern", "minecraft:large_fern[half=lower]",
+                "minecraft:large_fern[half=upper]", "minecraft:sweet_berry_bush[age=3]")
 
 
 def detail_shapes(shapes: np.ndarray, detail: int) -> np.ndarray:

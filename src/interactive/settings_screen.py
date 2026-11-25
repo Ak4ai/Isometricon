@@ -165,8 +165,8 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Leve: cada bloco faz sombra de cubo inteiro, como antes (lajes, escadas e cercas viram cubos; placas '
                 'e plantas não fazem sombra). Formas: lajes, escadas, cercas, placas e lanternas fazem sombra pelo '
                 'formato. Plantas: também mudas, flores e cogumelos, pelo desenho das folhas. Completa: também o '
-                'capim do chão, o mais pesado.',
-                [('Custo', 'Baixo a alto (o capim é o mais pesado)')]),
+                'mato do chão (capim, samambaias, arbustos), o mais pesado.',
+                [('Custo', 'Baixo a alto (o mato do chão é o mais pesado)')]),
             Row('shadow_range', 'Alcance da sombra', 'Até onde o raio procura o que tapa o sol', 'range', 'choice',
                 None, 'shadow_range',
                 'Com o sol baixo, um morro distante pode sombrear o personagem. O alcance diz até quantos blocos o raio '
