@@ -56,7 +56,6 @@ PIPELINE_STAGES = (
     "Shaders e framebuffer",
 )
 
-REPO = "github.com/Ak4ai/Isometricon/blob/main/"
 
 SLIDES: tuple[Slide, ...] = (
     Slide(
@@ -202,14 +201,15 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         "Fontes",
         (
-            _b(REPO + "src/world/terrain.py",
-               REPO + "src/world/chunk.py",
-               REPO + "src/world/mesher.py",
-               REPO + "src/rendering/mesh.py",
-               REPO + "src/camera/camera.py",
-               REPO + "assets/shaders/world_textured.vert",
-               REPO + "assets/shaders/world_textured.frag",
-               REPO + "src/world/manager.py"),
+            Block("subtitle", ("github.com/Ak4ai/Isometricon",)),
+            _b("src/world/terrain.py",
+               "src/world/chunk.py",
+               "src/world/mesher.py",
+               "src/rendering/mesh.py",
+               "src/camera/camera.py",
+               "assets/shaders/world_textured.vert",
+               "assets/shaders/world_textured.frag",
+               "src/world/manager.py"),
             Block("subtitle", ("Obrigado!",)),
         ),
         SceneCue(zoom=(1.0, 2.5, 12.0), spin=3.0, layout="center"),
