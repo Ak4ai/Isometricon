@@ -28,6 +28,8 @@ class SceneCue:
     screen: str = ""
     # aonde o personagem vai, um lugar por passo do slide (ver src/interactive/presentation_places.py)
     places: tuple[str, ...] = ()
+    # o bioma do terreno de fundo ("deserto", "taiga"); vazio é a planície (src/world/terrain_options.BIOMES)
+    biome: str = ""
 
 
 @dataclass(frozen=True)
@@ -187,13 +189,14 @@ SLIDES: tuple[Slide, ...] = (
                 _b("Voxels em chunks de 16 × 16 × 16, 1 byte por bloco (4096 B)",
                    "Relevo por Value Noise 2D com fade quíntica e 3 oitavas; a seed reproduz o mundo",
                    "Cavernas, água que corre como no Minecraft e vegetação",
-                   "18 tipos de bloco; plantas, tocha, escadas e fogo têm forma própria"),
+                   "Biomas: planície, deserto (dunas, cactos) e taiga (pinheiros em cone)",
+                   "30 tipos de bloco; plantas, cacto, tocha, escadas e fogo têm forma própria"),
                 _f("N(x,z) = Σ pⁱ·n(f·λⁱ·(x,z)) / Σ pⁱ"),
                 Block("heightmap", ("1 oitava", "2 oitavas", "3 oitavas")),
                 cg("Modelagem por voxels", "Geração procedural", "Ruído e interpolação"),
             ),
         ),
-        SceneCue(spin=2.0, chunk_outline=True),
+        SceneCue(spin=2.0, chunk_outline=True, biome="deserto"),
     ),
     Slide(
         "Mundo: malha e texturas",
@@ -261,7 +264,7 @@ SLIDES: tuple[Slide, ...] = (
                    _t("No painel do /mestre, à esquerda: arraste a hora do dia e veja o sol, a cor da luz e as "
                       "sombras mudarem. A cena alterna normal → só textura → só iluminação.")),
         ),
-        SceneCue(spin=2.0, views=(0, 0, 1, 2), screen="mestre"),
+        SceneCue(spin=2.0, views=(0, 0, 1, 2), screen="mestre", biome="taiga"),
     ),
     Slide(
         "Água e névoa",

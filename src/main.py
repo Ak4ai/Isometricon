@@ -881,9 +881,26 @@ def main() -> None:
         player_token.position[:] = [float(v) for v in spot]
         camera.target[:] = player_token.position
 
+    def set_presentation_biome(biome: str) -> None:
+        """Refaz o terreno no bioma do slide (vazio: o do jogo). A seed é a mesma; os lugares postos saem (a troca
+        repõe as construções salvas) e voltam no chão novo quando o slide pedir. Nada vai para o save."""
+        pv = presentation_view
+        if pv.get("biome", "") == biome or player_token is None:
+            return
+        pv["biome"] = biome
+        from src.world.terrain_options import defaults, water_default
+        original = active_terrain["options"]
+        options = original if not biome else dict(original or defaults(), bioma=biome, agua=water_default(biome))
+        go_to_presentation_place("")
+        pv.pop("places", None)                     # o restore abaixo já tira as construções da apresentação
+        regenerate_terrain(active_seed["value"], options, keep_world_structures=True)
+        pv["home"] = tuple(float(v) for v in player_token.position)   # o começo, no chão novo
+        pv["at"] = ""
+
     def end_presentation() -> None:
         """Esc na apresentação: a câmera volta a ser a do jogo e o HUD normal reaparece."""
         show_presentation_screen("")
+        set_presentation_biome("")
         go_to_presentation_place("")
         if schematic_tool is not None:   # as construções postas só para a apresentação saem do mundo
             saving, schematic_tool.on_change = schematic_tool.on_change, (lambda: None)
@@ -1070,6 +1087,30 @@ def main() -> None:
         menus.world = world
 
 
+    def regenerate_terrain(new_seed: int, options, keep_world_structures: bool = False) -> None:
+        """Refaz o terreno com outra seed ou outras opções (o R, e a apresentação ao trocar de bioma).
+
+        ``keep_world_structures``: num mundo do menu, as construções dele voltam (a seed não mudou)."""
+        world_manager.delete()
+        room_tracker.reset()
+        world_manager.generator = make_generator(new_seed, options)
+        # Reposiciona o token no topo do novo relevo
+        new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
+        player_token.position[1] = float(new_surface) + 1.0
+        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+        combat.clear()                     # os inimigos ficavam no relevo antigo
+        fog_war.explored.clear()           # o explorado era de outro relevo
+        if cloud_fog is not None:
+            cloud_fog.field.reset()
+        # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
+        from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
+        saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else (
+            (menus.world.get("structures") or []) if keep_world_structures else [])
+        for warning in restore_structures(schematic_tool, saved):
+            chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+        if construction_panel is not None:
+            construction_panel.close()
+
     def handle_camera_key(
         key: int,
         scancode: int,
@@ -1158,24 +1199,7 @@ def main() -> None:
             new_seed = random.randint(1, 999_999)
             active_seed["value"] = new_seed
             print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
-            world_manager.delete()
-            room_tracker.reset()
-            world_manager.generator = make_generator(new_seed, active_terrain["options"])   # as opções ficam
-            # Reposiciona o token no topo do novo relevo
-            new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
-            player_token.position[1] = float(new_surface) + 1.0
-            world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-            combat.clear()                     # os inimigos ficavam no relevo antigo
-            fog_war.explored.clear()           # o explorado era de outro relevo
-            if cloud_fog is not None:
-                cloud_fog.field.reset()
-            # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
-            from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
-            saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else []
-            for warning in restore_structures(schematic_tool, saved):
-                chat_console.add_message("[Schem] " + warning, (255, 85, 85))
-            if construction_panel is not None:
-                construction_panel.close()
+            regenerate_terrain(new_seed, active_terrain["options"])   # as opções ficam
 
         if char_demo:
             if key == glfw.KEY_SPACE and action == glfw.PRESS:
@@ -1472,6 +1496,7 @@ def main() -> None:
             pv["slide"] = presentation.index
             pv["base_yaw"] = math.degrees(camera.yaw)
         show_presentation_screen(presentation.slide.scene.screen)
+        set_presentation_biome(presentation.slide.scene.biome)
         if "home" not in pv and player_token is not None:
             pv["home"] = tuple(float(v) for v in player_token.position)
         places = presentation.slide.scene.places

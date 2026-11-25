@@ -186,3 +186,12 @@ def test_lugares_um_por_passo():
     for entry in ENTRIES.values():
         if entry["kind"] == "schem":
             assert os.path.isfile(os.path.join("assets", "schematics", entry["name"] + ".schem"))
+
+
+def test_slides_em_outros_biomas():
+    from src.interactive.presentation_slides import SceneCue
+    from src.world.terrain_options import BIOMES
+    assert SceneCue().biome == ""
+    assert SLIDES[_index("Mundo: modelagem")].scene.biome == "deserto"
+    assert SLIDES[_index("Iluminação e sombras")].scene.biome == "taiga"
+    assert all(s.scene.biome in ("",) + BIOMES for s in SLIDES)
