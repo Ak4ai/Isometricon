@@ -1,5 +1,8 @@
+from types import SimpleNamespace
+
 import glfw
 
+from src.editor import map_editor as map_editor_module
 from src.editor.map_editor import MapEditor
 from src.editor.voxel_object import VoxelObject
 
@@ -85,9 +88,14 @@ def test_grid_resize_and_camera_free(tmp_path):
 
 
 def test_tool_shortcuts(tmp_path):
+    from src.editor.editor_hud import TOOLS as HUD_TOOLS
+
     editor = _editor(tmp_path)
+    assert "erase" not in {tool for tool, _ in HUD_TOOLS}
     assert editor.handle_key(glfw.KEY_TAB, glfw.PRESS, 0)
-    assert editor.tool == "erase"
+    assert editor.tool == "paint"
+    assert editor.handle_key(glfw.KEY_TAB, glfw.PRESS, 0)
+    assert editor.tool == "stamp"
     assert editor.handle_key(glfw.KEY_C, glfw.PRESS, 0)
     assert editor.handle_key(glfw.KEY_X, glfw.PRESS, 0)
     assert editor.handle_key(glfw.KEY_F6, glfw.PRESS, 0)
@@ -108,7 +116,7 @@ def test_drag_paints_cells_while_held(tmp_path):
     editor = _editor(tmp_path)
     editor.tool = "build"
     editor.last_mouse = (0.0, 0.0)
-    assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.PRESS)
+    assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_RIGHT, glfw.PRESS)
     editor.cursor = (1, 0, 1)
     assert editor.process_click()
     # Sem mover o mouse, o cursor pode pular para o topo do novo voxel; não deve
@@ -121,8 +129,43 @@ def test_drag_paints_cells_while_held(tmp_path):
     editor.last_mouse = (20.0, 0.0)
     editor.update_drag()
     assert editor.map.get(2, 0, 1) >= 0
-    editor.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.RELEASE)
+    editor.handle_mouse_button(glfw.MOUSE_BUTTON_RIGHT, glfw.RELEASE)
     assert not editor.dragging
+
+
+def test_left_click_erases_with_build_tool_selected(tmp_path, monkeypatch):
+    editor = _editor(tmp_path)
+    editor.tool = "build"
+    material = editor.map.add_material((120, 120, 120), "stone")
+    editor.map.set(1, 0, 1, material)
+    hit = SimpleNamespace(block=(1, 0, 1), normal=(0, 1, 0))
+    monkeypatch.setattr(map_editor_module, "screen_to_world_ray", lambda *args: None)
+    monkeypatch.setattr(map_editor_module, "raycast_voxels", lambda *args, **kwargs: hit)
+
+    assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_LEFT, glfw.PRESS)
+    editor.update_cursor(0, 0, 16, 16, None, None, None, mouse_window=(0, 0))
+
+    assert editor.cursor == (1, 0, 1)
+    assert editor.process_click()
+    assert editor.map.get(1, 0, 1) == -1
+
+
+def test_right_click_builds_on_top_with_build_tool_selected(tmp_path, monkeypatch):
+    editor = _editor(tmp_path)
+    editor.tool = "build"
+    material = editor.map.add_material((120, 120, 120), "stone")
+    editor.map.set(1, 0, 1, material)
+    hit = SimpleNamespace(block=(1, 0, 1), normal=(0, 1, 0))
+    monkeypatch.setattr(map_editor_module, "screen_to_world_ray", lambda *args: None)
+    monkeypatch.setattr(map_editor_module, "raycast_voxels", lambda *args, **kwargs: hit)
+
+    assert editor.handle_mouse_button(glfw.MOUSE_BUTTON_RIGHT, glfw.PRESS)
+    editor.update_cursor(0, 0, 16, 16, None, None, None, mouse_window=(0, 0))
+
+    assert editor.cursor == (1, 1, 1)
+    assert editor.process_click()
+    assert editor.map.get(1, 0, 1) >= 0
+    assert editor.map.get(1, 1, 1) >= 0
 
 
 def test_fill_base_creates_floor_and_undoes(tmp_path):

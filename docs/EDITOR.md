@@ -62,8 +62,10 @@ e a moldura/área de desenho acompanham a resolução.
 
 | Ação | Controle |
 |---|---|
-| Aplicar ferramenta | Clique esquerdo |
-| Trocar ferramenta (construir → apagar → pintar → carimbar → selecionar) | `Tab` / `Shift+Tab` |
+| Apagar voxel apontado (com Construir selecionado) | Clique esquerdo |
+| Construir voxel na face apontada | Clique direito |
+| Aplicar Pintar, Carimbar ou Selecionar | Clique esquerdo |
+| Trocar ferramenta (construir → pintar → carimbar → selecionar) | `Tab` / `Shift+Tab` |
 | Escolher cor na roda HSV | clique na roda; barra abaixo ajusta o brilho |
 | Escolher cor na paleta/recentes | clique no quadradinho |
 | Alternar abas Cores/Texturas | clique nas abas ou `K` |
@@ -95,7 +97,7 @@ e a moldura/área de desenho acompanham a resolução.
 | Cancelar a saída | `Esc` |
 | Mover objeto selecionado | setas; `PageUp`/`PageDown` no Y |
 | Duplicar / excluir objeto | `Ctrl+D` / `Delete` |
-| Excluir carimbo apontado | `Delete` ou botão direito |
+| Excluir carimbo apontado | `Delete` ou botão direito sobre o objeto |
 | Biblioteca: escolher / carimbar | `↑`/`↓` / `Enter` |
 | Biblioteca: duplicar / excluir arquivo | `D` / `Delete` (duas vezes) |
 | Desfazer / refazer | `Ctrl+Z` / `Ctrl+Y` |
@@ -104,9 +106,10 @@ e a moldura/área de desenho acompanham a resolução.
 | Pan | Botão do meio ou `Shift` + arrastar |
 | Sair | `Esc` |
 
-Construir em altura: aponte para o **topo** ou para a **lateral** de um voxel e
-clique; a célula alvo é a vizinha na direção da face atingida. Para pintar ou
-apagar, aponte diretamente para o voxel.
+Com **Construir** selecionado, o botão direito constrói na célula vizinha à face
+apontada; o botão esquerdo apaga o voxel apontado. Para construir em altura,
+aponte o botão direito para o topo ou para a lateral de um voxel. As ferramentas
+Pintar, Carimbar e Selecionar continuam usando o botão esquerdo.
 
 ## 🔁 Fluxo de trabalho
 

@@ -38,7 +38,7 @@ from src.rendering.mesh import TexturedMesh
 from src.world import BlockType
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TOOLS = ("build", "erase", "paint", "stamp", "select")
+TOOLS = ("build", "paint", "stamp", "select")
 TOOL_LABELS = {"build": "Construir", "erase": "Apagar", "paint": "Pintar",
                "stamp": "Carimbar", "select": "Selecionar"}
 PALETTE = (
@@ -371,14 +371,15 @@ class MapEditor:
         ray = screen_to_world_ray(mouse_x, mouse_y, width, height, view, projection, model)
         hit = raycast_voxels(ray, _ObjectProvider(self.project), max_distance=512.0)
         self.hit_block = hit.block if hit is not None else None
-        if self.tool == "select":
+        active_tool = self._mouse_button_tool()
+        if active_tool == "select":
             self.cursor = hit.block if hit is not None else None
             self.cursor_normal = hit.normal if hit is not None else (0, 1, 0)
             return
         target: tuple[int, int, int] | None = None
         if hit is not None:
             self.cursor_normal = hit.normal
-            if self.tool in ("erase", "paint"):
+            if active_tool in ("erase", "paint"):
                 target = hit.block
             else:
                 target = (hit.block[0] + hit.normal[0], hit.block[1] + hit.normal[1],
@@ -427,38 +428,45 @@ class MapEditor:
                         cells.append(cell)
         return cells
 
-    def apply_current_tool(self) -> bool:
+    def _place_blocks(self) -> bool:
+        cells = [cell for cell in self._brush_cells() if not self.project.occupied(*cell)]
+        if not cells:
+            self.status = "As células já estão ocupadas."
+            return False
+        self._push_undo()
+        material = self.map.add_material(self.current_material())
+        for cell in cells:
+            self.map.set(*cell, material)
+        self._after_change(f"{len(cells)} voxel(is) criado(s).")
+        return True
+
+    def _destroy_blocks(self) -> bool:
+        cells = [cell for cell in self._brush_cells()
+                 if self.map.in_bounds(*cell) and self.map.get(*cell) >= 0]
+        if not cells:
+            self.status = "Não há voxel da base para apagar."
+            return False
+        self._push_undo()
+        for cell in cells:
+            self.map.clear(*cell)
+        self._after_change(f"{len(cells)} voxel(is) removido(s).")
+        return True
+
+    def apply_current_tool(self, tool_override: str | None = None) -> bool:
         if self.cursor is None:
             self.status = "Nenhuma célula sob o cursor."
             return False
-        if self.tool == "select":
+        active = tool_override or self.tool
+        if active == "select":
             index = self.project.object_at(*self.cursor)
             self.selected_index = index
             self.status = "Objeto selecionado." if index is not None else "Nenhum objeto aqui."
             return index is not None
-        if self.tool == "build":
-            cells = [cell for cell in self._brush_cells() if not self.project.occupied(*cell)]
-            if not cells:
-                self.status = "As células já estão ocupadas."
-                return False
-            self._push_undo()
-            material = self.map.add_material(self.current_material())
-            for cell in cells:
-                self.map.set(*cell, material)
-            self._after_change(f"{len(cells)} voxel(is) criado(s).")
-            return True
-        if self.tool == "erase":
-            cells = [cell for cell in self._brush_cells()
-                     if self.map.in_bounds(*cell) and self.map.get(*cell) >= 0]
-            if not cells:
-                self.status = "Não há voxel da base para apagar."
-                return False
-            self._push_undo()
-            for cell in cells:
-                self.map.clear(*cell)
-            self._after_change(f"{len(cells)} voxel(is) removido(s).")
-            return True
-        if self.tool == "paint":
+        if active == "build":
+            return self._place_blocks()
+        if active == "erase":
+            return self._destroy_blocks()
+        if active == "paint":
             cells = [cell for cell in self._brush_cells()
                      if self.map.in_bounds(*cell) and self.map.get(*cell) >= 0]
             if not cells:
@@ -470,7 +478,7 @@ class MapEditor:
                 self.map.set(*cell, material)
             self._after_change(f"{len(cells)} voxel(is) pintado(s).")
             return True
-        if self.tool == "stamp":
+        if active == "stamp":
             if self.stamp is None:
                 self._load_next_library()
             if self.stamp is None:
@@ -527,12 +535,13 @@ class MapEditor:
         self._after_change("Objeto duplicado.")
         return True
 
-    def _delete_object_at_cursor(self) -> bool:
+    def _delete_object_at_cursor(self, position: tuple[int, int, int] | None = None) -> bool:
         """Remove o objeto carimbado sob o cursor, sem trocar de ferramenta."""
-        if self.cursor is None:
+        target = position if position is not None else self.cursor
+        if target is None:
             self.status = "Aponte para um objeto carimbado para remover."
             return False
-        index = self.project.object_at(*self.cursor)
+        index = self.project.object_at(*target)
         if index is None:
             self.status = "Não há objeto carimbado neste ponto."
             return False
@@ -696,17 +705,11 @@ class MapEditor:
         return True
 
     def handle_mouse_button(self, button: int, action: int, shift: bool = False, alt: bool = False) -> bool:
-        if button == glfw.MOUSE_BUTTON_RIGHT:
-            if action == glfw.PRESS and not shift:
-                if self.export_dialog is not None and self.export_dialog.is_open:
-                    return True
-                return self._delete_object_at_cursor()
-            return False
-        if button != glfw.MOUSE_BUTTON_LEFT:
+        if button not in (glfw.MOUSE_BUTTON_LEFT, glfw.MOUSE_BUTTON_RIGHT):
             return False
         if action == glfw.PRESS and not shift:
             if self.export_dialog is not None and self.export_dialog.is_open:
-                if self.last_mouse_window is not None:
+                if button == glfw.MOUSE_BUTTON_LEFT and self.last_mouse_window is not None:
                     local = self.export_dialog.local_point(*self.last_mouse_window)
                     if local is not None:
                         target = self.export_dialog.hit(*local)
@@ -721,11 +724,11 @@ class MapEditor:
                 x, y = self.last_mouse_window
                 local = self.hud.local_point(x, y)
                 if local is not None:
-                    local_x, local_y = local
-                    if self.hud is not None:
-                        button = self.hud.hit(local_x, local_y)
-                        if button is not None:
-                            self._hud_action(button)
+                    if button == glfw.MOUSE_BUTTON_LEFT:
+                        local_x, local_y = local
+                        hud_btn = self.hud.hit(local_x, local_y)
+                        if hud_btn is not None:
+                            self._hud_action(hud_btn)
                             return True
                         wheel = self.hud.hit_wheel(local_x, local_y)
                         if wheel is not None:
@@ -754,7 +757,11 @@ class MapEditor:
                                 self.select_texture(texture)
                                 return True
                     return True
-            if alt and self.hit_block is not None:
+            if button == glfw.MOUSE_BUTTON_RIGHT:
+                for target in (self.hit_block, self.cursor):
+                    if target is not None and self.project.object_at(*target) is not None:
+                        return self._delete_object_at_cursor(target)
+            if button == glfw.MOUSE_BUTTON_LEFT and alt and self.hit_block is not None:
                 return self._pick_material(self.hit_block)
             now = time.monotonic()
             if now - self._last_click_time < CLICK_COOLDOWN:
@@ -764,31 +771,40 @@ class MapEditor:
             self._press_time = now
             self._drag_armed = False
             self._last_drag_mouse = self.last_mouse
+            self._active_mouse_button = button
             self.dragging = True
             self.click_pending = True
             return True
         if action == glfw.RELEASE:
-            self.hud_drag = False
-            self.dragging = False
-            self._drag_armed = False
-            self._press_mouse = None
-            self._last_drag_mouse = None
-            self._last_drag_cell = None
+            if button == getattr(self, "_active_mouse_button", button):
+                self.hud_drag = False
+                self.dragging = False
+                self._drag_armed = False
+                self._press_mouse = None
+                self._last_drag_mouse = None
+                self._last_drag_cell = None
+                self._active_mouse_button = None
         return False
+
+    def _mouse_button_tool(self) -> str:
+        if getattr(self, "_active_mouse_button", None) == glfw.MOUSE_BUTTON_RIGHT:
+            return "build"
+        if (getattr(self, "_active_mouse_button", None) == glfw.MOUSE_BUTTON_LEFT
+                and self.tool == "build"):
+            return "erase"
+        return self.tool
 
     def process_click(self) -> bool:
         if not self.click_pending:
             return False
         self.click_pending = False
-        result = self.apply_current_tool()
+        result = self.apply_current_tool(tool_override=self._mouse_button_tool())
         self._last_drag_cell = self.cursor
         self._last_drag_mouse = self.last_mouse
         return result
 
     def update_drag(self) -> None:
         if not self.dragging or self.click_pending or self.cursor is None:
-            return
-        if self.tool in ("select",):
             return
         now = time.monotonic()
         if not self._drag_armed:
@@ -809,7 +825,7 @@ class MapEditor:
         if self.cursor != self._last_drag_cell:
             self._last_drag_cell = self.cursor
             self._last_drag_mouse = self.last_mouse
-            self.apply_current_tool()
+            self.apply_current_tool(tool_override=self._mouse_button_tool())
 
     def update_hud_drag(self) -> None:
         if not self.hud_drag or self.hud is None or self.last_mouse_window is None:
@@ -1070,7 +1086,8 @@ class MapEditor:
             self.open_library()
             return True
         if key == glfw.KEY_TAB:
-            self.tool = TOOLS[(TOOLS.index(self.tool) + (-1 if shift else 1)) % len(TOOLS)]
+            current_tool = self.tool if self.tool in TOOLS else "build"
+            self.tool = TOOLS[(TOOLS.index(current_tool) + (-1 if shift else 1)) % len(TOOLS)]
             if self.tool == "stamp" and self.stamp is None:
                 self._load_next_library()
             self.status = f"Ferramenta: {TOOL_LABELS[self.tool]}."
@@ -1473,9 +1490,10 @@ class MapEditor:
                 shader.set_mat4("u_Model", model @ mat4_translate(*placed.position))
                 mesh.draw()
 
-        if self.tool == "stamp" and self.preview_mesh is not None and self.cursor is not None:
+        active_tool = self._mouse_button_tool()
+        if active_tool == "stamp" and self.preview_mesh is not None and self.cursor is not None:
             self._draw_alpha_mesh(shader, projection, view, model, self.preview_mesh, self.cursor, 0.42)
-        elif self.tool in ("build", "paint") and self.cursor_preview_mesh is not None and self.cursor is not None:
+        elif active_tool in ("build", "paint") and self.cursor_preview_mesh is not None and self.cursor is not None:
             self._draw_alpha_mesh(shader, projection, view, model, self.cursor_preview_mesh, self.cursor, 0.55)
 
         if self.selected is not None and self.selection_box is not None:
@@ -1485,9 +1503,9 @@ class MapEditor:
 
         if self.cursor is not None and self.highlight is not None:
             x, y, z = self.cursor
-            if self.tool == "erase" or (self.tool == "stamp" and self.stamp_valid is False):
+            if active_tool == "erase" or (active_tool == "stamp" and self.stamp_valid is False):
                 colour = (1.0, 0.35, 0.30)
-            elif self.tool == "stamp" and self.stamp_valid:
+            elif active_tool == "stamp" and self.stamp_valid:
                 colour = (0.45, 1.0, 0.55)
             else:
                 colour = (1.0, 0.85, 0.30)

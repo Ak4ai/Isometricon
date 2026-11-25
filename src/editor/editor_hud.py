@@ -22,8 +22,8 @@ WHEEL_SIZE = 84
 WHEEL_BOX = (16, 268, 16 + WHEEL_SIZE, 268 + WHEEL_SIZE)
 VALUE_BOX = (16, 358, 16 + WHEEL_SIZE, 368)
 TOOLS = (
-    ("build", "Construir"), ("erase", "Apagar"), ("paint", "Pintar"),
-    ("stamp", "Carimbar"), ("select", "Selecionar"),
+    ("build", "Construir"), ("paint", "Pintar"), ("stamp", "Carimbar"),
+    ("select", "Selecionar"),
 )
 ACTIONS = (
     ("save", "Salvar"), ("load", "Abrir"), ("export", "Exportar"),
