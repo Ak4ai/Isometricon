@@ -5,7 +5,9 @@ import numpy as np
 from src.math.aabb import AABB
 from src.math.vector import vec3
 from src.world import BlockType, Chunk3D
-from src.world.block import SHAPED_LUT
+from src.world.block import FOLIAGE, SHAPED_LUT
+
+_FOLIAGE_IDS = frozenset(int(b) for b in FOLIAGE)  # a copa das árvores: não é teto de caverna
 
 def _coordinate(value: int) -> int:
     # Valida coordenadas inteiras sem aceitar bool.
@@ -130,11 +132,13 @@ class VoxelGridProvider:
         world_x: int,
         world_z: int,
         skip_water: bool = False,
+        skip_foliage: bool = False,
     ) -> int:
         """Retorna o maior Y não-AIR da coluna carregada em ``(x, z)``.
 
         Os enfeites com forma (plantas, tochas, escadas de mão, fogo) não contam: não cobrem a coluna.
         Com ``skip_water`` a água também não conta: é o chão (ou o teto de caverna) sob ou sobre a água que vale.
+        Com ``skip_foliage`` as folhas também não: a copa de uma árvore não é teto de caverna.
 
         O ``WorldManager`` atual transmite apenas colunas no chunk vertical
         ``y=0``. No modo dinâmico, a busca consulta essa coluna diretamente
@@ -147,6 +151,8 @@ class VoxelGridProvider:
             for y in range(Chunk3D.SIZE - 1, -1, -1):
                 block = int(self.get_block_at(x, y, z))
                 if skip_water and block == int(BlockType.WATER):
+                    continue
+                if skip_foliage and block in _FOLIAGE_IDS:
                     continue
                 if block != BlockType.AIR and not SHAPED_LUT[block]:
                     return y
@@ -168,6 +174,8 @@ class VoxelGridProvider:
             wanted = (column != int(BlockType.AIR)) & ~SHAPED_LUT[column]
             if skip_water:
                 wanted &= column != int(BlockType.WATER)
+            if skip_foliage:
+                wanted &= ~np.isin(column, list(_FOLIAGE_IDS))
             solid_indices = np.flatnonzero(wanted)
             if solid_indices.size == 0:
                 continue

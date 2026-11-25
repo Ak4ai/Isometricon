@@ -2052,6 +2052,7 @@ def main() -> None:
                             int(np.floor(float(player_token.position[0]))),
                             int(np.floor(float(player_token.position[2]))),
                             skip_water=True,
+                            skip_foliage=True,  # a copa de uma árvore não faz do chão embaixo dela uma caverna
                         )
                     ) + 0.25
                 )

@@ -185,3 +185,21 @@ def test_a_cave_under_a_lake_is_still_underground():
     provider = _column_provider(cave)
     top = provider.get_top_solid_block(0, 0, skip_water=True)
     assert top == 5 and 3.0 < top + 0.25
+
+
+def test_standing_under_a_spruce_is_not_underground():
+    # chão de grama em y=8 e a copa de um pinheiro de y=11 a y=14: de pé em y=9 o jogador está ao ar livre (as
+    # folhas ligavam o corte de caverna, que redesenha o mundo inteiro translúcido: o peso embaixo das árvores)
+    tree = {**{y: BlockType.STONE for y in range(0, 8)}, 8: BlockType.TAIGA_GRASS,
+            **{y: BlockType.SPRUCE_LEAVES for y in (11, 12, 13)}, 14: BlockType.LEAVES}
+    provider = _column_provider(tree)
+    assert provider.get_top_solid_block(0, 0, skip_water=True) == 14
+    assert provider.get_top_solid_block(0, 0, skip_water=True, skip_foliage=True) == 8
+
+
+def test_a_cave_under_a_tree_is_still_underground():
+    # caverna em y=4..5 com teto de pedra em y=6 e uma árvore em cima: o teto cobre o jogador
+    cave = {**{y: BlockType.STONE for y in (0, 1, 2, 3, 6)}, **{y: BlockType.SPRUCE_LEAVES for y in (9, 10)}}
+    provider = _column_provider(cave)
+    top = provider.get_top_solid_block(0, 0, skip_water=True, skip_foliage=True)
+    assert top == 6 and 4.0 < top + 0.25
