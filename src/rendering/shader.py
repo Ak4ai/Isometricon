@@ -10,7 +10,7 @@ class Shader:
     """Carrega, compila e gerencia programas de shaders GLSL."""
 
     # Unidade de textura fixa de samplers adicionais do shader do mundo (u_RoomMask: máscara 3D do espaço)
-    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3}
+    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3, "u_ShadowShapeIds": 12, "u_ShadowEmpty": 14}
 
     def __init__(self, vertex_path: str, fragment_path: str):
         """Inicializa e compila o programa de shader a partir de arquivos no disco.
@@ -24,6 +24,12 @@ class Shader:
         self._uniform_cache: dict[str, int] = {}
         self.defines: Tuple[str, ...] = ()
         self._variants: Dict[Tuple[str, ...], Tuple[int, dict]] = {}
+        # O último valor de cada uniform (o setter e os argumentos) e quando foi dado: ao trocar de variante, a nova
+        # recebe só o que mudou desde a última vez em que ela era a atual (trocar duas vezes por quadro sai barato)
+        self._values: Dict[str, tuple] = {}
+        self._stamps: Dict[str, int] = {}
+        self._clock = 0
+        self._synced: Dict[Tuple[str, ...], int] = {(): 0}
         self.program_id = self._build(())
         self._variants[()] = (self.program_id, self._uniform_cache)
 
@@ -44,9 +50,30 @@ class Shader:
         if key not in self._variants:
             self._variants[key] = (self._build(key), {})
         old = self.program_id
+        bound = int(gl.glGetIntegerv(gl.GL_CURRENT_PROGRAM))
+        self._synced[self.defines] = self._clock
         self.program_id, self._uniform_cache = self._variants[key]
         self.defines = key
-        _copy_uniforms(old, self.program_id)
+        gl.glUseProgram(self.program_id)
+        since = self._synced.get(key, -1)
+        for name, stamp in self._stamps.items():
+            if stamp > since:
+                setter, args = self._values[name]
+                setter(self, name, *args, record=False)
+        self._synced[key] = self._clock
+        if bound != old:
+            gl.glUseProgram(bound)     # quem estava em uso era outro programa: fica ele
+
+    def set_define(self, name: str, on: bool) -> None:
+        """Liga ou desliga um ``#define`` sem mexer nos outros (troca de variante; ver ``set_defines``)."""
+        current = set(self.defines)
+        if (name in current) == bool(on):
+            return
+        if on:
+            current.add(name)
+        else:
+            current.discard(name)
+        self.set_defines(tuple(current))
 
     def _build(self, defines: Tuple[str, ...]) -> int:
         vertex_source = self._with_defines(self._read_source(self.vertex_path), defines)
@@ -123,21 +150,32 @@ class Shader:
             self._uniform_cache[name] = loc
         return self._uniform_cache[name]
 
-    def set_mat4(self, name: str, matrix: np.ndarray) -> None:
+    def _record(self, name: str, setter, args) -> None:
+        self._clock += 1
+        self._values[name] = (setter, args)
+        self._stamps[name] = self._clock
+
+    def set_mat4(self, name: str, matrix: np.ndarray, record: bool = True) -> None:
         """Envia uma matriz 4x4 float32 para o shader."""
+        if record:
+            self._record(name, Shader.set_mat4, (np.array(matrix, dtype=np.float32),))
         loc = self.get_uniform_location(name)
         if loc != -1:
             gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, np.ascontiguousarray(matrix, dtype=np.float32))
 
-    def set_mat4_array(self, name: str, matrices: np.ndarray) -> None:
+    def set_mat4_array(self, name: str, matrices: np.ndarray, record: bool = True) -> None:
         """Envia um vetor de matrizes 4x4 float32 (N, 4, 4) para o shader."""
+        if record:
+            self._record(name, Shader.set_mat4_array, (np.array(matrices, dtype=np.float32),))
         loc = self.get_uniform_location(name)
         if loc != -1:
             data = np.ascontiguousarray(matrices, dtype=np.float32)
             gl.glUniformMatrix4fv(loc, len(data), gl.GL_TRUE, data)
 
-    def set_mat3(self, name: str, matrix: np.ndarray) -> None:
+    def set_mat3(self, name: str, matrix: np.ndarray, record: bool = True) -> None:
         """Envia uma matriz 3x3 float32 para o shader."""
+        if record:
+            self._record(name, Shader.set_mat3, (np.array(matrix, dtype=np.float32),))
         loc = self.get_uniform_location(name)
         if loc != -1:
             gl.glUniformMatrix3fv(loc, 1, gl.GL_TRUE, np.ascontiguousarray(matrix, dtype=np.float32))
@@ -149,8 +187,13 @@ class Shader:
         y: float = 0.0,
         z: float = 0.0,
         w: float = 1.0,
+        record: bool = True,
     ) -> None:
         """Envia um vetor 4D para o shader."""
+        if isinstance(x, (np.ndarray, list, tuple)):
+            x, y, z, w = (float(v) for v in x[:4])
+        if record:
+            self._record(name, Shader.set_vec4, (x, y, z, w))
         loc = self.get_uniform_location(name)
         if loc != -1:
             if isinstance(x, (np.ndarray, list, tuple)):
@@ -164,8 +207,13 @@ class Shader:
         x: Union[float, Sequence[float], np.ndarray],
         y: float = 0.0,
         z: float = 0.0,
+        record: bool = True,
     ) -> None:
         """Envia um vetor 3D para o shader."""
+        if isinstance(x, (np.ndarray, list, tuple)):
+            x, y, z = (float(v) for v in x[:3])
+        if record:
+            self._record(name, Shader.set_vec3, (x, y, z))
         loc = self.get_uniform_location(name)
         if loc != -1:
             if isinstance(x, (np.ndarray, list, tuple)):
@@ -178,8 +226,13 @@ class Shader:
         name: str,
         x: Union[float, Sequence[float], np.ndarray],
         y: float = 0.0,
+        record: bool = True,
     ) -> None:
         """Envia um vetor 2D para o shader."""
+        if isinstance(x, (np.ndarray, list, tuple)):
+            x, y = (float(v) for v in x[:2])
+        if record:
+            self._record(name, Shader.set_vec2, (x, y))
         loc = self.get_uniform_location(name)
         if loc != -1:
             if isinstance(x, (np.ndarray, list, tuple)):
@@ -187,20 +240,26 @@ class Shader:
             else:
                 gl.glUniform2f(loc, float(x), float(y))
 
-    def set_float(self, name: str, value: float) -> None:
+    def set_float(self, name: str, value: float, record: bool = True) -> None:
         """Envia um valor float para o shader."""
+        if record:
+            self._record(name, Shader.set_float, (value,))
         loc = self.get_uniform_location(name)
         if loc != -1:
             gl.glUniform1f(loc, float(value))
 
-    def set_int(self, name: str, value: int) -> None:
+    def set_int(self, name: str, value: int, record: bool = True) -> None:
         """Envia um valor inteiro para o shader."""
+        if record:
+            self._record(name, Shader.set_int, (value,))
         loc = self.get_uniform_location(name)
         if loc != -1:
             gl.glUniform1i(loc, int(value))
 
-    def set_bool(self, name: str, value: bool) -> None:
+    def set_bool(self, name: str, value: bool, record: bool = True) -> None:
         """Envia um valor booleano para o shader."""
+        if record:
+            self._record(name, Shader.set_bool, (value,))
         loc = self.get_uniform_location(name)
         if loc != -1:
             gl.glUniform1i(loc, 1 if value else 0)

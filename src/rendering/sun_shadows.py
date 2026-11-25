@@ -25,6 +25,8 @@ HORIZON_UNIT = 4  # unidade do mapa de alturas por quadrante (column_horizons)
 SHAPES_UNIT = 10  # unidade da tabela das formas dos blocos parciais (shadow_shapes)
 PLANTS_UNIT = 11  # unidade dos desenhos das plantas (shadow_shapes.plant_masks)
 SHAPE_IDS_UNIT = 12  # unidade da textura 3D com o número da forma de cada célula parcial
+EMPTY_UNIT = 14      # unidade da textura 3D do ar vazio em volta de cada célula (empty_distances)
+EMPTY_MAX = 8        # o maior pulo do raio, em células
 
 
 SOFT_SPREAD = 0.15  # o raio do disco do cone borrado do shader (softSun); a nítida (0.08) cabe dentro dele
@@ -160,14 +162,27 @@ def far_window_origin(position, size) -> Tuple[int, int, int]:
     return x - size[0] // 2, y - FAR_BELOW, z - size[2] // 2
 
 
+def empty_distances(values: np.ndarray, cap: int = EMPTY_MAX) -> np.ndarray:
+    """[x, y, z] uint8: para cada célula, o maior n (até ``cap``) tal que o cubo de células a menos de n passos dela em
+    x, y e z (distância de Chebyshev) só tem ar. 0 numa célula ocupada (sólido, parcial, planta ou água: o raio tem de
+    passar por ela célula a célula). Fora da janela conta como ar (o sol está livre lá)."""
+    from scipy.ndimage import distance_transform_cdt
+    occupied = values > 0
+    if not occupied.any():
+        return np.full(values.shape, cap, dtype=np.uint8)
+    distance = distance_transform_cdt(~occupied, metric='chessboard')
+    return np.minimum(distance, cap).astype(np.uint8)
+
+
 def prepare_window(window, detail: int, rise: float):
-    """O que sobe para a GPU, no formato das texturas: a máscara (z, y, x), os números das formas (z, y, x, 2) e os
-    horizontes das colunas (z, x, 4)."""
+    """O que sobe para a GPU, no formato das texturas: a máscara (z, y, x), os números das formas (z, y, x, 2), os
+    horizontes das colunas (z, x, 4) e o ar vazio em volta de cada célula (z, y, x)."""
     values = mask_values(window, detail)
     data = np.ascontiguousarray(values.transpose(2, 1, 0))
     ids = np.ascontiguousarray(shape_texels(window, detail).transpose(2, 1, 0, 3))
     horizons = np.ascontiguousarray(column_horizons(values, rise).astype(np.uint8).transpose(1, 0, 2))
-    return data, ids, horizons
+    empty = np.ascontiguousarray(empty_distances(values).transpose(2, 1, 0))
+    return data, ids, horizons, empty
 
 
 class SunShadowRenderer:
@@ -188,6 +203,7 @@ class SunShadowRenderer:
         self.shapes_id = 0   # textura 2D RGBA32F: a tabela das formas (shadow_shapes.TABLE)
         self.plants_id = 0   # textura 2D R8: os desenhos das plantas
         self.shape_ids_id = 0  # textura 3D RG8: o número da forma de cada célula parcial
+        self.empty_id = 0      # textura 3D R8: o ar vazio em volta de cada célula (empty_distances)
         self._shapes_revision = -1
         self._uploaded = None  # as células da janela que estão na GPU
         self._origin = (0, 0, 0)
@@ -203,7 +219,7 @@ class SunShadowRenderer:
         sem o caminho das formas)."""
         detail = max(DETAIL_CUBES, min(DETAIL_FULL, int(detail)))
         if shader is not None:
-            shader.set_defines(() if detail == DETAIL_CUBES else ("SHADOW_SHAPES",))
+            shader.set_define("SHADOW_SHAPES", detail != DETAIL_CUBES)
         if detail != self.detail:
             self.detail = detail
             self._uploaded = None     # a mesma janela, outra máscara
@@ -267,7 +283,7 @@ class SunShadowRenderer:
     def _structure_key(structures):
         return tuple((id(s), s.origin, getattr(s, "revision", 0)) for s in structures)
 
-    def _upload(self, window, origin, size, data, ids, horizons) -> None:
+    def _upload(self, window, origin, size, data, ids, horizons, empty) -> None:
         if tuple(size) != tuple(self._size):
             self.delete()
             self._size = tuple(size)
@@ -281,6 +297,9 @@ class SunShadowRenderer:
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
         gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RG, gl.GL_UNSIGNED_BYTE, ids)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + EMPTY_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_3D, self.empty_id)
+        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, empty)
         # [x, z, 4] -> a textura 2D quer (altura z, largura x, canais)
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
@@ -325,6 +344,15 @@ class SunShadowRenderer:
             gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
         gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_RG8, sx, sy, sz, 0, gl.GL_RG, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx, 2), dtype=np.uint8))
+        self.empty_id = gl.glGenTextures(1)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + EMPTY_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_3D, self.empty_id)
+        for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
+                            (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
+                            (gl.GL_TEXTURE_WRAP_R, gl.GL_CLAMP_TO_EDGE)):
+            gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
+        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
+                        np.zeros((sz, sy, sx), dtype=np.uint8))
         self.horizon_id = gl.glGenTextures(1)
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
@@ -364,8 +392,11 @@ class SunShadowRenderer:
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.plants_id)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + EMPTY_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_3D, self.empty_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         shader.set_int("u_ShadowMask", SHADOW_UNIT)
+        shader.set_int("u_ShadowEmpty", EMPTY_UNIT)
         shader.set_int("u_ShadowShapeIds", SHAPE_IDS_UNIT)
         shader.set_int("u_ShadowShapes", SHAPES_UNIT)
         shader.set_int("u_ShadowPlants", PLANTS_UNIT)
@@ -383,9 +414,11 @@ class SunShadowRenderer:
 
     def delete(self) -> None:
         if self.texture_id:
-            ids = [t for t in (self.texture_id, self.horizon_id, self.shape_ids_id, self.shapes_id, self.plants_id) if t]
+            ids = [t for t in (self.texture_id, self.horizon_id, self.shape_ids_id, self.shapes_id, self.plants_id,
+                               self.empty_id) if t]
             gl.glDeleteTextures(len(ids), ids)
             self.texture_id = self.horizon_id = self.shape_ids_id = self.shapes_id = self.plants_id = 0
+            self.empty_id = 0
             self._shapes_revision = -1
         self._uploaded = None
 

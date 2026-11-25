@@ -1,4 +1,11 @@
 #version 330 core
+#ifdef EARLY_Z
+// A passada de cor depois da pré-passada de profundidade (src/main.py): o teste de profundidade vem antes do shader.
+// Com os descartes do shader a placa (Intel) deixava o teste para depois e cada fragmento escondido pagava os raios
+// do sol. Aqui não escreve profundidade, então descartar continua certo.
+#extension GL_ARB_shader_image_load_store : enable
+layout(early_fragment_tests) in;
+#endif
 
 // =============================================================================
 // Isometricon - Textured World Fragment Shader (GLSL 330 core)
@@ -64,6 +71,10 @@ uniform float u_ShadowHorizonRise;
 // (0 baixa: um raio; 1 média: cone borrado de 8 e nítido de 3; 2 alta: 12 e 6).
 uniform int u_ShadowSteps;
 uniform int u_ShadowQuality;
+// O ar em volta de cada célula (empty_distances em sun_shadows.py): n quer dizer que o cubo de células a menos de n
+// passos dela (em x, y e z) está todo vazio. O raio, no ar, pula esse cubo de uma vez em vez de andar célula a célula:
+// entre os troncos altos da taiga ele quase não parava cedo e andava as 56 células.
+uniform sampler3D u_ShadowEmpty;
 
 float shadowCell(vec3 worldPos)
 {
@@ -227,9 +238,11 @@ float traceSun(vec3 worldPos, vec3 dir)
     bool useHorizon = stepDir.y > 0 && safe.y >= u_ShadowHorizonRise * length(safe.xz);
     float light = 1.0;
     float tEnter = 0.0;                                       // onde o raio entrou na célula atual
+    float maxAxis = max(abs(safe.x), max(abs(safe.y), abs(safe.z)));
+    int walked = 0;                                           // células andadas (um pulo conta as que pulou)
     for (int i = 0; i < 56; i++)
     {
-        if (i >= u_ShadowSteps)
+        if (walked >= u_ShadowSteps)
             break;
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
             return light;                                     // saiu da janela (para cima ou para longe): sol livre
@@ -237,6 +250,25 @@ float traceSun(vec3 worldPos, vec3 dir)
         if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
             return light;
         float value = texelFetch(u_ShadowMask, cell, 0).r;
+        if (value < 0.1 && i > 0)
+        {
+            // no ar: o cubo de raio (n - 1) células em volta desta está vazio; o raio vai direto até a borda dele
+            int empty = int(texelFetch(u_ShadowEmpty, cell, 0).r * 255.0 + 0.5);
+            if (empty >= 2)
+            {
+                float t = tEnter + (float(empty - 1) - 0.001) / maxAxis;
+                vec3 p = q + safe * t;
+                cell = ivec3(floor(p));
+                frac = p - floor(p);
+                tMax = t + vec3(safe.x > 0.0 ? 1.0 - frac.x : frac.x,
+                                safe.y > 0.0 ? 1.0 - frac.y : frac.y,
+                                safe.z > 0.0 ? 1.0 - frac.z : frac.z) * tDelta;
+                tEnter = t;
+                walked += empty - 1;
+                continue;
+            }
+        }
+        walked += 1;
         float tExit = min(tMax.x, min(tMax.y, tMax.z));
         if (value > 0.94)
             return 0.0;
@@ -767,6 +799,9 @@ float fogWarCover(vec3 world, float wisps)
     return 1.0 - seen;
 }
 
+#ifdef MIST
+// Só existe nesta variante do shader (main.py liga o MIST com a neblina acima de 0): compilada sempre, mesmo sem
+// uso, deixava todo o shader mais pesado (~10 ms por quadro na taiga).
 // A neblina de ambientação (src/rendering/mist.py, /mestre > Neblina): a neblina de cena, baixa e rente ao chão. Soma
 // a densidade dela no caminho do ponto desenhado até a câmera (até a altura em que ela acaba), em MIST_STEPS passos.
 // A densidade é maior rente ao chão (o mapa u_MistMap dá a altura do chão de cada coluna) e rareia até u_MistHeight
@@ -813,6 +848,7 @@ float mistDensity(vec3 w, vec2 drift)
     return vertical * region * (0.25 + 1.3 * wisps * wisps);
 }
 
+#ifdef MIST_RAYS
 // O sol chega a este ponto da neblina? Uma marcha curta rumo ao sol na máscara das sombras (troncos e folhas tapam):
 // a neblina iluminada brilha e a da sombra fica apagada, e o contraste entre as duas desenha os feixes.
 float mistSunReach(vec3 w, vec3 sun)
@@ -827,6 +863,7 @@ float mistSunReach(vec3 w, vec3 sun)
     }
     return 1.0;
 }
+#endif
 
 vec3 mistGrade(vec3 color)
 {
@@ -862,12 +899,14 @@ vec3 mistGrade(vec3 color)
         if (a < 0.0005)
             continue;
         vec3 light = u_MistColor;
+#ifdef MIST_RAYS
         if (rays)
         {
             if ((i & 1) == 1 || i == 0)
                 lit = mistSunReach(w, sun);
             light = mix(u_MistColor, mix(u_MistColor * 0.26, u_MistColor * 0.8 + sunGlow * 1.5, lit), u_MistRays);
         }
+#endif
         gathered += through * a * light;
         through *= 1.0 - a;
     }
@@ -878,6 +917,7 @@ vec3 mistGrade(vec3 color)
     float limit = min(cover, 0.94 * u_MistAmount);
     return mix(color, gathered / cover, limit);
 }
+#endif
 
 vec3 envGrade(vec3 color, vec3 albedo)
 {
@@ -908,8 +948,10 @@ vec3 envGrade(vec3 color, vec3 albedo)
         float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 7.13) * 97.0, vec2(12.9898, 78.233))) * 43758.5453);
         color += (grain - 0.5) * 0.07 * smoothstep(0.45, 1.0, amount);
     }
+#ifdef MIST
     if (u_MistAmount > 0.001)
         color = mistGrade(color);
+#endif
     if (u_FogWar > 0)
     {
         // o que ninguém viu: uma névoa quase opaca, mais clara e mais escura nos tufos, com volume e grão

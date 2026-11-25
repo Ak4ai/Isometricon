@@ -692,6 +692,7 @@ def main() -> None:
     from src.rendering.fog_of_war import FogOfWar
     fog_war = FogOfWar()   # o explorado (névoa de guerra do /mestre), guardado no mundo
     from src.rendering.mist import MistField
+    early_z = {"ok": "--no-early-z" not in sys.argv}   # a passada de cor com o teste de profundidade antecipado
     mist_field = MistField()   # o mapa da neblina de ambientação (/mestre > Neblina)
     fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
     if master_panel is not None:
@@ -2101,7 +2102,10 @@ def main() -> None:
             fog_war.apply(shader, *fog_war_args)
             grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
             # a neblina de ambientação: ao ar livre (numa caverna ou num cômodo a de fora não entra)
-            if ambience.mist > 0 and not underground_mode and room_renderer.level <= 0.001:
+            mist_on = ambience.mist > 0 and not underground_mode and room_renderer.level <= 0.001
+            shader.set_define("MIST", mist_on)
+            shader.set_define("MIST_RAYS", mist_on and ambience.mist_rays > 0)
+            if mist_on:
                 layers = getattr(world_manager.generator, "column_layers", lambda: (0,))()
                 mist_field.update(float(player_token.position[0]), float(player_token.position[2]), chunk_revision,
                                   loaded_chunks.get, layers)
@@ -2263,7 +2267,14 @@ def main() -> None:
             shader.set_bool("u_DepthOnly", False)
             gl.glDepthFunc(gl.GL_LEQUAL)
             gl.glDepthMask(gl.GL_FALSE)
+            if early_z["ok"]:
+                try:
+                    shader.set_define("EARLY_Z", True)   # a variante com o teste de profundidade antes do shader
+                except RuntimeError as error:            # a placa não aceita: segue sem
+                    early_z["ok"] = False
+                    print(f"[Render] Sem teste de profundidade antecipado: {error}")
             draw_solids()
+            shader.set_define("EARLY_Z", False)
             gl.glDepthMask(gl.GL_TRUE)
             gl.glDepthFunc(gl.GL_LESS)
             mark("story_and_world_draw")
