@@ -46,6 +46,13 @@ class Ambience:
     war_objects: int = 1          # 1: as nuvens sobem também por cima das construções; 0: o que é mais alto aparece
     war_style: int = 0            # o jeito da névoa de guerra: 0 nuvens de blocos (cloud_fog), 1 névoa plana do
                                   # shader, 2 nuvens fofas (as caixas com bordas arredondadas pela luz)
+    # a neblina de ambientação (src/rendering/mist.py): a de cena, baixa, entre as árvores e na beira da água
+    mist: int = 0                 # o quanto ela é grossa, 0 a 100 (0 desligada)
+    mist_cover: int = 100         # quanto do mapa ela cobre, em manchas, 0 a 100 (%)
+    mist_height: int = 6          # até quantos blocos acima do chão ela sobe, 1 a 40
+    mist_where: int = 0           # 0 em toda parte, 1 só perto da água e entre as árvores
+    mist_wind: int = 30           # a velocidade com que os tufos derivam, 0 a 100
+    mist_tone: int = 1            # 0 fria, 1 neutra, 2 quente
 
     # ---- estado ----
     def to_dict(self) -> Dict[str, Any]:
@@ -79,6 +86,12 @@ class Ambience:
         self.war_height = max(0, min(16, self.war_height))
         self.war_objects = max(0, min(1, self.war_objects))
         self.war_style = max(0, min(2, self.war_style))
+        self.mist = max(0, min(100, self.mist))
+        self.mist_cover = max(0, min(100, self.mist_cover))
+        self.mist_height = max(1, min(40, self.mist_height))
+        self.mist_where = max(0, min(1, self.mist_where))
+        self.mist_wind = max(0, min(100, self.mist_wind))
+        self.mist_tone = max(0, min(2, self.mist_tone))
 
     def reset(self) -> None:
         self.load(None)
@@ -152,6 +165,14 @@ class Ambience:
         t = t * t * (3 - 2 * t)
         return tuple(a + (b - a) * t for a, b in zip(thin, grey))
 
+    def mist_color(self) -> Vec3:
+        """A cor da neblina: um branco no tom escolhido (frio, neutro, quente), na luz da hora (escura à noite)."""
+        tone = ((0.84, 0.90, 1.00), (0.93, 0.94, 0.95), (1.00, 0.93, 0.84))[self.mist_tone]
+        light = self.daylight()
+        luma = 0.299 * light[0] + 0.587 * light[1] + 0.114 * light[2]
+        # pega um pouco da cor da luz (o amanhecer dourado aparece), sem virar a cor forte dela
+        return tuple(min(1.0, t * (0.75 * luma + 0.25 * c) * self.brightness / 100.0) for t, c in zip(tone, light))
+
     def war_color(self) -> Vec3:
         """A cor da névoa de guerra: o cinza claro e frio da névoa densa, na luz da hora."""
         tint = self.tint()
@@ -180,6 +201,12 @@ class Ambience:
         shader.set_vec3("u_FogColor", *self.fog_color())
         shader.set_vec3("u_FogCenter", *(float(v) for v in center[:3]))
         shader.set_float("u_TorchAmount", self.torch / 100.0)
+        shader.set_float("u_MistAmount", self.mist / 100.0)
+        shader.set_float("u_MistCover", self.mist_cover / 100.0)
+        shader.set_float("u_MistHeight", float(self.mist_height))
+        shader.set_int("u_MistWhere", int(self.mist_where))
+        shader.set_float("u_MistWind", self.mist_wind / 100.0)
+        shader.set_vec3("u_MistColor", *self.mist_color())
 
     @staticmethod
     def neutral(shader) -> None:
@@ -188,17 +215,29 @@ class Ambience:
         shader.set_float("u_EnvSaturation", 1.0)
         shader.set_float("u_FogAmount", 0.0)
         shader.set_float("u_TorchAmount", 0.0)
+        shader.set_float("u_MistAmount", 0.0)
         shader.set_int("u_FogWar", 0)
 
 
 # (nome, valores): o mestre aplica de uma vez
+_NO_MIST = dict(mist=0)
 PRESETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
-    ('Amanhecer', dict(hour=6.6, brightness=95, temperature=35, fog=30, saturation=95, torch=0)),
-    ('Meio-dia', dict(hour=12.0, brightness=108, temperature=0, fog=0, saturation=105, torch=0)),
-    ('Entardecer', dict(hour=17.6, brightness=95, temperature=45, fog=10, saturation=110, torch=0)),
-    ('Noite', dict(hour=23.0, brightness=100, temperature=-20, fog=10, saturation=80, torch=60)),
-    ('Tempestade', dict(hour=14.0, brightness=62, temperature=-40, fog=55, saturation=45, torch=0)),
-    ('Sombrio', dict(hour=20.0, brightness=70, temperature=-10, fog=40, saturation=35, torch=45)),
-    ('Névoa densa', dict(hour=13.0, brightness=92, temperature=-15, fog=88, saturation=28, torch=0)),
-    ('Pesadelo', dict(hour=0.5, brightness=110, temperature=-25, fog=80, saturation=20, torch=70)),
+    ('Amanhecer', dict(hour=6.6, brightness=95, temperature=35, fog=30, saturation=95, torch=0,
+                       mist=55, mist_cover=80, mist_height=4, mist_where=0, mist_tone=2)),
+    ('Meio-dia', dict(hour=12.0, brightness=108, temperature=0, fog=0, saturation=105, torch=0, **_NO_MIST)),
+    ('Entardecer', dict(hour=17.6, brightness=95, temperature=45, fog=10, saturation=110, torch=0, **_NO_MIST)),
+    ('Noite', dict(hour=23.0, brightness=100, temperature=-20, fog=10, saturation=80, torch=60, **_NO_MIST)),
+    ('Tempestade', dict(hour=14.0, brightness=62, temperature=-40, fog=55, saturation=45, torch=0, **_NO_MIST)),
+    ('Sombrio', dict(hour=20.0, brightness=70, temperature=-10, fog=40, saturation=35, torch=45,
+                     mist=60, mist_cover=100, mist_height=3, mist_where=1, mist_tone=0)),
+    ('Névoa densa', dict(hour=13.0, brightness=92, temperature=-15, fog=88, saturation=28, torch=0, **_NO_MIST)),
+    ('Pesadelo', dict(hour=0.5, brightness=110, temperature=-25, fog=80, saturation=20, torch=70, **_NO_MIST)),
+)
+
+# os presets da neblina (aba Neblina do /mestre): só mexem nos campos mist*
+MIST_PRESETS: Tuple[Tuple[str, Dict[str, int]], ...] = (
+    ("Beira d'água", dict(mist=75, mist_cover=100, mist_height=4, mist_where=1, mist_wind=25, mist_tone=1)),
+    ('Manhã neblinosa', dict(mist=55, mist_cover=70, mist_height=8, mist_where=0, mist_wind=30, mist_tone=2)),
+    ('Vale', dict(mist=70, mist_cover=100, mist_height=2, mist_where=0, mist_wind=15, mist_tone=0)),
+    ('Bruma alta', dict(mist=30, mist_cover=100, mist_height=24, mist_where=0, mist_wind=45, mist_tone=1)),
 )

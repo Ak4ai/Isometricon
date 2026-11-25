@@ -691,6 +691,8 @@ def main() -> None:
     master_panel = MasterPanel(ambience) if terrain_demo else None
     from src.rendering.fog_of_war import FogOfWar
     fog_war = FogOfWar()   # o explorado (névoa de guerra do /mestre), guardado no mundo
+    from src.rendering.mist import MistField
+    mist_field = MistField()   # o mapa da neblina de ambientação (/mestre > Neblina)
     fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
     if master_panel is not None:
         master_panel.on_recover = fog_war.explored.clear
@@ -2097,6 +2099,16 @@ def main() -> None:
                             (float(player_token.position[0]), float(player_token.position[2])))
             fog_war.apply(shader, *fog_war_args)
             grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
+            # a neblina de ambientação: ao ar livre (numa caverna ou num cômodo a de fora não entra)
+            if ambience.mist > 0 and not underground_mode and room_renderer.level <= 0.001:
+                layers = getattr(world_manager.generator, "column_layers", lambda: (0,))()
+                mist_field.update(float(player_token.position[0]), float(player_token.position[2]), chunk_revision,
+                                  loaded_chunks.get, layers)
+                mist_field.apply(shader, fog_war_args[1],
+                                 np.asarray(camera._camera_position(), dtype=np.float64) - np.asarray(camera.target, dtype=np.float64),
+                                 ambience.mist_height)
+            else:
+                shader.set_float("u_MistAmount", 0.0)
             gl.glClearColor(*ambience.background(), 1.0)
             if character_shadows is not None:
                 shadow_casters = []

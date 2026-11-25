@@ -822,6 +822,18 @@ class SkinCommandHandler:
             panel.ambience.hour = value
             panel.activate("set")
             return True, f"[Mestre] Agora são {panel.ambience.clock_text()}.", CYAN
+        if word in ("neblina", "mist") and len(args) > 1:
+            from src.rendering.ambience import MIST_PRESETS
+            wanted = _fold(" ".join(args[1:]))
+            if wanted.isdigit():
+                panel.ambience.mist = int(wanted)
+                panel.activate("set")
+                return True, f"[Mestre] Neblina em {panel.ambience.mist}%.", CYAN
+            name = next((n for n, _ in MIST_PRESETS if _fold(n) == wanted or _fold(n).startswith(wanted)), None)
+            if name is None:
+                return False, "[Mestre] Neblina: 0 a 100, ou " + ", ".join(n for n, _ in MIST_PRESETS) + ".", RED
+            panel.activate("mist:" + name)
+            return True, f"[Mestre] Neblina: {name}.", CYAN
         if word in ("cena", "scene") and len(args) > 1:
             wanted = _fold(" ".join(args[1:]))
             name = next((n for n, _ in PRESETS if _fold(n) == wanted or _fold(n).startswith(wanted)), None)
@@ -1958,10 +1970,10 @@ ROOT_COMMANDS: List[Command] = [
             "os NPCs do mundo", SkinCommandHandler.npc, None),
     Command(("atributo", "attr"), "/atributo <for|des|con|sab|arma|armadura|nivel> <valor>",
             "muda a ficha de combate", SkinCommandHandler.attribute, None),
-    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | guerra <sem|revela|volta> | estilo <nuvens|nevoa|fofas> | altura <n> | objetos <cobrir|mostrar> | "
+    Command(("mestre", "master", "gm"), "/mestre [hora <hh:mm> | cena <nome> | neblina <0-100|preset> | guerra <sem|revela|volta> | estilo <nuvens|nevoa|fofas> | altura <n> | objetos <cobrir|mostrar> | "
             "recobrir | padrao]",
             "o painel do mestre: hora do dia, claridade, névoa e outras ambientações", SkinCommandHandler.master,
-            ["hora", "cena", "guerra", "estilo", "altura", "objetos", "recobrir", "padrao", "fechar"]),
+            ["hora", "cena", "neblina", "guerra", "estilo", "altura", "objetos", "recobrir", "padrao", "fechar"]),
     Command(("seed", "semente"), "/seed", "mostra a seed do mundo e a copia", SkinCommandHandler.seed, None),
     Command(("agua", "água", "water"), "/agua [x y z]", "põe uma fonte de água (para testar a água)",
             SkinCommandHandler.water, None),

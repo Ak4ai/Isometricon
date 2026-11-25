@@ -767,6 +767,74 @@ float fogWarCover(vec3 world, float wisps)
     return 1.0 - seen;
 }
 
+// A neblina de ambientação (src/rendering/mist.py, /mestre > Neblina): a neblina de cena, baixa e rente ao chão. Soma
+// a densidade dela no caminho do ponto desenhado até a câmera (até a altura em que ela acaba), em MIST_STEPS passos.
+// A densidade é maior rente ao chão (o mapa u_MistMap dá a altura do chão de cada coluna) e rareia até u_MistHeight
+// blocos acima dele; tufos de ruído derivam com o vento; manchas largas deixam só u_MistCover do mapa coberto; e no
+// modo "água e árvores" ela só se junta onde o mapa diz que é perto da água ou entre os troncos.
+uniform float u_MistAmount = 0.0;     // 0 desligada
+uniform float u_MistCover;            // 0..1 do mapa
+uniform float u_MistHeight;           // blocos acima do chão
+uniform int u_MistWhere;              // 0 em toda parte, 1 perto da água e das árvores
+uniform float u_MistWind;             // 0..1
+uniform vec3 u_MistColor;
+uniform sampler2D u_MistMap;          // [z][x] a partir de u_MistOrigin: (altura do chão, perto da água/árvore)
+uniform vec2 u_MistOrigin;
+uniform float u_MistSize;
+uniform float u_MistTop;              // a maior altura de chão do mapa + a altura da neblina (mundo)
+uniform mat4 u_MistInvModel;          // do espaço desenhado para o mundo
+uniform vec3 u_MistToCamera;          // do ponto para a câmera, no espaço desenhado (unitário)
+const int MIST_STEPS = 14;
+
+// as manchas da cobertura: largas e lentas, então uma conta por pixel basta (no meio do caminho do raio)
+float mistPatch(vec2 xz, vec2 drift)
+{
+    if (u_MistCover >= 0.999)
+        return 1.0;
+    if (u_MistCover <= 0.001)
+        return 0.0;
+    float n = 0.65 * valueNoise(vec3(xz * 0.021 + drift * 0.08, 5.3)) + 0.35 * valueNoise(vec3(xz * 0.047, 9.1));
+    float cut = mix(0.72, 0.28, u_MistCover);     // o limiar deixa ~u_MistCover do chão dentro delas
+    return smoothstep(cut - 0.06, cut + 0.06, n);
+}
+
+float mistDensity(vec3 w, vec2 drift)
+{
+    vec2 m = texture(u_MistMap, (w.xz - u_MistOrigin + 0.5) / u_MistSize).rg;
+    float h = max(w.y - m.r, 0.0) / max(u_MistHeight, 0.5);
+    if (h >= 1.0)
+        return 0.0;
+    float vertical = pow(1.0 - h, 1.7);
+    float region = u_MistWhere == 1 ? smoothstep(0.08, 0.7, m.g) : 1.0;
+    float wisps = 0.6 * valueNoise(vec3(w.xz * 0.13 + drift, w.y * 0.22 + u_Time * 0.04))
+                + 0.4 * valueNoise(vec3(w.xz * 0.31 + drift * 1.7, w.y * 0.45 - u_Time * 0.06));
+    return vertical * region * (0.25 + 1.3 * wisps * wisps);
+}
+
+vec3 mistGrade(vec3 color)
+{
+    vec3 p = (u_MistInvModel * vec4(v_FragPos, 1.0)).xyz;
+    vec3 d = normalize(mat3(u_MistInvModel) * u_MistToCamera);
+    float length_ = 60.0;
+    if (d.y > 0.02)
+        length_ = clamp((u_MistTop - p.y) / d.y, 0.0, 90.0);
+    if (length_ <= 0.0)
+        return color;
+    float ds = length_ / float(MIST_STEPS);
+    // começa num ponto sorteado do primeiro passo (sem faixas); o pontilhado some no filtro da tela
+    float jitter = roomDither();
+    vec2 drift = u_Time * u_MistWind * vec2(0.9, 0.35);
+    float spread = mistPatch((p + d * length_ * 0.3).xz, drift);
+    if (spread <= 0.001)
+        return color;
+    float optical = 0.0;
+    for (int i = 0; i < MIST_STEPS; ++i)
+        optical += mistDensity(p + d * ds * (float(i) + jitter), drift);
+    float amount = u_MistAmount * u_MistAmount;
+    float through = exp(-optical * spread * ds * mix(0.04, 0.42, amount));
+    return mix(u_MistColor, color, max(through, 1.0 - 0.94 * u_MistAmount));
+}
+
 vec3 envGrade(vec3 color, vec3 albedo)
 {
     color *= u_EnvTint;
@@ -796,6 +864,8 @@ vec3 envGrade(vec3 color, vec3 albedo)
         float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 7.13) * 97.0, vec2(12.9898, 78.233))) * 43758.5453);
         color += (grain - 0.5) * 0.07 * smoothstep(0.45, 1.0, amount);
     }
+    if (u_MistAmount > 0.001)
+        color = mistGrade(color);
     if (u_FogWar > 0)
     {
         // o que ninguém viu: uma névoa quase opaca, mais clara e mais escura nos tufos, com volume e grão
