@@ -336,6 +336,9 @@ def run_editor_session(window, shader, map_path: str | None = None,
                 on_key(key_code, 0, glfw.RELEASE, 0)
             camera.update(dt)
             hud_width, hud_height = window.get_window_size()
+            if hud_width <= 0 or hud_height <= 0:
+                glfw.wait_events_timeout(0.1)
+                continue
             canvas = (editor.hud.canvas_rect(hud_width, hud_height)
                       if editor.hud is not None else (0, 0, hud_width, hud_height))
             canvas_x, canvas_y, canvas_w, canvas_h = canvas

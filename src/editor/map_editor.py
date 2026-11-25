@@ -1393,7 +1393,7 @@ class MapEditor:
         if self.library_open:
             paths = self._library_paths()
             entries = []
-            for index, path in enumerate(paths[:5]):
+            for index, path in enumerate(paths[:4]):
                 marker = ">" if index == self.library_cursor % max(1, len(paths)) else " "
                 entries.append((f"{marker} {index + 1}. {os.path.basename(path)}", (200, 210, 220)))
             if not entries:
@@ -1407,13 +1407,14 @@ class MapEditor:
                                hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter,
                                texture_search=self.texture_search, search_mode=self.search_mode,
                                favourites=self.favourite_textures, hover_texture=self.hover_texture,
-                               texture_name=self.texture)
+                               texture_name=self.texture, grid_size=self.grid_size,
+                               grid_spacing=self.grid_spacing,
+                               light_enabled=bool(self.current_light))
             return
         display_name = self.selected.name if self.selected is not None else self.object_name
         lines = [
             (f"Ferramenta: {TOOL_LABELS[self.tool]} [Tab]  Pincel: {self.brush_size} [-/+]", (225, 230, 238)),
-            (f"Cor: {self.colour_name} [C]  Textura: {self.texture} [X]  Luz: {'on' if self.current_light else 'off'} [L]", (200, 210, 220)),
-            (f"Grid: {self.grid_size[0]}x{self.grid_size[1]}x{self.grid_size[2]} [F6/F7] passo {self.grid_spacing} [/] max 64", (200, 210, 220)),
+            (f"Cor: {self.colour_name} [C]  Textura: {self.texture} [X]  Luz [L]", (200, 210, 220)),
             (f"Objetos: {len(self.objects)}  Nome: {display_name} [N]  Sel: {selected}", (200, 210, 220)),
             (f"Cursor: {cursor}  Voxels: {self.project.voxel_count}", (200, 210, 220)),
             (self.status, (245, 210, 120)),
@@ -1432,7 +1433,9 @@ class MapEditor:
                            hsv=self.hsv, filters=TEXTURE_FILTERS, active_filter=self.texture_filter,
                            texture_search=self.texture_search, search_mode=self.search_mode,
                            favourites=self.favourite_textures, hover_texture=self.hover_texture,
-                           texture_name=self.texture)
+                           texture_name=self.texture, grid_size=self.grid_size,
+                           grid_spacing=self.grid_spacing,
+                           light_enabled=bool(self.current_light))
 
     def _common_shader(self, shader, projection: np.ndarray, view: np.ndarray, model: np.ndarray) -> None:
         shader.use()

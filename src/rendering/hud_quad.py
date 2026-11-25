@@ -69,7 +69,7 @@ class HudQuad:
              *, size: tuple[float,float] | None = None, opacity: float = 1.) -> None:
         """Desenha a imagem com o canto superior esquerdo em (x, y), por cima da cena."""
         w, h = size or self.size
-        if not w or not h:
+        if window_width <= 0 or window_height <= 0 or w <= 0 or h <= 0:
             return
         vertices = np.array([x, y, 0.0, 0.0,  x + w, y, 1.0, 0.0,  x + w, y + h, 1.0, 1.0,  x, y + h, 0.0, 1.0],
                             dtype=np.float32)

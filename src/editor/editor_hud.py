@@ -16,11 +16,11 @@ from src.editor.color_wheel import wheel_image
 from src.rendering.scaled_draw import RENDER_SCALE, ScaledDraw
 from src.rendering.hud_quad import HudQuad
 
-PANEL_WIDTH = 470
-PANEL_HEIGHT = 472
-WHEEL_SIZE = 84
-WHEEL_BOX = (16, 268, 16 + WHEEL_SIZE, 268 + WHEEL_SIZE)
-VALUE_BOX = (16, 358, 16 + WHEEL_SIZE, 368)
+PANEL_WIDTH = 500
+PANEL_HEIGHT = 840
+WHEEL_SIZE = 240
+WHEEL_BOX = (18, 520, 18 + WHEEL_SIZE, 520 + WHEEL_SIZE)
+VALUE_BOX = (18, 768, 18 + WHEEL_SIZE, 780)
 TOOLS = (
     ("build", "Construir"), ("paint", "Pintar"), ("stamp", "Carimbar"),
     ("select", "Selecionar"),
@@ -35,14 +35,10 @@ MIN_UI_SCALE = 0.45
 
 def fit_panel_scale(window_width: int, window_height: int,
                     panel_width: int = PANEL_WIDTH, panel_height: int = PANEL_HEIGHT) -> float:
-    """Escala apenas para baixo: a HUD cabe em janelas pequenas.
-
-    Em telas grandes o tamanho lógico atual já é confortável; ampliar deixaria
-    o painel grande demais e cobriria a plataforma.
-    """
+    """Escala uniforme para caber no viewport e ocupar sua altura disponível."""
     available_w = max(1.0, float(window_width) - 24.0)
     available_h = max(1.0, float(window_height) - 24.0)
-    return max(MIN_UI_SCALE, min(1.0, available_w / panel_width, available_h / panel_height))
+    return max(MIN_UI_SCALE, min(available_w / panel_width, available_h / panel_height))
 
 
 RENDER_SCALE = 2  # mantido para os testes/leitores que importam daqui
@@ -75,7 +71,7 @@ class EditorHud:
     def _font(self, size: int) -> Any:
         return ui_font(size)
 
-    def _button(self, draw, box, label: str, active: bool, font) -> None:
+    def _button(self, draw, box, label: str, active: bool, font, large: bool = False) -> None:
         x0, y0, x1, y1 = box
         draw.rounded_rectangle(box, radius=5,
                                fill=(196, 150, 45, 255) if active else (32, 41, 54, 255),
@@ -85,7 +81,8 @@ class EditorHud:
             width = draw.textbbox((0, 0), label, font=font)[2] / RENDER_SCALE
         except Exception:
             width = len(label) * 6
-        draw.text(((x0 + x1 - width) / 2, y0 + 5), label, font=font, fill=text_colour)
+        text_y = y0 + max(5, (y1 - y0 - 16) / 2) if large else y0 + 5
+        draw.text(((x0 + x1 - width) / 2, text_y), label, font=font, fill=text_colour)
 
     def _tab(self, draw, box, label: str, active: bool, font) -> None:
         self._button(draw, box, label, active, font)
@@ -107,7 +104,10 @@ class EditorHud:
                   search_mode: bool = False,
                   favourites: Iterable[str] = (),
                   hover_texture: str = "",
-                  texture_name: str = "") -> None:
+                  texture_name: str = "",
+                  grid_size: tuple[int, int, int] = (16, 16, 16),
+                  grid_spacing: int = 1,
+                  light_enabled: bool = False) -> None:
         rows = tuple(lines)
         palette = tuple(palette)
         textures = tuple(textures)
@@ -118,6 +118,7 @@ class EditorHud:
         key = (title, rows, swatch, active_tool, palette, colour_index, custom_colour,
                texture_names, texture_index, active_tab, recent, filters, active_filter,
                texture_search, search_mode, favourites, hover_texture, texture_name,
+               grid_size, grid_spacing, light_enabled,
                (round(hsv[0] * 360), round(hsv[1] * 100), round(hsv[2] * 100)))
         if key == self._key:
             return
@@ -130,6 +131,7 @@ class EditorHud:
         body_font = self._font(14 * RENDER_SCALE)
         small_font = self._font(11 * RENDER_SCALE)
         button_font = self._font(11 * RENDER_SCALE)
+        tool_font = self._font(16 * RENDER_SCALE)
         draw.text((16, 12), title, font=title_font, fill=(240, 208, 120, 255))
         y = 42
         for text, colour in rows:
@@ -139,19 +141,36 @@ class EditorHud:
             draw.rounded_rectangle((PANEL_WIDTH - 54, 12, PANEL_WIDTH - 18, 34), radius=5,
                                    fill=(*swatch, 255), outline=(255, 255, 255, 200), width=1)
 
+        grid_box = (14, 140, 246, 170)
+        light_box = (254, 140, PANEL_WIDTH - 14, 170)
+        draw.rounded_rectangle(grid_box, radius=6, fill=(31, 57, 78, 255),
+                               outline=(90, 167, 220, 255), width=2)
+        draw.text((grid_box[0] + 12, grid_box[1] + 8),
+                  f"GRADE {grid_size[0]}x{grid_size[1]}x{grid_size[2]}  PASSO {grid_spacing}",
+                  font=small_font, fill=(220, 240, 255, 255))
+        light_fill = (37, 74, 57, 255) if light_enabled else (55, 43, 48, 255)
+        light_outline = (105, 220, 145, 255) if light_enabled else (174, 105, 112, 255)
+        light_text = "BLOCO COM LUZ: ATIVO" if light_enabled else "BLOCO COM LUZ: INATIVO"
+        draw.rounded_rectangle(light_box, radius=6, fill=light_fill, outline=light_outline, width=2)
+        draw.text((light_box[0] + 12, light_box[1] + 8), light_text, font=body_font,
+                  fill=(225, 245, 230, 255) if light_enabled else (235, 210, 214, 255))
+
         self._buttons = {}
         for index, (key_id, label) in enumerate(TOOLS):
-            box = (14 + index * 88, 164, 14 + index * 88 + 82, 192)
+            top = 180 + index * 52
+            box = (14, top, PANEL_WIDTH - 14, top + 46)
             self._buttons[key_id] = box
-            self._button(draw, box, label, key_id == active_tool, button_font)
+            self._button(draw, box, label, key_id == active_tool, tool_font, large=True)
         for index, (key_id, label) in enumerate(ACTIONS):
-            box = (14 + index * 50, 198, 14 + index * 50 + 46, 224)
+            column, row = index % 5, index // 5
+            box = (14 + column * 94, 392 + row * 34,
+                   14 + column * 94 + 88, 420 + row * 34)
             self._buttons[key_id] = box
             self._button(draw, box, label, False, button_font)
 
         # Abas de conteúdo: só uma ocupa o espaço, evitando um painel gigante.
         for index, (tab_id, label) in enumerate(TABS):
-            box = (14 + index * 112, 230, 14 + index * 112 + 106, 256)
+            box = (14 + index * 112, 458, 14 + index * 112 + 106, 488)
             self._buttons["tab:" + tab_id] = box
             self._tab(draw, box, label, tab_id == active_tab, button_font)
 
@@ -166,10 +185,11 @@ class EditorHud:
         if active_tab == "textures":
             for position, (texture_id, name, thumb) in enumerate(textures):
                 column, row = position % 8, position // 8
-                box = (16 + column * 52, 268 + row * 54, 16 + column * 52 + 48, 268 + row * 54 + 48)
+                box = (16 + column * 58, 560 + row * 56,
+                       16 + column * 58 + 52, 560 + row * 56 + 52)
                 self._texture_boxes[texture_id] = box
-                if thumb.size != (48 * RENDER_SCALE, 48 * RENDER_SCALE):
-                    thumb = thumb.resize((48 * RENDER_SCALE, 48 * RENDER_SCALE), Image.Resampling.NEAREST)
+                if thumb.size != (52 * RENDER_SCALE, 52 * RENDER_SCALE):
+                    thumb = thumb.resize((52 * RENDER_SCALE, 52 * RENDER_SCALE), Image.Resampling.NEAREST)
                 image.paste(thumb.convert("RGBA"), (box[0] * RENDER_SCALE, box[1] * RENDER_SCALE))
                 active = texture_id == texture_index
                 draw.rounded_rectangle(box, radius=3,
@@ -179,25 +199,25 @@ class EditorHud:
                     draw.ellipse((box[2] - 9, box[1] + 3, box[2] - 3, box[1] + 9),
                                  fill=(240, 200, 90, 255), outline=(40, 34, 20, 255))
             # Busca textual: campo próprio, sem depender de janela nativa.
-            self._search_box = (16, 374, 250, 394)
+            self._search_box = (16, 500, PANEL_WIDTH - 16, 524)
             draw.rounded_rectangle(self._search_box, radius=4, fill=(25, 33, 44, 255),
                                    outline=(100, 118, 140, 255), width=1)
             query = (f"Buscar: {texture_search}_" if search_mode else
                      (f"Buscar: {texture_search}" if texture_search else "Buscar textura… [S]"))
-            draw.text((23, 378), query, font=small_font,
+            draw.text((23, 505), query, font=small_font,
                       fill=(240, 228, 195, 255) if search_mode else (165, 178, 195, 255))
             for index, label in enumerate(filters):
-                box = (14 + index * 74, 400, 14 + index * 74 + 70, 420)
+                box = (14 + index * 78, 530, 14 + index * 78 + 74, 552)
                 self._filter_boxes[label] = box
                 self._button(draw, box, label, label == active_filter, small_font)
             if not textures:
-                draw.text((16, 426), "Nenhuma textura neste filtro.", font=small_font,
+                draw.text((16, 792), "Nenhuma textura neste filtro.", font=small_font,
                           fill=(245, 120, 100, 255))
             elif hover_texture:
-                draw.text((16, 426), f"Sobre: {hover_texture}", font=small_font,
+                draw.text((16, 792), f"Sobre: {hover_texture}", font=small_font,
                           fill=(240, 205, 140, 255))
             else:
-                draw.text((16, 426), f"Textura: {texture_name}", font=small_font,
+                draw.text((16, 792), f"Textura: {texture_name}", font=small_font,
                           fill=(190, 202, 218, 255))
         else:
             if swatch is not None:
@@ -217,32 +237,34 @@ class EditorHud:
                 knob = vx0 + round((vx1 - vx0 - 1) * max(0.0, min(1.0, hsv[2])))
                 draw.rectangle((knob - 1, vy0 - 2, knob + 1, vy1 + 2), fill=(255, 255, 255, 255))
 
-            draw.text((112, 258), "Cores  [C]  clique na roda ou na paleta", font=small_font,
+            draw.text((18, 502), "RODA DE COR", font=small_font,
                       fill=(180, 190, 205, 255))
+            draw.text((280, 502), "PALETA", font=small_font, fill=(180, 190, 205, 255))
             current = custom_colour if custom_colour is not None else (
                 palette[colour_index][1] if palette else (255, 255, 255))
             for index, (name, colour) in enumerate(palette):
                 column, row = index % 8, index // 8
-                box = (112 + column * 28, 280 + row * 28, 112 + column * 28 + 24, 280 + row * 28 + 24)
+                box = (280 + column * 23, 522 + row * 30,
+                       280 + column * 23 + 20, 522 + row * 30 + 20)
                 self._colour_boxes[index] = box
                 active = custom_colour is None and index == colour_index
                 draw.rounded_rectangle(box, radius=3, fill=(*colour, 255),
                                        outline=(255, 235, 160, 255) if active else (40, 50, 62, 255),
                                        width=2 if active else 1)
-            draw.text((112, 340), "Recentes", font=small_font, fill=(160, 172, 188, 255))
+            draw.text((280, 610), "Recentes", font=small_font, fill=(160, 172, 188, 255))
             for index, colour in enumerate(recent[:8]):
-                box = (166 + index * 22, 348, 166 + index * 22 + 16, 364)
+                box = (280 + index * 21, 640, 280 + index * 21 + 17, 657)
                 self._recent_boxes[index] = box
                 draw.rounded_rectangle(box, radius=3, fill=(*colour, 255),
                                        outline=(80, 92, 108, 255), width=1)
-            draw.rounded_rectangle((PANEL_WIDTH - 62, 356, PANEL_WIDTH - 18, 372), radius=3,
+            draw.rounded_rectangle((PANEL_WIDTH - 64, 606, PANEL_WIDTH - 18, 632), radius=3,
                                    fill=(*current, 255), outline=(255, 255, 255, 200), width=1)
 
-        draw.text((16, 442),
+        draw.text((16, 808),
                   "F2 exportar  F3 objeto  F5 salvar  F9 carregar  Ctrl+Z desfazer",
                   font=small_font, fill=(150, 160, 175, 255))
-        draw.text((16, 458),
-                  "Botão esq: aplicar  Alt+clique: conta-gotas  F10: menu",
+        draw.text((16, 824),
+                  "Esq: ferramenta / Construir apaga  Dir: construir  F10: menu",
                   font=small_font, fill=(150, 160, 175, 255))
         self._image = image
         self._dirty = True
@@ -305,10 +327,10 @@ class EditorHud:
         return None
 
     def _fit_scale(self, window_width: int, window_height: int) -> float:
-        """Escala do painel dockado à direita, deixando uma área de canvas."""
-        available_w = min(float(PANEL_WIDTH), max(300.0, float(window_width) * 0.40))
+        """Escala o painel para acompanhar a altura do canvas sem cobri-lo."""
+        available_w = max(1.0, float(window_width) * 0.5 - 24.0)
         available_h = max(1.0, float(window_height) - 24.0)
-        return max(MIN_UI_SCALE, min(1.0, available_w / PANEL_WIDTH, available_h / PANEL_HEIGHT))
+        return max(MIN_UI_SCALE, min(available_w / PANEL_WIDTH, available_h / PANEL_HEIGHT))
 
     def canvas_rect(self, window_width: int, window_height: int) -> tuple[int, int, int, int]:
         """Área do mundo (x, y, largura, altura) à esquerda da barra lateral."""
