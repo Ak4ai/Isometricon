@@ -44,6 +44,8 @@ MAX_AMPLITUDE = 8.0            # com planície 0
 BASE_FREQUENCY = 1 / 24
 SAMPLE_RADIUS = 96             # o nível do mar sai das alturas deste quadrado em volta do começo
 SAMPLE_STEP = 3
+DUNE_AMPLITUDE = 1.3
+DUNE_FREQUENCY = 0.7
 
 
 def defaults() -> Dict[str, Any]:
@@ -81,6 +83,9 @@ def _settings(seed: int, options_key: str) -> tuple:
     options = json.loads(options_key)
     amplitude = MAX_AMPLITUDE * (1 - options['planicie'] / 100)
     frequency = BASE_FREQUENCY * 2 ** ((50 - options['relevo']) / 50)
+    if options.get('bioma') == 'deserto':      # dunas: mais altas e mais largas que os morros da planície
+        amplitude *= DUNE_AMPLITUDE
+        frequency *= DUNE_FREQUENCY
     shape = TerrainGenerator(seed=seed, amplitude=amplitude, frequency=frequency)
     grid = np.arange(-SAMPLE_RADIUS, SAMPLE_RADIUS + 1, SAMPLE_STEP)
     sea_level = sea_level_for(shape.heights(grid[:, None], grid[None, :]), options['agua'] / 100)

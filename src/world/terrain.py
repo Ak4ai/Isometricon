@@ -33,6 +33,26 @@ def _fade(t: float) -> float:
     return t * t * t * (t * (t * 6 - 15) + 10)
 
 
+def _value_noise(seed: int, px: np.ndarray, pz: np.ndarray) -> np.ndarray:
+    """Uma oitava de value noise em [-1, 1] nos pontos (px, pz) (floats): para as manchas do chão dos biomas."""
+    ix, iz = np.floor(px), np.floor(pz)
+    u, v = _fade(px - ix), _fade(pz - iz)
+    ix, iz = ix.astype(np.int64), iz.astype(np.int64)
+    corners = np.stack([np.stack([ix, iz], -1), np.stack([ix + 1, iz], -1),
+                        np.stack([ix, iz + 1], -1), np.stack([ix + 1, iz + 1], -1)]).reshape(-1, 2)
+    unique, inverse = np.unique(corners, axis=0, return_inverse=True)
+    values = np.array([_lattice(seed, int(x), int(z)) for x, z in unique])
+    a, b, c, d = values[inverse.reshape(4, *ix.shape)]
+    near, far = a + u * (b - a), c + u * (d - c)
+    return near + v * (far - near)
+
+
+DESERT_SAND_DEPTH = 4       # blocos de areia abaixo do topo, no deserto
+DESERT_SANDSTONE_DEPTH = 3  # e de arenito abaixo da areia
+PODZOL_SCALE = 14.0         # tamanho das manchas de podzol na taiga (blocos)
+PODZOL_THRESHOLD = 0.35
+
+
 @dataclass(frozen=True)
 class TerrainGenerator:
     """Configuração imutável; mesma seed/configuração reproduz o mesmo mundo.
@@ -165,8 +185,24 @@ class TerrainGenerator:
         y = (origin_y + local)[None, :, None]                                                         # [1, y, 1]
         blocks = np.full((size, size, size), int(BlockType.AIR), dtype=chunk.blocks.dtype)
         blocks[np.broadcast_to(y <= surface, blocks.shape)] = int(BlockType.STONE)
-        blocks[np.broadcast_to((y >= surface - self.dirt_depth) & (y <= surface), blocks.shape)] = int(BlockType.DIRT)
-        top = np.where(surface < self.sea_level, int(BlockType.DIRT), int(BlockType.GRASS))
+        if self.biome == 'deserto':
+            # areia, arenito embaixo dela, pedra embaixo de tudo; areia também no fundo da água
+            sand_floor = surface - DESERT_SAND_DEPTH
+            blocks[np.broadcast_to((y >= sand_floor - DESERT_SANDSTONE_DEPTH) & (y < sand_floor),
+                                   blocks.shape)] = int(BlockType.SANDSTONE)
+            blocks[np.broadcast_to((y >= sand_floor) & (y <= surface), blocks.shape)] = int(BlockType.SAND)
+            top = np.full(surface.shape, int(BlockType.SAND))
+        else:
+            blocks[np.broadcast_to((y >= surface - self.dirt_depth) & (y <= surface), blocks.shape)] =                 int(BlockType.DIRT)
+            if self.biome == 'taiga':
+                xs = (origin_x + local[:, None]).astype(np.float64) / PODZOL_SCALE
+                zs = (origin_z + local[None, :]).astype(np.float64) / PODZOL_SCALE
+                xs, zs = np.broadcast_arrays(xs, zs)
+                patch = _value_noise(self.seed + 7, xs, zs)[:, None, :] > PODZOL_THRESHOLD
+                land = np.where(patch, int(BlockType.PODZOL), int(BlockType.TAIGA_GRASS))
+            else:
+                land = int(BlockType.GRASS)
+            top = np.where(surface < self.sea_level, int(BlockType.DIRT), land)
         at_top = np.broadcast_to(y == surface, blocks.shape)
         blocks[at_top] = np.broadcast_to(top, blocks.shape)[at_top]
         blocks[np.broadcast_to((y > surface) & (y <= self.sea_level), blocks.shape)] = int(BlockType.WATER)
