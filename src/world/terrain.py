@@ -58,6 +58,7 @@ class TerrainGenerator:
     allow_sparse_depth: bool = True
     vegetation: bool = False   # capim, flores e cogumelos sobre a grama (o jogo liga; os testes antigos não)
     vegetation_density: float = 1.0   # quantas vezes a quantidade de sempre de plantas (0 a 2: tela de criação)
+    biome: str = 'planicie'           # 'planicie', 'deserto' ou 'taiga' (src/world/terrain_options.BIOMES)
 
     def __post_init__(self) -> None:
         for name in ('seed', 'base_height', 'octaves', 'dirt_depth', 'sea_level'):
@@ -83,6 +84,8 @@ class TerrainGenerator:
         if isinstance(density, (bool, np.bool_)) or not isinstance(density, Real) or not isfinite(density)                 or not 0.0 <= density <= 2.0:
             raise ValueError('vegetation_density deve estar em [0, 2].')
         object.__setattr__(self, 'vegetation_density', float(density))
+        if self.biome not in ('planicie', 'deserto', 'taiga'):
+            raise ValueError("biome deve ser 'planicie', 'deserto' ou 'taiga'.")
         if self.amplitude < 0 or self.frequency <= 0:
             raise ValueError('amplitude >= 0 e frequency > 0 são necessárias.')
         if self.octaves < 1 or self.dirt_depth < 0:

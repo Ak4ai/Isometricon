@@ -112,3 +112,30 @@ def test_previa_na_thread_fica_com_o_ultimo_pedido():
             break
         time.sleep(0.01)
     assert worker.image() == 3 and seen[-1] == 3
+
+
+# ---------------------------------------------------------------- biomas
+
+def _digest(generator):
+    import hashlib
+    chunks = generator.generate_region([(cx, cy, 0) for cx in range(-1, 2) for cy in range(-1, 2)])
+    return hashlib.sha256(b"".join(chunks[k].blocks.tobytes() for k in sorted(chunks))).hexdigest()
+
+
+def test_planicie_igual_a_de_antes():
+    # gravado antes dos biomas: um mundo sem bioma (ou com as opções padrão) não pode mudar um bloco
+    assert _digest(make_generator(329436, None)) == "a0b063f5f3c8e4d36c8a382b8d6ef4b569e05896e11b1d79157d5c3dae7ae9dd"
+    assert _digest(make_generator(329436, defaults())) == "a0b063f5f3c8e4d36c8a382b8d6ef4b569e05896e11b1d79157d5c3dae7ae9dd"
+
+
+def test_bioma_nas_opcoes():
+    import pytest
+    from src.world.terrain_options import water_default
+    assert clean({"bioma": "deserto"})["bioma"] == "deserto"
+    assert clean({"bioma": "lua"})["bioma"] == "planicie"
+    assert clean({})["bioma"] == "planicie"
+    assert water_default("deserto") == 5 and water_default("taiga") == 20
+    assert make_generator(1, {"bioma": "taiga"}).biome == "taiga"
+    assert make_generator(1, None).biome == "planicie"
+    with pytest.raises(ValueError):
+        TerrainGenerator(biome="lua")
