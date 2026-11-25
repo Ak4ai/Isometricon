@@ -1468,6 +1468,12 @@ def main() -> None:
             shadow_renderer.set_detail(int(prefs["shadow_detail"]), shader)
             shadow_renderer.strength = float(prefs["shadow_strength"])
             shadow_renderer.set_distance(int(prefs.get("shadow_distance", 1)))
+            half = bool(prefs.get("shadow_half", False)) and prefs["shadows"] in ("medium", "high")
+            try:
+                shader.set_define("SHADOW_HALF", half)
+            except RuntimeError as error:      # a placa não tem as derivadas finas: fica a sombra inteira
+                print(f"[Render] Sombra em meia resolução indisponível: {error}")
+                shader.set_define("SHADOW_HALF", False)
 
 
     fps_overlay = FpsOverlay()

@@ -30,6 +30,7 @@ GRAPHICS = {
     'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o capim
     'shadow_strength': (1.0, (0.25, 0.5, 0.75, 1.0)),  # o quanto a sombra escurece
     'shadow_distance': (1, (1, 2, 3, 4, 5, 6)),        # até quantos chunks em volta do jogador há sombra do sol
+    'shadow_half': (False, (False, True)),             # sombra calculada em meia resolução (quadrados 2x2)
     'fps_limit': (0, (0, 30, 60, 120, 144)),           # 0 sem limite
     'gpu': ('high', ('high', 'low', 'auto')),          # a placa de vídeo (src/core/gpu_preference.py)
 }

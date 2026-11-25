@@ -1,4 +1,9 @@
 #version 330 core
+#ifdef SHADOW_HALF
+// Sombra em meia resolução (Configurações > Gráficos): os 4 pixels de cada quadrado 2x2 dividem os raios do sol e
+// juntam o resultado pelas derivadas finas (dFdxFine/dFdyFine trocam valores entre os pixels do quadrado).
+#extension GL_ARB_derivative_control : enable
+#endif
 #ifdef EARLY_Z
 // A passada de cor depois da pré-passada de profundidade (src/main.py): o teste de profundidade vem antes do shader.
 // Com os descartes do shader a placa (Intel) deixava o teste para depois e cada fragmento escondido pagava os raios
@@ -426,6 +431,71 @@ float softSun(vec3 origin, vec3 sunDir, float spin, int rays, bool umbra)
     }
     return (first + rest) / float(rays);
 }
+
+#ifdef SHADOW_HALF
+// A parte deste pixel dos raios do cone borrado e do nítido: o raio k fica com o pixel (k mod 4) do quadrado 2x2, e
+// os quatro giram o cone do mesmo jeito, então juntos traçam o cone inteiro. Devolve (soma e número dos borrados,
+// soma e número dos nítidos).
+vec4 sunSlice(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
+{
+    int q = (int(gl_FragCoord.x) & 1) + 2 * (int(gl_FragCoord.y) & 1);
+    bool high = u_ShadowQuality >= 2;
+    int softRays = high ? 12 : 8;
+    int sharpRays = high ? 6 : 3;
+    vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(sunDir, t1);
+    float spin = interleavedNoise(floor(gl_FragCoord.xy * 0.5)) * 6.2831853;
+    vec4 sums = vec4(0.0);
+    for (int k = q; k < 12; k += 4)
+    {
+        if (k >= softRays)
+            break;
+        float r = sqrt((float(k) + 0.5) / float(softRays)) * 0.15;
+        float a = float(k) * 2.3999632 + spin;
+        sums.x += traceSun(exactPos + worldNormal * 0.04, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+        sums.y += 1.0;
+    }
+    for (int k = q; k < 6; k += 4)
+    {
+        if (k >= sharpRays)
+            break;
+        float r = sqrt((float(k) + 0.5) / float(sharpRays)) * 0.08;
+        float a = float(k) * 2.3999632;
+        sums.z += traceSun(snappedPos + worldNormal * 0.04, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+        sums.w += 1.0;
+    }
+    return sums;
+}
+
+// O valor do vizinho do lado e do de cima/baixo no quadrado 2x2.
+vec4 quadX(vec4 v)
+{
+    vec4 d = dFdxFine(v);
+    return (int(gl_FragCoord.x) & 1) == 0 ? v + d : v - d;
+}
+vec4 quadY(vec4 v)
+{
+    vec4 d = dFdyFine(v);
+    return (int(gl_FragCoord.y) & 1) == 0 ? v + d : v - d;
+}
+
+// Junta os raios dos 4 pixels do quadrado. Só entram os vizinhos na mesma face (mesma normal e mesmo plano): na borda
+// de um bloco cada lado fica com os seus raios. ``key`` é (normal, posição no eixo da normal); zero se o pixel não
+// traçou a sua parte.
+float sunFromQuad(vec4 sums, vec4 key)
+{
+    vec4 dH = quadX(sums), kH = quadX(key);
+    vec4 dV = quadY(sums), kV = quadY(key);
+    vec4 dD = quadY(dH), kD = quadY(kH);
+    vec4 total = sums;
+    if (dot(kH.xyz, key.xyz) > 0.99 && abs(kH.w - key.w) < 0.05) total += dH;
+    if (dot(kV.xyz, key.xyz) > 0.99 && abs(kV.w - key.w) < 0.05) total += dV;
+    if (dot(kD.xyz, key.xyz) > 0.99 && abs(kD.w - key.w) < 0.05) total += dD;
+    float soft = total.y > 0.0 ? total.x / total.y : 1.0;
+    float sharp = total.w > 0.0 ? total.z / total.w : soft;
+    return mix(sharp, soft, smoothstep(0.1, 0.9, soft));
+}
+#endif
 
 // Fração da luz do sol que chega ao ponto (1 = sol inteiro). A nitidez muda ao longo da sombra:
 // - a sombra nítida sai do ponto preso ao texel, em degraus de pixel;
@@ -1080,6 +1150,10 @@ void main()
     vec3 worldPos = v_FragPos;
     vec3 worldNormal = norm;
     float waterAbove = 0.0;           // blocos de água sobre este fragmento (0 fora da água)
+#ifdef SHADOW_HALF
+    vec4 halfSums = vec4(0.0);        // a parte deste pixel dos raios (sunSlice) e a face dele (sunFromQuad)
+    vec4 halfKey = vec4(0.0);
+#endif
     if (u_WorldStyle) {
         float contact = 0.0;
         if (u_ShadowStrength > 0.001)
@@ -1104,9 +1178,23 @@ void main()
                 {
                     // o ar em frente da face é o espaço do jogador: o teto o tapa, a não ser junto às aberturas
                     bool indoor = u_RoomActive > 0.001 && roomCell(worldPos + worldNormal * 0.04) > 0.9;
+#ifdef SHADOW_HALF
+                    if (u_ShadowQuality >= 1 && !indoor)
+                    {
+                        halfSums = sunSlice(worldPos, exactPos, worldNormal, sunDirWorld);
+                        halfKey = vec4(worldNormal, dot(exactPos, worldNormal));
+                    }
+                    else
+#endif
                     sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld, indoor);
                 }
             }
+#ifdef SHADOW_HALF
+            // fora dos ifs de cada pixel: as derivadas pedem os 4 pixels do quadrado no mesmo caminho
+            float quadSun = sunFromQuad(halfSums, halfKey);
+            if (halfKey != vec4(0.0))
+                sunVis = quadSun;
+#endif
         }
         if (u_CharShadowStrength > 0.001 && dot(norm, lightDir) > 0.02)  // a sombra do personagem, em qualquer face
         {

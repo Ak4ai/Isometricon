@@ -179,6 +179,13 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 '(até a distância de render), mas a área é refeita quando o personagem anda e ocupa mais memória de '
                 'vídeo.',
                 [('Custo', 'Médio a alto acima de 3 (um tranco curto a cada 8 blocos andados)')]),
+            Row('shadow_half', 'Sombra em meia resolução', 'Calcula a sombra em quadrados de 2 x 2 pixels', 'scale',
+                'toggle', None, 'shadow_half',
+                'Os quatro pixels de cada quadrado dividem os raios do sol (cada um traça só a sua parte) e juntam o '
+                'resultado. As texturas e as bordas dos blocos continuam nítidas; só a sombra perde um pouco de '
+                'precisão no contorno. Pesa bem menos onde quase tudo é penumbra, como debaixo das árvores altas da '
+                'taiga. Vale para as qualidades Média e Alta.',
+                [('Custo', 'Diminui (até ~3x menos raios)'), ('Visual', 'contorno da sombra um pouco mais mole')]),
             Row('shadow_strength', 'Intensidade da sombra', 'O quanto a sombra escurece', 'contrast', 'choice', None,
                 'shadow_strength',
                 'Só o escuro da sombra: 100% é a sombra inteira, 25% é um sombreado leve. Não muda o desempenho.',
