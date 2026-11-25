@@ -247,6 +247,9 @@ class TerrainGenerator:
             )
             carver.carve_region(chunks, self)
         if self.vegetation and chunks:
+            if self.biome == 'taiga':
+                from src.world.trees import stamp_spruces
+                stamp_spruces(self, chunks)       # antes das plantas baixas: a samambaia não tira o lugar do tronco
             self.plant_vegetation(chunks)
         return chunks
 
