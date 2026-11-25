@@ -100,6 +100,19 @@ class WorldManager:
         )
         self._worker_thread.start()
 
+    @property
+    def render_distance(self) -> int:
+        return self._render_distance
+
+    @render_distance.setter
+    def render_distance(self, value: int) -> None:
+        """Trocar o raio (Configurações > Gráficos) refaz a grade no próximo update, mesmo parado: sem isso o update
+        só recalculava ao mudar de chunk, e a opção parecia não fazer nada."""
+        value = int(value)
+        if value != getattr(self, "_render_distance", None):
+            self._render_distance = value
+            self._last_center = None
+
     def _worker_loop(self) -> None:
         """Loop de execução da worker thread que gera chunks e calcula malhas na CPU."""
         import time
