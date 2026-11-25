@@ -23,13 +23,19 @@ class SceneCue:
     views: tuple[int, ...] = ()        # ciclo de u_DebugView, 3 s cada (0 normal, 1 só textura, 2 só luz)
     chunk_outline: bool = False
     counters: tuple[str, ...] = ()     # dados ao vivo que os gráficos usam: "faces", "chunks"
+    # a tela do jogo aberta por trás, para quem apresenta mexer com o mouse: "editor" (criação do personagem),
+    # "mestre" (painel do /mestre) ou "combate" (uma luta de verdade, com o chat do registro)
+    screen: str = ""
+    # aonde o personagem vai, um lugar por passo do slide (ver src/interactive/presentation_places.py)
+    places: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class Block:
     """Um trecho de cartão. ``kind``: text, subtitle, bullets, formula, pipeline, prompt, heightmap,
     tags (etiquetas dos recursos de CG), bars (gráfico ao vivo: content = ("faces",) ou ("chunks",)),
-    vertex (os 44 bytes de um vértice)."""
+    vertex (os 44 bytes de um vértice), code (linhas em fonte fixa), places (os lugares do slide; o do passo
+    atual em destaque)."""
     kind: str
     content: tuple[str, ...] = ()
 
@@ -90,6 +96,12 @@ def right(title: str, *blocks: Block) -> Panel:
 
 def left(title: str, *blocks: Block) -> Panel:
     return Panel((0.02, 0.04, 0.42, 0.86), blocks, title, big=True)
+
+
+def side(where: str, title: str, *blocks: Block, width: float = 0.30) -> Panel:
+    """Uma coluna estreita na borda ``where`` ("l" ou "r"): sobra espaço para a tela do jogo aberta por trás."""
+    x = 0.02 if where == "l" else 0.98 - width
+    return Panel((x, 0.04, width, 0.86), blocks, title, big=True)
 
 
 def bottom(title: str, *blocks: Block) -> Panel:
@@ -198,6 +210,28 @@ SLIDES: tuple[Slide, ...] = (
         SceneCue(spin=2.0, wireframe=True, counters=("faces",)),
     ),
     Slide(
+        "Blocos: modelos e sombras",
+        (
+            side(
+                "r",
+                "Blocos: modelos e sombras",
+                _b("O blockstate (JSON) diz qual modelo cada variante usa",
+                   "O modelo (JSON) é uma lista de caixas de 0 a 16 e a textura de cada face",
+                   "Cada caixa vira faces com UV recortada no atlas (a laje mostra meia textura)",
+                   "Sombra do sol: a forma entra numa tabela e o raio testa as caixas dela"),
+                Block("code", ('blockstates/oak_slab.json',
+                               '  "type=bottom" → block/oak_slab',
+                               'models/block/slab.json',
+                               '  "from": [0, 0, 0]',
+                               '  "to":   [16, 8, 16]')),
+                cg("Modelagem por caixas", "Mapeamento de textura", "Ray marching", "Sombras"),
+                _t("Ao fundo, a vitrine de teste: uma amostra de cada forma de bloco."),
+                width=0.34,
+            ),
+        ),
+        SceneCue(zoom=(1.0, 0.75, 3.0), places=("formas",)),
+    ),
+    Slide(
         "Câmera e transformações",
         (
             right(
@@ -223,40 +257,75 @@ SLIDES: tuple[Slide, ...] = (
                       "Sombras do terreno: raios até o sol numa textura 3D dos blocos",
                       "Sombra dos personagens: mapa de sombra visto do sol"),
                    cg("Iluminação difusa", "Luz direcional", "Ray marching", "Shadow mapping",
-                      "Textura 3D")),
-            corner("bl", "Ao fundo", _t("Normal → só textura → só iluminação (as sombras aparecem)."), width=0.30),
+                      "Textura 3D"),
+                   _t("No painel do /mestre, à esquerda: arraste a hora do dia e veja o sol, a cor da luz e as "
+                      "sombras mudarem. A cena alterna normal → só textura → só iluminação.")),
         ),
-        SceneCue(spin=2.0, views=(0, 1, 2)),
+        SceneCue(spin=2.0, views=(0, 0, 1, 2), screen="mestre"),
     ),
     Slide(
-        "Água, névoa e cômodos",
+        "Água e névoa",
         (
-            left(
-                "Água, névoa e cômodos",
+            right(
+                "Água e névoa",
                 _b("Água translúcida com ondas na normal, reflexo do céu e Fresnel",
                    "Névoa de distância e névoa de guerra em nuvens de blocos que se desfazem",
-                   "Cômodos e cavernas: o teto some com dither e o lado de fora escurece",
                    "Pré-passada de profundidade antes do sombreamento caro"),
-                cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Dither",
-                   "Animação", "Z-buffer"),
+                cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Animação", "Z-buffer"),
+                _t("No painel do /mestre: a névoa de guerra (explorado ou em volta) e as cenas prontas."),
             ),
         ),
-        SceneCue(spin=3.0),
+        SceneCue(spin=3.0, screen="mestre"),
+    ),
+    Slide(
+        "Câmera dentro dos cômodos",
+        (
+            side(
+                "r",
+                "Câmera dentro dos cômodos",
+                _b("O jogo acha o espaço fechado em volta do personagem (inundação do ar coberto)",
+                   "A máscara vai à GPU como textura 3D",
+                   "O que tapa a vista (teto, andar de cima, terra) some com dither",
+                   "O lado de fora escurece; a transição é suave"),
+                cg("Textura 3D", "Dither", "Recorte (cutaway)", "Interpolação"),
+                Block("places", ("Sala de teste (3 andares)", "Caverna do terreno", "Casa medieval")),
+                _t("→ leva ao próximo lugar."),
+                width=0.30,
+            ),
+        ),
+        SceneCue(zoom=(0.8, 0.8, 1.0), places=("sala-andar", "caverna", "house-medieval")),
+        steps=3,
     ),
     Slide(
         "Personagens e animação",
         (
-            right(
+            side(
+                "r",
                 "Personagens e animação",
                 _b("Esqueleto de 16 ossos e skinning por pesos: caminhada e pose de descanso",
                    "Roupas encaixadas por cages e remoção de superfícies escondidas (HSR)",
                    "Modelos glTF (.glb) com esqueleto animado na GPU",
-                   "Miniaturas do combate: T·R·S em cada parte, anéis e rastro"),
+                   "Ajuste fino: escala e rotação de cada osso"),
                 cg("Esqueleto e skinning", "Animação", "Hierarquia de transformações", "Rotação",
-                   "Translação", "Escala", "Malhas importadas"),
+                   "Escala", "Malhas importadas"),
+                _t("Ao fundo, a tela de criação: arraste para girar; W liga a caminhada."),
+                width=0.27,
             ),
         ),
-        SceneCue(zoom=(1.0, 0.55, 4.0), spin=8.0),
+        SceneCue(screen="editor"),
+    ),
+    Slide(
+        "Combate por turnos",
+        (
+            corner("tr", "Combate por turnos",
+                   _b("Miniaturas montadas por T·R·S: base, corpo, cabeça e olhos",
+                      "Anéis no chão: alvo, vez e o movimento que sobra",
+                      "Rastro do caminho e golpe que pisca a peça em vermelho",
+                      "Interface da luta desenhada por cima da cena"),
+                   cg("Translação", "Rotação", "Escala", "Animação", "Sobreposição 2D", "Picking"),
+                   width=0.34, big=True),
+        ),
+        SceneCue(screen="combate"),
     ),
     Slide(
         "Interação",
@@ -265,7 +334,7 @@ SLIDES: tuple[Slide, ...] = (
                    _b("Clique → raio 3D → bloco: picking por DDA na grade de voxels",
                       "Bloco sob o mouse com brilho pulsante",
                       "Grade tática em GL_LINES sobre o relevo",
-                      "Portas abrem e construções giram de 90 em 90°"),
+                      "Portas abrem girando 90° na dobradiça"),
                    cg("Raycasting", "Picking", "Blending aditivo", "Linhas", "Rotação")),
             corner("br", "Ao fundo", _t("O contorno do chunk 16³ sob a câmera."), width=0.28),
         ),

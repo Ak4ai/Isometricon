@@ -800,8 +800,99 @@ def main() -> None:
         camera.pitch = math.radians(IsometricCamera.DEFAULT_PITCH_DEGREES)
         camera.yaw = math.radians(45.0)
 
+    def show_presentation_screen(want: str) -> None:
+        """Abre por trás do slide a tela do jogo que ele pede (e fecha a do slide anterior).
+
+        Quem apresenta mexe nela com o mouse; nada é gravado: a tela de criação não salva o personagem e os
+        inimigos da luta de demonstração somem ao trocar de slide."""
+        had = presentation_view.get("screen", "")
+        if had == want:
+            return
+        presentation_view["screen"] = want
+        if had == "editor" and character_editor.is_open:
+            character_editor.close()
+            character_editor.autosave = presentation_view["editor_autosave"]
+        elif had == "mestre" and master_panel is not None:
+            master_panel.close()
+        elif had == "combate":
+            combat.clear(keep_npcs=True)
+        if want == "editor" and not character_editor.is_open:
+            presentation_view["editor_autosave"] = character_editor.autosave
+            character_editor.autosave = False
+            character_editor.open()
+        elif want == "mestre" and master_panel is not None:
+            master_panel.open()
+        elif want == "combate" and player_token is not None:
+            combat.clear(keep_npcs=True)
+            position = [float(v) for v in player_token.position]
+            first = combat.spawn("zumbi", 1, position)[0]
+            combat.spawn("esqueleto", 1, position)
+            combat.start(position, first)
+
+    def presentation_solid(x: int, y: int, z: int) -> bool:
+        return is_solid(voxel_provider.get_block_at(x, y, z))
+
+    def presentation_place(name: str):
+        """O ponto de pé do lugar ``name``; a construção é posta na primeira vez (sem gravar no mundo)."""
+        from src.interactive.presentation_places import CAVE, ENTRIES, choose_site, find_cave_spot, find_floor_spot
+        places = presentation_view.setdefault("places", {})
+        if name in places:
+            return places[name][1]
+        home = presentation_view["home"]
+        spot, placed = None, None
+        if name == CAVE:
+            spot = find_cave_spot(presentation_solid, lambda x, z: world_manager.get_height(x, z), home)
+        elif schematic_tool is not None and name in ENTRIES:
+            entry = ENTRIES[name]
+            try:
+                schematic = schematic_tool.schematic_for(entry)
+            except Exception as error:   # o .schem pode ter sumido da pasta
+                print(f"[Apresentação] {name}: {error}")
+                schematic = None
+            if schematic is not None:
+                taken = [p.bounds() for p, _ in places.values() if p is not None]
+                wet = lambda x, z: voxel_provider.get_block_at(
+                    x, world_manager.get_height(x, z) + 1, z) == int(BlockType.WATER)
+                origin = choose_site(lambda x, z: world_manager.get_height(x, z), wet, home,
+                                     (schematic.width, schematic.length), taken)
+                saving, schematic_tool.on_change = schematic_tool.on_change, (lambda: None)
+                try:                                  # a construção da apresentação não vai para o save
+                    schematic_tool.load_entry(entry, origin)
+                    schematic_tool.confirm()
+                finally:
+                    schematic_tool.on_change = saving
+                placed = schematic_tool.layer.structures[-1]
+                lo, hi = placed.bounds()
+                spot = find_floor_spot(presentation_solid, lo, hi, roofed=entry["kind"] == "schem")
+                if spot is None:
+                    spot = (lo[0] - 1.5, float(lo[1]), (lo[2] + hi[2]) / 2.0)
+        places[name] = (placed, spot)
+        return spot
+
+    def go_to_presentation_place(name: str) -> None:
+        """Leva o personagem ao lugar do passo do slide (ou de volta ao começo, com ``name`` vazio)."""
+        if presentation_view.get("at", "") == name or player_token is None:
+            return
+        presentation_view["at"] = name
+        spot = presentation_place(name) if name else presentation_view["home"]
+        if spot is None:
+            chat_console.add_message(f"[Apresentação] Não achei onde mostrar: {name}", (255, 170, 85))
+            return
+        player_token.position[:] = [float(v) for v in spot]
+        camera.target[:] = player_token.position
+
     def end_presentation() -> None:
         """Esc na apresentação: a câmera volta a ser a do jogo e o HUD normal reaparece."""
+        show_presentation_screen("")
+        go_to_presentation_place("")
+        if schematic_tool is not None:   # as construções postas só para a apresentação saem do mundo
+            saving, schematic_tool.on_change = schematic_tool.on_change, (lambda: None)
+            try:
+                for placed, _ in presentation_view.pop("places", {}).values():
+                    if placed is not None:
+                        schematic_tool.remove(placed)
+            finally:
+                schematic_tool.on_change = saving
         camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees = (
             presentation_view["saved"])
         presentation_view["targets"] = None
@@ -1380,8 +1471,15 @@ def main() -> None:
         if pv["slide"] != presentation.index:   # o giro continua de onde parou em vez de voltar ao início
             pv["slide"] = presentation.index
             pv["base_yaw"] = math.degrees(camera.yaw)
+        show_presentation_screen(presentation.slide.scene.screen)
+        if "home" not in pv and player_token is not None:
+            pv["home"] = tuple(float(v) for v in player_token.position)
+        places = presentation.slide.scene.places
+        go_to_presentation_place(places[min(presentation.step, len(places) - 1)] if places else "")
         targets = presentation.camera_targets(pv["base_yaw"], pv["base_ortho"])
         pv["targets"] = targets
+        if character_editor.is_open:   # a tela de criação cuida da câmera (gira em volta do personagem)
+            return
         k = 1.0 - math.exp(-6.0 * dt)
         current = math.degrees(camera.yaw)
         camera.yaw = math.radians(current + ((targets.yaw_degrees - current + 180.0) % 360.0 - 180.0) * k)
@@ -1424,7 +1522,11 @@ def main() -> None:
         if pv["footer_key"] != presentation.index:
             pv["footer"].set_image(render_footer(presentation.index, len(presentation.slides), window.width))
             pv["footer_key"] = presentation.index
-        pv["footer"].draw(16, window.height - pv["footer"].size[1] - 12, window.width, window.height)
+        # com a tela de criação aberta o canto de baixo à esquerda tem os botões dela: o número vai para a direita;
+        # no combate o chat ocupa o canto de baixo à esquerda: o número sobe para o canto de cima
+        footer_x = window.width - pv["footer"].size[0] - 16 if character_editor.is_open else 16
+        footer_y = 4 if slide.scene.screen == "combate" else window.height - pv["footer"].size[1] - 12
+        pv["footer"].draw(footer_x, footer_y, window.width, window.height)
 
     # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
     loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)
@@ -2328,7 +2430,9 @@ def main() -> None:
         chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open
                               else master_panel.right + 16 if master_panel is not None and master_panel.is_open
                               else 16)
-        if (map_editor is None or chat_console.is_open) and not presenting():
+        # na apresentação o chat só aparece no slide do combate (o registro da luta faz parte da interface dela)
+        if (map_editor is None or chat_console.is_open) and (
+                not presenting() or presentation.slide.scene.screen == "combate"):
             chat_console.render(window.width, window.height)
         loading_indicator.render(window.width, window.height)
         if context_cursor is not None:

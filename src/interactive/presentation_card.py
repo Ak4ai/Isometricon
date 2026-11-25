@@ -22,6 +22,7 @@ FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
 )
 BOLD_CANDIDATES = ("C:/Windows/Fonts/cambriab.ttf",)
+MONO_CANDIDATES = ("C:/Windows/Fonts/consola.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
 
 INK = (46, 58, 52)
 MUTED = (112, 104, 86)
@@ -44,6 +45,18 @@ def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
             except OSError:
                 continue
     return ImageFont.load_default(size)
+
+
+@lru_cache(maxsize=16)
+def _mono(size: int) -> ImageFont.ImageFont:
+    """A fonte dos trechos de código (o JSON dos blocos); sem ela, a do texto."""
+    for path in MONO_CANDIDATES:
+        if os.path.isfile(path):
+            try:
+                return ImageFont.truetype(path, max(int(size), 8))
+            except OSError:
+                continue
+    return _font(size)
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, width: float) -> list[str]:
@@ -131,6 +144,20 @@ class _Layout:
                     for i, part in enumerate(lines):
                         draw.text((x0 + body, y + body // 2 + i * int(font.size * 1.28)), part, font=font, fill=INK)
                 y += h + body // 2
+            elif kind == "code":
+                size = int(body * 0.8)
+                while size > 9 and max(probe.textlength(l, font=_mono(size)) for l in block.content) > width - body:
+                    size -= 1
+                font = _mono(size)
+                step = int(font.size * 1.3)
+                h = len(block.content) * step + body // 2
+                if draw is not None:
+                    draw.rounded_rectangle((x0, y, x0 + width, y + h), 8, fill=FORMULA_BG)
+                    for i, line in enumerate(block.content):
+                        draw.text((x0 + body // 2, y + body // 4 + i * step), line, font=font, fill=INK)
+                y += h + body // 4
+            elif kind == "places":
+                y = self._places(draw, probe, block.content, x0, y)
             elif kind == "tags":
                 y = self._tags(draw, probe, block.content, x0, y + body // 4)
             elif kind == "pipeline":
@@ -162,6 +189,22 @@ class _Layout:
                 draw.text((x + pad_x, y + (h - font.size) / 2 - 1), tag, font=font, fill=(242, 232, 209))
             x += w + gap
         return y + h + gap
+
+    def _places(self, draw, probe, places, x0, y) -> int:
+        """Os lugares do slide, um por passo: o da vez cheio, os outros só com a borda."""
+        font = _font(int(self.body * 0.95), bold=True)
+        h, gap = int(font.size * 1.9), int(self.body * 0.4)
+        for i, name in enumerate(places):
+            here = i == self.step
+            label = ("▶ " if here else "") + name
+            if draw is not None:
+                draw.rounded_rectangle((x0, y, x0 + self.width, y + h), 8,
+                                       fill=(122, 156, 112) if here else (226, 216, 190),
+                                       outline=(160, 140, 96), width=2)
+                draw.text((x0 + self.body * 0.7, y + (h - font.size) / 2 - 1), label, font=font,
+                          fill=(255, 255, 255) if here else (130, 120, 100))
+            y += h + gap
+        return y
 
     # ------------------------------------------------------------------ pipeline
     def _pipeline(self, draw, probe, stages, x0, y) -> int:
@@ -356,7 +399,7 @@ def render_slide(slide: Slide, step: int, width: int, height: int,
                  live: dict[str, tuple[int, int]] | None = None) -> list[tuple[int, int, Image.Image]]:
     """Os cartões do slide; só os que têm gráfico ao vivo recebem os números (os outros ficam no cache)."""
     values: Live = tuple(sorted((live or {}).items()))
-    return [render_panel(p, step if p.blocks and any(b.kind == "pipeline" for b in p.blocks) else 0,
+    return [render_panel(p, step if any(b.kind in ("pipeline", "places") for b in p.blocks) else 0,
                          width, height, values if p.live else ())
             for p in slide.panels]
 

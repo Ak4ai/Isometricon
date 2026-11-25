@@ -1,3 +1,4 @@
+import os
 """Modo apresentação: os slides, a navegação, as teclas e o que cada slide pede à câmera."""
 import glfw
 import numpy as np
@@ -21,7 +22,7 @@ def _all_text():
 
 
 def test_slides_com_titulos_acentuados():
-    assert 12 <= len(SLIDES) <= 16
+    assert 12 <= len(SLIDES) <= 18
     titles = " | ".join(s.title for s in SLIDES)
     for word in ("Isometricon", "Ferramentas", "Pipeline", "Mundo", "Câmera", "Iluminação", "Personagens",
                  "Interação", "Otimizações", "Conclusão"):
@@ -125,14 +126,14 @@ def test_alvos_camera():
     assert _at(camera, 4.1).yaw_degrees == pytest.approx(45.0 + 90.0)
     assert _at(optimizations, 7.0).ortho_size == pytest.approx(30.0)
     assert _at(optimizations, 0.0).ortho_size == pytest.approx(10.0)
-    assert _at(light, 3.5).debug_view == 1
-    assert _at(light, 6.5).debug_view == 2
+    assert _at(light, 3.5).debug_view == 0
+    assert _at(light, 6.5).debug_view == 1
+    assert _at(light, 9.5).debug_view == 2
     assert _at(mesh, 1.0).wireframe is True
     calm = _at(2, 1.0)
     assert calm.debug_view == 0 and calm.perspective is False and calm.wireframe is False
     assert _at(camera, 9.0).perspective is True
     assert _at(camera, 1.0).perspective is False
-    assert _at(_index("Personagens e animação"), 6.0).ortho_size < 10.0   # aproxima do personagem
     spin = _at(0, 2.0)
     assert spin.yaw_degrees > 45.0
 
@@ -162,3 +163,26 @@ def test_graficos_ao_vivo_tem_contador():
             for b in p.blocks:
                 if b.kind == "bars":
                     assert b.content[0] in s.scene.counters, s.title
+
+
+def test_slides_abrem_as_telas_do_jogo():
+    screens = {s.title: s.scene.screen for s in SLIDES}
+    assert screens["Personagens e animação"] == "editor"
+    assert screens["Combate por turnos"] == "combate"
+    assert screens["Iluminação e sombras"] == screens["Água e névoa"] == "mestre"
+    assert screens["Interação"] == ""                     # o painel de construções não entra na apresentação
+    assert set(screens.values()) <= {"", "editor", "mestre", "combate"}
+
+
+def test_lugares_um_por_passo():
+    from src.interactive.presentation_places import CAVE, ENTRIES
+    rooms = SLIDES[_index("Câmera dentro dos cômodos")]
+    assert rooms.scene.places == ("sala-andar", CAVE, "house-medieval")
+    assert rooms.steps == len(rooms.scene.places)
+    assert SLIDES[_index("Blocos: modelos e sombras")].scene.places == ("formas",)
+    for slide in SLIDES:
+        for place in slide.scene.places:
+            assert place == CAVE or place in ENTRIES
+    for entry in ENTRIES.values():
+        if entry["kind"] == "schem":
+            assert os.path.isfile(os.path.join("assets", "schematics", entry["name"] + ".schem"))

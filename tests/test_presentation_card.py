@@ -121,3 +121,16 @@ def test_etiquetas_quebram_linha_e_cabem_no_cartao():
     _, _, tall = card.render_panel(many, 0, *FULL_HD)
     _, _, short = card.render_panel(one, 0, *FULL_HD)
     assert tall.height > short.height and tall.width == short.width
+
+
+def test_lugar_do_passo_em_destaque():
+    slide = _slide("Câmera dentro dos cômodos")
+    first = card.render_slide(slide, 0, *FULL_HD)[0][2]
+    second = card.render_slide(slide, 1, *FULL_HD)[0][2]
+    assert first.tobytes() != second.tobytes()
+
+
+def test_trecho_de_codigo_cabe_no_cartao():
+    slide = _slide("Blocos: modelos e sombras")
+    x, y, im = card.render_slide(slide, 0, *FULL_HD)[0]
+    assert x + im.width - card.SHADOW <= FULL_HD[0]
