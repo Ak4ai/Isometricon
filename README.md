@@ -270,6 +270,7 @@ Os slides da disciplina por cima do terreno ao vivo; a cena de fundo de cada sli
 ```bash
 python src/main.py --apresentacao            # começa no slide 1, sempre com a mesma seed de fundo
 python src/main.py --apresentacao --slide=7  # começa no slide 7 (--seed N troca o terreno)
+python src/main.py --apresentacao --janela   # em janela em vez de tela cheia
 ```
 
 | Ação | Tecla |
@@ -277,7 +278,8 @@ python src/main.py --apresentacao --slide=7  # começa no slide 7 (--seed N troc
 | Próximo slide (ou próximo passo do pipeline) | `→`, `Espaço`, `Page Down` |
 | Slide anterior | `←`, `Page Up` |
 | Primeiro / último | `Home` / `End` |
-| Esconder / mostrar o cartão | `H` |
+| Esconder / mostrar os cartões | `H` |
+| Tela cheia / janela | `F11` |
 | Sair da apresentação (o jogo continua) | `ESC` |
 
 Os textos ficam em `src/interactive/presentation_slides.py`.

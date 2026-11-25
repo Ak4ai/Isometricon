@@ -1,39 +1,89 @@
-"""Cartão do modo apresentação: imagem PIL do tamanho da janela, legível em qualquer tamanho."""
+"""Cartões do modo apresentação: posição, tamanho em tela cheia e janela pequena, gráficos ao vivo."""
 from PIL import Image
 
 from src.interactive import presentation_card as card
-from src.interactive.presentation_slides import SLIDES
+from src.interactive.presentation_slides import SLIDES, Block, Panel
+
+FULL_HD = (1920, 1080)
 
 
-def _inside(bounds):
-    x, y, r, b = bounds
-    return (x + r) // 2, y + 40
+def _area(pieces):
+    return [(x, y, x + im.width, y + im.height) for x, y, im in pieces]
 
 
-def test_bounds_center_e_right():
-    x, y, r, b = card.card_bounds("center", 1000, 800)
-    assert abs((x + r) / 2 - 500) <= 1 and abs((y + b) / 2 - 400) <= 1
-    assert card.card_bounds("right", 1000, 800)[2] == 1000 - 32
-
-
-def test_cartao_tem_tamanho_da_janela():
+def test_todos_os_slides_em_tela_cheia():
     for slide in SLIDES:
-        image = card.render_card(slide, 0, 1280, 720)
-        assert image.size == (1280, 720) and image.mode == "RGBA"
-        point = (640, 360) if slide.scene.layout == "center" else _inside(card.card_bounds("right", 1280, 720))
-        assert image.getpixel(point)[3] == 255
+        pieces = card.render_slide(slide, 0, *FULL_HD, {"faces": (10, 60), "chunks": (3, 9)})
+        assert len(pieces) == len(slide.panels)
+        for x0, y0, x1, y1 in _area(pieces):
+            # a imagem inclui a margem da sombra; o cartão em si fica dentro da tela
+            assert x0 + card.SHADOW >= 0 and y0 + card.SHADOW >= 0, slide.title
+            assert x1 - card.SHADOW <= FULL_HD[0] and y1 - card.SHADOW <= FULL_HD[1], slide.title
 
 
-def test_cartao_janela_pequena():
-    image = card.render_card(SLIDES[7], 0, 640, 360)
-    assert image.size == (640, 360)
-    assert image.getpixel((2, 2))[3] == 0
+def test_cartoes_do_mesmo_slide_nao_se_sobrepoem():
+    for slide in SLIDES:
+        rects = [(x + card.SHADOW, y + card.SHADOW, x + im.width - card.SHADOW, y + im.height - card.SHADOW)
+                 for x, y, im in card.render_slide(slide, 0, *FULL_HD, {"faces": (1, 2), "chunks": (1, 2)})]
+        for i, a in enumerate(rects):
+            for b in rects[i + 1:]:
+                overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+                assert not overlap, slide.title
 
 
-def test_pipeline_muda_com_passo():
-    a = card.render_card(SLIDES[3], 0, 1280, 720)
-    b = card.render_card(SLIDES[3], 4, 1280, 720)
+def test_cartoes_sao_opacos_por_dentro():
+    # nenhum gráfico ou imagem pode furar o pergaminho (a cena do jogo apareceria pelo buraco)
+    for slide in SLIDES:
+        for _, _, im in card.render_slide(slide, 0, *FULL_HD, {"faces": (1, 2), "chunks": (1, 2)}):
+            m = card.SHADOW + 8
+            for x in range(m, im.width - m, 7):
+                for y in range(m, im.height - m, 7):
+                    assert im.getpixel((x, y))[3] == 255, (slide.title, x, y)
+
+
+def test_janela_pequena_nao_quebra():
+    for slide in SLIDES:
+        image = card.compose(slide, 0, 640, 360, {"faces": (0, 0), "chunks": (0, 0)})
+        assert image.size == (640, 360)
+
+
+def test_cartao_encolhe_ate_o_conteudo_e_respeita_o_anchor():
+    small = Panel((0.5, 0.5, 0.4, 0.45), (Block("text", ("curto",)),), "T", anchor="bottom")
+    x, y, im = card.render_panel(small, 0, *FULL_HD)
+    assert im.height - 2 * card.SHADOW < 0.45 * FULL_HD[1] / 2
+    assert y + im.height - card.SHADOW == int(0.95 * FULL_HD[1])
+
+
+def test_pipeline_muda_com_passo_e_fica_em_linha_na_faixa():
+    slide = SLIDES[3]
+    a = card.compose(slide, 0, *FULL_HD)
+    b = card.compose(slide, 4, *FULL_HD)
     assert a.tobytes() != b.tobytes()
+    _, _, piece = card.render_slide(slide, 0, *FULL_HD)[0]
+    assert piece.width > piece.height       # as cinco caixas lado a lado
+
+
+def test_grafico_de_faces_muda_com_os_numeros():
+    slide = SLIDES[6]
+    live_panels = [p for p in slide.panels if p.live]
+    assert live_panels
+    one = card.render_slide(slide, 0, *FULL_HD, {"faces": (100, 600)})
+    two = card.render_slide(slide, 0, *FULL_HD, {"faces": (300, 600)})
+    i = slide.panels.index(live_panels[0])
+    assert one[i][2].tobytes() != two[i][2].tobytes()
+    j = 1 - i
+    assert one[j][2] is two[j][2]           # o cartão sem gráfico vem do cache, não é refeito
+
+
+def test_grafico_sem_dados():
+    image = card.compose(SLIDES[9], 0, *FULL_HD, {"chunks": (0, 0)})
+    assert image.size == FULL_HD
+
+
+def test_regua_do_vertice():
+    panel = next(p for p in SLIDES[7].panels if any(b.kind == "vertex" for b in p.blocks))
+    _, _, image = card.render_panel(panel, 0, *FULL_HD)
+    assert image.width > 300
 
 
 def test_heightmap_oitavas_diferem():
@@ -44,18 +94,18 @@ def test_heightmap_oitavas_diferem():
     assert len(set(parts)) == 3
 
 
-def test_rodape_zero_de_zero():
-    image = card.render_footer(0, 13, {"faces": (0, 0)}, 800)
-    assert isinstance(image, Image.Image) and image.width == 800
+def test_rodape():
+    assert isinstance(card.render_footer(6, 13, 1920), Image.Image)
 
 
 def test_sem_fontes_do_windows(monkeypatch):
     monkeypatch.setattr(card, "FONT_CANDIDATES", ("nao/existe.ttf",))
+    monkeypatch.setattr(card, "BOLD_CANDIDATES", ())
     card._font.cache_clear()
-    card.render_card.cache_clear()
+    card.render_panel.cache_clear()
     try:
-        image = card.render_card(SLIDES[5], 0, 1024, 600)
+        image = card.compose(SLIDES[5], 0, 1024, 600)
         assert image.size == (1024, 600)
     finally:
         card._font.cache_clear()
-        card.render_card.cache_clear()
+        card.render_panel.cache_clear()

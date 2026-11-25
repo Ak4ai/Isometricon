@@ -36,6 +36,7 @@ class Presentation:
         self.index = min(max(int(start), 0), len(slides) - 1)
         self.step = 0
         self.card_visible = True
+        self.fullscreen = True     # o main.py acompanha: a apresentação abre em tela cheia e o F11 alterna
         self.active = True
         self.elapsed = 0.0
 
@@ -83,6 +84,9 @@ class Presentation:
         elif key == glfw.KEY_H:
             if action == glfw.PRESS:
                 self.card_visible = not self.card_visible
+        elif key == glfw.KEY_F11:
+            if action == glfw.PRESS:
+                self.fullscreen = not self.fullscreen
         elif key == glfw.KEY_ESCAPE:
             if action == glfw.PRESS:
                 self.active = False

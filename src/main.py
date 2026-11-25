@@ -791,10 +791,11 @@ def main() -> None:
     if terrain_demo and presentation_requested:
         from src.interactive.presentation import BASE_ZOOM, Presentation
         presentation = Presentation(start=presentation_start - 1)
+        presentation.fullscreen = "--janela" not in argv   # tela cheia por padrão; F11 alterna
         presentation_view.update(
             saved=(camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees),
             base_yaw=45.0, base_ortho=camera.ortho_size * BASE_ZOOM, slide=presentation.index, targets=None, drawn=0,
-            faces=(0, 0), faces_at=-10.0, card=None, footer=None, card_key=None, footer_key=None)
+            faces=(0, 0), faces_at=-10.0, footer=None, footer_key=None)
         camera.perspective = False
         camera.pitch = math.radians(IsometricCamera.DEFAULT_PITCH_DEGREES)
         camera.yaw = math.radians(45.0)
@@ -804,6 +805,7 @@ def main() -> None:
         camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees = (
             presentation_view["saved"])
         presentation_view["targets"] = None
+        window.set_fullscreen(False)   # de volta ao jogo como ele estava
 
     map_editor = None
     if editor_mode:
@@ -1388,35 +1390,41 @@ def main() -> None:
         camera.fov_degrees = 40.0 if targets.perspective else pv["saved"][4]   # com 18° quase não se distingue
 
     def draw_presentation() -> None:
-        """O cartão do slide e o rodapé (número do slide e contadores), por cima de tudo."""
+        """Os cartões do slide (um quad por cartão) e o número do slide, por cima de tudo."""
         from src.interactive.presentation import face_stats
-        from src.interactive.presentation_card import render_card, render_footer
+        from src.interactive.presentation_card import render_footer, render_slide
         from src.rendering.hud_quad import HudQuad
         pv = presentation_view
-        if pv["card"] is None:
-            pv["card"], pv["footer"] = HudQuad(), HudQuad()
+        if window.is_fullscreen != presentation.fullscreen:
+            window.set_fullscreen(presentation.fullscreen)
         slide = presentation.slide
-        if presentation.card_visible:
-            key = (presentation.index, presentation.step, window.width, window.height)
-            if pv["card_key"] != key:
-                pv["card"].set_image(render_card(slide, presentation.step, window.width, window.height))
-                pv["card_key"] = key
-            pv["card"].draw(0, 0, window.width, window.height)
-        counters = {}
+        live = {}
         if "faces" in slide.scene.counters:
-            if window.time - pv["faces_at"] > 1.0:
+            if window.time - pv["faces_at"] > 1.0:   # soma os chunks carregados no máximo uma vez por segundo
                 pv["faces"] = face_stats([c.blocks for c in list(world_manager.chunks.values())],
                                          [m.index_count for m, _ in list(world_manager.meshes.values())])
                 pv["faces_at"] = window.time
-            counters["faces"] = pv["faces"]
+            live["faces"] = pv["faces"]
         if "chunks" in slide.scene.counters:
-            counters["chunks"] = (pv["drawn"], len(world_manager.meshes))
-        key = (presentation.index, window.width, tuple(sorted(counters.items())))
-        if pv["footer_key"] != key:
-            pv["footer"].set_image(render_footer(presentation.index, len(presentation.slides), counters,
-                                                 window.width))
-            pv["footer_key"] = key
-        pv["footer"].draw(0, window.height - pv["footer"].size[1] - 8, window.width, window.height)
+            live["chunks"] = (pv["drawn"], len(world_manager.meshes))
+        if presentation.card_visible:
+            pieces = render_slide(slide, presentation.step, window.width, window.height, live)
+            quads = pv.setdefault("quads", [])
+            shown = pv.setdefault("shown", [])
+            while len(quads) < len(pieces):
+                quads.append(HudQuad())
+                shown.append(None)
+            for i, (x, y, image) in enumerate(pieces):
+                if shown[i] is not image:           # a imagem vem do cache: só envia à GPU quando mudou
+                    quads[i].set_image(image)
+                    shown[i] = image
+                quads[i].draw(x, y, window.width, window.height)
+        if pv["footer"] is None:
+            pv["footer"] = HudQuad()
+        if pv["footer_key"] != presentation.index:
+            pv["footer"].set_image(render_footer(presentation.index, len(presentation.slides), window.width))
+            pv["footer_key"] = presentation.index
+        pv["footer"].draw(16, window.height - pv["footer"].size[1] - 12, window.width, window.height)
 
     # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
     loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)

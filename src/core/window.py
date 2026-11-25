@@ -74,6 +74,26 @@ class Window:
 
         self._last_frame_time = glfw.get_time()
 
+    @property
+    def is_fullscreen(self) -> bool:
+        return bool(glfw.get_window_monitor(self._window))   # em janela vem um ponteiro nulo, não None
+
+    def set_fullscreen(self, on: bool) -> None:
+        """Tela cheia no monitor principal, na resolução atual dele (sem trocar o modo de vídeo); ``False`` volta
+        à janela no lugar e tamanho de antes."""
+        if bool(on) == self.is_fullscreen:
+            return
+        if on:
+            self._windowed_rect = (*glfw.get_window_pos(self._window), *glfw.get_window_size(self._window))
+            monitor = glfw.get_primary_monitor()
+            mode = glfw.get_video_mode(monitor)
+            glfw.set_window_monitor(self._window, monitor, 0, 0, mode.size.width, mode.size.height,
+                                    mode.refresh_rate)
+        else:
+            x, y, w, h = getattr(self, "_windowed_rect", (100, 100, 1280, 720))
+            glfw.set_window_monitor(self._window, None, x, y, w, h, 0)
+        glfw.swap_interval(1 if self.vsync else 0)
+
     def _on_framebuffer_resize(self, window, width: int, height: int) -> None:
         """Callback acionado ao redimensionar a janela."""
         if width > 0 and height > 0:
