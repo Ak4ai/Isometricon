@@ -57,3 +57,30 @@ def test_caverna_abre_a_areia():
             if 0 <= top < blocks.shape[1] and blocks[x, top, z] == BlockType.AIR:
                 opened += 1
     assert opened > 0
+
+
+def test_cactos_nao_se_encostam_e_tem_ate_3_blocos():
+    blocks = region(TerrainGenerator(seed=21, biome="deserto", vegetation=True, sea_level=-50), n=6)
+    cacti = set(map(tuple, np.argwhere(blocks == BlockType.CACTUS)))
+    assert cacti
+    for x, y, z in cacti:
+        assert not any((x + dx, y, z + dz) in cacti for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+        assert not {(x, y - 1, z), (x, y - 2, z), (x, y - 3, z)} <= cacti      # no máximo 3 de altura
+        assert blocks[x, y - 1, z] in (BlockType.SAND, BlockType.CACTUS)
+
+
+def test_deserto_sem_capim_e_com_arbusto_seco():
+    blocks = region(TerrainGenerator(seed=21, biome="deserto", vegetation=True, sea_level=-50))
+    assert (blocks == BlockType.DEAD_BUSH).any()
+    for plant in (BlockType.SHORT_GRASS, BlockType.POPPY, BlockType.FERN):
+        assert not (blocks == plant).any()
+
+
+def test_taiga_com_samambaias_e_frutinhas():
+    blocks = region(TerrainGenerator(seed=21, biome="taiga", vegetation=True, sea_level=-50))
+    assert (blocks == BlockType.FERN).any() and (blocks == BlockType.SWEET_BERRY_BUSH).any()
+    lower = np.argwhere(blocks == BlockType.LARGE_FERN_LOWER)
+    assert len(lower)
+    for x, y, z in lower:
+        assert blocks[x, y + 1, z] == BlockType.LARGE_FERN_UPPER
+    assert not (blocks == BlockType.SHORT_GRASS).any() and not (blocks == BlockType.DEAD_BUSH).any()
