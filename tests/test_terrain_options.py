@@ -139,3 +139,30 @@ def test_bioma_nas_opcoes():
     assert make_generator(1, None).biome == "planicie"
     with pytest.raises(ValueError):
         TerrainGenerator(biome="lua")
+
+
+def test_escolher_o_bioma_na_criacao(tmp_path):
+    menus = _menus(tmp_path)
+    menus.go('create')
+    menus.render(1320, 876)
+    actions = [a for _, a in menus.hits]
+    assert {'biome:planicie', 'biome:deserto', 'biome:taiga'} <= set(actions)
+    menus.activate('biome:deserto')
+    assert menus.terrain['bioma'] == 'deserto' and menus.terrain['agua'] == 5
+    menus.activate('biome:taiga')
+    assert menus.terrain['bioma'] == 'taiga' and menus.terrain['agua'] == 20
+    menus.fields['name'] = 'Pinheiros'
+    menus.activate('create_world')
+    assert menus.result[1]['terrain']['bioma'] == 'taiga'
+    menus.go('create')
+    menus.activate('biome:deserto')
+    menus.activate('terrain_defaults')
+    assert menus.terrain['bioma'] == 'planicie'
+
+
+def test_previa_do_deserto_tem_areia():
+    from src.interactive.world_preview import COLORS, build
+    image = build(777, dict(defaults(), bioma='deserto', cavernas=0)).convert('RGB')
+    sand = COLORS[int(BlockType.SAND)]
+    pixels = set(map(tuple, np.asarray(image).reshape(-1, 3).tolist()))
+    assert any(max(abs(p[i] - sand[i]) for i in range(3)) < 40 for p in pixels)
