@@ -45,6 +45,23 @@ ATLAS_TILES: List[str] = [
     "torch",                # 17
     "ladder",               # 18
     "fire_0",               # 19
+    # Deserto e taiga
+    "sandstone",            # 20
+    "sandstone_top",        # 21
+    "sandstone_bottom",     # 22
+    "cactus_side",          # 23
+    "cactus_top",           # 24
+    "cactus_bottom",        # 25
+    "dead_bush",            # 26
+    "spruce_log",           # 27
+    "spruce_log_top",       # 28
+    "spruce_leaves",        # 29
+    "podzol_top",           # 30
+    "podzol_side",          # 31
+    "fern",                 # 32
+    "large_fern_bottom",    # 33
+    "large_fern_top",       # 34
+    "sweet_berry_bush_stage3",  # 35
 ]
 
 
@@ -61,7 +78,7 @@ class TextureAtlas:
 
     TILE_SIZE = 16
     GRID_COLS = 8
-    GRID_ROWS = 4
+    GRID_ROWS = 8
 
     def __init__(
         self,
@@ -166,6 +183,28 @@ class TextureAtlas:
 
         elif block == BlockType.LEAVES:
             return "oak_leaves", (0.28, 0.65, 0.20)
+
+        elif block == BlockType.TAIGA_GRASS:   # a grama fria da taiga: o mesmo desenho, outra tinta
+            if face == 2:
+                return "grass_block_top", (0.34, 0.56, 0.30)
+            elif face == 3:
+                return "dirt", (1.0, 1.0, 1.0)
+            return "grass_block_side", (1.0, 1.0, 1.0)
+
+        elif block == BlockType.SAND:
+            return "sand", (1.0, 1.0, 1.0)
+
+        elif block == BlockType.SANDSTONE:
+            return ("sandstone_top" if face == 2 else "sandstone_bottom" if face == 3 else "sandstone"), (1.0, 1.0, 1.0)
+
+        elif block == BlockType.PODZOL:
+            return ("podzol_top" if face == 2 else "dirt" if face == 3 else "podzol_side"), (1.0, 1.0, 1.0)
+
+        elif block == BlockType.SPRUCE_LOG:
+            return ("spruce_log_top" if face in (2, 3) else "spruce_log"), (1.0, 1.0, 1.0)
+
+        elif block == BlockType.SPRUCE_LEAVES:
+            return "spruce_leaves", (0.38, 0.60, 0.38)
 
         elif block == BlockType.WATER:
             return "water_still", (0.32, 0.62, 0.95)

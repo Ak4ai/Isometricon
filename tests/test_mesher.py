@@ -166,7 +166,7 @@ def test_opacity_policy(block, opaque):
 
 
 @pytest.mark.parametrize('value,error', [
-    (-1, ValueError), (18, ValueError), (256, ValueError),
+    (-1, ValueError), (30, ValueError), (256, ValueError),
     (1.0, TypeError), (True, TypeError), (np.bool_(False), TypeError),
     ('1', TypeError), (None, TypeError),
 ])

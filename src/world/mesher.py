@@ -90,8 +90,7 @@ class ChunkMeshData:
         return len(self.indices)
 
 
-_OPAQUE_LUT = np.zeros(256, dtype=bool)
-_OPAQUE_LUT[[int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD)]] = True
+from src.world.block import OPAQUE_LUT as _OPAQUE_LUT  # noqa: E402  (a lista mora em block.py)
 
 _COLOR_LUT = np.zeros((256, 3), dtype=np.float32)
 for _bt, _c in BLOCK_COLORS.items():
@@ -118,7 +117,13 @@ def _shaped_template(block: BlockType, atlas: object) -> NDArray[np.float32]:
             quads.append(quad_vertices(part, corner, rect, color))
         else:
             for face in range(len(FACES)):
-                quad = box_face_quad(part, face, corner, rect)
+                face_rect = rect
+                if use_atlas and not part.texture:
+                    # caixa sem textura própria (o cacto): <nome>_top, _bottom ou _side, como no Minecraft
+                    tile = f"{base}_{('top', 'bottom')[face] if face < 2 else 'side'}"
+                    if tile in getattr(atlas, "tile_rects", {}):
+                        face_rect = atlas.flipped_rect(tile)
+                quad = box_face_quad(part, face, corner, face_rect)
                 quad[:, 8:11] = color
                 quads.append(quad)
     if not quads:

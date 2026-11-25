@@ -21,7 +21,7 @@ from typing import Dict, Iterable, Optional, Tuple
 import numpy as np
 from scipy import ndimage
 
-from src.world.block import SHAPED_BLOCK_NAMES, SHAPED_LUT, BlockType
+from src.world.block import FOLIAGE, OPAQUE_BLOCKS, SHAPED_BLOCK_NAMES, SHAPED_LUT, BlockType
 from src.world.chunk import Chunk3D
 
 WINDOW = (48, 32, 48)          # células em x, y, z
@@ -42,8 +42,8 @@ EDGE = 64                      # sólido que só encosta no espaço pela quina: 
 OBJECT = 192                   # sólido com o espaço logo acima (móvel, degrau, piso): não é parede, não some na frente
 
 # Blocos que não contam como teto (a copa de uma árvore não faz um cômodo)
-_NOT_ROOF = (int(BlockType.LEAVES),)
-_OPAQUE = tuple(int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD))
+_NOT_ROOF = tuple(int(b) for b in FOLIAGE)
+_OPAQUE = tuple(int(b) for b in OPAQUE_BLOCKS)
 # O que o personagem atravessa: ar, água e os enfeites com forma (plantas, tochas, escadas de mão, fogo)
 _PASSABLE = (int(BlockType.AIR), int(BlockType.WATER), *(int(b) for b in SHAPED_BLOCK_NAMES))
 

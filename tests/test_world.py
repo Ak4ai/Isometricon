@@ -17,6 +17,9 @@ def test_block_ids_and_colors():
         "WATER": 4, "WOOD": 5, "LEAVES": 6,
         "SHORT_GRASS": 7, "POPPY": 8, "DANDELION": 9, "RED_MUSHROOM": 10, "BROWN_MUSHROOM": 11,
         "TORCH": 12, "LADDER_NORTH": 13, "LADDER_SOUTH": 14, "LADDER_EAST": 15, "LADDER_WEST": 16, "FIRE": 17,
+        "SAND": 18, "SANDSTONE": 19, "CACTUS": 20, "DEAD_BUSH": 21, "SPRUCE_LOG": 22, "SPRUCE_LEAVES": 23,
+        "PODZOL": 24, "TAIGA_GRASS": 25, "FERN": 26, "LARGE_FERN_LOWER": 27, "LARGE_FERN_UPPER": 28,
+        "SWEET_BERRY_BUSH": 29,
     }
     assert set(BLOCK_COLORS) == set(BlockType)
     for block in BlockType:
@@ -93,7 +96,7 @@ def test_coordinate_types_are_strict(axis, value):
 
 
 @pytest.mark.parametrize("value,error", [
-    (-1, ValueError), (18, ValueError), (256, ValueError),
+    (-1, ValueError), (30, ValueError), (256, ValueError),
     (1.5, TypeError), (1.0, TypeError), ("1", TypeError),
     (True, TypeError), (np.bool_(True), TypeError), (None, TypeError),
 ])
@@ -202,7 +205,7 @@ def test_initial_array_rejects_non_integer_dtype(dtype):
         Chunk3D(blocks=np.zeros((16, 16, 16), dtype=dtype))
 
 
-@pytest.mark.parametrize("value", [-1, 18, 255, 256, 257])
+@pytest.mark.parametrize("value", [-1, 30, 255, 256, 257])
 def test_initial_array_rejects_invalid_values_before_conversion(value):
     blocks = np.zeros((16, 16, 16), dtype=np.int64)
     blocks[4, 6, 7] = value
