@@ -47,6 +47,35 @@ def sight_needed(solid: np.ndarray, origin: Sequence[int], feet: Sequence[float]
             or sight_blocked(solid, origin, (fx, fy + HEAD, fz), direction))
 
 
+FAR_STEP = 0.5    # o passo do raio fora da janela, em blocos
+
+
+def sight_blocked_world(chunk_at, start: Sequence[float], direction: Sequence[float], t0: float, t1: float) -> bool:
+    """Há tronco, chão ou parede (opaco; folha não) no raio de ``start`` em ``direction``, entre ``t0`` e ``t1``
+    blocos, nos chunks carregados (``chunk_at((cx, cy, cz))``)? Para o que tapa o personagem de longe: uma árvore
+    alta lá na frente, fora da janela de blocos em volta dele (a câmera isométrica sobe devagar; uma sequoia de 36
+    blocos tapa a vista a dezenas de blocos)."""
+    from src.world.block import OPAQUE_LUT
+    direction = np.asarray(direction, dtype=np.float64)
+    length = float(np.linalg.norm(direction))
+    if length < 1e-9 or t1 <= t0:
+        return False
+    direction = direction / length
+    ts = np.arange(t0, t1, FAR_STEP)
+    cells = np.floor(np.asarray(start, dtype=np.float64) + direction * ts[:, None]).astype(np.int64)
+    keys = cells // 16
+    # os pontos em ordem passam por poucos chunks: um corte por chunk
+    change = np.flatnonzero(np.any(np.diff(keys, axis=0) != 0, axis=1)) + 1
+    for part in np.split(np.arange(len(cells)), change):
+        chunk = chunk_at(tuple(int(v) for v in keys[part[0]]))
+        if chunk is None:
+            continue
+        local = cells[part] - keys[part[0]] * 16
+        if OPAQUE_LUT[chunk.blocks[local[:, 0], local[:, 1], local[:, 2]]].any():
+            return True
+    return False
+
+
 # O buraco das folhas (no shader, ``leafHole``): ao ar livre, a copa das árvores entre a câmera e o personagem some num
 # círculo em volta dele, bloco a bloco como o corredor da câmera; só as folhas, o tronco e o chão ficam. O raio acompanha o zoom: é uma fração da meia-altura
 # visível, para o buraco ter sempre o mesmo tamanho na tela.

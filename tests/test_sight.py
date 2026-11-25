@@ -98,3 +98,23 @@ def test_the_leaf_hole_keeps_its_size_on_screen():
     assert leaf_hole_radius(20.0) == 2 * leaf_hole_radius(10.0)
     assert leaf_hole_radius(10.0) > leaf_hole_radius(8.0)
     assert leaf_hole_radius(0.5) == LEAF_HOLE_MIN
+
+
+def test_tronco_longe_rumo_a_camera_tambem_tapa():
+    """Uma árvore alta longe do personagem (fora da janela em volta dele) ainda tapa a vista: o raio segue nos chunks."""
+    from src.world.block import BlockType
+    from src.world.chunk import Chunk3D
+    from src.world.sight import sight_blocked_world
+    chunks = {}
+
+    def put(x, y, z, block):
+        key = (x // 16, y // 16, z // 16)
+        chunks.setdefault(key, Chunk3D(*key)).blocks[x % 16, y % 16, z % 16] = int(block)
+    for y in range(0, 40):
+        put(30, y, 30, BlockType.SEQUOIA_LOG)                  # 30 blocos na diagonal, 40 de altura
+    d = (1.0, 0.816, 1.0)
+    assert sight_blocked_world(chunks.get, (0.5, 1.1, 0.5), d, 0.0, 120.0)
+    assert not sight_blocked_world(chunks.get, (0.5, 1.1, 0.5), (1.0, 0.816, -1.0), 0.0, 120.0)
+    for y in range(0, 40):
+        put(30, y, 30, BlockType.SPRUCE_LEAVES)               # folha não tapa (abre pelo buraco das folhas)
+    assert not sight_blocked_world(chunks.get, (0.5, 1.1, 0.5), d, 0.0, 120.0)

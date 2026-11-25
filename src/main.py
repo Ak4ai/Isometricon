@@ -1492,6 +1492,7 @@ def main() -> None:
             shadow_renderer.steps = int(prefs["shadow_range"])
             shadow_renderer.set_detail(int(prefs["shadow_detail"]), shader)
             shadow_renderer.strength = float(prefs["shadow_strength"])
+            shadow_renderer.set_distance(int(prefs.get("shadow_distance", 1)))
 
 
     fps_overlay = FpsOverlay()
@@ -2046,7 +2047,7 @@ def main() -> None:
             mark("room_tracker")
             room_renderer.update(dt, room_tracker)
             mark("room_renderer")
-            shadow_renderer.update(room_tracker)
+            shadow_renderer.update(room_tracker, player_token.position, loaded_chunks, chunk_revision, room_structures)
             mark("shadows")
             if construction_panel is not None and construction_panel.is_open:
                 # o bloco que o mouse aponta (terreno e construções) e as células ocupadas pelo jogador
@@ -2158,9 +2159,24 @@ def main() -> None:
             sight_world_dir = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (
                 np.array(camera._camera_position(), dtype=np.float64) - sight_target[:3])
             window_cells = room_tracker.mask.window if room_tracker.mask is not None else None
+
+            def sight_blocked_far() -> bool:
+                """De longe: uma árvore alta lá na frente, fora da janela em volta do personagem (nos chunks)."""
+                from src.world.sight import CHEST, HEAD, START, sight_blocked_world
+                d = sight_world_dir / max(float(np.linalg.norm(sight_world_dir)), 1e-9)
+                if d[1] <= 0.05:
+                    return False
+                layers = getattr(world_manager.generator, "column_layers", lambda: (0,))()
+                top = (max(layers) + 1) * 16          # acima disso não há bloco: o raio pode parar
+                for rise in (CHEST, HEAD):
+                    start = (feet[0], feet[1] + rise, feet[2])
+                    if sight_blocked_world(loaded_chunks.get, start, d, START, min((top - start[1]) / d[1], 240.0)):
+                        return True
+                return False
             outdoors_target = 1.0 if (
                 room_renderer.level > 0.001 or window_cells is None
-                or sight_needed(sight_cover(window_cells), room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
+                or sight_needed(sight_cover(window_cells), room_tracker.mask.origin, feet, sight_world_dir)
+                or sight_blocked_far()) else 0.0
             story_state["sight"] += (outdoors_target - story_state["sight"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
             if abs(outdoors_target - story_state["sight"]) < 0.01:
                 story_state["sight"] = outdoors_target
@@ -2569,7 +2585,7 @@ def main() -> None:
     if room_renderer is not None:
         room_renderer.delete()
     if shadow_renderer is not None:
-        shadow_renderer.delete()
+        shadow_renderer.shutdown()
     if character_shadows is not None:
         character_shadows.delete()
     if scene_target is not None:

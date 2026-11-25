@@ -73,6 +73,8 @@ def value_text(key: str, value) -> str:
         return f'{round(value * 100)}%'
     if key == 'render_distance':
         return f'{value} chunk' + ('s' if value != 1 else '')
+    if key == 'shadow_distance':
+        return '1 chunk (perto)' if value == 1 else f'{value} chunks'
     if key == 'shadows':
         return {'off': 'Desligadas', 'low': 'Baixa', 'medium': 'Média', 'high': 'Alta'}[value]
     if key == 'shadow_detail':
@@ -160,6 +162,13 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Com o sol baixo, um morro distante pode sombrear o personagem. O alcance diz até quantos blocos o raio '
                 'do sol procura: Curto 16, Médio 32, Longo 56. Sombras compridas somem no curto.',
                 [('Custo', 'Baixo a médio')]),
+            Row('shadow_distance', 'Distância das sombras', 'Até quantos chunks em volta há sombra do sol', 'range',
+                'choice', None, 'shadow_distance',
+                'A sombra do sol só existe numa área em volta do personagem; fora dela tudo fica no sol. 1 chunk é '
+                'a área de sempre (48 × 48 blocos). Mais chunks mostram as sombras das árvores e dos morros lá longe '
+                '(até a distância de render), mas a área é refeita quando o personagem anda e ocupa mais memória de '
+                'vídeo.',
+                [('Custo', 'Médio a alto acima de 3 (um tranco curto a cada 8 blocos andados)')]),
             Row('shadow_strength', 'Intensidade da sombra', 'O quanto a sombra escurece', 'contrast', 'choice', None,
                 'shadow_strength',
                 'Só o escuro da sombra: 100% é a sombra inteira, 25% é um sombreado leve. Não muda o desempenho.',

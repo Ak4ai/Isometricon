@@ -29,6 +29,7 @@ GRAPHICS = {
     'shadow_range': (56, (16, 32, 56)),                # até quantas células o raio do sol procura o que tapa
     'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o capim
     'shadow_strength': (1.0, (0.25, 0.5, 0.75, 1.0)),  # o quanto a sombra escurece
+    'shadow_distance': (1, (1, 2, 3, 4, 5, 6)),        # até quantos chunks em volta do jogador há sombra do sol
     'fps_limit': (0, (0, 30, 60, 120, 144)),           # 0 sem limite
 }
 DEFAULTS = {'bindings': {k: v[1] for k, v in ACTIONS.items()}, 'vsync': True,
