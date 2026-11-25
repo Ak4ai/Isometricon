@@ -8,6 +8,8 @@ import numpy as np
 
 from src.interactive.presentation_slides import SLIDES, Slide
 
+PRESENTATION_SEED = 329436  # terreno com grama, água e encosta perto do início (sem --seed)
+BASE_ZOOM = 1.3            # a apresentação começa um pouco mais afastada que o jogo
 VIEW_SECONDS = 3.0        # tempo de cada modo de visualização do shader no ciclo
 WOBBLE_PERIOD = 6.0
 

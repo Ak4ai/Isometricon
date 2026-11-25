@@ -18,6 +18,7 @@ uniform sampler2D u_TextureAtlas;
 uniform vec3 u_LightDir;     // Direção da luz do sol
 uniform vec3 u_LightColor;   // Cor da luz do sol
 uniform vec3 u_AmbientColor; // Luz ambiente
+uniform int u_DebugView = 0;  // modo apresentação: 0 normal, 1 só a textura (albedo), 2 só a iluminação
 
 // Vitiligo: how much of the skin has lost its colour (0 = none), which pattern, and the skin's own
 // colour (only what has that colour is skin: eyes, mouth and eyebrows on the head's texture are not).
@@ -1007,9 +1008,13 @@ void main()
         vec3 color = mix(body * lighting, sky * mix(0.55, 1.0, sunVis), fresnel) + vec3(1.0, 0.95, 0.82) * glint;
         float alpha = clamp(mix(0.22, 0.90, deep) + fresnel * 0.40 + glint, 0.0, 1.0);
         FragColor = vec4(envGrade(color * roomFactor, body), alpha * u_Alpha);
+        if (u_DebugView == 1) FragColor.rgb = body;
+        else if (u_DebugView == 2) FragColor.rgb = lighting * 0.8;
         return;
     }
 
     vec3 result = envGrade(lighting * albedo * roomFactor, albedo * roomFactor);
     FragColor = vec4(result, texColor.a * u_Alpha);
+    if (u_DebugView == 1) FragColor.rgb = albedo;
+    else if (u_DebugView == 2) FragColor.rgb = lighting * 0.8;
 }

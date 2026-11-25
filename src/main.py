@@ -291,7 +291,10 @@ def main() -> None:
     shader = Shader(shader_vert, shader_frag)
     argv = sys.argv[1:]
     explicit_editor = "--map-editor" in argv or "--editor-mapa" in argv
-    terrain_requested = "--terrain" in argv
+    # --apresentacao: os slides da disciplina por cima do terreno ao vivo (ver src/interactive/presentation.py)
+    presentation_requested = "--apresentacao" in argv
+    terrain_requested = "--terrain" in argv or presentation_requested
+    presentation_start = 1
     map_path = None
     world_object_path = None
     for arg in argv:
@@ -302,6 +305,11 @@ def main() -> None:
             map_path = arg.split("=", 1)[1]
         elif arg.startswith(("--object=", "--objeto=")):
             world_object_path = arg.split("=", 1)[1]
+        elif arg.startswith("--slide="):
+            try:
+                presentation_start = int(arg.split("=", 1)[1])
+            except ValueError:
+                pass
     terrain_demo = terrain_requested
     char_demo = "--char" in argv or "--character" in argv
 
@@ -364,6 +372,9 @@ def main() -> None:
             chat_text = arg.split("=", 1)[1]
             open_chat = True
 
+    if presentation_requested and custom_seed is None:
+        from src.interactive.presentation import PRESENTATION_SEED
+        custom_seed = PRESENTATION_SEED   # sempre o mesmo terreno de fundo nos slides
     editor_mode = explicit_editor or (map_path is not None and not terrain_requested)
     if editor_mode:
         terrain_demo = False
@@ -376,7 +387,7 @@ def main() -> None:
     selected_world = None
     show_menu = "--menu" in sys.argv or (
         not editor_mode
-        and not any(flag in sys.argv for flag in ("--terrain", "--char", "--character", "--frames"))
+        and not any(flag in sys.argv for flag in ("--terrain", "--apresentacao", "--char", "--character", "--frames"))
         and not any(a.startswith("--frames=") for a in sys.argv)
     )
     if show_menu:
@@ -773,6 +784,27 @@ def main() -> None:
         camera.pitch = math.radians(30.0)
         camera.yaw = math.radians(45.0)
 
+    # Modo apresentação: a câmera parte da isométrica exata dos slides (yaw 45°, pitch 35,264°, ortográfica);
+    # a de antes volta quando o Esc encerra a apresentação.
+    presentation = None
+    presentation_view: dict = {}
+    if terrain_demo and presentation_requested:
+        from src.interactive.presentation import BASE_ZOOM, Presentation
+        presentation = Presentation(start=presentation_start - 1)
+        presentation_view.update(
+            saved=(camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees),
+            base_yaw=45.0, base_ortho=camera.ortho_size * BASE_ZOOM, slide=presentation.index, targets=None, drawn=0,
+            faces=(0, 0), faces_at=-10.0, card=None, footer=None, card_key=None, footer_key=None)
+        camera.perspective = False
+        camera.pitch = math.radians(IsometricCamera.DEFAULT_PITCH_DEGREES)
+        camera.yaw = math.radians(45.0)
+
+    def end_presentation() -> None:
+        """Esc na apresentação: a câmera volta a ser a do jogo e o HUD normal reaparece."""
+        camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees = (
+            presentation_view["saved"])
+        presentation_view["targets"] = None
+
     map_editor = None
     if editor_mode:
         from src.editor.map_editor import MapEditor
@@ -957,6 +989,12 @@ def main() -> None:
             keys_pressed[menus.preferences.canonical(key)] = False
         if menus.active:
             return menus.key(key, action, mods)
+
+        # A apresentação fica com as setas, espaço, PageUp/Down, Home/End, H e Esc; o resto segue para o jogo
+        if presentation is not None and presentation.active and presentation.key(key, action):
+            if not presentation.active:
+                end_presentation()
+            return True
 
         # O editor de mapa consome os atalhos próprios; Q/E, WASD e o chat continuam
         # disponíveis para a câmera e para o console.
@@ -1328,7 +1366,57 @@ def main() -> None:
     def coords_on_screen() -> bool:
         """As coordenadas do canto de cima à esquerda: ligadas em Configurações > Geral e sem o painel do /mestre ali."""
         return (coordinate_overlay is not None and menus.preferences.data.get('show_coords', True)
-                and not (master_panel is not None and master_panel.is_open))
+                and not (master_panel is not None and master_panel.is_open) and not presenting())
+
+    def presenting() -> bool:
+        return presentation is not None and presentation.active
+
+    def update_presentation(dt: float) -> None:
+        """Leva a câmera, suavemente, ao que a cena do slide pede (giro, zoom, ortográfica ou perspectiva)."""
+        pv = presentation_view
+        presentation.update(dt)
+        if pv["slide"] != presentation.index:   # o giro continua de onde parou em vez de voltar ao início
+            pv["slide"] = presentation.index
+            pv["base_yaw"] = math.degrees(camera.yaw)
+        targets = presentation.camera_targets(pv["base_yaw"], pv["base_ortho"])
+        pv["targets"] = targets
+        k = 1.0 - math.exp(-6.0 * dt)
+        current = math.degrees(camera.yaw)
+        camera.yaw = math.radians(current + ((targets.yaw_degrees - current + 180.0) % 360.0 - 180.0) * k)
+        camera.ortho_size += (targets.ortho_size - camera.ortho_size) * k
+        camera.perspective = targets.perspective
+        camera.fov_degrees = 40.0 if targets.perspective else pv["saved"][4]   # com 18° quase não se distingue
+
+    def draw_presentation() -> None:
+        """O cartão do slide e o rodapé (número do slide e contadores), por cima de tudo."""
+        from src.interactive.presentation import face_stats
+        from src.interactive.presentation_card import render_card, render_footer
+        from src.rendering.hud_quad import HudQuad
+        pv = presentation_view
+        if pv["card"] is None:
+            pv["card"], pv["footer"] = HudQuad(), HudQuad()
+        slide = presentation.slide
+        if presentation.card_visible:
+            key = (presentation.index, presentation.step, window.width, window.height)
+            if pv["card_key"] != key:
+                pv["card"].set_image(render_card(slide, presentation.step, window.width, window.height))
+                pv["card_key"] = key
+            pv["card"].draw(0, 0, window.width, window.height)
+        counters = {}
+        if "faces" in slide.scene.counters:
+            if window.time - pv["faces_at"] > 1.0:
+                pv["faces"] = face_stats([c.blocks for c in list(world_manager.chunks.values())],
+                                         [m.index_count for m, _ in list(world_manager.meshes.values())])
+                pv["faces_at"] = window.time
+            counters["faces"] = pv["faces"]
+        if "chunks" in slide.scene.counters:
+            counters["chunks"] = (pv["drawn"], len(world_manager.meshes))
+        key = (presentation.index, window.width, tuple(sorted(counters.items())))
+        if pv["footer_key"] != key:
+            pv["footer"].set_image(render_footer(presentation.index, len(presentation.slides), counters,
+                                                 window.width))
+            pv["footer_key"] = key
+        pv["footer"].draw(0, window.height - pv["footer"].size[1] - 8, window.width, window.height)
 
     # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
     loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)
@@ -1377,6 +1465,8 @@ def main() -> None:
         if menus.world is not None:
             menus.world['played'] += dt
         camera.update(dt)
+        if presenting():
+            update_presentation(dt)
         if menus.preferences.data['reduce_motion']:
             camera.current_rotation = float(camera.board_rotation)
         chat_console.update(dt)
@@ -1965,7 +2055,7 @@ def main() -> None:
                     shader.set_bool("u_WaterMode", player_token.in_water)
                     shader.set_int("u_CutawayPass", 0)
                     shader.set_int("u_WaterPass", 1)
-                    world_manager.render(shader, model, view_projection)
+                    presentation_view["drawn"] = world_manager.render(shader, model, view_projection)
                     room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
                 shader.set_int("u_WaterPass", 0)
                 schematic_tool.draw(shader, model, window.time, preview=False)
@@ -1975,6 +2065,12 @@ def main() -> None:
             # profundidade antecipado da placa, e sem ele cada fragmento escondido pagaria os raios do sol. A 1ª
             # passada só escreve a profundidade; a 2ª, sem escrever, sombreia só o que ficou na frente. Vale para o
             # terreno e para as construções (de dentro de uma casa, quase tudo na tela é parede, piso e móvel dela).
+            # Apresentação: o wireframe do face culling e os modos "só textura" / "só luz" valem para o mundo
+            slide_targets = presentation_view.get("targets") if presenting() else None
+            wireframe = slide_targets is not None and slide_targets.wireframe
+            shader.set_int("u_DebugView", slide_targets.debug_view if slide_targets is not None else 0)
+            if wireframe:
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
             shader.set_bool("u_DepthOnly", True)
             gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
             draw_solids()
@@ -2033,6 +2129,9 @@ def main() -> None:
                 world_manager.render(shader, model, view_projection)
                 gl.glDepthMask(gl.GL_TRUE)
                 mark("water_pass")
+            if wireframe:
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+            shader.set_int("u_DebugView", 0)
             gl.glDisable(gl.GL_BLEND)
             shader.set_int("u_WaterPass", 0)
             shader.set_float("u_SightActive", 0.0)
@@ -2045,6 +2144,10 @@ def main() -> None:
                                  tuple((model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3]))
             grid_renderer.render(projection, view, model)
             mark("grid_draw")
+            if presenting() and presentation.slide.scene.chunk_outline and selection_box is not None:
+                # slide "Voxel e chunk": o contorno do chunk 16³ para onde a câmera olha
+                low = tuple(int(math.floor(float(v) / 16.0)) * 16 for v in camera.target)
+                selection_box.render(projection, view, model, low, tuple(v + 15 for v in low), (1.0, 0.85, 0.25))
 
             if construction_panel is not None and construction_panel.is_open and selection_box is not None:
                 # a caixa da construção selecionada (amarela) e a do holograma (verde se cabe, vermelha se não)
@@ -2208,7 +2311,7 @@ def main() -> None:
                 chest_dim["quad"].set_image(Image.new("RGBA", (1, 1), (0, 0, 0, 255)))
             chest_dim["quad"].draw(0, 0, window.width, window.height, size=(window.width, window.height),
                                    opacity=chest_session.dim)
-        if menus.preferences.data.get('show_fps'):   # Configurações > Mostrar FPS (desligado por padrão)
+        if menus.preferences.data.get('show_fps') and not presenting():   # Configurações > Mostrar FPS
             # sob as coordenadas, quando elas estão na tela (uma linha de 18 pixels mais a folga)
             fps_overlay.render(window.width, window.height,
                                FpsOverlay.MARGIN + (22 if coords_on_screen() else 0))
@@ -2217,7 +2320,7 @@ def main() -> None:
         chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open
                               else master_panel.right + 16 if master_panel is not None and master_panel.is_open
                               else 16)
-        if map_editor is None or chat_console.is_open:
+        if (map_editor is None or chat_console.is_open) and not presenting():
             chat_console.render(window.width, window.height)
         loading_indicator.render(window.width, window.height)
         if context_cursor is not None:
@@ -2239,6 +2342,9 @@ def main() -> None:
                 from src.interactive.context_cursor import cursor_opacity
                 context_cursor.render(window.get_cursor_pos_framebuffer(), window.width, window.height,
                                       prompt_at, interact_key_name(), verb, opacity=cursor_opacity(cursor_idle()))
+
+        if presenting():
+            draw_presentation()
 
         # --------------------------------------------------------------
         # Captura de screenshot e limite de frames (para testes e automação)

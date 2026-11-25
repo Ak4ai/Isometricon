@@ -175,7 +175,7 @@ class _Layout:
         return y + strip.height + self.body // 4
 
 
-@lru_cache(maxsize=48)
+@lru_cache(maxsize=6)   # cada cartão tem o tamanho da janela (8 MB em 1920×1080)
 def render_card(slide: Slide, step: int, width: int, height: int) -> Image.Image:
     """O cartão do slide sobre fundo transparente, do tamanho da janela (o ``HudQuad`` desenha em 0, 0)."""
     image = Image.new("RGBA", (max(width, 1), max(height, 1)), (0, 0, 0, 0))
