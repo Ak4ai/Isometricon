@@ -30,7 +30,10 @@ COLORS = {int(BlockType.GRASS): (104, 158, 70), int(BlockType.DIRT): (134, 96, 6
 # os blocos dos biomas (deserto e taiga)
 COLORS.update({int(BlockType.SAND): (219, 205, 160), int(BlockType.SANDSTONE): (206, 188, 140),
                int(BlockType.TAIGA_GRASS): (84, 128, 70), int(BlockType.PODZOL): (110, 80, 48),
-               int(BlockType.SPRUCE_LOG): (92, 64, 40), int(BlockType.SPRUCE_LEAVES): (52, 96, 60)})
+               int(BlockType.SPRUCE_LOG): (92, 64, 40), int(BlockType.SEQUOIA_LOG): (120, 64, 44),
+               int(BlockType.SPRUCE_LOG_X): (92, 64, 40), int(BlockType.SPRUCE_LOG_Z): (92, 64, 40),
+               int(BlockType.SEQUOIA_LOG_X): (120, 64, 44), int(BlockType.SEQUOIA_LOG_Z): (120, 64, 44),
+               int(BlockType.SPRUCE_LEAVES): (52, 96, 60)})
 GRASS_SIDE = (122, 100, 64)
 SHADE = (1.0, 0.80, 0.64)      # topo, face +x, face +z
 

@@ -148,12 +148,23 @@ class TextureAtlas:
                 )
 
                 base_uv = _TOP_UVS if face == 2 else _UVS
+                if self._rotated(block, face):
+                    base_uv = np.roll(base_uv, 1, axis=0)   # a textura girada 90°
                 du = u_max - u_min
                 dv = v_max - v_min
 
                 self.uv_table[b_id, face, :, 0] = u_min + base_uv[:, 0] * du
                 self.uv_table[b_id, face, :, 1] = v_min + base_uv[:, 1] * dv
                 self.color_table[b_id, face, :] = tint
+
+    @staticmethod
+    def _rotated(block: BlockType, face: int) -> bool:
+        """A face mostra a textura girada 90°? Nos troncos deitados, para a casca correr ao longo do tronco."""
+        if block in (BlockType.SPRUCE_LOG_X, BlockType.SEQUOIA_LOG_X):
+            return face in (2, 3, 4, 5)       # deitado em x: em cima, embaixo e nos lados z
+        if block in (BlockType.SPRUCE_LOG_Z, BlockType.SEQUOIA_LOG_Z):
+            return face in (0, 1)             # deitado em z: nos lados x (em cima a casca já corre em z)
+        return False
 
     def _resolve_tile_and_tint(
         self,
@@ -202,6 +213,18 @@ class TextureAtlas:
 
         elif block == BlockType.SPRUCE_LOG:
             return ("spruce_log_top" if face in (2, 3) else "spruce_log"), (1.0, 1.0, 1.0)
+
+        elif block in (BlockType.SPRUCE_LOG_X, BlockType.SPRUCE_LOG_Z):   # deitados: os anéis na ponta
+            ends = (0, 1) if block == BlockType.SPRUCE_LOG_X else (4, 5)
+            return ("spruce_log_top" if face in ends else "spruce_log"), (1.0, 1.0, 1.0)
+
+        elif block in (BlockType.SEQUOIA_LOG_X, BlockType.SEQUOIA_LOG_Z):
+            ends = (0, 1) if block == BlockType.SEQUOIA_LOG_X else (4, 5)
+            return ("spruce_log_top" if face in ends else "spruce_log"), (1.0, 0.86, 0.78)
+
+        elif block == BlockType.SEQUOIA_LOG:
+            # a madeira do pinheiro, um pouco mais quente (a de mangue parecia acácia)
+            return ("spruce_log_top" if face in (2, 3) else "spruce_log"), (1.0, 0.86, 0.78)
 
         elif block == BlockType.SPRUCE_LEAVES:
             return "spruce_leaves", (0.38, 0.60, 0.38)

@@ -144,6 +144,16 @@ class TerrainGenerator:
         near, far = a + u * (b - a), c + u * (d - c)
         return near + v * (far - near)
 
+    def column_layers(self) -> tuple[int, ...]:
+        """As camadas de chunks (chunk_y) de cada coluna do mundo: a do chão e, na taiga, as de cima, onde chegam as
+        copas das árvores altas."""
+        if not (self.vegetation and self.biome == 'taiga' and self.vegetation_density > 0):
+            return (0,)
+        from src.world.chunk import Chunk3D
+        from src.world.trees import MAX_TOP
+        top = self.base_height + int(np.ceil(self.amplitude)) + 1 + MAX_TOP
+        return tuple(range(0, top // Chunk3D.SIZE + 1))
+
     def get_height(self, world_x: int, world_z: int) -> int:
         """Retorna Y sólido em [base+floor(-amplitude), base+floor(amplitude)]."""
         return _column_height(self, _coordinate(world_x), _coordinate(world_z))
@@ -248,8 +258,8 @@ class TerrainGenerator:
             carver.carve_region(chunks, self)
         if self.vegetation and chunks:
             if self.biome == 'taiga':
-                from src.world.trees import stamp_spruces
-                stamp_spruces(self, chunks)       # antes das plantas baixas: a samambaia não tira o lugar do tronco
+                from src.world.trees import stamp_trees
+                stamp_trees(self, chunks)       # antes das plantas baixas: a samambaia não tira o lugar do tronco
             self.plant_vegetation(chunks)
         return chunks
 

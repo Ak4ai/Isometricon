@@ -31,6 +31,59 @@ _TOP_UVS = np.array([(0, 1), (1, 1), (1, 0), (0, 0)], dtype=np.float32)
 _QUAD_INDICES = np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32)
 
 
+def _uv_frame(face: int):
+    """O canto da face com UV (0, 0) e as direções em que o U e o V crescem (vetores unitários do mundo)."""
+    base = _TOP_UVS if face == 2 else _UVS
+    corners = _CORNERS[face]
+    at = {tuple(int(v) for v in uv): k for k, uv in enumerate(base)}
+    origin = corners[at[(0, 0)]]
+    return base, origin, corners[at[(1, 0)]] - origin, corners[at[(0, 1)]] - origin
+
+
+_UV_FRAMES = [_uv_frame(face) for face in range(6)]
+
+# Troncos que se juntam: quatro do mesmo tipo num quadrado 2 x 2 alinhado à grade par do mundo viram uma tora só, com a
+# textura esticada 2x (a casca dos lados e os anéis do topo conectados), como os mods de textura conectada.
+BIG_LOGS = (BlockType.SPRUCE_LOG, BlockType.SEQUOIA_LOG)
+JOIN = 2
+
+
+def joined_logs(blocks: NDArray) -> NDArray[np.bool_]:
+    """[x, y, z] das células de tronco que fazem parte de um quadrado 2 x 2 (em x e z) do mesmo tronco. O chunk tem
+    lado par e começa numa coordenada par, então os quadrados alinhados nunca atravessam a borda do chunk."""
+    out = np.zeros(blocks.shape, dtype=bool)
+    for log in BIG_LOGS:
+        m = blocks == int(log)
+        if not m.any():
+            continue
+        full = m[0::2, :, 0::2] & m[1::2, :, 0::2] & m[0::2, :, 1::2] & m[1::2, :, 1::2]
+        out |= np.repeat(np.repeat(full, JOIN, axis=0), JOIN, axis=2)
+    return out
+
+
+def _join_uvs(uv: NDArray[np.float32], cells: NDArray, face: int) -> NDArray[np.float32]:
+    """As UVs (n, 4, 2) das faces de tronco juntado: cada bloco mostra a sua parte da textura esticada 2x.
+
+    ``cells``: (n, 3) células do mundo (a paridade decide que parte)."""
+    base, origin, udir, vdir = _UV_FRAMES[face]
+    u0, u1 = uv[:, :, 0].min(axis=1), uv[:, :, 0].max(axis=1)
+    v0, v1 = uv[:, :, 1].min(axis=1), uv[:, :, 1].max(axis=1)
+    i = np.mod(np.floor((cells + origin) @ udir).astype(np.int64), JOIN)
+    j = np.mod(np.floor((cells + origin) @ vdir).astype(np.int64), JOIN)
+    # a orientação de cada eixo na textura: segue a da UV original (u cresce com base_u se u1 está no canto base_u=1)
+    out = np.empty_like(uv)
+    k1u = int(np.flatnonzero((base[:, 0] == 1))[0])
+    k1v = int(np.flatnonzero((base[:, 1] == 1))[0])
+    su = np.where(uv[:, k1u, 0] >= uv[:, :, 0].mean(axis=1), 1.0, -1.0)
+    sv = np.where(uv[:, k1v, 1] >= uv[:, :, 1].mean(axis=1), 1.0, -1.0)
+    for k in range(4):
+        fu = (i + base[k, 0]) / JOIN
+        fv = (j + base[k, 1]) / JOIN
+        out[:, k, 0] = np.where(su > 0, u0 + fu * (u1 - u0), u1 - fu * (u1 - u0))
+        out[:, k, 1] = np.where(sv > 0, v0 + fv * (v1 - v0), v1 - fv * (v1 - v0))
+    return out
+
+
 # Brilho do vértice conforme quantos blocos opacos o cercam na frente da face (0 a 3), como na
 # iluminação suave do Minecraft: o canto de uma parede ou de um degrau escurece, o campo aberto não.
 _AO_BRIGHTNESS = np.array([1.0, 0.82, 0.64, 0.46], dtype=np.float32)
@@ -318,6 +371,8 @@ class ChunkMesher:
         indices[:] = (quad_offsets + base_idx[:, None]).ravel()
 
         flip = np.zeros(total_faces, dtype=bool)
+        joined = joined_logs(blocks) if use_atlas else None
+        world_origin = np.array([origin_x, origin_y, origin_z], dtype=np.int64)
         current_face_idx = 0
         corner_heights: dict[tuple[int, int, int], float] = {}
         for face in range(6):
@@ -355,6 +410,10 @@ class ChunkMesher:
             if use_atlas:
                 v_slice[:, :, 6:8] = uv_table[blk, face]
                 v_slice[:, :, 8:11] = color_table[blk, face][:, None, :]
+                big = joined[xs, ys, zs]
+                if big.any():
+                    cells = np.stack([xs[big], ys[big], zs[big]], axis=1).astype(np.int64) + world_origin
+                    v_slice[big, :, 6:8] = _join_uvs(v_slice[big, :, 6:8], cells, face)
             else:
                 v_slice[:, :, 6:8] = _TOP_UVS if face == 2 else _UVS
                 v_slice[:, :, 8:11] = _COLOR_LUT[blk][:, None, :]

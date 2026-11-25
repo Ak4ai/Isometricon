@@ -465,6 +465,11 @@ def main() -> None:
         from src.world.terrain_options import make_generator
         # as opções de criação do mundo (tela "Uma nova aventura"); sem elas, o relevo de sempre
         active_terrain = {"options": selected_world.get("terrain") if selected_world else None}
+        biome_arg = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--bioma=")), "")
+        if biome_arg:   # --bioma=taiga: abre o modo terreno nesse bioma (para ver e tirar prints)
+            from src.world.terrain_options import defaults, water_default
+            active_terrain["options"] = dict(active_terrain["options"] or defaults(), bioma=biome_arg,
+                                             agua=water_default(biome_arg))
         generator = make_generator(active_seed["value"], active_terrain["options"])
         world_manager = WorldManager(generator=generator,
                                      render_distance=menus.preferences.data['render_distance'], atlas=atlas)
@@ -770,6 +775,9 @@ def main() -> None:
     elif terrain_demo:
         cam_target = vec3(0.5, float(start_surface_y) + 1.0, 0.5)
         cam_ortho = 4.5
+        zoom_arg = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--zoom=")), "")
+        if zoom_arg:   # --zoom=12: começa com a câmera mais afastada (meia-altura visível, em blocos)
+            cam_ortho = float(zoom_arg)
     elif char_demo:
         cam_target = vec3(0.0, 0.95, 0.0)
         cam_ortho = 1.18

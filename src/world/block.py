@@ -45,6 +45,12 @@ class BlockType(IntEnum):
     LARGE_FERN_LOWER = 27
     LARGE_FERN_UPPER = 28
     SWEET_BERRY_BUSH = 29
+    SEQUOIA_LOG = 30         # a casca avermelhada das sequoias da taiga
+    # Troncos deitados (os galhos): os anéis ficam na ponta, virados para x ou para z
+    SPRUCE_LOG_X = 31
+    SPRUCE_LOG_Z = 32
+    SEQUOIA_LOG_X = 33
+    SEQUOIA_LOG_Z = 34
 
 
 BLOCK_COLORS: Mapping[BlockType, tuple[float, float, float]] = MappingProxyType({
@@ -78,6 +84,11 @@ BLOCK_COLORS: Mapping[BlockType, tuple[float, float, float]] = MappingProxyType(
     BlockType.LARGE_FERN_LOWER: (0.27, 0.47, 0.24),
     BlockType.LARGE_FERN_UPPER: (0.27, 0.47, 0.24),
     BlockType.SWEET_BERRY_BUSH: (0.24, 0.43, 0.24),
+    BlockType.SEQUOIA_LOG: (0.47, 0.25, 0.17),
+    BlockType.SPRUCE_LOG_X: (0.36, 0.25, 0.16),
+    BlockType.SPRUCE_LOG_Z: (0.36, 0.25, 0.16),
+    BlockType.SEQUOIA_LOG_X: (0.47, 0.25, 0.17),
+    BlockType.SEQUOIA_LOG_Z: (0.47, 0.25, 0.17),
 })
 
 
@@ -100,6 +111,13 @@ def get_block_color(block_type: BlockType | int) -> tuple[float, float, float]:
 OPAQUE_BLOCKS = frozenset({
     BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD,
     BlockType.SAND, BlockType.SANDSTONE, BlockType.SPRUCE_LOG, BlockType.PODZOL, BlockType.TAIGA_GRASS,
+    BlockType.SEQUOIA_LOG, BlockType.SPRUCE_LOG_X, BlockType.SPRUCE_LOG_Z, BlockType.SEQUOIA_LOG_X,
+    BlockType.SEQUOIA_LOG_Z,
+})
+# O tronco deitado de cada tronco em pé, por eixo (os galhos das árvores)
+LYING_LOGS = MappingProxyType({
+    BlockType.SPRUCE_LOG: {"x": BlockType.SPRUCE_LOG_X, "z": BlockType.SPRUCE_LOG_Z},
+    BlockType.SEQUOIA_LOG: {"x": BlockType.SEQUOIA_LOG_X, "z": BlockType.SEQUOIA_LOG_Z},
 })
 _OPAQUE_BLOCKS = OPAQUE_BLOCKS
 OPAQUE_LUT = np.zeros(256, dtype=bool)

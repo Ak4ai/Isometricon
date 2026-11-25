@@ -166,7 +166,7 @@ def test_opacity_policy(block, opaque):
 
 
 @pytest.mark.parametrize('value,error', [
-    (-1, ValueError), (30, ValueError), (256, ValueError),
+    (-1, ValueError), (35, ValueError), (256, ValueError),
     (1.0, TypeError), (True, TypeError), (np.bool_(False), TypeError),
     ('1', TypeError), (None, TypeError),
 ])
@@ -279,3 +279,40 @@ def test_water_under_water_keeps_a_full_surface():
     data = ChunkMesher().build(chunk, water_levels={(6, 5, 5): 0.5})
     lower_tops = data.vertices[(data.vertices[:, 4] == 1.0) & (data.vertices[:, 1] < 6.5)]
     assert np.all(lower_tops[:, 1] == 6.0)             # encosta na água de cima sem degrau
+
+
+def test_troncos_2x2_juntam_a_textura():
+    """Quatro troncos iguais num quadrado 2 x 2 alinhado mostram, cada um, um quarto da textura (esticada 2x)."""
+    from src.rendering.atlas import TextureAtlas
+    from src.world.mesher import joined_logs
+    atlas = TextureAtlas(create_gl=False)
+    chunk = Chunk3D(0, 0, 0)
+    for x, z in ((2, 2), (3, 2), (2, 3), (3, 3)):
+        for y in range(4):
+            chunk.set_block(x, y, z, BlockType.SPRUCE_LOG)
+    chunk.set_block(8, 0, 8, BlockType.SPRUCE_LOG)          # um tronco sozinho: textura inteira
+    chunk.set_block(5, 0, 2, BlockType.SPRUCE_LOG)          # 2 x 2 desalinhado não junta
+    chunk.set_block(6, 0, 2, BlockType.SPRUCE_LOG)
+    chunk.set_block(5, 0, 3, BlockType.SPRUCE_LOG)
+    chunk.set_block(6, 0, 3, BlockType.SPRUCE_LOG)
+    joined = joined_logs(chunk.blocks)
+    assert joined[2:4, 0:4, 2:4].all() and not joined[8, 0, 8] and not joined[5:7, 0, 2:4].any()
+
+    data = ChunkMesher(atlas=atlas).build(chunk)
+    v = data.vertices.reshape(-1, 4, 11)
+    full = atlas.uv_table[int(BlockType.SPRUCE_LOG), 2]
+    width = full[:, 0].max() - full[:, 0].min()
+
+    def tops(x, z, y=3):
+        sel = (v[:, 0, 4] == 1) & (np.floor(v[:, :, 0].min(axis=1)) == x) & (np.floor(v[:, :, 2].min(axis=1)) == z) \
+            & (v[:, 0, 1] == y + 1)
+        return v[sel][:, :, 6:8]
+    quarters = [tops(x, z) for x, z in ((2, 2), (3, 2), (2, 3), (3, 3))]
+    for q in quarters:
+        assert len(q) == 1
+        assert np.isclose(q[0, :, 0].max() - q[0, :, 0].min(), width / 2)
+    # os quatro quartos juntos cobrem a textura inteira, sem repetir
+    corners = {(round(float(q[0, :, 0].min()), 5), round(float(q[0, :, 1].min()), 5)) for q in quarters}
+    assert len(corners) == 4
+    alone = tops(8, 8, y=0)
+    assert np.isclose(alone[0, :, 0].max() - alone[0, :, 0].min(), width)

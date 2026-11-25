@@ -140,7 +140,7 @@ class WorldManager:
                         continue
 
                 # 1. Gera o relevo procedural e as cavernas 3D
-                new_chunks = self.generator.generate_region(positions)
+                new_chunks = self._generate_columns(positions)
 
                 with self._chunks_lock:
                     self._apply_clearings(new_chunks)  # sob a trava: não perde um corte feito agora
@@ -160,6 +160,13 @@ class WorldManager:
             finally:
                 self._worker_busy.clear()
                 self._request_queue.task_done()
+
+    def _generate_columns(self, positions) -> Dict[Tuple[int, int, int], Chunk3D]:
+        """Gera as colunas pedidas (pelo chunk do chão, ``(cx, 0, cz)``) com todas as camadas que o gerador diz que a
+        coluna tem (na taiga, as copas altas passam da camada do chão)."""
+        layers = getattr(self.generator, "column_layers", lambda: (0,))()
+        keys = [(cx, cy, cz) for cx, _, cz in positions for cy in layers]
+        return self.generator.generate_region(keys)
 
     def blocks_around(self, key: Tuple[int, int, int]) -> np.ndarray:
         """O cubo 18³ de IDs em volta do chunk (ele e a borda dos vizinhos), para a malha (ver mesher.blocks_around)."""
@@ -191,7 +198,7 @@ class WorldManager:
             for cz in range(center_cz - self.render_distance, center_cz + self.render_distance + 1)
         ]
 
-        new_chunks = self.generator.generate_region(target_columns)
+        new_chunks = self._generate_columns(target_columns)
         self._apply_clearings(new_chunks)
         with self._chunks_lock:
             self.chunks.update(new_chunks)
@@ -315,7 +322,7 @@ class WorldManager:
                     self._request_queue.put([pos])
             else:
                 # Modo síncrono para testes ou execução local
-                new_chunks = self.generator.generate_region(new_positions)
+                new_chunks = self._generate_columns(new_positions)
                 with self._chunks_lock:
                     self.chunks.update(new_chunks)
                     self._chunk_revision += 1
