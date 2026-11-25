@@ -154,6 +154,11 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Quantos chunks (16 × 16 blocos) em volta do personagem ficam carregados e desenhados. Mais distância '
                 'mostra mais mundo, mas gera e guarda mais terreno.',
                 [('Custo', 'Alto acima de 3 (memória e geração)')]),
+            Row('edge_fog', 'Névoa na borda', 'Esconde o fim do terreno carregado numa névoa', 'cloud',
+                'toggle', None, 'edge_fog',
+                'Com pouca distância de render o terreno acaba perto do personagem e aparece o vazio. Com a névoa, o '
+                'chão vai sumindo numa bruma da cor do fundo antes de acabar, como numa cidade coberta de neblina.',
+                [('Custo', 'Quase nenhum')]),
             Row('shadows', 'Sombras do sol', 'Qualidade da sombra que o sol projeta', 'sun', 'choice', 'Sombras',
                 'shadows',
                 'Alta: penumbra suave e borda nítida junto aos blocos (até 18 raios por pixel). Média: a mesma sombra '
@@ -285,6 +290,8 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: float, y: float, s: float, co
         line([(.3, .63), (.7, .63)])
     elif kind == 'motion':
         line([(.08, .5), (.92, .5)]); line([(.08, .28), (.6, .28)], 1); line([(.08, .72), (.6, .72)], 1)
+    elif kind == 'cloud':   # faixas de névoa (a névoa na borda do mundo)
+        line([(.1, .3), (.7, .3)]); line([(.3, .5), (.9, .5)]); line([(.1, .7), (.65, .7)])
     elif kind == 'text':
         line([(.15, .15), (.85, .15)]); line([(.5, .15), (.5, .88)])
     else:

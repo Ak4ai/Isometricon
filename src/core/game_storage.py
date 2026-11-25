@@ -25,6 +25,7 @@ GRAPHICS = {
     'fxaa': (False, (False, True)),                    # antisserrilhado rápido, uma passada sobre a imagem pronta
     'render_scale': (1.0, (0.5, 0.67, 0.75, 0.85, 1.0)),  # resolução interna da cena (a interface fica nítida)
     'render_distance': (2, (1, 2, 3, 4, 5, 6)),        # chunks carregados em volta do jogador
+    'edge_fog': (True, (True, False)),                 # névoa na borda dos chunks carregados (esconde o fim do mundo)
     'shadows': ('high', ('off', 'low', 'medium', 'high')),  # qualidade da sombra do sol (raios por pixel)
     'shadow_range': (56, (16, 32, 56)),                # até quantas células o raio do sol procura o que tapa
     'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o mato do chão

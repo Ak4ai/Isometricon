@@ -1452,6 +1452,7 @@ def main() -> None:
     from src.core.game_storage import GRAPHICS
     frame_limiter = FrameLimiter()
     graphics_applied = {"key": None}
+    edge_fog = {"on": True}   # Configurações > Gráficos > Névoa na borda
 
     def apply_graphics():
         prefs = menus.preferences.data
@@ -1461,6 +1462,7 @@ def main() -> None:
         graphics_applied["key"] = key
         if world_manager is not None:
             world_manager.render_distance = int(prefs["render_distance"])
+        edge_fog["on"] = bool(prefs.get("edge_fog", True))
         if shadow_renderer is not None:
             shadow_renderer.enabled = prefs["shadows"] != "off"
             shadow_renderer.quality = {"low": 0, "medium": 1, "high": 2}.get(prefs["shadows"], 2)
@@ -2095,6 +2097,15 @@ def main() -> None:
             else:
                 shader.set_float("u_MistAmount", 0.0)
             gl.glClearColor(*ambience.background(), 1.0)
+            edge_on = edge_fog["on"] and world_manager is not None and not underground_mode
+            shader.set_define("EDGE_FOG", edge_on)
+            if edge_on:
+                px, pz = float(player_token.position[0]), float(player_token.position[2])
+                shader.set_vec4("u_EdgeRect", *world_manager.loaded_rect(px, pz))
+                shader.set_vec2("u_EdgePlayer", px, pz)
+                shader.set_float("u_EdgeRadius", world_manager.render_distance * 16.0 + 10.0)
+                shader.set_vec3("u_EdgeColor", *ambience.background())
+                shader.set_mat4("u_EdgeInvModel", np.asarray(fog_war_args[1], dtype=np.float32))
             if character_shadows is not None:
                 shadow_casters = []
                 if shadow_renderer.enabled and not character_editor.is_open:
