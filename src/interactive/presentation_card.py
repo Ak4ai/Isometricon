@@ -131,6 +131,8 @@ class _Layout:
                     for i, part in enumerate(lines):
                         draw.text((x0 + body, y + body // 2 + i * int(font.size * 1.28)), part, font=font, fill=INK)
                 y += h + body // 2
+            elif kind == "tags":
+                y = self._tags(draw, probe, block.content, x0, y + body // 4)
             elif kind == "pipeline":
                 y = self._pipeline(draw, probe, block.content, x0, y)
             elif kind == "heightmap":
@@ -142,6 +144,24 @@ class _Layout:
                 y = self._vertex(draw, probe, x0, y + body // 4)
             y += body // 3
         return y - y0
+
+    # ------------------------------------------------------------------ etiquetas
+    def _tags(self, draw, probe, tags, x0, y) -> int:
+        """Os recursos de CG da parte do slide como etiquetas, quebrando linha quando não cabem."""
+        font = _font(int(self.body * 0.82), bold=True)
+        pad_x, gap = int(self.body * 0.5), int(self.body * 0.35)
+        h = int(font.size * 1.55)
+        x = x0
+        for tag in tags:
+            w = probe.textlength(tag, font=font) + 2 * pad_x
+            if x > x0 and x + w > x0 + self.width:
+                x = x0
+                y += h + gap
+            if draw is not None:
+                draw.rounded_rectangle((x, y, x + w, y + h), h // 2, fill=(52, 82, 70))
+                draw.text((x + pad_x, y + (h - font.size) / 2 - 1), tag, font=font, fill=(242, 232, 209))
+            x += w + gap
+        return y + h + gap
 
     # ------------------------------------------------------------------ pipeline
     def _pipeline(self, draw, probe, stages, x0, y) -> int:

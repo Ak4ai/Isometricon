@@ -1,8 +1,12 @@
 """Os slides do modo apresentação (``--apresentacao``): os cartões de cada um e o que a cena de fundo faz.
 
+O professor pediu que a apresentação mostre *onde* cada recurso de computação gráfica é usado no projeto, sem
+explicar a teoria. Por isso cada slide é uma parte do jogo: o que ela faz, em poucas linhas, e uma fileira de
+etiquetas (``tags``) com os recursos de CG usados ali, enquanto a cena de fundo mostra essa parte.
+
 Só dados: ``presentation.py`` navega por eles, ``presentation_card.py`` desenha os cartões e o ``main.py``
 traduz a ``SceneCue`` em câmera e estado do OpenGL. Cada slide é um ou mais cartões (``Panel``) posicionados em
-frações da tela, para variar a composição: coluna à esquerda ou à direita, faixa embaixo, cartões nos cantos.
+frações da tela: coluna à esquerda ou à direita, faixa embaixo, cartões nos cantos.
 """
 from dataclasses import dataclass
 
@@ -24,7 +28,8 @@ class SceneCue:
 @dataclass(frozen=True)
 class Block:
     """Um trecho de cartão. ``kind``: text, subtitle, bullets, formula, pipeline, prompt, heightmap,
-    bars (gráfico ao vivo: content = ("faces",) ou ("chunks",)), vertex (os 44 bytes de um vértice)."""
+    tags (etiquetas dos recursos de CG), bars (gráfico ao vivo: content = ("faces",) ou ("chunks",)),
+    vertex (os 44 bytes de um vértice)."""
     kind: str
     content: tuple[str, ...] = ()
 
@@ -69,6 +74,11 @@ def _sub(text: str) -> Block:
     return Block("subtitle", (text,))
 
 
+def cg(*resources: str) -> Block:
+    """As etiquetas dos recursos de computação gráfica usados na parte do slide."""
+    return Block("tags", resources)
+
+
 # Composições usadas pelos slides
 def center(title: str, *blocks: Block) -> Panel:
     return Panel((0.20, 0.06, 0.60, 0.88), blocks, title, big=True, align="center", anchor="middle")
@@ -107,27 +117,28 @@ SLIDES: tuple[Slide, ...] = (
         "Isometricon: do voxel à imagem na tela",
         (center(
             "Isometricon: do voxel à imagem na tela",
-            _sub("Modelagem 3D, câmera virtual e pipeline gráfico"),
+            _sub("Onde usamos computação gráfica num RPG de mesa em voxels"),
             _t("Henrique de Freitas Araujo", "João Pedro Rodrigues Silva", "Pedro Augusto Gontijo Moura"),
             _t("Computação Gráfica — CEFET-MG Divinópolis — 2026"),
         ),),
         SceneCue(spin=6.0),
     ),
     Slide(
-        "O que vamos demonstrar",
+        "O projeto",
         (
             left(
-                "O que vamos demonstrar",
-                _b("Uma grade de voxels vira um ambiente 3D em tempo real",
-                   "Como os dados do terreno são gerados",
-                   "Como a geometria desnecessária é descartada",
-                   "A divisão de trabalho entre CPU, OpenGL e shaders",
-                   "A câmera e as matrizes de transformação"),
-                _t("Recorte: modelagem e renderização básicas."),
+                "O projeto",
+                _t("Um RPG de mesa virtual em 3D, com visão isométrica e mundo de blocos. "
+                   "Tudo o que está ao fundo é o jogo rodando agora."),
+                _b("Mundo procedural infinito, com água, cavernas e vegetação",
+                   "Personagem montado na tela de criação, com roupas e animação",
+                   "NPCs e combate por turnos no tabuleiro",
+                   "Construções, portas, baús e editor de mapas",
+                   "Ambientação do mestre: hora do dia, névoa e névoa de guerra"),
             ),
-            corner("br", "Pergunta central",
-                   _t("Como sair de milhares de células discretas para uma cena 3D coerente "
-                      "sem desenhar todos os lados de todos os cubos?"), width=0.34),
+            corner("br", "Nesta apresentação",
+                   _t("Cada slide é uma parte do jogo; as etiquetas dizem quais recursos de "
+                      "computação gráfica foram usados ali."), width=0.34),
         ),
         SceneCue(zoom=(1.0, 1.8, 20.0)),
     ),
@@ -136,146 +147,169 @@ SLIDES: tuple[Slide, ...] = (
         (
             corner("tl", "Ferramentas",
                    _b("Python e NumPy", "GLFW (janela e entrada)", "PyOpenGL e GLSL 330 core",
-                      "Pillow (atlas de texturas)", "pytest (testes automatizados)"), big=True, width=0.30),
-            corner("tr", "IA generativa", _b("GitHub Copilot", "Claude Code", "ChatGPT Codex"), width=0.26),
-            corner("br", "Colaboração", _b("GitHub: repositório, branches e pull requests"), width=0.30),
+                      "Pillow (texturas e interface)", "pytest (~1500 testes automatizados)"), big=True, width=0.32),
+            corner("tr", "IA generativa",
+                   _b("GitHub Copilot", "Claude Code", "ChatGPT Codex"),
+                   _t("Apoio para ler o código, testar e revisar; a conferência é nossa."), width=0.30),
+            corner("br", "Colaboração", _b("GitHub: repositório, branches, pull requests e wiki"), width=0.32),
         ),
         SceneCue(spin=3.0),
     ),
     Slide(
-        "Pipeline",
+        "Pipeline gráfico",
         (bottom(
-            "Pipeline",
+            "Pipeline gráfico",
             Block("pipeline", PIPELINE_STAGES),
-            _t("CPU: gera o terreno, guarda os voxels e monta a malha. "
+            _t("CPU: gera o terreno, guarda os voxels e monta a malha (numa thread à parte). "
                "GPU: recebe os buffers e executa os shaders até o framebuffer."),
+            cg("Pipeline programável", "VAO / VBO / EBO", "GLSL 330 core", "Framebuffer próprio"),
         ),),
         SceneCue(spin=2.0),
         steps=5,
     ),
     Slide(
-        "Voxel e chunk",
+        "Mundo: modelagem",
         (
-            right(
-                "Voxel e chunk",
-                _b("Chunk de 16 × 16 × 16 voxels",
-                   "1 byte (uint8) por voxel: 16³ = 4096 bytes por chunk",
-                   "Índice linear: x + 16·(y + 16·z)"),
-                _sub("Tipos básicos"),
-                _t("AIR, DIRT, GRASS, STONE, WATER, WOOD, LEAVES"),
+            left(
+                "Mundo: modelagem",
+                _b("Voxels em chunks de 16 × 16 × 16, 1 byte por bloco (4096 B)",
+                   "Relevo por Value Noise 2D com fade quíntica e 3 oitavas; a seed reproduz o mundo",
+                   "Cavernas, água que corre como no Minecraft e vegetação",
+                   "18 tipos de bloco; plantas, tocha, escadas e fogo têm forma própria"),
+                _f("N(x,z) = Σ pⁱ·n(f·λⁱ·(x,z)) / Σ pⁱ"),
+                Block("heightmap", ("1 oitava", "2 oitavas", "3 oitavas")),
+                cg("Modelagem por voxels", "Geração procedural", "Ruído e interpolação"),
             ),
-            corner("bl", "Hoje",
-                   _t("São 18 tipos: plantas, tocha, escadas e fogo têm forma própria "
-                      "e geram a sua geometria à parte."), width=0.30),
         ),
         SceneCue(spin=2.0, chunk_outline=True),
     ),
     Slide(
-        "Geração procedural",
-        (left(
-            "Geração procedural",
-            _b("Value Noise 2D (não é Perlin): valores pseudoaleatórios nos pontos da grade",
-               "Interpolação com fade quíntica: 6t⁵ − 15t⁴ + 10t³",
-               "Soma de oitavas (frequência ×λ, peso ×p a cada oitava)"),
-            _f("N(x,z) = Σ pⁱ·n(f·λⁱ·(x,z)) / Σ pⁱ"),
-            Block("heightmap", ("1 oitava", "2 oitavas", "3 oitavas")),
-            _t("A mesma seed reproduz o mesmo mundo."),
-        ),),
-        SceneCue(spin=2.0),
-    ),
-    Slide(
-        "Face culling na CPU",
+        "Mundo: malha e texturas",
         (
-            corner("tl", "Face culling na CPU",
-                   _b("O ChunkMesher olha os 6 vizinhos de cada voxel: ±X, ±Y, ±Z",
-                      "Vizinho opaco esconde a face: ela nem vira geometria",
-                      "Só DIRT, GRASS, STONE e WOOD ocultam faces",
-                      "WATER, LEAVES e os blocos com forma geram geometria, mas não ocultam"),
-                   big=True, width=0.40),
-            corner("br", "Faces nos chunks carregados", Block("bars", ("faces",)),
-                   _t("Ao fundo: a malha em wireframe, só com as faces que sobraram."), width=0.36),
+            right("Mundo: malha e texturas",
+                   _b("Face culling na CPU: só vira geometria a face que dá para o ar",
+                      "Quad = 4 vértices e 6 índices; atlas de texturas com UV por face",
+                      "Oclusão de ambiente por vértice nos cantos"),
+                   Block("vertex", ("Vértice: posição 3 + normal 3 + UV 2 + cor 3 = 11 floats = 44 B",)),
+                   cg("Malha poligonal", "Face culling", "Mapeamento de textura", "Oclusão de ambiente")),
+            corner("bl", "Faces nos chunks carregados", Block("bars", ("faces",)),
+                   _t("Ao fundo: a malha em wireframe."), width=0.34),
         ),
         SceneCue(spin=2.0, wireframe=True, counters=("faces",)),
     ),
     Slide(
-        "Da malha aos shaders",
+        "Câmera e transformações",
         (
-            corner("tr", "Da malha aos shaders",
-                   _b("Quad = 4 vértices e 6 índices (dois triângulos)",
-                      "VAO / VBO / EBO; world_textured.vert / .frag"),
-                   Block("vertex", ("Vértice: posição 3 + normal 3 + UV 2 + cor 3 = 11 floats = 44 B",)),
-                   big=True, width=0.42),
-            corner("bl", "Iluminação",
+            right(
+                "Câmera e transformações",
+                _f("p_clip = P·V·M·p_local", "M = T·R·S"),
+                _b("Isométrica: yaw 45°, pitch 35,264°; projeção ortográfica ou perspectiva",
+                   "Pan move o alvo (translação); zoom muda o ortho_size (escala)",
+                   "Q/E giram o tabuleiro 90° com interpolação suave",
+                   "Frustum culling: o chunk fora da visão nem é desenhado"),
+                cg("Projeção ortográfica", "Perspectiva", "Look-at", "Rotação", "Translação",
+                   "Escala", "Interpolação", "Frustum culling"),
+            ),
+        ),
+        SceneCue(yaw_steps=2.0, wobble=0.35, perspective_every=8.0),
+    ),
+    Slide(
+        "Iluminação e sombras",
+        (
+            right("Iluminação e sombras",
                    _f("C_final = (C_amb + d·C_luz) ⊙ (C_textura ⊙ C_base)"),
-                   _t("d: Half-Lambert ao quadrado na superfície, Lambert no subsolo.",
-                      "Hoje também: sombras do sol por raio e oclusão de ambiente por vértice.",
-                      "Ao fundo: normal → só textura → só iluminação."),
-                   width=0.42),
+                   _b("Luz ambiente + luz direcional do sol (Half-Lambert)",
+                      "A hora do dia move o sol e muda a cor da luz (/mestre)",
+                      "Sombras do terreno: raios até o sol numa textura 3D dos blocos",
+                      "Sombra dos personagens: mapa de sombra visto do sol"),
+                   cg("Iluminação difusa", "Luz direcional", "Ray marching", "Shadow mapping",
+                      "Textura 3D")),
+            corner("bl", "Ao fundo", _t("Normal → só textura → só iluminação (as sombras aparecem)."), width=0.30),
         ),
         SceneCue(spin=2.0, views=(0, 1, 2)),
     ),
     Slide(
-        "Câmera",
-        (left(
-            "Câmera",
-            _f("p_clip = P·V·M·p_local", "M = T·R·S"),
-            _b("V: look-at do olho para o alvo",
-               "P: projeção ortográfica (há também um modo perspectiva)",
-               "Yaw 45°, pitch 35,264° = asen(tan 30°)",
-               "Pan move o alvo; zoom altera ortho_size"),
-            _t("Ao fundo: giros de 45°, zoom e ortográfica ↔ perspectiva."),
-        ),),
-        SceneCue(yaw_steps=2.0, wobble=0.35, perspective_every=8.0),
-    ),
-    Slide(
-        "Outras otimizações",
+        "Água, névoa e cômodos",
         (
-            corner("tl", "Z-buffer", _t("Por pixel, o fragmento mais próximo vence; a ordem de desenho não importa "
-                                       "para o que é opaco."), width=0.30),
-            corner("tr", "Back-face culling", _t("A GPU descarta os triângulos de costas para a câmera "
-                                                "(GL_CULL_FACE)."), width=0.30),
-            corner("bl", "Frustum culling", _t("O chunk sai se os 8 cantos estão fora de um mesmo plano."),
-                   Block("bars", ("chunks",)), width=0.34),
-            corner("br", "Processamento assíncrono", _t("Terreno e malha numa thread; a GPU recebe 1 chunk "
-                                                        "por quadro."), width=0.30),
-        ),
-        SceneCue(zoom=(1.0, 3.0, 6.0), counters=("chunks",)),
-    ),
-    Slide(
-        "IA como apoio",
-        (
-            corner("tl", "IA como apoio",
-                   Block("prompt", ("Analise src/world/terrain.py e explique qual ruído o terreno usa de verdade: "
-                                    "é Perlin ou outro? Mostre as linhas que provam.",)),
-                   big=True, width=0.40),
-            corner("br", "",
-                   Block("prompt", ("Explique como P·V·M é montado em src/camera/camera.py e usado em "
-                                    "assets/shaders/world_textured.vert, passo a passo.",)),
-                   _t("A IA acelera a leitura do código; a conferência é nossa."), width=0.40),
+            left(
+                "Água, névoa e cômodos",
+                _b("Água translúcida com ondas na normal, reflexo do céu e Fresnel",
+                   "Névoa de distância e névoa de guerra em nuvens de blocos que se desfazem",
+                   "Cômodos e cavernas: o teto some com dither e o lado de fora escurece",
+                   "Pré-passada de profundidade antes do sombreamento caro"),
+                cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Dither",
+                   "Animação", "Z-buffer"),
+            ),
         ),
         SceneCue(spin=3.0),
     ),
     Slide(
-        "Conclusão",
-        (bottom(
-            "Conclusão",
-            _b("Voxels em chunks dão uma representação compacta e fácil de editar",
-               "Descartar faces escondidas na CPU reduz muito o que vai para a GPU",
-               "Shaders e matrizes transformam a malha na imagem final",
-               "Câmera ortográfica isométrica com pan e zoom"),
-        ),),
+        "Personagens e animação",
+        (
+            right(
+                "Personagens e animação",
+                _b("Esqueleto de 16 ossos e skinning por pesos: caminhada e pose de descanso",
+                   "Roupas encaixadas por cages e remoção de superfícies escondidas (HSR)",
+                   "Modelos glTF (.glb) com esqueleto animado na GPU",
+                   "Miniaturas do combate: T·R·S em cada parte, anéis e rastro"),
+                cg("Esqueleto e skinning", "Animação", "Hierarquia de transformações", "Rotação",
+                   "Translação", "Escala", "Malhas importadas"),
+            ),
+        ),
+        SceneCue(zoom=(1.0, 0.55, 4.0), spin=8.0),
+    ),
+    Slide(
+        "Interação",
+        (
+            left("Interação",
+                   _b("Clique → raio 3D → bloco: picking por DDA na grade de voxels",
+                      "Bloco sob o mouse com brilho pulsante",
+                      "Grade tática em GL_LINES sobre o relevo",
+                      "Portas abrem e construções giram de 90 em 90°"),
+                   cg("Raycasting", "Picking", "Blending aditivo", "Linhas", "Rotação")),
+            corner("br", "Ao fundo", _t("O contorno do chunk 16³ sob a câmera."), width=0.28),
+        ),
+        SceneCue(spin=2.0, chunk_outline=True),
+    ),
+    Slide(
+        "Interface e imagem final",
+        (
+            bottom(
+                "Interface e imagem final",
+                _b("A cena vai para um framebuffer próprio: MSAA, FXAA e escala de resolução",
+                   "Interface 2D como quads texturizados por cima da cena (estes cartões também)",
+                   "Menus com paisagem voxel e prévias do mundo desenhadas de trás para a frente"),
+                cg("Render to texture", "Antisserrilhado (MSAA, FXAA)", "Sobreposição 2D",
+                   "Algoritmo do pintor"),
+            ),
+        ),
         SceneCue(spin=4.0),
     ),
     Slide(
-        "Fontes",
-        (center(
-            "Fontes",
-            _sub("github.com/Ak4ai/Isometricon"),
-            _b("src/world/terrain.py", "src/world/chunk.py", "src/world/mesher.py", "src/rendering/mesh.py",
-               "src/camera/camera.py", "assets/shaders/world_textured.vert",
-               "assets/shaders/world_textured.frag", "src/world/manager.py"),
-            _sub("Obrigado!"),
-        ),),
+        "Otimizações",
+        (
+            corner("tl", "Na CPU", _t("Face culling, malha numa thread à parte, 1 chunk enviado à GPU "
+                                      "por quadro."), width=0.30),
+            corner("tr", "Na GPU", _t("Z-buffer, back-face culling e pré-passada de profundidade."),
+                   width=0.30),
+            corner("bl", "Frustum culling", _t("O chunk sai se os 8 cantos estão fora de um mesmo plano."),
+                   Block("bars", ("chunks",)), width=0.34),
+        ),
+        SceneCue(zoom=(1.0, 3.0, 6.0), counters=("chunks",)),
+    ),
+    Slide(
+        "Conclusão",
+        (
+            bottom(
+                "Conclusão",
+                _b("Modelagem: voxels, ruído procedural e malhas importadas",
+                   "Transformações: câmera, tabuleiro, personagens e esqueleto",
+                   "Iluminação: luz difusa, sombras por raio e por mapa de sombra, água e névoa",
+                   "Desempenho: face culling, frustum culling e trabalho em thread"),
+                _t("Código, wiki e testes: github.com/Ak4ai/Isometricon"),
+                _sub("Obrigado!"),
+            ),
+        ),
         SceneCue(zoom=(1.0, 2.5, 12.0), spin=3.0),
     ),
 )

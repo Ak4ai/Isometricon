@@ -8,17 +8,37 @@ from src.interactive.presentation_slides import SLIDES
 from src.world.block import BlockType
 
 
+LAST = len(SLIDES) - 1
+
+
+def _index(title):
+    return next(i for i, s in enumerate(SLIDES) if s.title == title)
+
+
 def _all_text():
     return "\n".join(line for s in SLIDES for p in s.panels for b in p.blocks
                      for line in (s.title, p.title, *b.content))
 
 
-def test_treze_slides_com_titulos_acentuados():
-    assert len(SLIDES) == 13
+def test_slides_com_titulos_acentuados():
+    assert 12 <= len(SLIDES) <= 16
     titles = " | ".join(s.title for s in SLIDES)
-    for word in ("Isometricon", "Ferramentas", "Geração procedural", "Face culling", "Câmera", "Conclusão"):
+    for word in ("Isometricon", "Ferramentas", "Pipeline", "Mundo", "Câmera", "Iluminação", "Personagens",
+                 "Interação", "Otimizações", "Conclusão"):
         assert word in titles
     assert "Obrigado!" in SLIDES[-1].panels[-1].blocks[-1].content[-1]
+
+
+def test_cada_parte_cita_os_recursos_de_cg():
+    # o pedido do professor: mostrar onde cada recurso de computação gráfica é usado
+    for s in SLIDES[3:-1]:
+        if s.title == "Otimizações":
+            continue
+        assert any(b.kind == "tags" and b.content for p in s.panels for b in p.blocks), s.title
+    tags = {t for s in SLIDES for p in s.panels for b in p.blocks if b.kind == "tags" for t in b.content}
+    for resource in ("Rotação", "Translação", "Escala", "Iluminação difusa", "Shadow mapping",
+                     "Esqueleto e skinning", "Raycasting", "Transparência e blending", "Projeção ortográfica"):
+        assert resource in tags
 
 
 def test_capa_tem_autores_e_instituicao():
@@ -40,7 +60,7 @@ def test_next_prev_limites():
     assert (p.index, p.step) == (0, 0)
     p.last()
     p.next()
-    assert p.index == 12
+    assert p.index == LAST
 
 
 def test_pipeline_avanca_por_passos():
@@ -68,7 +88,7 @@ def test_teclas_consumidas():
     assert p.key(glfw.KEY_LEFT, glfw.PRESS) is True
     assert p.key(glfw.KEY_PAGE_UP, glfw.PRESS) is True
     assert p.index == 1
-    assert p.key(glfw.KEY_END, glfw.PRESS) is True and p.index == 12
+    assert p.key(glfw.KEY_END, glfw.PRESS) is True and p.index == LAST
     assert p.key(glfw.KEY_HOME, glfw.PRESS) is True and p.index == 0
     assert p.key(glfw.KEY_H, glfw.PRESS) is True and p.card_visible is False
     p.key(glfw.KEY_H, glfw.PRESS)
@@ -89,7 +109,7 @@ def test_elapsed_zera_ao_trocar():
 
 
 def test_slide_inicial_fora_do_intervalo_e_limitado():
-    assert Presentation(start=99).index == 12
+    assert Presentation(start=99).index == LAST
     assert Presentation(start=-3).index == 0
 
 
@@ -100,16 +120,19 @@ def _at(index, seconds):
 
 
 def test_alvos_camera():
-    assert _at(8, 4.1).yaw_degrees == pytest.approx(45.0 + 90.0)
-    assert _at(9, 7.0).ortho_size == pytest.approx(30.0)
-    assert _at(9, 0.0).ortho_size == pytest.approx(10.0)
-    assert _at(7, 3.5).debug_view == 1
-    assert _at(7, 6.5).debug_view == 2
-    assert _at(6, 1.0).wireframe is True
+    camera, light = _index("Câmera e transformações"), _index("Iluminação e sombras")
+    optimizations, mesh = _index("Otimizações"), _index("Mundo: malha e texturas")
+    assert _at(camera, 4.1).yaw_degrees == pytest.approx(45.0 + 90.0)
+    assert _at(optimizations, 7.0).ortho_size == pytest.approx(30.0)
+    assert _at(optimizations, 0.0).ortho_size == pytest.approx(10.0)
+    assert _at(light, 3.5).debug_view == 1
+    assert _at(light, 6.5).debug_view == 2
+    assert _at(mesh, 1.0).wireframe is True
     calm = _at(2, 1.0)
     assert calm.debug_view == 0 and calm.perspective is False and calm.wireframe is False
-    assert _at(8, 9.0).perspective is True
-    assert _at(8, 1.0).perspective is False
+    assert _at(camera, 9.0).perspective is True
+    assert _at(camera, 1.0).perspective is False
+    assert _at(_index("Personagens e animação"), 6.0).ortho_size < 10.0   # aproxima do personagem
     spin = _at(0, 2.0)
     assert spin.yaw_degrees > 45.0
 

@@ -63,8 +63,12 @@ def test_pipeline_muda_com_passo_e_fica_em_linha_na_faixa():
     assert piece.width > piece.height       # as cinco caixas lado a lado
 
 
+def _slide(title):
+    return next(s for s in SLIDES if s.title == title)
+
+
 def test_grafico_de_faces_muda_com_os_numeros():
-    slide = SLIDES[6]
+    slide = _slide("Mundo: malha e texturas")
     live_panels = [p for p in slide.panels if p.live]
     assert live_panels
     one = card.render_slide(slide, 0, *FULL_HD, {"faces": (100, 600)})
@@ -76,12 +80,12 @@ def test_grafico_de_faces_muda_com_os_numeros():
 
 
 def test_grafico_sem_dados():
-    image = card.compose(SLIDES[9], 0, *FULL_HD, {"chunks": (0, 0)})
+    image = card.compose(_slide("Otimizações"), 0, *FULL_HD, {"chunks": (0, 0)})
     assert image.size == FULL_HD
 
 
 def test_regua_do_vertice():
-    panel = next(p for p in SLIDES[7].panels if any(b.kind == "vertex" for b in p.blocks))
+    panel = next(p for s in SLIDES for p in s.panels if any(b.kind == "vertex" for b in p.blocks))
     _, _, image = card.render_panel(panel, 0, *FULL_HD)
     assert image.width > 300
 
@@ -104,8 +108,16 @@ def test_sem_fontes_do_windows(monkeypatch):
     card._font.cache_clear()
     card.render_panel.cache_clear()
     try:
-        image = card.compose(SLIDES[5], 0, 1024, 600)
+        image = card.compose(_slide("Mundo: modelagem"), 0, 1024, 600)
         assert image.size == (1024, 600)
     finally:
         card._font.cache_clear()
         card.render_panel.cache_clear()
+
+
+def test_etiquetas_quebram_linha_e_cabem_no_cartao():
+    many = Panel((0.6, 0.1, 0.3, 0.8), (Block("tags", tuple(f"Recurso {i}" for i in range(14))),), "T")
+    one = Panel((0.6, 0.1, 0.3, 0.8), (Block("tags", ("Recurso 0",)),), "T")
+    _, _, tall = card.render_panel(many, 0, *FULL_HD)
+    _, _, short = card.render_panel(one, 0, *FULL_HD)
+    assert tall.height > short.height and tall.width == short.width
