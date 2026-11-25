@@ -45,3 +45,20 @@ def sight_needed(solid: np.ndarray, origin: Sequence[int], feet: Sequence[float]
     fx, fy, fz = (float(v) for v in feet)
     return (sight_blocked(solid, origin, (fx, fy + CHEST, fz), direction)
             or sight_blocked(solid, origin, (fx, fy + HEAD, fz), direction))
+
+
+# O buraco das folhas (no shader, ``leafHole``): ao ar livre, a copa das árvores entre a câmera e o personagem some num
+# círculo em volta dele, bloco a bloco como o corredor da câmera; só as folhas, o tronco e o chão ficam. O raio acompanha o zoom: é uma fração da meia-altura
+# visível, para o buraco ter sempre o mesmo tamanho na tela.
+LEAF_HOLE_SCREEN = 1.0    # fração da meia-altura visível (ortho_size): o círculo vai de cima a baixo da tela
+LEAF_HOLE_MIN = 2.6       # de muito perto, não fica menor que o corredor da câmera (blocos)
+
+
+def leaf_hole_radius(ortho_size: float) -> float:
+    """O raio do buraco das folhas, em blocos, para a câmera com essa meia-altura visível."""
+    return max(LEAF_HOLE_MIN, LEAF_HOLE_SCREEN * float(ortho_size))
+
+
+def sight_cover(cells) -> np.ndarray:
+    """O que conta para o corredor da câmera abrir: o sólido sem a folhagem (as folhas abrem pelo buraco delas)."""
+    return cells.roof

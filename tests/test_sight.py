@@ -68,3 +68,33 @@ def test_the_world_offset_of_the_window_is_respected():
     solid[12:14, 5:9, 12:14] = True
     assert sight_needed(solid, (100, 0, -50), (110.5, 5.0, -39.5), TOWARD_CAMERA)
     assert not sight_needed(solid, (0, 0, 0), (110.5, 5.0, -39.5), TOWARD_CAMERA)
+
+
+def test_leaves_alone_do_not_open_the_corridor():
+    # a copa de um pinheiro entre o personagem e a câmera: quem a abre é o buraco das folhas (no shader), não o
+    # corredor, que cortaria também o tronco e o chão. A cobertura que o corredor olha é o sólido sem a folhagem.
+    from src.world.block import BlockType
+    from src.world.chunk import Chunk3D
+    from src.world.room_reveal import extract_window_cells, window_origin
+    from src.world.sight import sight_cover
+    chunk = Chunk3D(0, 0, 0)
+    chunk.blocks[:, :5, :] = int(BlockType.STONE)
+    for d in range(1, 4):
+        chunk.blocks[10 + d, 6 + d, 10 + d] = int(BlockType.SPRUCE_LEAVES)   # na linha até a câmera
+    feet = FEET
+    origin = window_origin(feet)
+    cells = extract_window_cells(origin, {(0, 0, 0): chunk})
+    assert sight_needed(cells.solid, origin, feet, TOWARD_CAMERA)            # com as folhas, abriria
+    assert not sight_needed(sight_cover(cells), origin, feet, TOWARD_CAMERA)
+    chunk.blocks[12, 7, 12] = int(BlockType.SPRUCE_LOG)                     # um tronco no caminho ainda abre
+    cells = extract_window_cells(origin, {(0, 0, 0): chunk})
+    assert sight_needed(sight_cover(cells), origin, feet, TOWARD_CAMERA)
+
+
+def test_the_leaf_hole_keeps_its_size_on_screen():
+    # o raio é uma fração da meia-altura visível (ortho_size): afastar a câmera aumenta o buraco no mundo, aproximar
+    # diminui, e na tela ele fica do mesmo tamanho; de muito perto não fica menor que o personagem
+    from src.world.sight import LEAF_HOLE_MIN, leaf_hole_radius
+    assert leaf_hole_radius(20.0) == 2 * leaf_hole_radius(10.0)
+    assert leaf_hole_radius(10.0) > leaf_hole_radius(8.0)
+    assert leaf_hole_radius(0.5) == LEAF_HOLE_MIN

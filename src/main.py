@@ -456,6 +456,12 @@ def main() -> None:
         water_uv = atlas.uv_table[int(BlockType.WATER)].reshape(-1, 2)
         water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
                       float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
+        # e as das folhas: o buraco das folhas (leafHole no shader) as reconhece por elas
+        leaf_rects = []
+        for leaf in (BlockType.LEAVES, BlockType.SPRUCE_LEAVES):
+            leaf_uv = atlas.uv_table[int(leaf)].reshape(-1, 2)
+            leaf_rects.append((float(leaf_uv[:, 0].min()), float(leaf_uv[:, 1].min()),
+                               float(leaf_uv[:, 0].max()), float(leaf_uv[:, 1].max())))
         from src.world.terrain_options import make_generator
         # as opções de criação do mundo (tela "Uma nova aventura"); sem elas, o relevo de sempre
         active_terrain = {"options": selected_world.get("terrain") if selected_world else None}
@@ -2128,13 +2134,13 @@ def main() -> None:
             # Ao ar livre o corredor só liga quando algo bloqueia a vista do peito ou da cabeça (se só as pernas ficam
             # atrás de um degrau, não abre buraco); ligado, corta o cilindro inteiro, dos pés para cima, e os pés
             # aparecem. Num cômodo fica sempre ligado (só corta o que tapa o cômodo: ver o shader).
-            from src.world.sight import sight_needed
+            from src.world.sight import leaf_hole_radius, sight_cover, sight_needed
             sight_world_dir = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (
                 np.array(camera._camera_position(), dtype=np.float64) - sight_target[:3])
             window_cells = room_tracker.mask.window if room_tracker.mask is not None else None
             outdoors_target = 1.0 if (
                 room_renderer.level > 0.001 or window_cells is None
-                or sight_needed(window_cells.solid, room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
+                or sight_needed(sight_cover(window_cells), room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
             story_state["sight"] += (outdoors_target - story_state["sight"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
             if abs(outdoors_target - story_state["sight"]) < 0.01:
                 story_state["sight"] = outdoors_target
@@ -2191,7 +2197,14 @@ def main() -> None:
                     shader.set_bool("u_WaterMode", player_token.in_water)
                     shader.set_int("u_CutawayPass", 0)
                     shader.set_int("u_WaterPass", 1)
+                    # ao ar livre, a copa entre a câmera e o personagem abre num círculo (num cômodo ou numa caverna,
+                    # os cortes de lá cuidam da vista)
+                    shader.set_float("u_LeafHole", 0.0 if underground_mode or room_renderer.level > 0.001
+                                     else leaf_hole_radius(camera.ortho_size))
+                    shader.set_vec4("u_LeafRect0", *leaf_rects[0])
+                    shader.set_vec4("u_LeafRect1", *leaf_rects[1])
                     presentation_view["drawn"] = world_manager.render(shader, model, view_projection)
+                    shader.set_float("u_LeafHole", 0.0)             # as construções usam outro atlas
                     room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
                 shader.set_int("u_WaterPass", 0)
                 schematic_tool.draw(shader, model, window.time, preview=False)

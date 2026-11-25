@@ -662,6 +662,46 @@ bool sightCarved()
     return (1.0 - keep) * u_SightActive > roomDither();
 }
 
+// Buraco das folhas: ao ar livre, a copa das árvores entre a câmera e o personagem some num círculo em volta dele (só
+// as folhas: o tronco e o chão ficam). Como o corredor da câmera, a decisão é pelo centro do bloco (o corte sai em
+// degraus de bloco); a distância é medida na perpendicular à linha da câmera, então o círculo é redondo na tela. O raio
+// vem de leaf_hole_radius em src/world/sight.py (uma fração da tela: acompanha o zoom). As folhas são reconhecidas pela
+// região da textura delas no atlas do terreno, como a água; nas construções, que usam outro atlas, fica desligado.
+uniform float u_LeafHole;        // raio do buraco, em blocos; 0 desligado
+uniform vec4 u_LeafRect0;        // a região da folha de carvalho no atlas (u0, v0, u1, v1)
+uniform vec4 u_LeafRect1;        // e a da folha de pinheiro
+
+bool inRect(vec2 uv, vec4 r)
+{
+    return uv.x >= r.x - 1e-4 && uv.x <= r.z + 1e-4 && uv.y >= r.y - 1e-4 && uv.y <= r.w + 1e-4;
+}
+
+bool leafHole()
+{
+    if (u_LeafHole <= 0.001 || u_KeepVisible)
+        return false;
+    if (!inRect(v_TexCoord, u_LeafRect0) && !inRect(v_TexCoord, u_LeafRect1))
+        return false;
+    vec3 worldPos = (u_SightInvModel * vec4(v_FragPos, 1.0)).xyz;
+    vec3 worldNormal = normalize(mat3(u_SightInvModel) * v_Normal);
+    vec3 cell = floor(worldPos - worldNormal * 0.05);
+    vec3 center = (u_SightModel * vec4(cell + 0.5, 1.0)).xyz;
+    vec3 line = u_CameraPos - u_SightTarget;
+    vec3 dir = line / max(length(line), 1e-4);
+    float t = dot(center - u_SightTarget, dir);         // 0 no personagem, positivo para o lado da câmera
+    if (t < -3.0)
+        return false;                                   // bem atrás do personagem: fica
+    float off = length(center - u_SightTarget - dir * t);
+    // a borda é larga: os blocos da beirada vão ficando opacos aos poucos (pontilhado cada vez mais cheio), em vez de
+    // passar de transparente a opaco de um bloco para o outro
+    float band = max(2.0, u_LeafHole * 0.4);
+    float keep = smoothstep(u_LeafHole - band, u_LeafHole, off);  // 0 no meio, 1 fora
+    // e para trás também: do personagem até 3 blocos atrás dele as folhas voltam aos poucos (sem um corte seco em volta
+    // da cabeça)
+    float front = smoothstep(-3.0, 0.0, t);
+    return (1.0 - keep) * front > roomDither();
+}
+
 // O quanto de um personagem está entre este ponto (espaço desenhado) e o sol: 0 nada, 1 tudo. A borda é nítida (3x3
 // texels só para não serrilhar); a opacidade cai com a distância, ao longo do raio, até a parte do corpo que faz a
 // sombra: forte junto aos pés, esmaecendo para a cabeça.
@@ -832,6 +872,8 @@ void main()
     }
 
     if (sightCarved())
+        discard;
+    if (leafHole())
         discard;
 
     bool above_player = v_FragPos.y > u_PlayerY + 0.05;
