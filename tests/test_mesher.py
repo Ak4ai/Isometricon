@@ -316,3 +316,15 @@ def test_troncos_2x2_juntam_a_textura():
     assert len(corners) == 4
     alone = tops(8, 8, y=0)
     assert np.isclose(alone[0, :, 0].max() - alone[0, :, 0].min(), width)
+
+
+def test_toras_juntam_numa_janela_de_origem_impar():
+    """As tampas do corte da câmera usam uma janela que começa em qualquer célula: a junção segue a grade do mundo."""
+    from src.world.mesher import joined_logs
+    blocks = np.zeros((6, 2, 6), dtype=np.uint8)
+    blocks[1:3, :, 1:3] = int(BlockType.SPRUCE_LOG)      # mundo x, z = 2..3 com origem (1, 0, 1): alinhado
+    blocks[3:5, :, 3:5] = int(BlockType.SPRUCE_LOG)      # mundo x, z = 4..5: alinhado
+    blocks[0, :, 0] = int(BlockType.SPRUCE_LOG)
+    joined = joined_logs(blocks, (1, 0, 1))
+    assert joined[1:3, :, 1:3].all() and joined[3:5, :, 3:5].all() and not joined[0, :, 0].any()
+    assert not joined_logs(blocks, (0, 0, 0))[1:3, :, 1:3].any()   # na grade par da origem 0 ficam desalinhados

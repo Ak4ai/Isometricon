@@ -68,16 +68,22 @@ def _blob(voxels: Dict, rng: np.random.Generator, x: float, y: int, z: float, ra
 
 
 def _branch(voxels: Dict, rng: np.random.Generator, y: int, length: float, center: float, log: BlockType):
-    """Um galho deitado saindo para um lado sorteado (o tronco virado no eixo dele); devolve onde ele termina."""
-    angle = rng.uniform(0, 2 * np.pi)
-    lying = LYING_LOGS[log]["x" if abs(np.cos(angle)) >= abs(np.sin(angle)) else "z"]
-    ex, ez = center, center
-    for step in range(1, int(round(length)) + 1):
-        ex = center + np.cos(angle) * (step + 0.5)
-        ez = center + np.sin(angle) * (step + 0.5)
-        cell = (int(round(ex)), y, int(round(ez)))
-        if voxels.get(cell) not in (BlockType.SPRUCE_LOG, BlockType.SEQUOIA_LOG):   # não deita um pedaço do tronco
-            voxels[cell] = lying
+    """Um galho deitado saindo reto para um dos quatro lados (sorteado), o tronco virado no eixo dele; devolve onde
+    ele termina. Reto, e não na diagonal: na diagonal o galho vira degraus com os anéis de lado."""
+    dx, dz = ((1, 0), (-1, 0), (0, 1), (0, -1))[int(rng.integers(0, 4))]
+    lying = LYING_LOGS[log]["x" if dx else "z"]
+    side = int(rng.integers(0, 2))                    # num tronco largo, sai de uma das colunas do meio
+    x, z = int(np.floor(center)) + (side if not dx else 0), int(np.floor(center)) + (side if not dz else 0)
+    if center == int(center):
+        x, z = int(center), int(center)
+    placed = 0
+    while placed < int(round(length)):
+        x, z = x + dx, z + dz
+        if voxels.get((x, y, z)) in (BlockType.SPRUCE_LOG, BlockType.SEQUOIA_LOG):
+            continue                                   # ainda dentro do tronco
+        voxels[(x, y, z)] = lying
+        placed += 1
+    ex, ez = float(x), float(z)
     return ex, ez
 
 
@@ -102,6 +108,9 @@ def tree_shape(kind: int, height: int, width: int, variant: int) -> np.ndarray:
     log = BlockType.SEQUOIA_LOG if kind == SEQUOIA else BlockType.SPRUCE_LOG
     center = _trunk_center(width)
     voxels: Dict[Tuple[int, int, int], BlockType] = {}
+    for dx, dz in _trunk_cells(width):                           # o tronco antes: os galhos saem da borda dele
+        for y in range(height):
+            voxels[(dx, y, dz)] = log
 
     if kind == PINE:
         base = int(round(height * 0.32))

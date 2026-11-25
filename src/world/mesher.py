@@ -48,20 +48,26 @@ BIG_LOGS = (BlockType.SPRUCE_LOG, BlockType.SEQUOIA_LOG)
 JOIN = 2
 
 
-def joined_logs(blocks: NDArray) -> NDArray[np.bool_]:
-    """[x, y, z] das células de tronco que fazem parte de um quadrado 2 x 2 (em x e z) do mesmo tronco. O chunk tem
-    lado par e começa numa coordenada par, então os quadrados alinhados nunca atravessam a borda do chunk."""
-    out = np.zeros(blocks.shape, dtype=bool)
+def joined_logs(blocks: NDArray, origin=(0, 0, 0)) -> NDArray[np.bool_]:
+    """[x, y, z] das células de tronco que fazem parte de um quadrado 2 x 2 (em x e z, alinhado à grade par do mundo)
+    do mesmo tronco. ``origin``: a célula do mundo de ``blocks[0, 0, 0]``. O chunk tem lado par e começa numa
+    coordenada par, então nele os quadrados nunca atravessam a borda; numa janela qualquer (as tampas do corte da
+    câmera), um quadrado cortado pela borda não junta."""
+    sx, sz = int(origin[0]) % JOIN, int(origin[2]) % JOIN
+    nx, ny, nz = blocks.shape
+    px, pz = (-(sx + nx)) % JOIN, (-(sz + nz)) % JOIN
+    out = np.zeros((sx + nx + px, ny, sz + nz + pz), dtype=bool)
     for log in BIG_LOGS:
-        m = blocks == int(log)
+        m = np.zeros_like(out)
+        m[sx:sx + nx, :, sz:sz + nz] = blocks == int(log)
         if not m.any():
             continue
         full = m[0::2, :, 0::2] & m[1::2, :, 0::2] & m[0::2, :, 1::2] & m[1::2, :, 1::2]
         out |= np.repeat(np.repeat(full, JOIN, axis=0), JOIN, axis=2)
-    return out
+    return out[sx:sx + nx, :, sz:sz + nz]
 
 
-def _join_uvs(uv: NDArray[np.float32], cells: NDArray, face: int) -> NDArray[np.float32]:
+def join_uvs(uv: NDArray[np.float32], cells: NDArray, face: int) -> NDArray[np.float32]:
     """As UVs (n, 4, 2) das faces de tronco juntado: cada bloco mostra a sua parte da textura esticada 2x.
 
     ``cells``: (n, 3) células do mundo (a paridade decide que parte)."""
@@ -413,7 +419,7 @@ class ChunkMesher:
                 big = joined[xs, ys, zs]
                 if big.any():
                     cells = np.stack([xs[big], ys[big], zs[big]], axis=1).astype(np.int64) + world_origin
-                    v_slice[big, :, 6:8] = _join_uvs(v_slice[big, :, 6:8], cells, face)
+                    v_slice[big, :, 6:8] = join_uvs(v_slice[big, :, 6:8], cells, face)
             else:
                 v_slice[:, :, 6:8] = _TOP_UVS if face == 2 else _UVS
                 v_slice[:, :, 8:11] = _COLOR_LUT[blk][:, None, :]

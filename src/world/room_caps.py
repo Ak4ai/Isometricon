@@ -288,7 +288,10 @@ def build_caps(room: RoomMask, view_dir, terrain_atlas, structure_uv: UvLookup,
 
 
 def _terrain_caps(window, visible, hidden, origin, atlas):
+    from src.world.mesher import join_uvs, joined_logs
     vertices, indices, base = [], [], 0
+    world = np.asarray(origin, dtype=np.int64).reshape(3)
+    joined = joined_logs(window.blocks, world)
     for face in range(6):
         normal = _NORMALS[face]
         mask = visible & _toward(hidden, normal) & (window.owner < 0) & CUBE_LUT[window.blocks]
@@ -302,6 +305,9 @@ def _terrain_caps(window, visible, hidden, origin, atlas):
         quad[:, :, 3:6] = normal
         quad[:, :, 6:8] = atlas.uv_table[blocks, face]
         quad[:, :, 8:11] = atlas.color_table[blocks, face][:, None, :]
+        big = joined[cells[:, 0], cells[:, 1], cells[:, 2]]    # as toras 2 x 2: a textura junta, como no chunk
+        if big.any():
+            quad[big, :, 6:8] = join_uvs(quad[big, :, 6:8], cells[big].astype(np.int64) + world, face)
         vertices.append(quad.reshape(-1, 11))
         corner_index = base + np.arange(count, dtype=np.uint32)[:, None] * 4
         indices.append((corner_index + np.array([0, 1, 2, 2, 3, 0], dtype=np.uint32)).ravel())
