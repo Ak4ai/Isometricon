@@ -222,6 +222,11 @@ class Ambience:
         shader.set_float("u_TorchAmount", 0.0)
         shader.set_float("u_MistAmount", 0.0)
         shader.set_int("u_FogWar", 0)
+        # as variantes do shader que o quadro do mundo deixou ligadas: a névoa da borda cobria o personagem da tela
+        # de criação (desenhado fora do retângulo de chunks do mundo) com a cor do fundo
+        for name in ("EDGE_FOG", "MIST", "MIST_RAYS", "SHADOW_ACCUM", "EARLY_Z"):
+            shader.set_define(name, False)
+        shader.use()   # trocar de variante devolve o programa que estava em uso: os uniforms seguintes vão para este
 
 
 # (nome, valores): o mestre aplica de uma vez
