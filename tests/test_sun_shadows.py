@@ -208,3 +208,17 @@ def test_the_far_window_reads_every_loaded_chunk_inside_it():
     window = extract_window_cells(origin, {(3, 0, 3): far}, (), size)
     assert window.solid.shape == size
     assert window.solid[48 + 3 - origin[0], 5 - origin[1], 48 + 3 - origin[2]]
+
+
+def test_detalhe_plantas_tira_os_matos_da_taiga_como_o_capim():
+    """No detalhe "plantas" a cobertura do chão sai da sombra em todo bioma: o capim da planície e as samambaias e
+    o arbusto da taiga (antes só o capim saía, e a taiga pagava ~1 ms a mais por quadro)."""
+    import numpy as np
+    from src.rendering.sun_shadows import DETAIL_PLANTS, detail_shapes
+    from src.world.shadow_shapes import TABLE
+    names = ("short_grass", "fern", "large_fern[half=lower]", "large_fern[half=upper]", "sweet_berry_bush[age=3]")
+    ids = np.array([TABLE.id_for("minecraft:" + n) for n in names], dtype=np.uint16)
+    assert (ids != 0).all()
+    assert (detail_shapes(ids, DETAIL_PLANTS) == 0).all()
+    poppy = np.array([TABLE.id_for("minecraft:poppy")], dtype=np.uint16)
+    assert detail_shapes(poppy, DETAIL_PLANTS)[0] == poppy[0]     # as flores continuam fazendo sombra

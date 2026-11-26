@@ -273,6 +273,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Água e névoa",
                 _b("Água translúcida com ondas na normal, reflexo do céu e Fresnel",
                    "Névoa de distância e névoa de guerra em nuvens de blocos que se desfazem",
+                   "Névoa na borda: o fim dos chunks carregados some numa bruma da cor do fundo",
                    "Pré-passada de profundidade antes do sombreamento caro"),
                 cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Animação", "Z-buffer"),
                 _t("No painel do /mestre: a névoa de guerra (explorado ou em volta) e as cenas prontas."),
@@ -361,8 +362,10 @@ SLIDES: tuple[Slide, ...] = (
         "Otimizações",
         (
             corner("tl", "Na CPU", _t("Face culling, malha numa thread à parte, 1 chunk enviado à GPU "
-                                      "por quadro."), width=0.30),
-            corner("tr", "Na GPU", _t("Z-buffer, back-face culling e pré-passada de profundidade."),
+                                      "por quadro. A distância de render (1 a 6 chunks) carrega e "
+                                      "descarrega na hora."), width=0.30),
+            corner("tr", "Na GPU", _t("Z-buffer, back-face culling e pré-passada de profundidade. O mato "
+                                      "do chão fica fora da sombra do sol: +15% de fps na taiga."),
                    width=0.30),
             corner("bl", "Frustum culling", _t("O chunk sai se os 8 cantos estão fora de um mesmo plano."),
                    Block("bars", ("chunks",)), width=0.34),

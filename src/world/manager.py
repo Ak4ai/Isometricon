@@ -100,6 +100,27 @@ class WorldManager:
         )
         self._worker_thread.start()
 
+    @property
+    def render_distance(self) -> int:
+        return self._render_distance
+
+    @render_distance.setter
+    def render_distance(self, value: int) -> None:
+        """Trocar o raio (Configurações > Gráficos) refaz a grade no próximo update, mesmo parado: sem isso o update
+        só recalculava ao mudar de chunk, e a opção parecia não fazer nada."""
+        value = int(value)
+        if value != getattr(self, "_render_distance", None):
+            self._render_distance = value
+            self._last_center = None
+
+    def loaded_rect(self, focus_x: float, focus_z: float) -> Tuple[float, float, float, float]:
+        """O quadrado (x mín, z mín, x máx, z máx, em blocos) dos chunks carregados em volta do foco: a grade que o
+        update mantém. A névoa da borda (EDGE_FOG) fecha antes dele."""
+        size = Chunk3D.SIZE
+        cx, cz = int(math.floor(focus_x / size)), int(math.floor(focus_z / size))
+        r = self.render_distance
+        return ((cx - r) * size, (cz - r) * size, (cx + r + 1) * size, (cz + r + 1) * size)
+
     def _worker_loop(self) -> None:
         """Loop de execução da worker thread que gera chunks e calcula malhas na CPU."""
         import time

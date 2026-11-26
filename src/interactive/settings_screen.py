@@ -156,6 +156,11 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Quantos chunks (16 × 16 blocos) em volta do personagem ficam carregados e desenhados. Mais distância '
                 'mostra mais mundo, mas gera e guarda mais terreno.',
                 [('Custo', 'Alto acima de 3 (memória e geração)')]),
+            Row('edge_fog', 'Névoa na borda', 'Esconde o fim do terreno carregado numa névoa', 'cloud',
+                'toggle', None, 'edge_fog',
+                'Com pouca distância de render o terreno acaba perto do personagem e aparece o vazio. Com a névoa, o '
+                'chão vai sumindo numa bruma da cor do fundo antes de acabar, como numa cidade coberta de neblina.',
+                [('Custo', 'Quase nenhum')]),
             Row('shadows', 'Sombras do sol', 'Qualidade da sombra que o sol projeta', 'sun', 'choice', 'Sombras',
                 'shadows',
                 'Alta: penumbra suave e borda nítida junto aos blocos (até 18 raios por pixel). Média: a mesma sombra '
@@ -167,8 +172,8 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Leve: cada bloco faz sombra de cubo inteiro, como antes (lajes, escadas e cercas viram cubos; placas '
                 'e plantas não fazem sombra). Formas: lajes, escadas, cercas, placas e lanternas fazem sombra pelo '
                 'formato. Plantas: também mudas, flores e cogumelos, pelo desenho das folhas. Completa: também o '
-                'capim do chão, o mais pesado.',
-                [('Custo', 'Baixo a alto (o capim é o mais pesado)')]),
+                'mato do chão (capim, samambaias, arbustos), o mais pesado.',
+                [('Custo', 'Baixo a alto (o mato do chão é o mais pesado)')]),
             Row('shadow_range', 'Alcance da sombra', 'Até onde o raio procura o que tapa o sol', 'range', 'choice',
                 None, 'shadow_range',
                 'Com o sol baixo, um morro distante pode sombrear o personagem. O alcance diz até quantos blocos o raio '
@@ -302,6 +307,8 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: float, y: float, s: float, co
         line([(.3, .63), (.7, .63)])
     elif kind == 'motion':
         line([(.08, .5), (.92, .5)]); line([(.08, .28), (.6, .28)], 1); line([(.08, .72), (.6, .72)], 1)
+    elif kind == 'cloud':   # faixas de névoa (a névoa na borda do mundo)
+        line([(.1, .3), (.7, .3)]); line([(.3, .5), (.9, .5)]); line([(.1, .7), (.65, .7)])
     elif kind == 'text':
         line([(.15, .15), (.85, .15)]); line([(.5, .15), (.5, .88)])
     else:

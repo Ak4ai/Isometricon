@@ -1117,6 +1117,27 @@ vec3 mistGrade(vec3 color)
 }
 #endif
 
+#ifdef EDGE_FOG
+// A névoa na borda do mundo carregado (Configurações > Gráficos): com poucos chunks o fim do terreno vira um
+// buraco; aqui o terreno some numa névoa da cor do fundo antes de acabar, em volta do personagem.
+uniform vec4 u_EdgeRect;        // x mín, z mín, x máx, z máx (mundo) dos chunks carregados
+uniform vec2 u_EdgePlayer;      // x, z (mundo) do personagem
+uniform float u_EdgeRadius;     // onde a névoa fecha de vez, em blocos
+uniform vec3 u_EdgeColor;       // a cor do fundo da tela
+uniform mat4 u_EdgeInvModel;    // do espaço desenhado de volta ao mundo
+
+vec3 edgeFog(vec3 color)
+{
+    vec2 w = (u_EdgeInvModel * vec4(v_FragPos, 1.0)).xz;
+    // tufos lentos: a borda da névoa não fica uma linha reta nem um círculo perfeito
+    float wisp = sin(w.x * 0.21 + u_Time * 0.15) * sin(w.y * 0.17 - u_Time * 0.11) * 3.0;
+    float d = min(min(w.x - u_EdgeRect.x, u_EdgeRect.z - w.x), min(w.y - u_EdgeRect.y, u_EdgeRect.w - w.y)) + wisp;
+    float square = 1.0 - smoothstep(1.0, 8.0, d);
+    float round_ = smoothstep(u_EdgeRadius * 0.65, u_EdgeRadius, length(w - u_EdgePlayer) + wisp);
+    return mix(color, u_EdgeColor, clamp(max(square, round_), 0.0, 1.0));
+}
+#endif
+
 vec3 envGrade(vec3 color, vec3 albedo)
 {
     color *= u_EnvTint;
@@ -1165,6 +1186,9 @@ vec3 envGrade(vec3 color, vec3 albedo)
             color += (grain - 0.5) * 0.05 * cover;
         }
     }
+#ifdef EDGE_FOG
+    color = edgeFog(color);
+#endif
     return color;
 }
 
