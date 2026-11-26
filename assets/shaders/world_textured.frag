@@ -11,6 +11,12 @@
 #extension GL_ARB_shader_image_load_store : enable
 layout(early_fragment_tests) in;
 #endif
+#ifdef SHADOW_ACCUM
+// Sombra acumulada (Configurações > Gráficos; ver src/rendering/shadow_accum.py): cada pixel grava a sombra que achou
+// numa textura, e o quadro seguinte continua dela com poucos raios novos. Só na passada de cor com EARLY_Z (um
+// fragmento por pixel).
+#extension GL_ARB_shader_image_load_store : enable
+#endif
 
 // =============================================================================
 // Isometricon - Textured World Fragment Shader (GLSL 330 core)
@@ -436,6 +442,123 @@ float softSun(vec3 origin, vec3 sunDir, float spin, int rays, bool umbra)
     }
     return (first + rest) / float(rays);
 }
+
+#ifdef SHADOW_ACCUM
+layout(rgba16f) uniform writeonly image2D u_AccumOut;    // (borrada, nítida, quadros da borrada, quadros da nítida)
+layout(rgba32f) uniform writeonly image2D u_AccumPosOut; // (o ponto do mundo, 1 = gravado)
+uniform sampler2D u_AccumPrev;          // as mesmas duas do quadro anterior
+uniform sampler2D u_AccumPrevPos;
+uniform mat4 u_AccumPrevClip;           // mundo -> recorte do quadro anterior
+uniform bool u_AccumHistory;            // há um quadro anterior (falso depois de mudar o tamanho)
+uniform int u_AccumFrame;
+
+// Quantos quadros entram na média: mais é mais liso e demora mais para seguir o sol e um bloco posto (60 fps: 16
+// quadros são ~1/4 de segundo).
+const float ACCUM_SOFT_FRAMES = 16.0;
+const float ACCUM_SHARP_FRAMES = 12.0;
+const int ACCUM_SOFT_RAYS = 3;          // raios novos por quadro, do cone borrado e do nítido
+const int ACCUM_SHARP_RAYS = 2;
+
+// A sombra do ponto como ``sunVisibility``, mas somada ao longo dos quadros. O ponto é procurado na tela do quadro
+// anterior: no pixel de lá e, se ele guardou outro ponto, nos 8 em volta (na borda de um bloco o pixel tem um
+// fragmento de cada face, com o MSAA, e só um deles fica gravado: o outro acha a sua face no vizinho). Achado (mesmo
+// plano, a menos de 2,5 pixels), a média de lá continua com ACCUM_SOFT_RAYS raios borrados e ACCUM_SHARP_RAYS
+// nítidos; senão o cone inteiro é traçado, como sem a opção.
+// O cone borrado gira a cada volta (pelo ângulo de ouro): com o tempo cobre o disco todo, mais liso que os 12 raios
+// parados de antes. O nítido passa pelos mesmos raios fixos, ACCUM_SHARP_RAYS por quadro.
+// Os dois cones, inteiros ou não, saem de um laço só, com um traceSun só e o número de voltas variável: com um laço
+// para cada caso (como softSun e sunCone) o compilador desenrola tudo, o shader incha e a placa roda menos pixels de
+// uma vez (RTX 3050, taiga: 10 ms com os laços de sempre só presentes, sem rodar, contra 4 sem eles).
+float sunAccumulated(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir, float pixelWorld)
+{
+    bool high = u_ShadowQuality >= 2;
+    int softRays = high ? 12 : 8;
+    int sharpRays = high ? 6 : 3;
+    vec4 prev = vec4(0.0);
+    vec3 prevPos = exactPos;
+    if (u_AccumHistory)
+    {
+        vec4 clip = u_AccumPrevClip * vec4(exactPos, 1.0);
+        ivec2 size = textureSize(u_AccumPrevPos, 0);
+        ivec2 center = ivec2(floor((clip.xy / clip.w * 0.5 + 0.5) * vec2(size)));
+        for (int i = 0; i < 9; i++)
+        {
+            ivec2 texel = center + (i == 0 ? ivec2(0) : ivec2((i - 1) % 3 - 1, (i - 1) / 3 - 1));
+            if (i == 5 || any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, size)))
+                continue;                     // (i == 5 é o centro de novo)
+            vec4 p = texelFetch(u_AccumPrevPos, texel, 0);
+            vec3 d = p.xyz - exactPos;
+            if (p.w > 0.5 && abs(dot(d, worldNormal)) < 0.02 && length(d) < 2.5 * pixelWorld + 0.01)
+            {
+                prev = texelFetch(u_AccumPrev, texel, 0);
+                prevPos = p.xyz;
+                break;
+            }
+        }
+    }
+    bool softMiss = prev.z < 0.5;
+    float sharpN = prev.w;
+    if (distance(snapToTexel(prevPos, worldNormal), snappedPos) > 0.001)
+        sharpN = min(sharpN, 1.0);            // outro texel (a câmera andou): a média do vizinho vale pouco
+    bool sharpMiss = sharpN < 0.5;
+    // a nítida só conta onde a borrada não é quase sol pleno (ver sunVisibility); decide pela do quadro anterior
+    bool wantSharp = softMiss || prev.x < 0.95;
+    int softCount = softMiss ? softRays : ACCUM_SOFT_RAYS;
+    int sharpCount = wantSharp ? (sharpMiss ? sharpRays : ACCUM_SHARP_RAYS) : 0;
+    int softFirst = softMiss ? 0 : u_AccumFrame * ACCUM_SOFT_RAYS;
+    int sharpFirst = sharpMiss ? 0 : u_AccumFrame * ACCUM_SHARP_RAYS;
+    float spin = interleavedNoise(floor(gl_FragCoord.xy)) * 6.2831853
+               + fract(float(softFirst / softRays) * 0.618034) * 6.2831853;   // cada volta pelo cone, girada
+    vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(sunDir, t1);
+    vec3 softFrom = exactPos + worldNormal * 0.04;
+    vec3 sharpFrom = snappedPos + worldNormal * 0.04;
+    float softLit = 0.0, sharpLit = 0.0;
+    for (int j = 0; j < softCount + sharpCount; j++)
+    {
+        bool isSoft = j < softCount;
+        int k = isSoft ? (softFirst + j) % softRays : (sharpFirst + j - softCount) % sharpRays;
+        float r = isSoft ? sqrt((float(k) + 0.5) / float(softRays)) * 0.15 : sqrt((float(k) + 0.5) / float(sharpRays)) * 0.08;
+        float a = float(k) * 2.3999632 + (isSoft ? spin : 0.0);
+        float lit = traceSun(isSoft ? softFrom : sharpFrom, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+        if (isSoft)
+            softLit += lit;
+        else
+            sharpLit += lit;
+    }
+    float soft, softN;
+    if (softMiss)
+    {
+        soft = softLit / float(softCount);
+        softN = float(softRays) / float(ACCUM_SOFT_RAYS);    // vale os quadros que estes raios levariam
+    }
+    else
+    {
+        float n = min(prev.z, ACCUM_SOFT_FRAMES - 1.0);
+        soft = mix(prev.x, softLit / float(softCount), 1.0 / (n + 1.0));
+        softN = n + 1.0;
+    }
+    float sharp = prev.y;
+    if (sharpCount > 0)
+    {
+        if (sharpMiss)
+        {
+            sharp = sharpLit / float(sharpCount);
+            sharpN = float(sharpRays) / float(ACCUM_SHARP_RAYS);
+        }
+        else
+        {
+            float n = min(sharpN, ACCUM_SHARP_FRAMES - 1.0);
+            sharp = mix(sharp, sharpLit / float(sharpCount), 1.0 / (n + 1.0));
+            sharpN = n + 1.0;
+        }
+    }
+    ivec2 pixel = ivec2(gl_FragCoord.xy);
+    imageStore(u_AccumOut, pixel, vec4(soft, sharp, softN, sharpN));
+    imageStore(u_AccumPosOut, pixel, vec4(exactPos, 1.0));
+    return sharpN > 0.5 ? mix(sharp, soft, smoothstep(0.1, 0.9, soft)) : soft;
+}
+#endif
 
 #ifdef SHADOW_HALF
 // A parte deste pixel dos raios do cone borrado e do nítido: o raio k fica com o pixel (k mod 4) do quadrado 2x2, e
@@ -1165,6 +1288,11 @@ void main()
         {
             worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
             vec3 exactPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
+#ifdef SHADOW_ACCUM
+            // o tamanho de um pixel no mundo, para achar o ponto no quadro anterior (no contorno de um bloco a
+            // derivada pega o vizinho e fica grande: limitada)
+            float pixelWorld = min(max(length(dFdx(exactPos)), length(dFdy(exactPos))), 0.5);
+#endif
             worldPos = snapToTexel(exactPos, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
             if (!water)
@@ -1183,6 +1311,11 @@ void main()
                 {
                     // o ar em frente da face é o espaço do jogador: o teto o tapa, a não ser junto às aberturas
                     bool indoor = u_RoomActive > 0.001 && roomCell(worldPos + worldNormal * 0.04) > 0.9;
+#ifdef SHADOW_ACCUM
+                    if (u_ShadowQuality >= 1)
+                        sunVis = sunAccumulated(worldPos, exactPos, worldNormal, sunDirWorld, pixelWorld);
+                    else
+#endif
 #ifdef SHADOW_HALF
                     if (u_ShadowQuality >= 1 && !indoor)
                     {

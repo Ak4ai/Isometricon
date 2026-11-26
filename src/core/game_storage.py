@@ -30,6 +30,7 @@ GRAPHICS = {
     'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o capim
     'shadow_strength': (1.0, (0.25, 0.5, 0.75, 1.0)),  # o quanto a sombra escurece
     'shadow_distance': (1, (1, 2, 3, 4, 5, 6)),        # até quantos chunks em volta do jogador há sombra do sol
+    'shadow_accum': (True, (False, True)),             # a sombra do sol somada entre quadros (shadow_accum.py)
     'shadow_half': (False, (False, True)),             # sombra calculada em meia resolução (quadrados 2x2)
     'shadow_grain': (1, (1, 2, 4, 8)),                 # o bloco de pixels que gira o cone da penumbra junto
     'fps_limit': (0, (0, 30, 60, 120, 144)),           # 0 sem limite

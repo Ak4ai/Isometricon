@@ -10,7 +10,9 @@ class Shader:
     """Carrega, compila e gerencia programas de shaders GLSL."""
 
     # Unidade de textura fixa de samplers adicionais do shader do mundo (u_RoomMask: máscara 3D do espaço)
-    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3, "u_ShadowShapeIds": 12, "u_ShadowEmpty": 14}
+    # (u_AccumOut e u_AccumPosOut são as unidades de imagem 0 e 1 da sombra acumulada: ver shadow_accum.py)
+    EXTRA_SAMPLER_UNITS = {"u_RoomMask": 2, "u_ShadowMask": 3, "u_ShadowShapeIds": 12, "u_ShadowEmpty": 14,
+                           "u_AccumPrev": 15, "u_AccumPrevPos": 16, "u_AccumOut": 0, "u_AccumPosOut": 1}
 
     def __init__(self, vertex_path: str, fragment_path: str):
         """Inicializa e compila o programa de shader a partir de arquivos no disco.

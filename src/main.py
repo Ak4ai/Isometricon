@@ -526,6 +526,8 @@ def main() -> None:
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
+        from src.rendering.shadow_accum import ShadowAccumulator
+        shadow_accum = ShadowAccumulator()   # a sombra do sol somada entre quadros (Configurações > Sombra acumulada)
         from src.rendering.cast_shadow import CharacterShadowMap
         character_shadows = CharacterShadowMap()   # a sombra do personagem e dos NPCs em qualquer face de bloco
         # a cena do jogo num framebuffer próprio: MSAA, escala de resolução e FXAA mudam na hora (Configurações)
@@ -585,7 +587,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = shadow_renderer = scene_target = None
+        room_tracker = room_renderer = shadow_renderer = shadow_accum = scene_target = None
         character_shadows = None
         interact_prompt = None
         context_cursor = None
@@ -599,7 +601,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = shadow_renderer = scene_target = None
+        room_tracker = room_renderer = shadow_renderer = shadow_accum = scene_target = None
         character_shadows = None
         interact_prompt = None
         context_cursor = None
@@ -667,6 +669,7 @@ def main() -> None:
     fog_war = FogOfWar()   # o explorado (névoa de guerra do /mestre), guardado no mundo
     from src.rendering.mist import MistField
     early_z = {"ok": "--no-early-z" not in sys.argv}   # a passada de cor com o teste de profundidade antecipado
+    accum_state = {"on": False, "ok": True}            # a sombra acumulada: pedida nas Configurações; a placa aceita
     mist_field = MistField()   # o mapa da neblina de ambientação (/mestre > Neblina)
     fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
     if master_panel is not None:
@@ -1482,7 +1485,10 @@ def main() -> None:
             shadow_renderer.strength = float(prefs["shadow_strength"])
             shadow_renderer.set_distance(int(prefs.get("shadow_distance", 1)))
             shadow_renderer.spin_tile = SPIN_TILES.get(int(prefs.get("shadow_grain", 1)), (1.0, 1.0))
-            half = bool(prefs.get("shadow_half", False)) and prefs["shadows"] in ("medium", "high")
+            cone = prefs["shadows"] in ("medium", "high")
+            accum_state["on"] = bool(prefs.get("shadow_accum", True)) and cone
+            # com a acumulada ligada a meia resolução não vale: a acumulada já traça poucos raios por quadro
+            half = bool(prefs.get("shadow_half", False)) and cone and not accum_state["on"]
             try:
                 shader.set_define("SHADOW_HALF", half)
             except RuntimeError as error:      # a placa não tem as derivadas finas: fica a sombra inteira
@@ -2272,8 +2278,27 @@ def main() -> None:
                 except RuntimeError as error:            # a placa não aceita: segue sem
                     early_z["ok"] = False
                     print(f"[Render] Sem teste de profundidade antecipado: {error}")
+            # a sombra acumulada (src/rendering/shadow_accum.py): precisa do teste antecipado (um fragmento por pixel)
+            # e da cena no framebuffer dela (as texturas têm o tamanho da cena)
+            accum_now = (accum_state["on"] and accum_state["ok"] and early_z["ok"] and shadow_accum is not None
+                         and scene_target is not None and scene_target.active and shadow_renderer is not None
+                         and shadow_renderer.active)
+            if accum_now:
+                try:
+                    shader.set_define("SHADOW_ACCUM", True)
+                    shader.use()
+                    shadow_accum.begin(shader, scene_target.size, projection @ view @ model)
+                except Exception as error:             # a placa não aceita: segue com a sombra de sempre
+                    accum_state["ok"] = accum_now = False
+                    shader.set_define("SHADOW_ACCUM", False)
+                    print(f"[Render] Sem sombra acumulada: {error}")
+            elif shadow_accum is not None:
+                shadow_accum.reset()                   # sem ela neste quadro, o histórico fica velho
             shader.use()       # a variante pode ter trocado com outro programa em uso (as tampas, as construções)
             draw_solids()
+            if accum_now:
+                shadow_accum.end()
+                shader.set_define("SHADOW_ACCUM", False)
             shader.set_define("EARLY_Z", False)
             gl.glDepthMask(gl.GL_TRUE)
             gl.glDepthFunc(gl.GL_LESS)
@@ -2611,6 +2636,8 @@ def main() -> None:
         room_renderer.delete()
     if shadow_renderer is not None:
         shadow_renderer.shutdown()
+    if shadow_accum is not None:
+        shadow_accum.delete()
     if character_shadows is not None:
         character_shadows.delete()
     if scene_target is not None:

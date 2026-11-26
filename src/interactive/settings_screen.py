@@ -181,6 +181,14 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 '(até a distância de render), mas a área é refeita quando o personagem anda e ocupa mais memória de '
                 'vídeo.',
                 [('Custo', 'Médio a alto acima de 3 (um tranco curto a cada 8 blocos andados)')]),
+            Row('shadow_accum', 'Sombra acumulada', 'Soma a sombra de um quadro para o outro', 'gauge', 'toggle',
+                None, 'shadow_accum',
+                'A borda da sombra é feita de até 18 raios por pixel. Ligada, cada pixel guarda o que achou e, no quadro '
+                'seguinte, soma só 3 a 5 raios novos: a mesma sombra (a penumbra fica até mais lisa) por bem menos '
+                'trabalho, principalmente debaixo das árvores altas da taiga. Quando o sol anda ou um bloco é posto, a '
+                'sombra acompanha em cerca de um quarto de segundo. Vale para as qualidades Média e Alta; com ela, a '
+                'Sombra em meia resolução não é usada.',
+                [('Custo', 'Diminui bastante na penumbra'), ('Visual', 'igual; muda com um leve atraso')]),
             Row('shadow_half', 'Sombra em meia resolução', 'Calcula a sombra em quadrados de 2 x 2 pixels', 'scale',
                 'toggle', None, 'shadow_half',
                 'Os quatro pixels de cada quadrado dividem os raios do sol (cada um traça só a sua parte) e juntam o '
