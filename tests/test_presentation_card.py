@@ -85,7 +85,8 @@ def test_grafico_sem_dados():
 
 
 def test_regua_do_vertice():
-    panel = next(p for s in SLIDES for p in s.panels if any(b.kind == "vertex" for b in p.blocks))
+    from src.interactive.presentation_slides import Block, Panel
+    panel = Panel((0.02, 0.04, 0.42, 0.86), (Block("vertex"),))
     _, _, image = card.render_panel(panel, 0, *FULL_HD)
     assert image.width > 300
 

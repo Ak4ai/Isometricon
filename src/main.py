@@ -1212,7 +1212,7 @@ def main() -> None:
         if menus.active:
             return menus.key(key, action, mods)
 
-        # A apresentação fica com as setas, espaço, PageUp/Down, Home/End, H e Esc; o resto segue para o jogo
+        # A apresentação fica com as setas, PageUp/Down, Home/End, H e Esc; o resto segue para o jogo
         if presentation is not None and presentation.active and presentation.key(key, action):
             if not presentation.active:
                 end_presentation()
