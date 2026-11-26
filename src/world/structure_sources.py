@@ -3,6 +3,7 @@
 Uma *entrada* (``dict``, que vai para o save) diz como refazer a construção:
 
 - ``{"kind": "schem", "name": <nome da pasta ou caminho>}``
+- ``{"kind": "schem", "name": <rótulo>, "sha256": <hash da cópia local>}``
 - ``{"kind": "formas"}`` (a vitrine montada em código, ``src/world/shape_showcase.py``)
 - ``{"kind": "object", "object": <VoxelObject.to_dict()>, "name": <rótulo>}`` — o objeto vai inteiro, como o editor do
   Rafael já guardava: o que foi colocado não muda se o arquivo da biblioteca for editado depois.
@@ -10,9 +11,14 @@ Uma *entrada* (``dict``, que vai para o save) diz como refazer a construção:
 
 from __future__ import annotations
 
+import hashlib
 import os
+from pathlib import Path
+import re
+import tempfile
 from typing import Dict, List, Optional, Tuple
 
+from src.core.paths import saves_path
 from src.world.schematic import Schematic
 
 Entry = Dict
@@ -75,6 +81,49 @@ def entry_for_text(text: str, schematics_dir: str) -> Optional[Entry]:
     return {"kind": "schem", "name": stem if inside else os.path.abspath(path)}
 
 
+def _managed_path(digest: str) -> Path:
+    if not isinstance(digest, str) or re.fullmatch(r"[a-f0-9]{64}", digest) is None:
+        raise ValueError("Identificador da cópia .schem inválido.")
+    return saves_path("schematics", digest + ".schem")
+
+
+def _read_schem_bytes(path: Path) -> bytes:
+    from src.world.schematic import MAX_SCHEM_FILE_BYTES
+
+    with path.open("rb") as source:
+        raw = source.read(MAX_SCHEM_FILE_BYTES + 1)
+    if len(raw) > MAX_SCHEM_FILE_BYTES:
+        raise ValueError("Arquivo .schem maior que o limite de importação.")
+    return raw
+
+
+def snapshot_external(entry: Entry) -> Tuple[Entry, Schematic]:
+    """Valida e guarda os mesmos bytes importados, independentemente do arquivo de origem."""
+    source = Path(entry["name"])
+    raw = _read_schem_bytes(source)
+    schematic = Schematic.load_from_bytes(raw, source.stem)
+    digest = hashlib.sha256(raw).hexdigest()
+    destination = _managed_path(digest)
+    try:
+        synchronized = hashlib.sha256(_read_schem_bytes(destination)).hexdigest() == digest
+    except (OSError, ValueError):
+        synchronized = False
+    if not synchronized:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            try:
+                temporary.write(raw)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+                temporary.close()
+                os.replace(temporary_path, destination)
+            finally:
+                temporary.close()
+                temporary_path.unlink(missing_ok=True)
+    return {"kind": "schem", "name": source.stem, "sha256": digest}, schematic
+
+
 def load_entry(entry: Entry, schematics_dir: str) -> Schematic:
     """A construção (sem giro) de uma entrada. ``FileNotFoundError`` se o .schem sumiu; ``ValueError`` se não dá."""
     kind = entry.get("kind")
@@ -83,6 +132,12 @@ def load_entry(entry: Entry, schematics_dir: str) -> Schematic:
         return showcase_schematic()
     if kind == "schem":
         name = str(entry.get("name", ""))
+        if "sha256" in entry:
+            digest = entry["sha256"]
+            raw = _read_schem_bytes(_managed_path(digest))
+            if hashlib.sha256(raw).hexdigest() != digest:
+                raise ValueError("A cópia local da construção perdeu a integridade.")
+            return Schematic.load_from_bytes(raw, name)
         path = _schem_path(name, schematics_dir)
         if path is None:
             raise FileNotFoundError(f"Construção '{name}' não encontrada.")

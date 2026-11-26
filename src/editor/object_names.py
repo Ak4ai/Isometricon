@@ -7,10 +7,11 @@ import re
 import unicodedata
 from pathlib import Path
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ASSET_OBJECTS = os.path.join(PROJECT_ROOT, "assets", "objects")
-EXPORT_OBJECTS = os.path.join(PROJECT_ROOT, "saves", "objetos")
-LEGACY_EXPORT = os.path.join(PROJECT_ROOT, "saves", "objeto.json")
+from src.core.paths import RESOURCE_ROOT, saves_path
+
+ASSET_OBJECTS = os.fspath(RESOURCE_ROOT / "assets" / "objects")
+EXPORT_OBJECTS = os.fspath(saves_path("objetos"))
+LEGACY_EXPORT = os.fspath(saves_path("objeto.json"))
 
 
 def slugify(name: str, default: str = "objeto") -> str:

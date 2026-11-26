@@ -200,3 +200,57 @@ def test_real_schematic_meshes_with_project_atlas():
     assert inds.max() < len(verts) // FLOATS_PER_VERTEX
     uvs = verts.reshape(-1, FLOATS_PER_VERTEX)[:, 6:8]
     assert uvs.min() >= 0.0 and uvs.max() <= 1.0
+
+
+def schematic_bytes(dim, block_data, palette_id=0):
+    import gzip
+    import struct
+
+    def field(kind, name, payload):
+        name = name.encode()
+        return struct.pack(">BH", kind, len(name)) + name + payload
+
+    dimensions = b"".join(field(2, name, struct.pack(">h", d)) for name, d in zip(("Width", "Height", "Length"), dim))
+    palette = field(10, "Palette", field(3, "minecraft:stone", struct.pack(">i", palette_id)) + b"\x00")
+    data = field(7, "BlockData", struct.pack(">i", len(block_data)) + block_data)
+    return gzip.compress(field(10, "Schematic", dimensions + palette + data + b"\x00"))
+
+
+def test_schematic_decompression_and_voxel_limits_before_allocation(monkeypatch):
+    from src.world import schematic
+
+    file = schematic_bytes((3, 2, 1), b"\x00" * 6)
+    monkeypatch.setattr(schematic, "MAX_SCHEM_NBT_BYTES", 10)
+    with pytest.raises(ValueError, match="descompactado"):
+        Schematic.load_from_bytes(file, "pequeno")
+    monkeypatch.undo()
+    monkeypatch.setattr(schematic, "MAX_SCHEM_VOXELS", 5)
+    from types import SimpleNamespace
+
+    numpy_calls = vars(schematic.np) | {"full": lambda *args, **kwargs: pytest.fail("alocou antes do limite")}
+    monkeypatch.setattr(schematic, "np", SimpleNamespace(**numpy_calls))
+    with pytest.raises(ValueError, match="limite.*voxels"):
+        Schematic.load_from_bytes(file, "pequeno")
+
+
+def test_schematic_sparse_ids_do_not_allocate_a_palette_as_large_as_the_id():
+    data = schematic_bytes((2, 1, 1), b"\xff\xff\xff\xff\x07", palette_id=2**31 - 1)
+    result = Schematic.load_from_bytes(data, "paleta esparsa")
+    assert result.get_block(0, 0, 0) == "minecraft:stone"
+    assert result.get_block(1, 0, 0) == "minecraft:air"
+
+
+@pytest.mark.parametrize("block_data", [b"\x80", b"\x80\x80\x80\x80\x80", b"\x00\x00"])
+def test_schematic_invalid_varints_or_extra_voxels_report_value_error(block_data):
+    with pytest.raises(ValueError, match="VarInt"):
+        Schematic.load_from_bytes(schematic_bytes((1, 1, 1), block_data), "inválido")
+
+
+def test_schematic_mesh_budget_survives_rotation(monkeypatch):
+    from src.world import schematic
+    from src.world.block_rotation import rotate_schematic
+
+    monkeypatch.setattr(schematic, "MAX_SCHEM_MESH_QUADS", 5)
+    source = Schematic.load_from_bytes(schematic_bytes((1, 1, 1), b"\x00"), "seis faces")
+    with pytest.raises(ValueError, match="quadriláteros"):
+        StructureMesher.build_arrays(rotate_schematic(source, 1), flat_uv)

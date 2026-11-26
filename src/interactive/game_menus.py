@@ -195,13 +195,11 @@ class GameMenus:
             elif action == 'create_world':
                 # com o campo vazio, a seed é a da prévia: o mundo criado é o que a tela mostrou
                 seed = self.fields['seed'] if self.fields['seed'].strip() else str(self.preview_seed)
-                self.world = self.library.create(self.fields['name'], seed, dict(self.terrain))
-                self.result = ('play', self.world)
-                self.go('game')
+                world = self.library.create(self.fields['name'], seed, dict(self.terrain))
+                self.result = ('play', world)
             elif action.startswith('load:'):
-                self.world = next(w for w in self.library.list() if w['id'] == action[5:])
-                self.result = ('play', self.world)
-                self.go('game')
+                self.result = None
+                self.result = ('play', self.library.load(action[5:]))
             elif action.startswith('delete:'):
                 self.pending_delete = next(w for w in self.library.list() if w['id'] == action[7:])
                 self.worlds_scroll = self.scroll

@@ -111,3 +111,34 @@ def test_seed_store_round_trip_and_bad_file(tmp_path):
 
 def test_seed_store_path_is_the_old_rafael_place():
     assert seed_store_path(42).replace("\\", "/").endswith("saves/mundos/mundo_42.json")
+
+
+def test_external_schematic_survives_source_move(tmp_path, monkeypatch):
+    import shutil
+    monkeypatch.setenv("ISOMETRICON_DATA_DIR", str(tmp_path / "data"))
+    source = tmp_path / "external.schem"
+    shutil.copyfile("assets/schematics/sala-teste.schem", source)
+    tool = make_tool()
+    original = place(tool, str(source), (0, 5, 0))
+    source.rename(tmp_path / "moved.schem")
+
+    other = make_tool()
+    assert restore(other, to_data(tool.layer)) == []
+    assert np.array_equal(other.layer.structures[0].schematic.grid, original.schematic.grid)
+
+
+def test_legacy_missing_reference_survives_saving_and_can_recover(tmp_path, monkeypatch):
+    import shutil
+    monkeypatch.setenv("ISOMETRICON_DATA_DIR", str(tmp_path / "data"))
+    missing = tmp_path / "legacy.schem"
+    original = {"entry": {"kind": "schem", "name": str(missing)}, "name": "legacy",
+                "origin": [50, 5, 50], "rotation": 2, "open_doors": []}
+    tool = make_tool()
+    assert len(restore(tool, [original])) == 1
+    assert to_data(tool.layer) == [original]
+
+    shutil.copyfile("assets/schematics/sala-teste.schem", missing)
+    assert restore(tool, to_data(tool.layer)) == []
+    assert tool.layer.structures[0].rotation == 2
+    missing.unlink()
+    assert restore(make_tool(), to_data(tool.layer)) == []

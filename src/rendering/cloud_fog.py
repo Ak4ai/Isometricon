@@ -491,7 +491,7 @@ class CloudFog:
         gl.glTexSubImage2D(gl.GL_TEXTURE_2D, 0, 0, 0, WINDOW, WINDOW, gl.GL_RGBA, gl.GL_FLOAT, data)
         gl.glActiveTexture(gl.GL_TEXTURE0)
 
-    def render(self, projection, view, model, tint, time: float, light=(0.55, 0.26, 0.7), soft: bool = False) -> None:
+    def render(self, projection, view, model, tint, time: float, light=(0.55, 0.26, 0.7), soft: bool = False, focus=None) -> None:
         """``light``: para onde está o sol, no espaço desenhado (o ``u_LightDir``); ``soft``: as nuvens fofas."""
         import OpenGL.GL as gl
         full, moving = self._meshes['full'], self._meshes['moving']
@@ -506,14 +506,17 @@ class CloudFog:
         self.shader.set_float('u_Window', float(WINDOW))
         self.shader.set_float('u_Cell', float(CELL))
         self.shader.set_bool('u_Soft', bool(soft))
+        # A direção da câmera no mundo serve tanto à superfície arredondada quanto ao recorte de visibilidade.
+        eye = np.linalg.solve((np.asarray(view, dtype=np.float64) @ np.asarray(model, dtype=np.float64))[:3, :3],
+                              np.array([0.0, 0.0, 1.0]))
+        eye /= max(np.linalg.norm(eye), 1e-9)
+        self.shader.set_vec3('u_ToCamera', *eye)
+        disc = (0.0, 0.0, 0.0, 0.0) if focus is None else (float(focus[0]), float(focus[1]) + .5, float(focus[2]), RADIUS)
+        self.shader.set_vec4('u_VisibleDisc', *disc)
         if soft:
-            # o sol e a câmera no espaço do mundo (as nuvens são desenhadas nele, com o model no u_MVP)
             rotation = np.asarray(model, dtype=np.float64)[:3, :3]
             sun = np.linalg.solve(rotation, np.asarray(light, dtype=np.float64))
-            eye = np.linalg.solve((np.asarray(view, dtype=np.float64) @ np.asarray(model, dtype=np.float64))[:3, :3],
-                                  np.array([0.0, 0.0, 1.0]))
             self.shader.set_vec3('u_Light', *(sun / max(np.linalg.norm(sun), 1e-9)))
-            self.shader.set_vec3('u_ToCamera', *(eye / max(np.linalg.norm(eye), 1e-9)))
             gl.glActiveTexture(gl.GL_TEXTURE0 + BOX_UNIT)
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.boxes_id)
             gl.glActiveTexture(gl.GL_TEXTURE0)

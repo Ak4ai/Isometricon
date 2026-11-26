@@ -11,9 +11,9 @@ uma imagem desenhada com PIL e enviada como textura só quando muda.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import glob
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -34,6 +34,7 @@ from src.clothing.customization import IRIS_PALETTES, MAKEUP_COLORS
 from src.clothing.character_model import DEFAULT_HAIR_ID, HANDMADE_HAIR, MODELS_DIR, SKIN_PRESETS
 from src.clothing.customization import HairStyle
 from src.clothing.layer_clearance import fitted_asset_type
+from src.clothing.model_paths import GENERATED_MODELS, clothing_files, model_file
 from src.interactive.skin_commands import (
     BODIES,
     CLOTHING_DIR,
@@ -200,19 +201,24 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
     """
     found: Dict[str, List[CatalogItem]] = {k: [] for k in ("top", "jacket", "bottom", "dress", "shoes", "hair", "tool", "other")}
     halves: Dict[str, Dict[str, CatalogItem]] = {}
+    default_catalog = clothing_dir == CLOTHING_DIR and models_dir == MODELS_DIR
+    user_dir = GENERATED_MODELS / "clothing" if default_catalog else Path(clothing_dir)
     fixed = _load_types(os.path.join(clothing_dir, TYPES_FILE))
-    user = _load_types(os.path.join(clothing_dir, USER_TYPES_FILE))
+    user_path = os.fspath(user_dir / USER_TYPES_FILE)
+    user = _load_types(user_path)
     known = {**user, **fixed}
     learned = dict(user)
-    for path in sorted(glob.glob(os.path.join(clothing_dir, "*.rbxm"))):
+    paths = clothing_files("*.rbxm") if default_catalog else sorted(Path(clothing_dir).glob("*.rbxm"))
+    for path in paths:
         base = os.path.basename(path)
         match = re.search(r"_(\d{6,})\.rbxm$", base)
         if not match:
             continue
         asset_id, stem = match.group(1), base[:match.start()]
         lower = stem.lower()
-        asset_type = next((t for t in (fitted_asset_type(os.path.join(models_dir, f"character_native_{asset_id}_{body}.obj"))
-                                       for body in ("female", "male")) if t is not None), None)
+        fit_names = (f"character_native_{asset_id}_{body}.obj" for body in ("female", "male"))
+        fit_paths = (model_file(name) if default_catalog else os.path.join(models_dir, name) for name in fit_names)
+        asset_type = next((kind for fitted in fit_paths if (kind := fitted_asset_type(fitted)) is not None), None)
         if asset_type is None:
             asset_type = known.get(asset_id)  # not fitted on this machine (a fresh clone): the type seen when it was
         elif asset_id not in fixed:
@@ -223,7 +229,8 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
             kind = ("hair" if any(w in lower for w in HAIR_WORDS)
                     else "shoe" if is_side and any(w in lower for w in SHOE_WORDS) else "other")
         thumb = os.path.join(clothing_dir, "thumbs", f"{asset_id}.png")
-        texture = path[:-len(".rbxm")] + ".png"
+        texture = (model_file("clothing", path.with_suffix(".png").name) if default_catalog
+                   else os.fspath(path.with_suffix(".png")))
         image = thumb if os.path.exists(thumb) else texture if os.path.exists(texture) else None
         item = CatalogItem(asset_id, re.sub(r"[_\s]+", " ", stem).strip(" -"), kind, image)
         if kind != "shoe":
@@ -239,7 +246,7 @@ def catalog(clothing_dir: str = CLOTHING_DIR, models_dir: str = MODELS_DIR) -> D
             name = re.sub(r"(?i)\s*-?\s*(left|right)\s*(shoe)?\s*(accessory)?", "", left.name).strip(" -") or left.name
             found["shoes"].append(CatalogItem(f"{left.asset_id},{right.asset_id}", name, "shoes", left.image))
     if learned != user:
-        _save_types(os.path.join(clothing_dir, USER_TYPES_FILE), learned)
+        _save_types(user_path, learned)
     return found
 
 
@@ -259,6 +266,7 @@ def _load_types(path: str) -> Dict[str, int]:
 
 def _save_types(path: str, types: Dict[str, int]) -> None:
     try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path + ".tmp", "w", encoding="utf-8") as fp:
             json.dump(dict(sorted(types.items(), key=lambda kv: int(kv[0]))), fp, indent=1)
             fp.write("\n")

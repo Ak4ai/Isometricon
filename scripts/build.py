@@ -72,51 +72,39 @@ def build_windows(version: str, onefile: bool = False, make_zip: bool = True) ->
     ensure_pyinstaller()
     os.chdir(PROJECT_ROOT)
 
-    # 1. Build Portable (OneDir)
-    portable_name = f"Isometricon-v{version}"
-    cmd_portable = [
+    # Usa os mesmos recursos e DLLs nos dois formatos Windows.
+    build_command = [
         sys.executable,
         "-m",
         "PyInstaller",
         "--noconsole",
-        "--onedir",
+        "--collect-binaries",
+        "glfw",
         "--add-data",
         f"{ASSETS_DIR};assets",
-        "--name",
-        portable_name,
-        MAIN_SCRIPT,
+        "--add-data",
+        f"{os.path.join(PROJECT_ROOT, 'VERSION.txt')};.",
     ]
 
     start_time = time.time()
-    subprocess.run(cmd_portable, check=True)
+    portable_name = "Isometricon"
+    subprocess.run(build_command + ["--onedir", "--name", portable_name, MAIN_SCRIPT], check=True)
 
     out_folder = os.path.join(DIST_DIR, portable_name)
     print(f"✅ Executável Portable gerado em: {out_folder}")
 
     if make_zip:
-        zip_path = os.path.join(DIST_DIR, f"{portable_name}-Windows-Portable")
+        zip_path = os.path.join(DIST_DIR, f"Isometricon-v{version}-Windows-Portable")
         print(f"📦 Criando arquivo compactado: {zip_path}.zip...")
-        shutil.make_archive(zip_path, "zip", out_folder)
+        shutil.make_archive(zip_path, "zip", root_dir=DIST_DIR, base_dir=portable_name)
         print(f"🎉 Pacote Zip criado: {zip_path}.zip")
 
-    # 2. Build Standalone Installer (OneFile) se solicitado
+    # Build standalone (OneFile) se solicitado. O nome de release é mantido por compatibilidade.
     if onefile:
         installer_name = f"Isometricon-v{version}-Windows-Installer"
         print(f"\n💿 Compilando versão Standalone OneFile ({installer_name}.exe)...")
-        cmd_onefile = [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            "--noconsole",
-            "--onefile",
-            "--add-data",
-            f"{ASSETS_DIR};assets",
-            "--name",
-            installer_name,
-            MAIN_SCRIPT,
-        ]
-        subprocess.run(cmd_onefile, check=True)
-        print(f"✅ Instalador Standalone gerado em: {os.path.join(DIST_DIR, installer_name + '.exe')}")
+        subprocess.run(build_command + ["--onefile", "--name", installer_name, MAIN_SCRIPT], check=True)
+        print(f"✅ Executável standalone gerado em: {os.path.join(DIST_DIR, installer_name + '.exe')}")
 
     elapsed = time.time() - start_time
     print(f"\n⚡ Compilação para Windows concluída em {elapsed:.1f}s!\n")
@@ -134,14 +122,17 @@ def build_linux(version: str, make_tar: bool = True) -> None:
         ensure_pyinstaller()
         os.chdir(PROJECT_ROOT)
 
-        portable_name = f"Isometricon-v{version}-linux"
         cmd = [
             sys.executable,
             "-m",
             "PyInstaller",
             "--onedir",
+            "--collect-binaries",
+            "glfw",
             "--add-data",
             f"{ASSETS_DIR}:assets",
+            "--add-data",
+            f"{os.path.join(PROJECT_ROOT, 'VERSION.txt')}:.",
             "--name",
             "isometricon",
             MAIN_SCRIPT,
@@ -188,7 +179,7 @@ def build_linux(version: str, make_tar: bool = True) -> None:
             wsl_cmd = (
                 f"cd '{wsl_proj_path}' && "
                 "pip install -q -r requirements.txt pyinstaller && "
-                "pyinstaller --onedir --add-data 'assets:assets' --name 'isometricon' src/main.py"
+                "python3 scripts/build.py --linux --no-zip"
             )
             subprocess.run(["wsl", "bash", "-c", wsl_cmd], check=True)
 

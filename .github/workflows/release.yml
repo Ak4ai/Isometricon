@@ -5,17 +5,27 @@ on:
     branches: [ main ]
     paths:
       - 'VERSION.txt'
-      - 'VERSION'
     tags:
       - 'v*'
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish after confirming redistribution permissions for the bundled assets'
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: isometricon-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   prepare-release:
-    name: Prepare Release & Tag
+    name: Verify Release Version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get-version.outputs.version }}
@@ -24,46 +34,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Extract Version
         id: get-version
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG="${GITHUB_REF_NAME}"
-            VERSION="${TAG#v}"
-          elif [ -f VERSION.txt ]; then
-            VERSION=$(cat VERSION.txt | tr -d '[:space:]')
-            TAG="v${VERSION}"
-          else
-            VERSION=$(cat VERSION | tr -d '[:space:]')
-            TAG="v${VERSION}"
+          VERSION=$(tr -d '[:space:]' < VERSION.txt)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version" >&2
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "The tag must match VERSION.txt" >&2
+            exit 1
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag_name=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Target Version: ${VERSION}, Tag: ${TAG}"
-
-      - name: Create Git Tag and Draft Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.get-version.outputs.tag_name }}
-          VERSION: ${{ steps.get-version.outputs.version }}
-        run: |
-          # Criar Release como Rascunho (Draft) se ainda não existir
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Criando draft release para $TAG..."
-            gh release create "$TAG" --title "Isometricon $TAG" --generate-notes --draft
-          else
-            echo "Release $TAG já existe."
-          fi
 
   build-windows:
-    name: Build Windows (Portable & Installer)
+    name: Build and Verify Windows (Portable & OneFile)
     runs-on: windows-latest
     needs: prepare-release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -76,66 +73,121 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Windows Portable (OneDir)
-        run: |
-          pyinstaller --noconsole --onedir --add-data "assets;assets" --name "Isometricon" src/main.py
-          Compress-Archive -Path dist/Isometricon -DestinationPath "dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Windows-Portable.zip" -Force
-
-      - name: Build Windows Standalone Executable (OneFile)
-        run: |
-          pyinstaller --noconsole --onefile --add-data "assets;assets" --name "Isometricon-Installer" src/main.py
-          Move-Item "dist/Isometricon-Installer.exe" "dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Windows-Installer.exe" -Force
-
-      - name: Upload Windows Binaries to Release
+      - name: Build Windows packages
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.prepare-release.outputs.tag_name }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: python -c "import os; from scripts.build import build_windows; build_windows(os.environ['VERSION'], onefile=True)"
+
+      - name: Prepare software OpenGL for the smoke test
+        shell: pwsh
         run: |
-          gh release upload "$env:TAG" "dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Windows-Portable.zip" "dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Windows-Installer.exe" --clobber
+          $archive = Join-Path $env:RUNNER_TEMP 'isometricon-mesa.7z'
+          $mesa = Join-Path $env:RUNNER_TEMP 'isometricon-mesa'
+          curl.exe --fail --location --retry 3 --output $archive https://github.com/pal1000/mesa-dist-win/releases/download/25.2.8/mesa3d-25.2.8-release-msvc.7z
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download Mesa' }
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash -ne 'e47cfe0be35f0c40c3d488c0e965d10656154ed55cfdfe4f4d79d4395672dc02') {
+            throw 'Unexpected Mesa archive hash'
+          }
+          New-Item -ItemType Directory -Path $mesa | Out-Null
+          tar.exe -xf $archive -C $mesa x64/opengl32.dll x64/libgallium_wgl.dll
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract Mesa' }
+
+      - name: Verify Windows packages outside the checkout
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          python scripts/smoke_windows_package.py "dist/Isometricon-v${env:VERSION}-Windows-Portable.zip" "dist/Isometricon-v${env:VERSION}-Windows-Installer.exe" --mesa-dir "$env:RUNNER_TEMP/isometricon-mesa/x64"
+
+      - name: Store verified Windows packages
+        if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-packages
+          path: |
+            dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Windows-Portable.zip
+            dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Windows-Installer.exe
+          if-no-files-found: error
 
   build-linux:
-    name: Build Linux (Portable)
+    name: Build and Verify Linux Portable
     runs-on: ubuntu-latest
     needs: prepare-release
+    env:
+      VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          python -m pip install -r requirements.txt pyinstaller
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
 
       - name: Build Linux Portable
         run: |
-          pyinstaller --onedir --add-data "assets:assets" --name "isometricon" src/main.py
-          tar -czvf "dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Linux-Portable.tar.gz" -C dist isometricon
+          python scripts/build.py --linux --no-zip
+          tar -czf "dist/Isometricon-v${VERSION}-Linux-Portable.tar.gz" -C dist isometricon
 
-      - name: Upload Linux Binary to Release
+      - name: Verify the extracted package outside the checkout
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.prepare-release.outputs.tag_name }}
+          LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
-          gh release upload "$TAG" "dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Linux-Portable.tar.gz" --clobber
+          xvfb-run -a python scripts/smoke_linux_package.py "dist/Isometricon-v${VERSION}-Linux-Portable.tar.gz"
+
+      - name: Store verified Linux package
+        if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-package
+          path: dist/Isometricon-v${{ needs.prepare-release.outputs.version }}-Linux-Portable.tar.gz
+          if-no-files-found: error
 
   publish-release:
     name: Publish Official Release
     runs-on: ubuntu-latest
     needs: [prepare-release, build-windows, build-linux]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '*-package*'
+          path: packages
+          merge-multiple: true
 
-      - name: Publish Release (Set Draft to False)
+      - name: Create and publish a new release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare-release.outputs.tag_name }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
+          files=(
+            "packages/Isometricon-v${VERSION}-Windows-Portable.zip"
+            "packages/Isometricon-v${VERSION}-Windows-Installer.exe"
+            "packages/Isometricon-v${VERSION}-Linux-Portable.tar.gz"
+          )
+          for file in "${files[@]}"; do
+            test -s "$file"
+          done
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. No artifacts were uploaded." >&2
+            exit 1
+          fi
+          # An existing tag must reference the exact commit used by the builds.
+          tags=$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/$TAG" --jq '.[].ref')
+          tag_options=(--target "$GITHUB_SHA")
+          if grep -Fxq "refs/tags/$TAG" <<< "$tags"; then
+            tagged=$(gh api "repos/$GH_REPO/commits/$TAG" --jq '.sha')
+            test "$tagged" = "$GITHUB_SHA"
+            tag_options=(--verify-tag)
+          fi
+          gh release create "$TAG" "${tag_options[@]}" --title "Isometricon $TAG" --generate-notes --draft "${files[@]}"
           gh release edit "$TAG" --draft=false
-          echo "Release $TAG publicada com sucesso no GitHub!"

@@ -96,6 +96,7 @@ class StructureLayer:
 
     def __init__(self) -> None:
         self.structures: List[PlacedStructure] = []
+        self.unavailable: List[Tuple[int, dict]] = []  # entradas preservadas sem fonte disponível
 
     def __len__(self) -> int:
         return len(self.structures)

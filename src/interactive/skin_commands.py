@@ -10,8 +10,8 @@ chat saem desse mesmo quadro, então não divergem da execução.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import glob
 import os
+import sys
 import re
 import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -19,8 +19,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from src.clothing.body_shape import ADJUSTMENTS
 from src.clothing.eye_shapes import SHAPE_NAMES as EYE_SHAPE_NAMES
 from src.clothing.ears import STYLE_NAMES as EAR_STYLE_NAMES
+from src.clothing.model_paths import RESOURCE_MODELS, clothing_files
 from src.clothing.nose import STYLE_NAMES as NOSE_STYLE_NAMES
 from src.clothing.character_model import BOTTOM_PRESETS, DEFAULT_HAIR_ID, HANDMADE_HAIR, OUTFIT_PRESETS, SKIN_PRESETS, CharacterModel
+from src.core.paths import data_root
+
 from src.clothing.customization import (
     AvatarCustomization,
     BodyType,
@@ -33,8 +36,7 @@ from src.clothing.customization import (
     MouthStyle,
 )
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CLOTHING_DIR = os.path.join(PROJECT_ROOT, "assets", "models", "clothing")
+CLOTHING_DIR = os.fspath(RESOURCE_MODELS / "clothing")
 
 GREEN = (85, 255, 85)
 GOLD = (255, 215, 0)
@@ -117,7 +119,7 @@ def _english(enum) -> Dict[str, Any]:
 def catalog_names() -> Dict[str, int]:
     """Nome amigável -> id de cada item baixado em assets/models/clothing, mais os atalhos fixos."""
     names: Dict[str, int] = {}
-    for path in sorted(glob.glob(os.path.join(CLOTHING_DIR, "*.rbxm"))):
+    for path in clothing_files("*.rbxm"):
         match = re.search(r"_(\d{6,})\.rbxm$", os.path.basename(path))
         if match:
             name = re.sub(r"[^a-z0-9]+", "_", os.path.basename(path)[:match.start()].lower()).strip("_")
@@ -136,7 +138,7 @@ def item_name(asset_id) -> str:
     for name, made in HANDMADE_HAIR.items():
         if str(asset_id) == made:
             return f"{name.capitalize()} ({asset_id})"
-    for path in glob.glob(os.path.join(CLOTHING_DIR, f"*{asset_id}.rbxm")):
+    for path in clothing_files(f"*{asset_id}.rbxm"):
         base = os.path.basename(path)
         return f"{base[:-len(f'_{asset_id}.rbxm')].replace('_', ' ').strip()} ({asset_id})"
     return str(asset_id)
@@ -456,7 +458,7 @@ class SkinCommandHandler:
             roles = auto_roles(model.rig, model.height)
             os.makedirs(directory, exist_ok=True)
             roles.save(model.rig, target)
-            return True, f"[Modelo] Papéis gravados em {os.path.relpath(target, PROJECT_ROOT)}; edite e use /skin modelo papeis <arquivo>.", CYAN
+            return True, f"[Modelo] Papéis gravados em {os.path.relpath(target, data_root())}; edite e use /skin modelo papeis <arquivo>.", CYAN
         if word in ("off", "limpar"):
             if os.path.isfile(target):
                 os.remove(target)
@@ -1583,7 +1585,7 @@ class SkinCommandHandler:
             path = character_save.save(self.character_model, self.save_path or character_save.SAVE_PATH)
         except OSError as exc:
             return False, f"[Skin] Não foi possível salvar o personagem: {exc}", RED
-        return True, f"[Skin] Personagem salvo em {os.path.relpath(path, PROJECT_ROOT)}.", GREEN
+        return True, f"[Skin] Personagem salvo em {path}.", GREEN
 
     def load(self, args: List[str]) -> Result:
         missing = self._need_model()
@@ -1989,20 +1991,65 @@ SCHEM_ALIASES = {
 
 
 def _pick_model_file() -> Optional[str]:
-    """Abre a janela do sistema para escolher um .glb; ``None`` se cancelou ou se ela não existe."""
+    """Abre o seletor de .glb do sistema."""
+    if sys.platform == "win32":
+        return _pick_windows_model_file()
+
     try:
         import tkinter
         from tkinter import filedialog
     except ImportError:
         return None
-    root = tkinter.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
     try:
-        path = filedialog.askopenfilename(title="Escolha o modelo (.glb)", filetypes=[("Modelo glTF", "*.glb")])
-    finally:
-        root.destroy()
-    return path or None
+        root = tkinter.Tk()
+        try:
+            root.withdraw()
+            root.attributes("-topmost", True)
+            path = filedialog.askopenfilename(title="Escolha o modelo (.glb)", filetypes=[("Modelo glTF", "*.glb")])
+        finally:
+            root.destroy()
+        return path or None
+    except tkinter.TclError:
+        return None
+
+
+def _pick_windows_model_file() -> Optional[str]:
+    """Usa o seletor Unicode fornecido pelo Windows, inclusive nos executáveis empacotados."""
+    import ctypes
+    from ctypes import wintypes
+
+    class OpenFileName(ctypes.Structure):
+        _fields_ = [
+            ("lStructSize", wintypes.DWORD), ("hwndOwner", wintypes.HWND),
+            ("hInstance", wintypes.HINSTANCE), ("lpstrFilter", wintypes.LPCWSTR),
+            ("lpstrCustomFilter", wintypes.LPWSTR), ("nMaxCustFilter", wintypes.DWORD),
+            ("nFilterIndex", wintypes.DWORD), ("lpstrFile", wintypes.LPWSTR),
+            ("nMaxFile", wintypes.DWORD), ("lpstrFileTitle", wintypes.LPWSTR),
+            ("nMaxFileTitle", wintypes.DWORD), ("lpstrInitialDir", wintypes.LPCWSTR),
+            ("lpstrTitle", wintypes.LPCWSTR), ("Flags", wintypes.DWORD),
+            ("nFileOffset", wintypes.WORD), ("nFileExtension", wintypes.WORD),
+            ("lpstrDefExt", wintypes.LPCWSTR), ("lCustData", wintypes.LPARAM),
+            ("lpfnHook", ctypes.c_void_p), ("lpTemplateName", wintypes.LPCWSTR),
+            ("pvReserved", ctypes.c_void_p), ("dwReserved", wintypes.DWORD),
+            ("FlagsEx", wintypes.DWORD),
+        ]
+
+    choose = ctypes.windll.comdlg32.GetOpenFileNameW
+    choose.argtypes = [ctypes.POINTER(OpenFileName)]
+    choose.restype = wintypes.BOOL
+    active_window = ctypes.windll.user32.GetActiveWindow
+    active_window.argtypes = []
+    active_window.restype = wintypes.HWND
+    filename = ctypes.create_unicode_buffer(32768)
+    file_filter = ctypes.create_unicode_buffer("Modelo glTF (*.glb)\0*.glb\0")
+    dialog = OpenFileName(
+        lStructSize=ctypes.sizeof(OpenFileName), hwndOwner=active_window(),
+        lpstrFile=ctypes.cast(filename, wintypes.LPWSTR), nMaxFile=len(filename),
+        lpstrFilter=ctypes.cast(file_filter, wintypes.LPCWSTR), nFilterIndex=1,
+        lpstrTitle="Escolha o modelo (.glb)", lpstrDefExt="glb",
+        Flags=0x80000 | 0x1000 | 0x8 | 0x4,  # EXPLORER | FILEMUSTEXIST | NOCHANGEDIR | HIDEREADONLY
+    )
+    return filename.value if choose(ctypes.byref(dialog)) else None
 
 
 def _model_options() -> List[str]:

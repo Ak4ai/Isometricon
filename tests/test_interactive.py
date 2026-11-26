@@ -602,3 +602,38 @@ def test_world_manager_water_does_not_leak_below_the_world_floor():
     assert not (below.blocks == int(BlockType.WATER)).any()
     assert chunk.get_block(9, 0, 8) is BlockType.WATER  # espalha no chão em vez de cair
     manager.delete()
+
+
+@pytest.mark.parametrize("failures, expected", [(1, True), (20, False)])
+def test_streaming_column_finishes_after_generation_failure(failures, expected):
+    import time
+
+    class IntermittentTerrain:
+        def __init__(self):
+            self.attempts = []
+
+        def generate_region(self, keys):
+            self.attempts.extend(keys)
+            if len(self.attempts) <= failures:
+                raise RuntimeError("falha transitória simulada")
+            return {key: Chunk3D(*key) for key in keys}
+
+    generator = IntermittentTerrain()
+    manager = WorldManager(generator, render_distance=0, create_gl_meshes=False)
+    manager.async_loading = True  # worker CPU real; chunks vazios não precisam de upload OpenGL
+    try:
+        manager.update(0, 0)
+        deadline = time.monotonic() + 2
+        while manager.has_pending_streaming_work() and time.monotonic() < deadline:
+            manager.update(0, 0)
+            time.sleep(.005)
+        assert not manager.has_pending_streaming_work()
+        revision, chunks = manager.get_loaded_chunks_snapshot()
+        assert ((0, 0, 0) in chunks) == expected
+        assert (revision > 0) == expected
+        assert generator.attempts == [(0, 0, 0)] * 2
+        for _ in range(3):
+            manager.update(0, 0)
+        assert len(generator.attempts) == 2
+    finally:
+        manager.delete()

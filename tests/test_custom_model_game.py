@@ -299,3 +299,25 @@ def test_the_model_tab_shows_the_new_options_right_after_a_click_with_no_tab_cha
     assert "Meu_Monstro" in labels() and "Altura (m)" not in labels() and "Bipede" in labels()
     editor.choose(next(o for g in editor.groups() for o in g.options if o.label == "Personagem"))
     assert labels() == ["Personagem", "Personalizado"]
+
+
+def test_same_basename_keeps_both_models_and_their_saved_ids(tmp_path):
+    from pathlib import Path
+
+    from src.clothing.glb_writer import sample_humanoid
+
+    first = tmp_path / "original" / "Mesmo nome.glb"
+    second = tmp_path / "novo" / first.name
+    for path, data in ((first, skinned_glb()[0]), (second, sample_humanoid())):
+        path.parent.mkdir()
+        path.write_bytes(data)
+    folder = tmp_path / "biblioteca"
+    old_id = store.import_model(first, folder)
+    choice_path = tmp_path / "escolha.json"
+    store.save_choice({"arquivo": old_id}, choice_path)
+    new_id = store.import_model(second, folder)
+    assert old_id == "Mesmo_nome" and new_id != old_id
+    assert store.import_model(second, folder) == new_id
+    assert sorted(store.list_models(folder)) == sorted([old_id, new_id])
+    assert Path(store.path_of(store.load_choice(choice_path)["arquivo"], folder)).read_bytes() == first.read_bytes()
+    assert Path(store.path_of(new_id, folder)).read_bytes() == second.read_bytes()

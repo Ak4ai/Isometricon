@@ -18,7 +18,7 @@ from src.world.block_rotation import rotate_schematic
 from src.world.schematic import Schematic
 from src.world.structure_layer import BlockLookup, PlacedStructure, StructureLayer
 from src.world.structure_mesher import StructureMesher
-from src.world.structure_sources import SHOWCASE_NAMES, entry_for_text, load_entry
+from src.world.structure_sources import SHOWCASE_NAMES, entry_for_text, load_entry, snapshot_external
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCHEMATICS_DIR = os.path.join(PROJECT_ROOT, "assets", "schematics")
@@ -73,8 +73,12 @@ class StructureMeshes:
         self.main = TexturedMesh(*StructureMesher.build_arrays(schematic, uv_lookup, center=False, cells=body))
         self.doors = None
         self.chests = None
-        self.rebuild_doors()
-        self.rebuild_chests()
+        try:
+            self.rebuild_doors()
+            self.rebuild_chests()
+        except Exception:
+            self.delete()
+            raise
 
     def rebuild_doors(self) -> None:
         from src.rendering.mesh import TexturedMesh
@@ -198,23 +202,29 @@ class SchematicTool:
 
     def schematic_for(self, entry: dict) -> Schematic:
         """A construção (sem giro) de uma entrada; levanta se não dá para carregar."""
-        if entry.get("kind") == "schem":
+        if entry.get("kind") == "schem" and "sha256" not in entry:
             path = self.resolve(str(entry.get("name", "")))
             if path is None:
                 raise FileNotFoundError(f"Construção '{entry.get('name')}' não encontrada.")
             return Schematic.load_from_file(path)
         return load_entry(entry, self.schematics_dir)
 
+    def prepare_entry(self, entry: dict) -> Tuple[dict, Schematic]:
+        """Carrega a entrada e migra referências externas antigas enquanto a fonte existe."""
+        if entry.get("kind") == "schem" and "sha256" not in entry and os.path.isabs(str(entry.get("name", ""))):
+            return snapshot_external(entry)
+        return entry, self.schematic_for(entry)
+
     def load_entry(self, entry: dict, origin: Optional[Tuple[int, int, int]] = None) -> Tuple[bool, str]:
         """Abre a prévia de uma entrada da biblioteca (``src/world/structure_sources.py``)."""
         try:
-            schematic = self.schematic_for(entry)
+            entry, schematic = self.prepare_entry(entry)
+            mesh = self._mesh_factory(schematic)
         except FileNotFoundError:
             return False, f"Construção '{entry.get('name', '?')}' não encontrada. /schem list mostra as disponíveis."
         except Exception as error:  # arquivo corrompido ou formato desconhecido
             return False, f"Não consegui ler '{entry.get('name', '?')}': {error}"
         self.cancel(silent=True)
-        mesh = self._mesh_factory(schematic)
         start = list(origin) if origin is not None else self._default_origin(schematic)
         self.preview = Preview(schematic.name, schematic, mesh, start, dict(entry), 0, schematic)
         return True, (f"{schematic.name} ({schematic.width}x{schematic.height}x{schematic.length}) em prévia. "
@@ -340,13 +350,22 @@ class SchematicTool:
     def clear(self) -> Tuple[bool, str]:
         """Tira a prévia e todas as construções fixadas."""
         self.cancel(silent=True)
+        unavailable = len(self.layer.unavailable)
+        self.layer.unavailable.clear()
         removed = self.layer.clear()
         for placed in removed:
             self._delete_mesh(placed.mesh)
             self.on_remove(placed)
-        if removed:
+        if removed or unavailable:
             self.on_change()
-        return True, f"{len(removed)} construção(ões) removida(s)."
+        return True, f"{len(removed) + unavailable} construção(ões) removida(s)."
+
+    def discard_scene(self) -> None:
+        """Libera as construções na troca de mundo, sem restaurar terreno nem disparar um save."""
+        self.cancel(silent=True)
+        for placed in self.layer.clear():
+            self._delete_mesh(placed.mesh)
+        self.layer.unavailable.clear()
 
     def describe(self) -> List[str]:
         """Linhas para o /schem info: a prévia e as construções fixadas."""
@@ -491,7 +510,7 @@ class SchematicTool:
 
     def delete(self) -> None:
         """Libera as malhas e o atlas da GPU."""
-        self.clear()
+        self.discard_scene()
         if self._atlas is not None:
             self._atlas.delete()
             self._atlas = None

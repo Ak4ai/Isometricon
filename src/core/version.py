@@ -4,16 +4,18 @@ from dataclasses import dataclass
 import json
 import os
 import subprocess
+import sys
 import threading
 from typing import Optional
 import urllib.error
 import urllib.request
 
+from src.core.paths import RESOURCE_ROOT
+
 def _load_base_version() -> str:
     """Lê a versão base a partir do arquivo VERSION.txt (ou VERSION) na raiz do projeto."""
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     for filename in ["VERSION.txt", "VERSION", "version.txt"]:
-        version_file = os.path.join(root_dir, filename)
+        version_file = RESOURCE_ROOT / filename
         if os.path.exists(version_file):
             try:
                 with open(version_file, "r", encoding="utf-8") as f:
@@ -47,6 +49,8 @@ class VersionInfo:
     @property
     def full_version(self) -> str:
         """Retorna versão completa formatada: ex: v0.1.0-d5bb890* (main)."""
+        if self.commit_hash == "unknown" and self.branch == "unknown" and getattr(sys, "frozen", False):
+            return f"v{self.base_version}"
         dirty_flag = "*" if self.is_dirty else ""
         return f"v{self.base_version}-{self.commit_hash}{dirty_flag} ({self.branch})"
 
@@ -71,7 +75,7 @@ def _run_git_cmd(args: list[str], cwd: Optional[str] = None) -> Optional[str]:
     """Executa um comando git com timeout e tratamento seguro de exceção."""
     try:
         if cwd is None:
-            cwd = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            cwd = RESOURCE_ROOT
         result = subprocess.run(
             ["git"] + args,
             cwd=cwd,
@@ -91,6 +95,9 @@ def _run_git_cmd(args: list[str], cwd: Optional[str] = None) -> Optional[str]:
 def get_local_version_info() -> VersionInfo:
     """Extrai informações da versão e commit a partir do repositório Git local."""
     info = VersionInfo()
+    if getattr(sys, "frozen", False):
+        info.sync_status = "offline"
+        return info
 
     # 1. Commit Hash (short)
     commit = _run_git_cmd(["rev-parse", "--short", "HEAD"])
