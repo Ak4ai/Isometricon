@@ -32,13 +32,13 @@ from src.clothing.customization import (
     IrisColor,
     MouthStyle,
 )
+from src.clothing.model_paths import GENERATED_MODELS, RESOURCE_MODELS, clothing_files, model_file
 from src.math import mat4_identity, mat4_rotate_y, mat4_scale, mat4_translate, vec3
 
 
 # Diretórios padrão de assets
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODELS_DIR = os.path.join(PROJECT_ROOT, "assets", "models")
-CLOTHING_DIR = os.path.join(MODELS_DIR, "clothing")
+MODELS_DIR = os.fspath(RESOURCE_MODELS)
+CLOTHING_DIR = os.fspath(RESOURCE_MODELS / "clothing")
 # Clean A-pose mesh of each body. Both have the same groups, pose and cage topology,
 # so skin, HSR and clothing work the same on either (the cages are in wear_engine.BODY_CAGES).
 BODY_MESHES = {"female": "character_female_clean_apose_stage2.obj", "male": "character_male_clean_apose.obj"}
@@ -791,11 +791,8 @@ def fade_texture(color_rgb_255: Tuple[int, int, int], width: int = 256, streak_r
 def find_clothing_texture(asset_id: Union[int, str]) -> Optional[str]:
     """Localiza a textura PNG de uma peça de roupa a partir do seu ID numérico."""
     id_str = str(asset_id)
-    if os.path.exists(CLOTHING_DIR):
-        for fname in os.listdir(CLOTHING_DIR):
-            if fname.lower().endswith(".png") and id_str in fname:
-                return os.path.join(CLOTHING_DIR, fname)
-    return None
+    return next((os.fspath(path) for path in clothing_files("*") if
+                 path.suffix.lower() == ".png" and id_str in path.name), None)
 
 
 def is_valid_v2_obj(path: str) -> bool:
@@ -938,7 +935,7 @@ class CharacterModel:
                 print(f"[CharacterModel] Aviso: falha ao equipar cabelo {hair_id}: {e}")
         if not os.path.exists(path):
             # Hairs fitted by hand (no .rbxm) are shared by both bodies.
-            path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{hair_id}.obj")
+            path = model_file("clothing", f"Hair_fitted_{hair_id}.obj")
         return path if os.path.exists(path) else None
 
     def _choose_hair_mesh(self) -> None:
@@ -995,7 +992,12 @@ class CharacterModel:
 
     def fitted_path(self, asset_id, suffix: str = "") -> str:
         """Cache of ``asset_id`` fitted to the current body."""
-        return os.path.join(MODELS_DIR, f"character_native_{asset_id}{suffix}_{self.body}.obj")
+        name = f"character_native_{asset_id}{suffix}_{self.body}.obj"
+        local = GENERATED_MODELS / name
+        bundled = RESOURCE_MODELS / name
+        if local != bundled and not local.is_file() and is_valid_v2_obj(bundled):
+            return os.fspath(bundled)
+        return os.fspath(local)
 
     def set_hair_offset(
         self,
@@ -1724,11 +1726,9 @@ class CharacterModel:
 
         if not is_none_top and top_obj_path and os.path.exists(top_obj_path):
             top_str = str(self.top_id).lower()
-            if os.path.exists(CLOTHING_DIR):
-                for _cf in os.listdir(CLOTHING_DIR):
-                    if str(self.top_id) in _cf:
-                        top_str = f"{top_str} {_cf.lower()}"
-                        break
+            item = next((path.name for path in clothing_files("*") if str(self.top_id) in path.name), None)
+            if item is not None:
+                top_str = f"{top_str} {item.lower()}"
 
             is_bikini_name = any(k in top_str for k in ["bikini", "biquini", "swimsuit", "swim", "bra", "tube", "strapless", "strappy", "regata", "jersey"])
             is_crop_name = any(k in top_str for k in ["crop", "cropped", "tied", "short", "halter", "corset", "cutout", "strap"])
@@ -1853,9 +1853,9 @@ class CharacterModel:
 
         # 9. Tool / Katana / Acessório opcional
         if self.tool_id is not None:
-            tool_obj_path = os.path.join(MODELS_DIR, f"character_native_tool_{self.tool_id}.obj")
+            tool_obj_path = model_file(f"character_native_tool_{self.tool_id}.obj")
             if not os.path.exists(tool_obj_path):
-                tool_obj_path = os.path.join(MODELS_DIR, f"character_native_katana_{self.tool_id}.obj")
+                tool_obj_path = model_file(f"character_native_katana_{self.tool_id}.obj")
             if not os.path.exists(tool_obj_path):
                 try:
                     from src.clothing.wear_engine import RobloxWearEngine
@@ -2356,7 +2356,7 @@ def parse_character_cli_args(args: List[str]) -> Tuple[AvatarCustomization, int,
                     except Exception:
                         pass
                 if not os.path.exists(fitted_path):
-                    fitted_path = os.path.join(CLOTHING_DIR, f"Hair_fitted_{val}.obj")
+                    fitted_path = model_file("clothing", f"Hair_fitted_{val}.obj")
                 if os.path.exists(fitted_path):
                     custom_hair_obj = fitted_path
                     custom_hair_tex = find_clothing_texture(val)

@@ -53,3 +53,11 @@ Desenha a superfície de edição em um único quad, com grade, borda e célula 
 * **`platform.frag`:** calcula linhas de grade com `fwidth`, borda do volume, célula do cursor e pulso; mistura a cor base e usa alpha.
 * **Uniforms:** `u_Model`, `u_View`, `u_Projection`, `u_Size`, `u_BaseColor`, `u_LineColor`, `u_BorderColor`, `u_Cursor`, `u_CursorOn`, `u_CursorColor`, `u_GridOn`, `u_Time`.
 * **Por que em coordenadas locais:** a grade acompanha a rotação do tabuleiro (Q/E) sem desalinhar dos voxels.
+
+## Névoa de guerra em nuvens (`cloud.vert`, `cloud.frag`)
+
+A manta tem uma passada de profundidade e outra de cor. `u_ToCamera` é a direção no espaço do mundo para a câmera
+ortográfica. `u_VisibleDisc` define o centro e o raio protegidos na altura do personagem. O fragment shader projeta
+o raio do pixel nesse plano e atenua a nuvem dentro do disco, inclusive na passada de profundidade. Isso mantém
+visível a abertura quando um morro com nuvens está em primeiro plano. O mapa de exploração continua a usar as
+coordenadas horizontais do mundo.

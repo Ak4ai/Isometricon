@@ -76,7 +76,7 @@ Golpe Pesado entra quando o acerto é fácil. A aranha envenena; o ogro é um ch
   quando a luta acaba. Se você cai, a luta é perdida mesmo com aliados de pé.
 - `/npc lista`, `/npc fala <nome> <texto>`, `/npc editar <nome>` (volta ao assistente com o corpo e a ficha dele) e
   `/npc remover <nome>`. `/inimigo limpar` não tira os NPCs.
-- Cada NPC tem o seu cache de montagem (`saves/cache/npc_<id>.pkl`), para não apagar o do personagem. Enquanto o
+- Cada NPC tem o seu cache de montagem (`saves/cache/npc_<id>.zip`), para não apagar o do personagem. Enquanto o
   corpo monta, a miniatura do bestiário aparece no lugar.
 
 ## Sombra dos personagens

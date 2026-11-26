@@ -77,7 +77,8 @@ def rotate_schematic(schematic: Schematic, turns: int) -> Schematic:
         names = {name: rotate_block_name(str(name), turns) for name in set(grid.ravel().tolist())}
         grid = np.vectorize(names.__getitem__, otypes=[object])(grid) if grid.size else grid
     height, length, width = grid.shape
-    rotated = Schematic(width, height, length, grid, dict(schematic.palette), schematic.name)
+    rotated = Schematic(width, height, length, grid, dict(schematic.palette), schematic.name,
+                        max_mesh_quads=schematic.max_mesh_quads)
     tints = getattr(schematic, "tints", None)
     if tints is not None:
         rotated.tints = _turn_grid(tints, turns).copy()

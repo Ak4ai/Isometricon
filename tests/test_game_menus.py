@@ -226,3 +226,38 @@ def test_gpu_menu_updates_only_changed_controls_and_keeps_texture_correct(tmp_pa
     menus.go('create')
     menus.render(1280,720)
     assert menus.quad.uploads[-1] is None
+
+
+@pytest.mark.parametrize("corruption", [
+    {"npcs": [{"posicao": [1, 2]}]},
+    {"npcs": [{"modelo": {"arquivo": "figura"}}]},
+    {"position": [1e55, 0, 0]},
+    {"terrain": []},
+    {"character": {"cabelo": {"hair_scale_x": "invalid"}}},
+    {"structures": [{"entry": {"kind": "formas"}, "origin": [0, 1]}]},
+])
+def test_invalid_world_selection_keeps_the_active_world(tmp_path, corruption):
+    library = WorldLibrary(tmp_path / "worlds")
+    active = library.create("Ativo", 42)
+    bad = library.create("Inv?lido", 43)
+    library.save(dict(bad, **corruption))
+    before = (library.directory / (active["id"] + ".json")).read_bytes()
+    menus = GameMenus("test", Preferences(tmp_path / "prefs.json"), library, create_gl=False)
+    menus.world = active
+    menus.go("worlds")
+    menus.activate("load:" + bad["id"])
+    assert menus.world is active
+    assert menus.result is None and menus.page == "worlds" and menus.message
+    assert (library.directory / (active["id"] + ".json")).read_bytes() == before
+
+
+def test_valid_selection_waits_for_world_activation(tmp_path):
+    library = WorldLibrary(tmp_path / "worlds")
+    active = library.create("Ativo", 42)
+    other = library.create("Outro", 43)
+    menus = GameMenus("test", Preferences(tmp_path / "prefs.json"), library, create_gl=False)
+    menus.world = active
+    menus.go("worlds")
+    menus.activate("load:" + other["id"])
+    assert menus.result == ("play", other)
+    assert menus.world is active

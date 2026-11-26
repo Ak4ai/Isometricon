@@ -3,9 +3,18 @@
 import gzip
 import io
 import os
+import zlib
 import struct
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 import numpy as np
+
+
+MAX_SCHEM_FILE_BYTES = 32 * 1024 * 1024
+MAX_SCHEM_NBT_BYTES = 64 * 1024 * 1024
+MAX_SCHEM_VOXELS = 1024 * 1024
+MAX_SCHEM_MESH_QUADS = 150_000
+MAX_NBT_DEPTH = 64
+MAX_NBT_VALUES = 500_000
 
 
 class NBTTag:
@@ -25,55 +34,65 @@ class NBTTag:
 
 
 def parse_nbt_stream(stream: io.BytesIO) -> Tuple[str, dict]:
-    """Decodifica uma estrutura NBT a partir de um stream de bytes."""
+    """Lê NBT com limites para o tamanho, a profundidade e o número de valores."""
+    remaining = MAX_NBT_VALUES
+    start = stream.tell()
+    end = stream.seek(0, io.SEEK_END)
+    stream.seek(start)
 
-    def read_tag(tag_type: int):
-        if tag_type == NBTTag.BYTE:
-            return struct.unpack(">b", stream.read(1))[0]
-        elif tag_type == NBTTag.SHORT:
-            return struct.unpack(">h", stream.read(2))[0]
-        elif tag_type == NBTTag.INT:
-            return struct.unpack(">i", stream.read(4))[0]
-        elif tag_type == NBTTag.LONG:
-            return struct.unpack(">q", stream.read(8))[0]
-        elif tag_type == NBTTag.FLOAT:
-            return struct.unpack(">f", stream.read(4))[0]
-        elif tag_type == NBTTag.DOUBLE:
-            return struct.unpack(">d", stream.read(8))[0]
-        elif tag_type == NBTTag.BYTE_ARRAY:
-            length = struct.unpack(">i", stream.read(4))[0]
-            return stream.read(length)
-        elif tag_type == NBTTag.STRING:
-            length = struct.unpack(">H", stream.read(2))[0]
-            return stream.read(length).decode("utf-8", errors="replace")
-        elif tag_type == NBTTag.LIST:
-            sub_type = stream.read(1)[0]
-            length = struct.unpack(">i", stream.read(4))[0]
-            return [read_tag(sub_type) for _ in range(length)]
-        elif tag_type == NBTTag.COMPOUND:
-            res = {}
-            while True:
-                sub_type = stream.read(1)[0]
-                if sub_type == NBTTag.END:
-                    break
-                name_len = struct.unpack(">H", stream.read(2))[0]
-                name = stream.read(name_len).decode("utf-8", errors="replace")
-                res[name] = read_tag(sub_type)
-            return res
-        elif tag_type == NBTTag.INT_ARRAY:
-            length = struct.unpack(">i", stream.read(4))[0]
-            return list(struct.unpack(f">{length}i", stream.read(4 * length)))
-        elif tag_type == NBTTag.LONG_ARRAY:
-            length = struct.unpack(">i", stream.read(4))[0]
-            return list(struct.unpack(f">{length}q", stream.read(8 * length)))
-        return None
+    def read(size: int) -> bytes:
+        if not 0 <= size <= end - stream.tell():
+            raise ValueError("Dados NBT truncados ou com tamanho inválido.")
+        return stream.read(size)
 
-    top_type = stream.read(1)[0]
-    if top_type == NBTTag.END:
-        return "", {}
-    name_len = struct.unpack(">H", stream.read(2))[0]
-    root_name = stream.read(name_len).decode("utf-8", errors="replace")
-    return root_name, read_tag(top_type)
+    def string() -> str:
+        return read(struct.unpack(">H", read(2))[0]).decode("utf-8", errors="replace")
+
+    numbers = {
+        NBTTag.BYTE: ">b", NBTTag.SHORT: ">h", NBTTag.INT: ">i", NBTTag.LONG: ">q",
+        NBTTag.FLOAT: ">f", NBTTag.DOUBLE: ">d",
+    }
+
+    def size_of_collection(length: int) -> None:
+        if length < 0 or length > remaining:
+            raise ValueError("Coleção NBT excede o limite de elementos.")
+
+    def tag(kind: int, depth: int):
+        nonlocal remaining
+        remaining -= 1
+        if remaining < 0 or depth > MAX_NBT_DEPTH:
+            raise ValueError("Dados NBT excedem o limite de elementos ou profundidade.")
+        if kind in numbers:
+            fmt = numbers[kind]
+            return struct.unpack(fmt, read(struct.calcsize(fmt)))[0]
+        if kind == NBTTag.BYTE_ARRAY:
+            return read(struct.unpack(">i", read(4))[0])
+        if kind == NBTTag.STRING:
+            return string()
+        if kind == NBTTag.LIST:
+            child, length = struct.unpack(">Bi", read(5))
+            if length <= 0:  # NBT permite lista vazia com qualquer tipo quando o tamanho não é positivo
+                return []
+            size_of_collection(length)
+            return [tag(child, depth + 1) for _ in range(length)]
+        if kind == NBTTag.COMPOUND:
+            compound = {}
+            while (child := read(1)[0]) != NBTTag.END:
+                name = string()
+                compound[name] = tag(child, depth + 1)
+            return compound
+        if kind in (NBTTag.INT_ARRAY, NBTTag.LONG_ARRAY):
+            length = struct.unpack(">i", read(4))[0]
+            size_of_collection(length)
+            remaining -= length
+            fmt, width = ("i", 4) if kind == NBTTag.INT_ARRAY else ("q", 8)
+            return list(struct.unpack(f">{length}{fmt}", read(length * width)))
+        raise ValueError("Tipo de etiqueta NBT desconhecido.")
+
+    if read(1)[0] != NBTTag.COMPOUND:
+        raise ValueError("A raiz NBT deve ser um compound.")
+    root_name = string()
+    return root_name, tag(NBTTag.COMPOUND, 0)
 
 
 _AIR_NAMES = {"air", "cave_air", "void_air"}
@@ -98,6 +117,8 @@ class Schematic:
         grid: np.ndarray,
         palette: Dict[str, int],
         name: str = "Structure",
+        *,
+        max_mesh_quads: Optional[int] = None,
     ):
         """
         Args:
@@ -114,6 +135,7 @@ class Schematic:
         self.grid = grid  # indexado como [y, z, x]
         self.palette = palette
         self.name = name
+        self.max_mesh_quads = max_mesh_quads
         self._solid_mask: Optional[np.ndarray] = None
         self._occupied_mask: Optional[np.ndarray] = None
         self._full_cube_mask: Optional[np.ndarray] = None
@@ -200,73 +222,64 @@ class Schematic:
 
     @classmethod
     def load_from_file(cls, filepath: str) -> "Schematic":
-        """Carrega e decodifica um arquivo .schem (Sponge Schematic v1/v2/v3)."""
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Arquivo schematic não encontrado: {filepath}")
+        """Carrega um arquivo Sponge Schematic v1/v2/v3."""
+        with open(filepath, "rb") as handle:
+            data = handle.read(MAX_SCHEM_FILE_BYTES + 1)
+        name = os.path.splitext(os.path.basename(filepath))[0]
+        return cls.load_from_bytes(data, name)
 
-        # Descomprimir NBT compactado com Gzip
-        with gzip.open(filepath, "rb") as f:
-            raw_data = f.read()
-
+    @classmethod
+    def load_from_bytes(cls, data: bytes, name: str) -> "Schematic":
+        """Valida o conteúdo comprimido, inclusive quando será guardado como cópia persistente."""
+        if len(data) > MAX_SCHEM_FILE_BYTES:
+            raise ValueError("Arquivo schematic comprimido excede o limite.")
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb") as handle:
+                raw_data = handle.read(MAX_SCHEM_NBT_BYTES + 1)
+        except (OSError, EOFError, zlib.error) as error:
+            raise ValueError("Arquivo schematic Gzip inválido.") from error
+        if len(raw_data) > MAX_SCHEM_NBT_BYTES:
+            raise ValueError("Arquivo schematic descompactado excede o limite.")
         _, root = parse_nbt_stream(io.BytesIO(raw_data))
 
-        # Suporte a nós raiz 'Schematic' ou raiz direta
         schem_tag = root.get("Schematic", root)
-
-        width = int(schem_tag.get("Width", 0))
-        height = int(schem_tag.get("Height", 0))
-        length = int(schem_tag.get("Length", 0))
-
-        if width <= 0 or height <= 0 or length <= 0:
+        if not isinstance(schem_tag, dict):
+            raise ValueError("Cabeçalho Schematic inválido.")
+        width, height, length = (schem_tag.get(key, 0) for key in ("Width", "Height", "Length"))
+        if any(type(n) is not int or n <= 0 for n in (width, height, length)):
             raise ValueError(f"Dimensões inválidas no schematic: {width}x{height}x{length}")
-
         total_voxels = width * height * length
+        if total_voxels > MAX_SCHEM_VOXELS:
+            raise ValueError(f"Schematic excede o limite de {MAX_SCHEM_VOXELS} voxels.")
 
-        # Sponge v3 tem sub-compound 'Blocks', enquanto v1/v2 usa chaves diretas
-        blocks_compound = schem_tag.get("Blocks", {})
-        if isinstance(blocks_compound, dict) and "Palette" in blocks_compound:
-            palette = blocks_compound.get("Palette", {})
-            block_data_bytes = blocks_compound.get("Data", b"")
+        blocks = schem_tag.get("Blocks", {})
+        if isinstance(blocks, dict) and "Palette" in blocks:
+            palette, block_data = blocks.get("Palette"), blocks.get("Data")
         else:
-            palette = schem_tag.get("Palette", {})
-            block_data_bytes = schem_tag.get("BlockData", b"")
+            palette, block_data = schem_tag.get("Palette"), schem_tag.get("BlockData")
+        if not isinstance(palette, dict) or not isinstance(block_data, bytes):
+            raise ValueError("Paleta ou dados de blocos inválidos no schematic.")
+        if any(type(value) is not int or not 0 <= value <= 0x7fff_ffff for value in palette.values()):
+            raise ValueError("Identificador de paleta inválido no schematic.")
 
-        # Inverter palette: int_id -> block_name
-        id_to_name = {int(v): str(k) for k, v in palette.items()}
-
-        # Decodificar stream de VarInts do BlockData
-        block_ids: List[int] = []
-        i = 0
-        data_len = len(block_data_bytes)
-
-        while i < data_len and len(block_ids) < total_voxels:
-            value = 0
-            shift = 0
-            while True:
-                b = block_data_bytes[i]
-                i += 1
-                value |= (b & 0x7F) << shift
-                if not (b & 0x80):
-                    break
+        # Indexação Sponge: (y * Length + z) * Width + x. IDs fora da paleta e
+        # células ausentes continuam sendo ar, sem alocar uma tabela pelo maior ID.
+        id_to_name = {value: key for key, value in palette.items()}
+        air = "minecraft:air"
+        grid = np.full(total_voxels, air, dtype=object)
+        cell, value, shift = 0, 0, 0
+        for byte in block_data:
+            if cell >= total_voxels or (shift == 28 and byte > 7):
+                raise ValueError("Dados de blocos excedem o tamanho ou o VarInt permitido.")
+            value |= (byte & 0x7f) << shift
+            if byte & 0x80:
                 shift += 7
-            block_ids.append(value)
+                continue
+            grid[cell] = id_to_name.get(value, air)
+            cell += 1
+            value = shift = 0
+        if shift:
+            raise ValueError("Identificador de bloco VarInt truncado.")
 
-        # Matriz 3D com indexação canônica Sponge: index = (y * Length + z) * Width + x.
-        # Ids fora da palette e voxels que faltam no stream viram ar.
-        ids = np.full(total_voxels, -1, dtype=np.int64)
-        ids[: len(block_ids)] = block_ids
-        top_id = max([int(ids.max())] + list(id_to_name))
-        lookup = np.full(top_id + 2, "minecraft:air", dtype=object)  # a última posição serve ao -1
-        for b_id, block_name in id_to_name.items():
-            lookup[b_id] = block_name
-        grid = lookup[ids].reshape((height, length, width))
-
-        structure_name = os.path.splitext(os.path.basename(filepath))[0]
-        return cls(
-            width=width,
-            height=height,
-            length=length,
-            grid=grid,
-            palette=palette,
-            name=structure_name,
-        )
+        return cls(width, height, length, grid.reshape((height, length, width)), palette, name,
+                   max_mesh_quads=MAX_SCHEM_MESH_QUADS)

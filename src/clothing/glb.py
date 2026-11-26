@@ -23,8 +23,15 @@ from .clips import Channel, Clip, RestPose, decompose
 from .rig import MAX_BONES, Rig
 
 MAX_FILE_BYTES = 64 * 1024 * 1024
+MAX_JSON_STRUCTURE = 400_000
 MAX_TRIANGLES = 300_000
+MAX_VERTICES = MAX_TRIANGLES * 3
+MAX_ACCESSOR_VALUES = MAX_VERTICES * 4
+MAX_MESH_PARTS = 4096
+MAX_NODES = 16_384
+MAX_NODE_DEPTH = 128
 MAX_TEXTURE_SIDE = 4096
+MAX_TEXTURE_PIXELS = 32 * 1024 * 1024  # total das imagens decodificadas
 MAX_CLIPS = 64
 MAX_KEYFRAMES = 100_000   # por canal
 FLOATS_PER_VERTEX = 11  # posição(3), normal(3), uv(2), cor(3)
@@ -98,14 +105,18 @@ class GlbModel:
             turn = np.identity(4)
             turn[:3, :3] = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]]
             total = turn @ total
-        low, high = self.bounds()
+        low, high = (corner.astype(np.float64) for corner in self.bounds())
         size = float(high[1] - low[1])
         if size <= 1e-9:
             raise ModelError("O modelo não tem altura.")
         scale = height / size
         centre = np.array([(low[0] + high[0]) / 2.0, low[1], (low[2] + high[2]) / 2.0])
-        for s in self.submeshes:
-            s.vertices[:, :3] = (s.vertices[:, :3] - centre) * scale
+        with np.errstate(over="raise", invalid="raise"):
+            try:
+                for s in self.submeshes:
+                    s.vertices[:, :3] = (s.vertices[:, :3] - centre) * scale
+            except FloatingPointError as error:
+                raise ModelError("As dimensões do modelo normalizado excedem o limite.") from error
         move = np.identity(4)
         move[:3, :3] *= scale
         move[:3, 3] = -centre * scale
@@ -117,8 +128,8 @@ class GlbModel:
 
 
 # ------------------------------------------------------------------------------------------------ arquivo
-def load_model(path: str) -> GlbModel:
-    """Lê um ``.glb`` (ou um ``.gltf`` sem arquivos externos) do disco."""
+def read_model_bytes(path: str) -> bytes:
+    """Lê só a quantidade de bytes que o importador suporta."""
     try:
         with open(path, "rb") as handle:
             data = handle.read(MAX_FILE_BYTES + 1)
@@ -126,21 +137,44 @@ def load_model(path: str) -> GlbModel:
         raise ModelError(f"Não consegui abrir o arquivo: {error}") from error
     if len(data) > MAX_FILE_BYTES:
         raise ModelError(f"O arquivo passa de {MAX_FILE_BYTES // (1024 * 1024)} MB.")
-    return parse_model(data)
+    return data
+
+
+def load_model(path: str) -> GlbModel:
+    """Lê um .glb ou .gltf com dados embutidos."""
+    return parse_model(read_model_bytes(path))
 
 
 def parse_model(data: bytes) -> GlbModel:
     """Lê o conteúdo de um ``.glb`` ou de um ``.gltf`` (texto JSON com os dados embutidos)."""
-    if data[:4] == b"glTF":
-        document, blob = _split_glb(data)
-    else:
-        try:
-            document, blob = json.loads(data.decode("utf-8")), None
-        except (UnicodeDecodeError, ValueError) as error:
-            raise ModelError("Não é um arquivo glTF (.glb ou .gltf).") from error
-    if not isinstance(document, dict) or str(document.get("asset", {}).get("version", "")).split(".")[0] != "2":
-        raise ModelError("Só o glTF 2.0 é aceito.")
-    return _Reader(document, blob).read()
+    if len(data) > MAX_FILE_BYTES:
+        raise ModelError(f"O arquivo passa de {MAX_FILE_BYTES // (1024 * 1024)} MB.")
+    try:
+        if data[:4] == b"glTF":
+            document, blob = _split_glb(data)
+        else:
+            try:
+                document, blob = _read_json(data), None
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise ModelError("Não é um arquivo glTF (.glb ou .gltf).") from error
+        asset = document.get("asset") if isinstance(document, dict) else None
+        if not isinstance(asset, dict) or str(asset.get("version", "")).split(".")[0] != "2":
+            raise ModelError("Só o glTF 2.0 é aceito.")
+        with np.errstate(over="raise", invalid="raise"):
+            return _Reader(document, blob).read()
+    except ModelError:
+        raise
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError, OverflowError, RecursionError,
+            FloatingPointError, np.linalg.LinAlgError) as error:
+        raise ModelError("Estrutura ou dados do modelo inválidos.") from error
+
+
+def _read_json(data: bytes) -> dict:
+    # Limita o crescimento dos objetos Python antes de carregar o JSON.
+    # Uma URI base64 pode ser grande, mas não contém esses separadores.
+    if data.count(b",") + data.count(b"{") + data.count(b"[") > MAX_JSON_STRUCTURE:
+        raise ModelError("A descrição JSON do modelo excede o limite de elementos.")
+    return json.loads(data)
 
 
 def _split_glb(data: bytes):
@@ -150,19 +184,22 @@ def _split_glb(data: bytes):
     if magic != _GLB_MAGIC or version != 2:
         raise ModelError("Não é um .glb da versão 2.")
     document, blob, offset = None, None, 12
-    while offset + 8 <= min(length, len(data)):
+    if length != len(data):
+        raise ModelError("Comprimento inválido no .glb.")
+    while offset < length:
+        if offset + 8 > length:
+            raise ModelError("O cabeçalho de um bloco do .glb está cortado.")
         size, kind = struct.unpack_from("<II", data, offset)
-        chunk = data[offset + 8: offset + 8 + size]
-        if len(chunk) < size:
+        if offset + 8 + size > length or size % 4:
             raise ModelError("O arquivo .glb está cortado.")
         if kind == _CHUNK_JSON and document is None:
             try:
-                document = json.loads(chunk.decode("utf-8"))
-            except (UnicodeDecodeError, ValueError) as error:
+                document = _read_json(data[offset + 8: offset + 8 + size])
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
                 raise ModelError("O JSON do .glb é inválido.") from error
         elif kind == _CHUNK_BIN and blob is None:
-            blob = chunk
-        offset += 8 + size + (-size) % 4
+            blob = memoryview(data)[offset + 8: offset + 8 + size]
+        offset += 8 + size
     if document is None:
         raise ModelError("O .glb não tem o bloco de descrição.")
     return document, blob
@@ -170,21 +207,25 @@ def _split_glb(data: bytes):
 
 # ------------------------------------------------------------------------------------------------ leitor
 class _Reader:
-    def __init__(self, document: dict, blob: Optional[bytes]) -> None:
+    def __init__(self, document: dict, blob: Optional[memoryview]) -> None:
         self.doc = document
         self.blob = blob
         self.model = GlbModel()
-        self._buffers: Dict[int, bytes] = {}
+        self._buffers: Dict[int, memoryview] = {}
         self._images: Dict[int, object] = {}
         self._parent_node: Dict[int, int] = {}
         self._world_cache: Dict[int, np.ndarray] = {}
+        self._triangles = self._vertices = self._image_pixels = 0
+        self._primitives = 0
         self._rig_skin: Optional[int] = None     # o skin cujo esqueleto vai para o modelo
 
     # ---- dados
-    def _buffer(self, index: int) -> bytes:
+    def _buffer(self, index: int) -> memoryview:
         if index in self._buffers:
             return self._buffers[index]
         try:
+            if index < 0:
+                raise IndexError(index)
             entry = self.doc["buffers"][index]
         except (KeyError, IndexError, TypeError) as error:
             raise ModelError("O modelo aponta para um buffer que não existe.") from error
@@ -194,54 +235,65 @@ class _Reader:
                 raise ModelError("O .glb não traz os dados do buffer.")
             raw = self.blob
         else:
-            raw = _data_uri(uri)
-        if len(raw) < int(entry.get("byteLength", 0)):
+            raw = memoryview(_data_uri(uri))
+        size = int(entry["byteLength"])
+        if not 0 <= size <= len(raw):
             raise ModelError("Os dados do buffer estão cortados.")
-        self._buffers[index] = raw
-        return raw
+        self._buffers[index] = raw[:size]
+        return self._buffers[index]
 
-    def _view(self, index: int) -> Tuple[bytes, int, Optional[int]]:
+    def _view(self, index: int) -> Tuple[memoryview, Optional[int]]:
         try:
+            if index < 0:
+                raise IndexError(index)
             view = self.doc["bufferViews"][index]
         except (KeyError, IndexError, TypeError) as error:
             raise ModelError("O modelo aponta para uma bufferView que não existe.") from error
         buffer = self._buffer(int(view.get("buffer", 0)))
         start = int(view.get("byteOffset", 0))
         end = start + int(view["byteLength"])
-        if end > len(buffer):
+        if not 0 <= start <= end <= len(buffer):
             raise ModelError("Uma bufferView passa do fim do buffer.")
-        return buffer[start:end], start, view.get("byteStride")
+        return buffer[start:end], view.get("byteStride")
 
-    def accessor(self, index: int) -> np.ndarray:
-        """Os valores do accessor como array (count, componentes), com os inteiros normalizados em float."""
+    def _accessor_layout(self, index: int):
         try:
+            if index < 0:
+                raise IndexError(index)
             entry = self.doc["accessors"][index]
         except (KeyError, IndexError, TypeError) as error:
             raise ModelError("O modelo aponta para um accessor que não existe.") from error
-        if "sparse" in entry:
-            self.model.warnings.append("Accessor 'sparse' não é suportado; ignorado.")
         dtype = _COMPONENT.get(int(entry["componentType"]))
         width = _WIDTH.get(entry["type"])
         if dtype is None or width is None:
             raise ModelError("Tipo de dado do modelo desconhecido.")
         count = int(entry["count"])
+        if not 0 <= count <= MAX_VERTICES or count * width > MAX_ACCESSOR_VALUES:
+            raise ModelError("Um accessor excede o limite de valores do modelo.")
+        return entry, dtype, width, count
+
+    def accessor(self, index: int) -> np.ndarray:
+        """Os valores do accessor como array (count, componentes)."""
+        entry, kind, width, count = self._accessor_layout(index)
+        if "sparse" in entry:
+            self.model.warnings.append("Accessor 'sparse' não é suportado; ignorado.")
         if "bufferView" not in entry:
             return np.zeros((count, width), dtype=np.float32)
-        chunk, _, stride = self._view(int(entry["bufferView"]))
-        itemsize = np.dtype(dtype).itemsize
-        element = itemsize * width
-        stride = int(stride) if stride else element
+        chunk, stride = self._view(int(entry["bufferView"]))
+        dtype = np.dtype(kind).newbyteorder("<")
+        element = dtype.itemsize * width
+        stride = element if stride is None else int(stride)
         offset = int(entry.get("byteOffset", 0))
-        if count and offset + stride * (count - 1) + element > len(chunk):
-            raise ModelError("Um accessor passa do fim dos dados.")
-        if stride == element:
-            values = np.frombuffer(chunk, dtype=dtype, count=count * width, offset=offset).reshape(count, width)
-        else:  # dados intercalados com outros: lê elemento por elemento
-            raw = np.frombuffer(chunk, dtype=np.uint8)
-            rows = np.arange(count)[:, None] * stride + offset + np.arange(element)[None, :]
-            values = raw[rows].copy().view(dtype).reshape(count, width)
-        if entry.get("normalized") and dtype in _NORMALIZER:
-            return np.maximum(values.astype(np.float32) / _NORMALIZER[dtype], -1.0)
+        if (not 0 <= offset <= len(chunk) or not element <= stride <= 252
+                or stride % dtype.itemsize or offset % dtype.itemsize
+                or (count and offset + stride * (count - 1) + element > len(chunk))):
+            raise ModelError("Um accessor tem deslocamento ou stride inválido.")
+        # A view estridada lê os atributos intercalados sem criar uma matriz
+        # auxiliar de índices com um inteiro para cada byte do accessor.
+        values = np.ndarray((count, width), dtype=dtype, buffer=chunk, offset=offset,
+                            strides=(stride, dtype.itemsize))
+        if entry.get("normalized") and kind in _NORMALIZER:
+            return np.maximum(values.astype(np.float32) / _NORMALIZER[kind], -1.0)
         return values
 
     def image(self, index: int):
@@ -255,12 +307,17 @@ class _Reader:
                 raw = bytes(self._view(int(entry["bufferView"]))[0])
             else:
                 raw = _data_uri(entry["uri"])
-            picture = Image.open(io.BytesIO(raw))
-            if max(picture.size) > MAX_TEXTURE_SIDE:
-                raise ModelError(f"A textura passa de {MAX_TEXTURE_SIDE} pixels de lado.")
-            picture = picture.convert("RGBA")
+            with Image.open(io.BytesIO(raw)) as source:
+                if max(source.size) > MAX_TEXTURE_SIDE:
+                    raise ModelError(f"A textura passa de {MAX_TEXTURE_SIDE} pixels de lado.")
+                self._image_pixels += source.width * source.height
+                if self._image_pixels > MAX_TEXTURE_PIXELS:
+                    raise ModelError("As texturas excedem o limite total de pixels.")
+                picture = source.convert("RGBA")
         except ModelError:
             raise
+        except Image.DecompressionBombError as error:
+            raise ModelError("A textura excede o limite de pixels.") from error
         except Exception as error:  # imagem corrompida ou formato que o Pillow não lê
             self.model.warnings.append(f"Não consegui ler uma textura: {error}")
             picture = None
@@ -272,13 +329,34 @@ class _Reader:
         doc = self.doc
         self.model.skins = len(doc.get("skins", []))
         self.model.animations = [a.get("name", f"animação {i}") for i, a in enumerate(doc.get("animations", []))]
-        for index, node in enumerate(doc.get("nodes", [])):
+        nodes = doc.get("nodes", [])
+        if len(nodes) > MAX_NODES:
+            raise ModelError("A cena excede o limite de nós.")
+        for index, node in enumerate(nodes):
             for child in node.get("children", []):
-                self._parent_node[int(child)] = index
+                child = int(child)
+                if not 0 <= child < len(nodes) or child in self._parent_node:
+                    raise ModelError("A hierarquia contém um filho inválido ou com mais de um pai.")
+                self._parent_node[child] = index
+        depths: Dict[int, int] = {}
+        for index in range(len(nodes)):
+            chain = []
+            cursor = index
+            while cursor is not None and cursor not in depths:
+                if cursor in chain or len(chain) >= MAX_NODE_DEPTH:
+                    raise ModelError("A hierarquia de nós contém um ciclo ou é profunda demais.")
+                chain.append(cursor)
+                cursor = self._parent_node.get(cursor)
+            depth = depths.get(cursor, 0)
+            for cursor in reversed(chain):
+                depth += 1
+                if depth > MAX_NODE_DEPTH:
+                    raise ModelError("A hierarquia de nós é profunda demais.")
+                depths[cursor] = depth
         scenes = doc.get("scenes", [])
         roots = scenes[int(doc.get("scene", 0))].get("nodes", []) if scenes else []
         if not roots:
-            roots = [i for i in range(len(doc.get("nodes", [])))]  # sem cena: todos os nós, cada um na sua raiz
+            roots = [i for i in range(len(nodes)) if i not in self._parent_node]
         seen: set = set()
         for root in roots:
             self._node(int(root), np.identity(4), seen)
@@ -296,6 +374,8 @@ class _Reader:
             return
         seen.add(index)
         try:
+            if index < 0:
+                raise IndexError(index)
             node = self.doc["nodes"][index]
         except (KeyError, IndexError, TypeError) as error:
             raise ModelError("A cena aponta para um nó que não existe.") from error
@@ -310,12 +390,18 @@ class _Reader:
 
     def _mesh(self, index: int, matrix: np.ndarray, name: str, skin: Optional[int] = None) -> None:
         try:
+            if index < 0:
+                raise IndexError(index)
             mesh = self.doc["meshes"][index]
         except (KeyError, IndexError, TypeError) as error:
             raise ModelError("Um nó aponta para uma malha que não existe.") from error
         normal_matrix = np.linalg.inv(matrix[:3, :3]).T if abs(np.linalg.det(matrix[:3, :3])) > 1e-12 else np.identity(3)
         flip = np.linalg.det(matrix[:3, :3]) < 0  # espelhado: inverte o sentido dos triângulos
-        for number, primitive in enumerate(mesh.get("primitives", [])):
+        primitives = mesh.get("primitives", [])
+        self._primitives += len(primitives)
+        if self._primitives > MAX_MESH_PARTS:
+            raise ModelError("O modelo excede o limite de partes de malha.")
+        for number, primitive in enumerate(primitives):
             mode = int(primitive.get("mode", 4))
             if mode != 4:
                 self.model.warnings.append("Só triângulos soltos (modo 4) são lidos; uma parte foi ignorada.")
@@ -323,39 +409,56 @@ class _Reader:
             attributes = primitive.get("attributes", {})
             if "POSITION" not in attributes:
                 continue
-            positions = self.accessor(int(attributes["POSITION"])).astype(np.float64)
-            count = len(positions)
-            if "indices" in primitive:
-                indices = self.accessor(int(primitive["indices"])).reshape(-1).astype(np.int64)
-            else:
-                indices = np.arange(count, dtype=np.int64)
-            indices = indices[: len(indices) // 3 * 3]
+            position_id = int(attributes["POSITION"])
+            _, _, width, count = self._accessor_layout(position_id)
+            if width != 3:
+                raise ModelError("O atributo POSITION deve ter três componentes.")
+            index_id = int(primitive["indices"]) if "indices" in primitive else None
+            index_count = count
+            if index_id is not None:
+                index_info, kind, width, index_count = self._accessor_layout(index_id)
+                if width != 1 or kind not in (np.uint8, np.uint16, np.uint32) or index_info.get("normalized"):
+                    raise ModelError("Tipo de índice de triângulo inválido.")
+            if count == 0 or index_count < 3:
+                continue
+            self._triangles += index_count // 3
+            self._vertices += count
+            if self._triangles > MAX_TRIANGLES:
+                raise ModelError(f"O modelo excede o limite de {MAX_TRIANGLES} triângulos.")
+            if self._vertices > MAX_VERTICES:
+                raise ModelError("O modelo excede o limite de vértices.")
+            positions = self._vertex_attribute(attributes, "POSITION", count, (3,)).astype(np.float64)
+            indices = (self.accessor(index_id).reshape(-1).astype(np.int64) if index_id is not None
+                       else np.arange(count, dtype=np.int64))
+            indices = indices[:index_count // 3 * 3]
             if len(indices) and (indices.max() >= count or indices.min() < 0):
                 raise ModelError("Um índice aponta para um vértice que não existe.")
             if flip:
                 indices = indices.reshape(-1, 3)[:, ::-1].reshape(-1)
             if "NORMAL" in attributes:
-                normals = self.accessor(int(attributes["NORMAL"])).astype(np.float64)
+                normals = self._vertex_attribute(attributes, "NORMAL", count, (3,)).astype(np.float64)
             else:
                 normals = _smooth_normals(positions, indices)
-            uv = self.accessor(int(attributes["TEXCOORD_0"])).astype(np.float64) if "TEXCOORD_0" in attributes \
+            uv = self._vertex_attribute(attributes, "TEXCOORD_0", count, (2,)).astype(np.float64) if "TEXCOORD_0" in attributes \
                 else np.zeros((count, 2))
             colour = np.ones((count, 3))
             if "COLOR_0" in attributes:
-                colour = np.clip(self.accessor(int(attributes["COLOR_0"]))[:, :3].astype(np.float64), 0.0, 1.0)
+                colour = np.clip(self._vertex_attribute(attributes, "COLOR_0", count, (3, 4))[:, :3].astype(np.float64), 0.0, 1.0)
 
             joints = weights = None
             if skin is not None and "JOINTS_0" in attributes and "WEIGHTS_0" in attributes:
                 if self._rig_skin is None:
                     self._rig_skin = skin
                 if skin == self._rig_skin:
-                    joints = self.accessor(int(attributes["JOINTS_0"])).astype(np.int64)
-                    weights = np.maximum(self.accessor(int(attributes["WEIGHTS_0"])).astype(np.float64), 0.0)
+                    joints = self._vertex_attribute(attributes, "JOINTS_0", count, (4,)).astype(np.int64)
+                    weights = np.maximum(self._vertex_attribute(attributes, "WEIGHTS_0", count, (4,)).astype(np.float64), 0.0)
                     total = weights.sum(axis=1, keepdims=True)
                     weights = np.where(total > 1e-9, weights / np.maximum(total, 1e-9), np.array([1.0, 0.0, 0.0, 0.0]))
                 else:
                     self.model.warnings.append("O modelo tem mais de um esqueleto; só o primeiro é usado.")
 
+            if joints is not None and (joints.min(initial=0) < 0 or joints.max(initial=0) > np.iinfo(np.uint16).max):
+                raise ModelError("Um vértice usa um osso que não está no esqueleto.")
             material = self._material(primitive.get("material"))
             vertices = np.empty((count, FLOATS_PER_VERTEX), dtype=np.float32)
             vertices[:, :3] = positions @ matrix[:3, :3].T + matrix[:3, 3]
@@ -363,10 +466,22 @@ class _Reader:
             vertices[:, 3:6] = rotated / np.maximum(np.linalg.norm(rotated, axis=1, keepdims=True), 1e-12)
             vertices[:, 6:8] = uv[:, :2]
             vertices[:, 8:11] = colour
+            if not np.isfinite(vertices).all():
+                raise ModelError("A malha transformada contém valores não finitos.")
             self.model.submeshes.append(Submesh(
                 name=f"{name}.{number}", vertices=vertices, indices=indices.astype(np.uint32),
                 joints=None if joints is None else joints.astype(np.uint16),
                 weights=None if weights is None else weights.astype(np.float32), **material))
+
+    def _vertex_attribute(self, attributes, name: str, count: int, widths: tuple) -> np.ndarray:
+        index = int(attributes[name])
+        _, _, width, rows = self._accessor_layout(index)
+        if rows != count or width not in widths:
+            raise ModelError(f"As dimensões do atributo {name} não batem com POSITION.")
+        values = self.accessor(index)
+        if not np.isfinite(values).all():
+            raise ModelError(f"O atributo {name} contém valores não finitos.")
+        return values
 
     def _world_of(self, node: int) -> np.ndarray:
         """A matriz de mundo de um nó (também dos que não estão na cena)."""
@@ -378,8 +493,10 @@ class _Reader:
 
     def _build_rig(self, skin_index: int) -> Rig:
         try:
+            if skin_index < 0:
+                raise IndexError(skin_index)
             skin = self.doc["skins"][skin_index]
-            joint_nodes = [int(j) for j in skin["joints"]]
+            joint_nodes = skin["joints"]
         except (KeyError, IndexError, TypeError) as error:
             raise ModelError("O esqueleto do modelo está incompleto.") from error
         count = len(joint_nodes)
@@ -387,6 +504,9 @@ class _Reader:
             raise ModelError("O esqueleto do modelo não tem ossos.")
         if count > MAX_BONES:
             raise ModelError(f"O esqueleto tem {count} ossos; o limite é {MAX_BONES}.")
+        joint_nodes = [int(j) for j in joint_nodes]
+        if len(set(joint_nodes)) != count or any(not 0 <= j < len(self.doc["nodes"]) for j in joint_nodes):
+            raise ModelError("O esqueleto aponta para nós inválidos.")
         for submesh in self.model.submeshes:
             if submesh.joints is not None and int(submesh.joints.max(initial=0)) >= count:
                 raise ModelError("Um vértice usa um osso que não está no esqueleto.")
@@ -402,9 +522,11 @@ class _Reader:
         local = np.array([world[i] if parents[i] < 0 else np.linalg.inv(world[parents[i]]) @ world[i]
                           for i in range(count)])
         if "inverseBindMatrices" in skin:
-            matrices = self.accessor(int(skin["inverseBindMatrices"])).astype(np.float64)
-            if len(matrices) < count:
-                raise ModelError("O esqueleto tem menos matrizes de montagem que ossos.")
+            matrix_id = int(skin["inverseBindMatrices"])
+            _, _, width, rows = self._accessor_layout(matrix_id)
+            if width != 16 or rows != count:
+                raise ModelError("O número de matrizes de montagem difere do número de ossos.")
+            matrices = self.accessor(matrix_id).astype(np.float64)
             inverse_bind = np.array([m.reshape(4, 4).T for m in matrices[:count]])   # o glTF guarda por colunas
         else:
             inverse_bind = np.array([np.linalg.inv(w) for w in world])
@@ -446,19 +568,26 @@ class _Reader:
                     continue
                 try:
                     sampler = samplers[int(channel["sampler"])]
-                    times = self.accessor(int(sampler["input"])).reshape(-1).astype(np.float64)
-                    values = self.accessor(int(sampler["output"])).astype(np.float64)
+                    time_id = int(sampler["input"])
+                    value_id = int(sampler["output"])
                 except (KeyError, IndexError, TypeError, ValueError):
                     continue
                 mode = sampler.get("interpolation", "LINEAR")
-                if mode == "CUBICSPLINE" and len(values) == 3 * len(times):
-                    values = values[1::3]    # só os valores; as tangentes ficam de fora (interpolação linear)
-                if len(times) == 0 or len(values) != len(times) or len(times) > MAX_KEYFRAMES \
-                        or values.shape[1] != (4 if path == "rotation" else 3) or np.any(np.diff(times) < 0):
+                _, _, time_width, frames = self._accessor_layout(time_id)
+                _, _, value_width, samples = self._accessor_layout(value_id)
+                expected = frames * (3 if mode == "CUBICSPLINE" else 1)
+                if frames > MAX_KEYFRAMES or total + frames > MAX_KEYFRAMES * 4:
+                    raise ModelError("As animações excedem o limite de quadros-chave.")
+                if (not frames or time_width != 1 or samples != expected
+                        or value_width != (4 if path == "rotation" else 3)):
                     continue
-                total += len(times)
-                if total > MAX_KEYFRAMES * 4:
-                    break
+                times = self.accessor(time_id).reshape(-1).astype(np.float64)
+                values = self.accessor(value_id).astype(np.float64)
+                if mode == "CUBICSPLINE":
+                    values = values[1::3]   # as tangentes ficam de fora (interpolação linear)
+                total += frames
+                if not np.isfinite(times).all() or not np.isfinite(values).all() or np.any(np.diff(times) < 0):
+                    continue
                 clip.channels.append(Channel(joint, path, times, values, step=(mode == "STEP")))
                 clip.duration = max(clip.duration, float(times[-1]))
             if clip.channels:

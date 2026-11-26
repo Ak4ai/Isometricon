@@ -24,6 +24,7 @@ uniform float u_Cell;           // blocos por célula
 uniform bool u_Moving;          // os tufos das células que estão se desfazendo (ou se formando)
 uniform bool u_Soft;            // as nuvens fofas: caixas de quinas e vértices redondos
 uniform vec3 u_Light;           // para onde está o sol (no espaço do mundo)
+uniform vec4 u_VisibleDisc;     // centro e raio visíveis, projetados na altura do grupo
 uniform vec3 u_ToCamera;        // para onde está a câmera (no espaço do mundo; a vista é ortográfica)
 uniform sampler2D u_Boxes;      // as fofas: por célula (topo, fundo, lados que emendam, 1 se tem nuvem)
 uniform float u_Round;          // o raio das quinas e dos vértices, em blocos
@@ -116,6 +117,15 @@ vec3 cloudNormal(vec3 p) {
 }
 
 void main() {
+    // A manta no morro à frente pode cobrir a abertura no vale em projeção ortográfica.
+    // Testa o raio deste pixel no plano do grupo, em ambas as passadas de profundidade/cor.
+    float visibility = 1.0;
+    if (u_VisibleDisc.w > 0.0 && abs(u_ToCamera.y) > 0.001) {
+        vec3 relative = v_World - u_VisibleDisc.xyz;
+        vec2 ground = relative.xz - u_ToCamera.xz * (relative.y / u_ToCamera.y);
+        visibility = smoothstep(0.55, 1.0, length(ground) / u_VisibleDisc.w);
+        if (visibility <= 0.0) discard;
+    }
     // pixels de 1/4 de bloco: o ar de textura do jogo
     vec2 p = floor(v_World.xz * 4.0 + 0.5) / 4.0;
     vec2 wind = u_Time * vec2(0.05, 0.02);
@@ -131,7 +141,7 @@ void main() {
 
     if (!u_Soft) {
         gl_FragDepth = gl_FragCoord.z;
-        FragColor = vec4(white * blocky(tufts, dense) * sun, alpha);
+        FragColor = vec4(white * blocky(tufts, dense) * sun, alpha * visibility);
         return;
     }
 
@@ -211,5 +221,5 @@ void main() {
     // distância até a beira no ponto achado
     float near = texture(u_Distance, cellUV(hit.xz)).r;
     alpha = mix(SOFT_EDGE_ALPHA, 1.0, smoothstep(0.02, 0.7, near)) * (u_Moving ? v_Alpha : 1.0);
-    FragColor = vec4(color, alpha);
+    FragColor = vec4(color, alpha * visibility);
 }

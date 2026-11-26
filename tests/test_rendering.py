@@ -1,6 +1,7 @@
 """Testes unitários para o módulo de renderização (Shader e Mesh)."""
 
 import os
+from pathlib import Path
 import glfw
 import pytest
 import numpy as np
@@ -36,6 +37,31 @@ def test_shader_file_not_found():
     """Verifica se FileNotFound é lançado para arquivos inexistentes."""
     with pytest.raises(FileNotFoundError):
         Shader("assets/shaders/inexistente.vert", "assets/shaders/world.frag")
+
+
+@pytest.mark.parametrize("vertex", sorted(Path("assets/shaders").glob("*.vert")))
+def test_packaged_shader_pairs_link_in_opengl_33(gl_context, vertex):
+    shader = Shader(str(vertex), str(vertex.with_suffix(".frag")))
+    assert shader.program_id > 0
+    shader.delete()
+
+
+def test_world_shader_reserves_the_shape_id_sampler_before_first_draw(gl_context):
+    import OpenGL.GL as gl
+    from src.rendering.sun_shadows import SHAPE_IDS_UNIT
+
+    shader = Shader("assets/shaders/world_textured.vert", "assets/shaders/world_textured.frag")
+    try:
+        shader.set_defines(("SHADOW_SHAPES",))
+        unit = np.zeros(1, dtype=np.int32)
+        location = gl.glGetUniformLocation(shader.program_id, "u_ShadowShapeIds")
+        assert location >= 0
+        gl.glGetUniformiv(shader.program_id, location, unit)
+        assert unit[0] == SHAPE_IDS_UNIT
+        gl.glValidateProgram(shader.program_id)
+        assert gl.glGetProgramiv(shader.program_id, gl.GL_VALIDATE_STATUS), gl.glGetProgramInfoLog(shader.program_id)
+    finally:
+        shader.delete()
 
 
 def test_shader_compilation(gl_context):
