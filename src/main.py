@@ -231,9 +231,18 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 2. Inicializar janela GLFW e contexto OpenGL 3.3 Core
     # ------------------------------------------------------------------
+    # --resolucao=1920x1080: o tamanho da janela (para capturar os slides em Full HD)
+    window_size = (1280, 720)
+    for arg in sys.argv[1:]:
+        if arg.startswith("--resolucao="):
+            try:
+                width_text, height_text = arg.split("=", 1)[1].lower().split("x")
+                window_size = (max(320, int(width_text)), max(240, int(height_text)))
+            except ValueError:
+                pass
     window = Window(
-        width=1280,
-        height=720,
+        width=window_size[0],
+        height=window_size[1],
         title=f"Isometricon {version_info.full_version} - Inicializando...",
         vsync=True,
     )
@@ -785,6 +794,12 @@ def main() -> None:
     if terrain_demo and presentation_requested:
         from src.interactive.presentation import BASE_ZOOM, Presentation
         presentation = Presentation(start=presentation_start - 1)
+        for arg in argv:      # --step=N: abre o slide já no passo N (1 é o primeiro), para capturar cada passo
+            if arg.startswith("--step="):
+                try:
+                    presentation.step = min(max(int(arg.split("=", 1)[1]) - 1, 0), presentation.slide.steps - 1)
+                except ValueError:
+                    pass
         presentation.fullscreen = "--janela" not in argv   # tela cheia por padrão; F11 alterna
         presentation_view.update(
             saved=(camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees),
