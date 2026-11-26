@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Check GLSL Shader Syntax Integrity
+      - name: Check GLSL Version Headers
         run: |
           echo "Checking GLSL Shaders..."
           for file in assets/shaders/*; do
@@ -23,7 +23,7 @@ jobs:
               head -n 1 "$file" | grep -q "#version" || { echo "Missing #version in $file"; exit 1; }
             fi
           done
-          echo "All shaders verified."
+          echo "All shader version headers found."
 
       - name: Verify Documentation & Structural Integrity
         run: |
@@ -43,6 +43,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Unit Tests
-        run: |
-          pytest tests/ -v
+      - name: Install virtual display and software OpenGL
+        run: sudo apt-get update && sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0
+
+      - name: Run tests with an OpenGL context
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: xvfb-run -a python -m pytest tests/ -v

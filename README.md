@@ -300,7 +300,7 @@ pytest -v
 # Compilar para o seu sistema operacional atual:
 python scripts/build.py
 
-# Windows (.exe portátil):
+# Windows (portátil e OneFile):
 python scripts/build.py --windows --onefile
 
 # Linux (via WSL no Windows):
@@ -310,6 +310,10 @@ python scripts/build.py --linux
 python scripts/build.py --clean
 ```
 
+No Windows, consulte [build, saves e verificação dos executáveis](docs/WINDOWS_DISTRIBUTION.md). Para gerenciar
+mundos e construções, veja [persistência e migração de saves](docs/PERSISTENCIA.md). Antes de redistribuir o pacote,
+consulte a [procedência dos recursos](docs/PROCEDENCIA-ASSETS.md).
+
 > 💡 **Atalho no VS Code**: Pressione **`Ctrl + Shift + B`** para o menu de compilação!
 
 ---
@@ -318,9 +322,9 @@ python scripts/build.py --clean
 
 * **Arquivo de Versão Central ([`VERSION.txt`](VERSION.txt))**: Controla a versão semântica (ex: `0.1.0`).
 * **Sincronização em Tempo Real**: Thread assíncrona compara commit local com `origin/main` e exibe status no console.
-* **Esteira de Releases**: Ao alterar `VERSION.txt` na `main`, o GitHub Actions publica automaticamente:
+* **Esteira de Releases**: O GitHub Actions compila e valida os pacotes ao alterar `VERSION.txt` na `main`. A publicação requer [acionamento manual](CONTRIBUTING.md) depois da confirmação das permissões dos assets.
   - 📦 `Isometricon-v<VER>-Windows-Portable.zip`
-  - 💿 `Isometricon-v<VER>-Windows-Installer.exe`
+  - 💿 `Isometricon-v<VER>-Windows-Installer.exe` (OneFile executável diretamente)
   - 🐧 `Isometricon-v<VER>-Linux-Portable.tar.gz`
 
 ---

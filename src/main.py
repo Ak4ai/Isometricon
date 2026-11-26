@@ -10,7 +10,7 @@ from typing import Optional
 # ``src/math`` sombreia o módulo padrão ``math``. Remove-o e deixa a raiz do
 # projeto no caminho antes de importar qualquer módulo que use ``math``.
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+PROJECT_ROOT = getattr(sys, "_MEIPASS", os.path.abspath(os.path.join(CURRENT_DIR, "..")))
 if sys.path:
     first = sys.path[0]
     if first and os.path.normcase(os.path.abspath(first)) == os.path.normcase(CURRENT_DIR):
@@ -368,12 +368,30 @@ def main() -> None:
     from src.interactive.game_menus import GameMenus
     menus = GameMenus(version_info.full_version)
     selected_world = None
+    package_smoke = next((arg.partition("=")[2] for arg in argv if arg.startswith("--package-smoke-world=")), None)
+    if package_smoke is not None:
+        if (package_smoke not in ("create", "reopen") or not max_frames or max_frames < 1
+                or not os.environ.get("ISOMETRICON_DATA_DIR")):
+            raise ValueError("Package smoke requires create/reopen, --frames and an isolated data directory.")
+        smoke_name = "Isometricon package smoke"
+        if package_smoke == "create":
+            menus.go("create")
+            menus.fields.update(name=smoke_name, seed="42")
+            menus.activate("create_world")
+        else:
+            world = next((item for item in menus.library.list() if item["name"] == smoke_name), None)
+            if world is None or world.get("position") is None:
+                raise ValueError("Package smoke could not find the saved world and player position.")
+            menus.activate("load:" + world["id"])
+        if menus.result is None:
+            raise ValueError(menus.message or "Package smoke could not open the world.")
+        selected_world = menus.result[1]
     show_menu = "--menu" in sys.argv or (
         not editor_mode
         and not any(flag in sys.argv for flag in ("--terrain", "--apresentacao", "--char", "--character", "--frames"))
         and not any(a.startswith("--frames=") for a in sys.argv)
     )
-    if show_menu:
+    if show_menu and package_smoke is None:
         if screenshot_path:
             menus.prepare_background(wait=True)
         def menu_mouse(button, action, mods):
@@ -409,6 +427,7 @@ def main() -> None:
             window.close()
             return
         selected_world = menus.result[1]
+    if selected_world is not None:
         custom_seed = selected_world['seed']
         terrain_demo, char_demo = True, False
     menus.go('game')
@@ -424,6 +443,7 @@ def main() -> None:
     # O personagem gravado (saves/personagem.json) volta, a menos que a linha de comando escolha outro.
     from src.clothing import character_save
     saved_character = character_save.load() if character_save.wanted(sys.argv[1:]) else None
+    default_world_character = saved_character
     if selected_world and selected_world.get('character'):
         saved_character = selected_world['character']
     if saved_character is not None:
@@ -464,6 +484,9 @@ def main() -> None:
             from src.clothing.character_model import CharacterModel, parse_character_cli_args
             char_customization, top_id, bottom_id, tool_id, _ = parse_character_cli_args(sys.argv[1:])
             worn = dict(customization=char_customization, top_id=top_id, bottom_id=bottom_id, tool_id=tool_id)
+            if default_world_character is None:
+                from types import SimpleNamespace
+                default_world_character = character_save.to_dict(SimpleNamespace(**worn))
             if saved_character is not None:
                 worn = character_save.model_arguments(saved_character)  # the character of the last time
             # Built off the main thread, so the window stays responsive; a screenshot run waits for the
@@ -1020,8 +1043,9 @@ def main() -> None:
         items = to_data(schematic_tool.layer)
         try:
             if menus.world is not None:
-                menus.world["structures"] = items
-                menus.library.save(menus.world)
+                world = dict(menus.world, structures=items)
+                menus.library.save(world)
+                menus.world = world
             else:
                 SeedStore(seed_store_path(active_seed["value"])).write(items, active_seed["value"])
         except (OSError, ValueError) as error:
@@ -1033,21 +1057,24 @@ def main() -> None:
     def save_world():
         if not terrain_demo:
             return
-        if menus.world is None:
-            menus.world = menus.library.create('Mundo ' + str(active_seed['value']), active_seed['value'],
-                                               active_terrain["options"])
-        menus.world['seed'] = active_seed['value']
-        menus.world['position'] = [float(v) for v in player_token.position]
+        if menus.world is not None:
+            world = dict(menus.world)
+        else:
+            seed = active_seed['value']
+            world = menus.library.create('Mundo ' + str(seed), seed, active_terrain["options"], write=False)
+            world['seed'] = seed  # mantém a seed exata nos mundos iniciados pela CLI
+        world['position'] = [float(v) for v in player_token.position]
         if construction_panel is not None:
             from src.world.structure_save import to_data
-            menus.world['structures'] = to_data(schematic_tool.layer)
-        if character_model is not None and not getattr(character_model, 'is_loading', False):
-            menus.world['character'] = character_save.to_dict(character_model)
-        menus.world['combat'] = combat.sheet.to_dict()
-        menus.world['npcs'] = combat.npc_list()
-        menus.world['ambiente'] = ambience.to_dict()
-        menus.world['nevoa_explorada'] = fog_war.explored.to_data()
-        menus.library.save(menus.world)
+            world['structures'] = to_data(schematic_tool.layer)
+        if character_model is not None:
+            world['character'] = character_save.to_dict(character_model)
+        world['combat'] = combat.sheet.to_dict()
+        world['npcs'] = combat.npc_list()
+        world['ambiente'] = ambience.to_dict()
+        world['nevoa_explorada'] = fog_war.explored.to_data()
+        menus.library.save(world)
+        menus.world = world
         if not menus.active:
             menus.capture_scene(window.width,window.height)
         if menus.scene_image is not None and menus.scene_owner == menus.world["id"]:
@@ -1058,22 +1085,49 @@ def main() -> None:
             except OSError as error:
                 print(f'[Menu] Não foi possível gravar a miniatura: {error}')
 
-    def load_world(world):
+    def load_world(world, *, persist_new=False, unnamed=False):
+        """Prepara terreno, construções e NPCs antes de trocar os recursos da sessão."""
         nonlocal world_manager, voxel_provider
+        from src.core.game_storage import validate_world_state
+        from src.world.structure_save import restore as restore_structures
+
+        validate_world_state(world)
+        seed, options = world['seed'], world.get('terrain')
+        next_manager = WorldManager(make_generator(seed, options),
+                                    render_distance=menus.preferences.data['render_distance'], atlas=atlas)
+        next_tool = SchematicTool(mesh_factory=schematic_tool._mesh_factory, schematics_dir=schematic_tool.schematics_dir)
+        next_tool.on_place = lambda placed: next_manager.clear_box(*placed.bounds())
+        try:
+            x, z = (float(player_token.position[0]), float(player_token.position[2])) if unnamed else (.5, .5)
+            position = world.get('position') or [x, next_manager.get_height(x, z) + 1., z]
+            position = [float(v) for v in position]
+            warnings = restore_structures(next_tool, world.get('structures') or [])
+            next_manager.load_initial_region(position[0], position[2])
+            next_lookup = next_tool.layer.wrap_lookup(next_manager.neighbor_at)
+            next_combat = CombatController(combat.sheet if unnamed else PlayerSheet.from_dict(world.get('combat')))
+            next_combat.terrain = WorldTerrain(lambda x, y, z: is_solid(next_lookup(x, y, z)))
+            next_combat.load_npcs(world.get('npcs'))
+            next_ambience = None if unnamed else Ambience.from_dict(world.get('ambiente'))
+            character = world.get('character') or default_world_character
+            if persist_new:
+                menus.library.save(world)
+            if character_model is not None and character != character_save.to_dict(character_model):
+                character_save.apply(character_model, character)
+        except Exception:
+            next_tool.discard_scene()
+            next_manager.delete()
+            raise
+
+        chest_session.close()
+        schematic_tool.discard_scene()
+        schematic_tool.layer = next_tool.layer
         world_manager.delete()
-        active_seed['value'] = world['seed']
-        active_terrain["options"] = world.get("terrain")
-        world_manager = WorldManager(make_generator(world["seed"], active_terrain["options"]),
-                                     render_distance=menus.preferences.data['render_distance'], atlas=atlas)
-        x, z = .5, .5
-        player_token.position[:] = world.get('position') or [x, world_manager.get_height(x, z) + 1., z]
+        world_manager = next_manager
+        active_seed['value'], active_terrain["options"] = seed, options
+        player_token.position[:] = position
         player_token.vertical_velocity = 0.0
         player_token._collision_controller = None
-        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
-        # as construções do mundo anterior saem; as deste voltam (sem regravar nada: recarregar não é mudança)
-        from src.world.structure_save import restore as restore_structures
-        for warning in restore_structures(schematic_tool, world.get('structures') or []):
-            chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+        player_token.ladder_grip = None
         if construction_panel is not None:
             construction_panel.close()
         room_tracker.reset()
@@ -1081,19 +1135,44 @@ def main() -> None:
             block_lookup=lambda x, y, z: schematic_tool.lookup(world_manager.neighbor_at, x, y, z)
         )
         camera.target[:] = player_token.position
-        picking_state.update(click_pending=False, hover_hit=None, clicked_hit=None)
-        # Invalida o cache de revisão da grade ao substituir o WorldManager.
+        keys_pressed.clear()
+        pan_state.update(active=False, shift_pressed=False)
+        picking_state.update(click_pending=False, hover_hit=None, clicked_hit=None, aim=None, door=None, door_in_reach=False)
         grid_renderer.sync_chunks({}, -1)
-        if world.get('character') and character_model is not None:
-            character_save.apply(character_model, world['character'])
         combat.clear()
-        combat.sheet = PlayerSheet.from_dict(world.get('combat'))
-        combat.load_npcs(world.get('npcs'))
-        ambience.load(world.get('ambiente'))
+        combat.sheet = next_combat.sheet
+        combat.enemies = next_combat.enemies
+        npc_models.delete()
+        if next_ambience is not None:
+            ambience.load(next_ambience.to_dict())
         fog_war.explored.load(world.get('nevoa_explorada'))
         if cloud_fog is not None:
             cloud_fog.field.reset()
-        menus.world = world
+        menus.world = None if unnamed else world
+        for warning in warnings:
+            chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+
+    def regenerate_world():
+        """R cria outro mundo quando há uma sessão nomeada, gravando a sessão anterior primeiro."""
+        from src.world.structure_save import SeedStore, seed_store_path
+
+        seed = (active_seed['value'] + random.randrange(1, 999_999)) % 999_999 + 1
+        if seed == active_seed['value']:
+            seed = seed % 999_999 + 1
+        previous = menus.world
+        if previous is not None:
+            save_world()
+            name = previous['name'][:48] + ' (nova seed)'
+            world = menus.library.create(name, seed, active_terrain["options"], write=False)
+            world['character'] = menus.world.get('character')
+            load_world(world, persist_new=True)
+        else:
+            world = dict(seed=seed, terrain=active_terrain["options"],
+                         structures=SeedStore(seed_store_path(seed)).read(),
+                         character=character_save.to_dict(character_model) if character_model is not None else None)
+            load_world(world, unnamed=True)
+        chat_console.add_message(f"[Terrain] Mundo regenerado. Nova seed: {seed}", (85, 255, 85))
+        print(f"[Terrain] Mundo regenerado. Nova Seed: {seed}")
 
 
     def regenerate_terrain(new_seed: int, options, keep_world_structures: bool = False) -> None:
@@ -1205,10 +1284,11 @@ def main() -> None:
         keys_pressed[key] = (action != glfw.RELEASE)
 
         if terrain_demo and map_world is None and not character_editor.is_open and key == glfw.KEY_R and action == glfw.PRESS:
-            new_seed = random.randint(1, 999_999)
-            active_seed["value"] = new_seed
-            print(f"[Terrain] Regenerando mundo... Nova Seed: {new_seed}")
-            regenerate_terrain(new_seed, active_terrain["options"])   # as opções ficam
+            try:
+                regenerate_world()
+            except (OSError, ValueError, RuntimeError) as error:
+                chat_console.add_message(f"[Terrain] Não consegui regenerar o mundo: {error}", (255, 85, 85))
+            return True
 
         if char_demo:
             if key == glfw.KEY_SPACE and action == glfw.PRESS:
@@ -1625,9 +1705,11 @@ def main() -> None:
                             break
                         menus.go('welcome')
                     elif action == 'play':
+                        if not terrain_demo or map_world is not None:
+                            raise ValueError('Reabra pelo menu inicial para jogar um mundo procedural.')
                         load_world(world)
-                except (OSError, ValueError) as error:
-                    menus.go('pause')
+                        menus.go('game')
+                except (OSError, ValueError, RuntimeError) as error:
                     menus.message = 'Falha ao salvar/abrir: ' + str(error)
             window.set_vsync(menus.preferences.data['vsync'])
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
@@ -2117,6 +2199,7 @@ def main() -> None:
                 cloud_fog = CloudFog(lambda bx, bz: world_manager.get_height(bx, bz), fog_war.explored,
                                      lambda: [placed.bounds() for placed in schematic_tool.layer.structures]
                                      if schematic_tool is not None else [])
+                shader.use()  # o construtor de Shader muda o programa ativo durante a compilação
             fog_war_args = (0 if clouds_on else ambience.fog_war, np.linalg.inv(np.asarray(model, dtype=np.float64)), ambience.war_color(),
                             (float(player_token.position[0]), float(player_token.position[2])))
             fog_war.apply(shader, *fog_war_args)
@@ -2486,7 +2569,8 @@ def main() -> None:
                 cloud_fog.update(ambience.fog_war if clouds_on else 0, float(player_token.position[0]),
                                  float(player_token.position[2]), dt, soft=ambience.war_style == 2)
                 cloud_fog.render(projection, view, model, ambience.tint(), window.time,
-                                 light=ambience.light_direction(), soft=ambience.war_style == 2)
+                                 light=ambience.light_direction(), soft=ambience.war_style == 2,
+                                 focus=player_token.position)
                 shader.use()
                 mark("clouds")
             # a cena vai para a tela; daqui em diante (coordenadas, rótulos, chat, cursor) desenha-se direto nela
@@ -2644,10 +2728,12 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 8. Liberar recursos
     # ------------------------------------------------------------------
-    if terrain_demo and menus.world is not None and max_frames is None:
+    if terrain_demo and menus.world is not None and (max_frames is None or package_smoke == "create"):
         try:
             save_world()
         except (OSError, ValueError) as error:
+            if package_smoke == "create":
+                raise
             print(f'[Save] Não foi possível salvar ao fechar: {error}')
     menus.delete()
     character_editor.delete()

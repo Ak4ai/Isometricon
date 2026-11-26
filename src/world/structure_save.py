@@ -15,17 +15,18 @@ from typing import List
 
 import numpy as np
 
+from src.core.game_storage import atomic_json
+from src.core.paths import saves_path
 from src.world.block_rotation import rotate_schematic
 from src.world.doors import is_door, is_open_door, with_open
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FORMAT = "isometricon-structures"
 VERSION = 2
 OLD_FORMAT = "isometricon-world-objects"
 
 
 def seed_store_path(seed: int) -> str:
-    return os.path.join(PROJECT_ROOT, "saves", "mundos", f"mundo_{int(seed)}.json")
+    return os.fspath(saves_path("mundos", f"mundo_{int(seed)}.json"))
 
 
 def _lower_door_cells(grid: np.ndarray):
@@ -48,6 +49,8 @@ def to_data(layer) -> List[dict]:
                       if is_open_door(grid[cell[1], cell[2], cell[0]])]
         items.append({"entry": placed.entry, "name": placed.name, "origin": [int(v) for v in placed.origin],
                       "rotation": int(placed.rotation), "open_doors": open_doors})
+    for index, item in layer.unavailable:
+        items.insert(index, item)
     return items
 
 
@@ -69,19 +72,23 @@ def restore(tool, items: List[dict]) -> List[str]:
     warnings = []
     try:
         tool.clear()
-        for item in items:
-            name = str(item.get("name") or item.get("entry", {}).get("name") or "construção")
+        for index, item in enumerate(items):
+            name = "construção"
             try:
                 entry = dict(item["entry"])
-                schematic = rotate_schematic(tool.schematic_for(entry), int(item.get("rotation", 0)))
+                name = str(item.get("name") or entry.get("name") or name)
+                entry, schematic = tool.prepare_entry(entry)
+                schematic = rotate_schematic(schematic, int(item.get("rotation", 0)))
                 _set_doors(schematic.grid, item.get("open_doors", []))
-                origin = tuple(int(v) for v in item["origin"])
-            except Exception as error:
-                warnings.append(f"{name}: não deu para carregar ({error}).")
+                x, y, z = (int(v) for v in item["origin"])
+                origin = (x, y, z)
+                schematic.name = name
+                mesh = tool._mesh_factory(schematic)
+            except (OSError, ValueError, TypeError, KeyError, IndexError, OverflowError) as error:
+                warnings.append(f"{name}: não deu para carregar ({error}). A entrada foi preservada.")
+                tool.layer.unavailable.append((index, item))
                 continue
-            schematic.name = name
-            placed = tool.layer.add(name, schematic, origin, tool._mesh_factory(schematic),
-                                    rotation=int(item.get("rotation", 0)) % 4, entry=entry)
+            placed = tool.layer.add(name, schematic, origin, mesh, rotation=int(item.get("rotation", 0)) % 4, entry=entry)
             tool.on_place(placed)
     finally:
         tool.on_change = on_change
@@ -118,13 +125,7 @@ class SeedStore:
         return []
 
     def write(self, items: List[dict], seed: int | None = None) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
         payload = {"format": FORMAT, "version": VERSION, "structures": items}
         if seed is not None:
             payload["seed"] = int(seed)
-        temporary = self.path + ".tmp"
-        with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=1)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, self.path)
+        atomic_json(self.path, payload)

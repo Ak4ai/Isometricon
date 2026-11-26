@@ -11,6 +11,7 @@ Executa todo o pipeline geométrico em tempo de execução para qualquer PC:
 """
 
 import os
+from pathlib import Path
 import sys
 import re
 import math
@@ -19,6 +20,8 @@ import json
 import gzip
 import urllib.request
 import numpy as np
+
+from src.clothing.model_paths import GENERATED_MODELS, clothing_files, garment_cache_dir, model_file
 
 # Importa decodificadores do projeto
 from scripts.import_roblox_clothing import fetch_roblox_asset, decode_roblox_mesh_to_obj, download_failure_message
@@ -41,8 +44,7 @@ def body_parts_path(fitted_obj) -> str:
 
 def hair_fitted_path(asset_id, body_type) -> str:
     """Hair (or hat) ``asset_id`` fitted to the head of ``body_type``."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, "assets", "models", "clothing", f"Hair_fitted_{asset_id}_{body_name(body_type)}.obj")
+    return model_file("clothing", f"Hair_fitted_{asset_id}_{body_name(body_type)}.obj")
 
 
 def body_name(body_type) -> str:
@@ -637,7 +639,7 @@ class RobloxWearEngine:
         verts, faces, _, _ = self.load_obj(under["obj_path"])
         trace = {}
         retarget_garment_with_wrap_layer(self, verts, under["rbxm_path"],
-                                         os.path.join(os.path.dirname(under["obj_path"]), "wrap_cages"),
+                                         garment_cache_dir(under["obj_path"], "wrap_cages"),
                                          binding_audit=trace)
         fit_radial_prism(verts, faces, trace)
         total = np.zeros_like(body_positions)
@@ -775,7 +777,7 @@ class RobloxWearEngine:
             return None
         try:
             from .wrap_layer_fit import retarget_garment_with_wrap_layer
-            cache = os.path.join(os.path.dirname(meta["obj_path"]), "wrap_cages")
+            cache = garment_cache_dir(meta["obj_path"], "wrap_cages")
             trace = {}
             layered = self._layered_body_cage() if getattr(self, "layer_under_asset", None) else None
             result = retarget_garment_with_wrap_layer(self, verts, meta["rbxm_path"], cache, binding_audit=trace,
@@ -802,7 +804,7 @@ class RobloxWearEngine:
             from .wrap_layer_fit import _unique_uv_positions
             _, cage_positions = _unique_uv_positions(self.body_cages)
             hidden = hidden_body_cage_mask(meta["rbxm_path"], trace, len(cage_positions),
-                                           os.path.join(os.path.dirname(meta["obj_path"]), "hsr"))
+                                           garment_cache_dir(meta["obj_path"], "hsr"))
             if hidden is not None:
                 from .hsr import body_cage_faces
                 result[1]["hsr"] = {"cage_points": engine_to_body_mesh(cage_positions), "hidden": hidden,
@@ -1079,23 +1081,21 @@ class RobloxWearEngine:
     def fetch_asset(self, asset_id, output_dir=None):
         """Baixa malha e textura do Roblox em Python puro."""
         if output_dir is None:
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            output_dir = os.path.join(base_dir, "assets", "models", "clothing")
-        # Verifica cache local existente para resiliência offline
-        cached_objs = [
-            f for f in os.listdir(output_dir)
-            if str(asset_id) in f and f.endswith(".obj")
-            and not f.startswith("Hair_fitted_")
-            and not f.startswith("character_")
-        ]
-        cached_pngs = [f for f in os.listdir(output_dir) if str(asset_id) in f and f.endswith(".png")]
-        cached_rbxms = [f for f in os.listdir(output_dir) if str(asset_id) in f and f.endswith(".rbxm")]
-        rbxm_path = os.path.join(output_dir, cached_rbxms[0]) if cached_rbxms else None
+            output_dir = GENERATED_MODELS / "clothing"
+            cached_files = clothing_files("*")
+        else:
+            cached_files = list(Path(output_dir).glob("*"))
+        os.makedirs(output_dir, exist_ok=True)
+        # O catálogo distribuído e os arquivos baixados podem ser usados offline.
+        cached = [path for path in cached_files if str(asset_id) in path.name and path.is_file()]
+        obj = next((path for path in cached if path.suffix == ".obj"
+                    and not path.name.startswith(("Hair_fitted_", "character_"))), None)
+        tex_path = next((os.fspath(path) for path in cached if path.suffix == ".png"), None)
+        rbxm_path = next((os.fspath(path) for path in cached if path.suffix == ".rbxm"), None)
 
-        if cached_objs:
-            obj_path = os.path.join(output_dir, cached_objs[0])
-            tex_path = os.path.join(output_dir, cached_pngs[0]) if cached_pngs else None
-            name = cached_objs[0].replace(f"_{asset_id}.obj", "").replace(".obj", "").strip("_")
+        if obj is not None:
+            obj_path = os.fspath(obj)
+            name = obj.stem.removesuffix(f"_{asset_id}").strip("_")
             is_top_guess = not any(b in name.lower() for b in ["pants", "jeans", "trouser", "skirt", "shorts", "shoe", "boot"])
             type_id = 65 if is_top_guess else 66
             try:
@@ -2277,8 +2277,8 @@ class RobloxWearEngine:
             is_short, is_sleeveless, is_long = False, False, False
 
         if output_obj is None:
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            output_obj = os.path.join(base_dir, "assets", "models", f"character_native_{asset_id}_{self.body_type}.obj")
+            output_obj = os.fspath(GENERATED_MODELS / f"character_native_{asset_id}_{self.body_type}.obj")
+        os.makedirs(os.path.dirname(os.path.abspath(output_obj)), exist_ok=True)
 
         if meta.get("is_top", False) and not used_asset_wrap:
             # Inverte X no final para leitura frontal correta de logos/texturas, invertendo winding para preservar normais externas.
@@ -2381,10 +2381,9 @@ class RobloxWearEngine:
         meta = self.fetch_asset(asset_id)
         raw_obj = meta["obj_path"]
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        models_dir = os.path.join(base_dir, "assets", "models")
         if output_obj is None:
-            output_obj = os.path.join(models_dir, f"character_native_tool_{asset_id}.obj")
+            output_obj = os.fspath(GENERATED_MODELS / f"character_native_tool_{asset_id}.obj")
+        os.makedirs(os.path.dirname(os.path.abspath(output_obj)), exist_ok=True)
 
         raw_verts = []
         raw_uvs = []
@@ -2474,8 +2473,7 @@ class RobloxWearEngine:
         text = str(shoes_id).strip()
         if "," in text:
             return [i.strip() for i in text.split(",") if i.strip()]
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        cache_path = os.path.join(base_dir, "assets", "models", "clothing", "shoe_bundles.json")
+        cache_path = GENERATED_MODELS / "clothing" / "shoe_bundles.json"
         try:
             with open(cache_path, encoding="utf-8") as handle:
                 cache = json.load(handle)
@@ -2493,6 +2491,7 @@ class RobloxWearEngine:
                 pass  # not a bundle: a single shoe asset
             cache[text] = assets or [text]
             try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(cache_path, "w", encoding="utf-8") as handle:
                     json.dump(cache, handle, indent=2)
             except OSError:
@@ -2506,10 +2505,7 @@ class RobloxWearEngine:
         print(f"  EQUIPAR CALÇADOS NATIVO PYTHON: {bundle_or_asset_id}")
         print(f"==================================================")
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        models_dir = os.path.join(base_dir, "assets", "models")
-        clothing_dir = os.path.join(models_dir, "clothing")
-        os.makedirs(clothing_dir, exist_ok=True)
+        GENERATED_MODELS.mkdir(parents=True, exist_ok=True)
 
         left_asset_id = None
         right_asset_id = None
@@ -2569,7 +2565,7 @@ class RobloxWearEngine:
             v_world[:, 1] = raw_verts[:, 2] * scale_z - 0.010
             v_world[:, 2] = (raw_verts[:, 1] - y_min) * scale_y + 0.000
 
-            out_obj = os.path.join(models_dir, f"character_native_shoe_{side}_{bundle_or_asset_id}.obj")
+            out_obj = os.fspath(GENERATED_MODELS / f"character_native_shoe_{side}_{bundle_or_asset_id}.obj")
             with open(out_obj, "w", encoding="utf-8") as f:
                 f.write(f"# Isometricon Native Fitted Shoe ({side}): {bundle_or_asset_id}\n")
                 for v in v_world:
@@ -2600,11 +2596,6 @@ class RobloxWearEngine:
         print(f"  EQUIPAR CABELO NATIVO PYTHON: {asset_id} ({self.body_type.upper()})")
         print(f"==================================================")
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        models_dir = os.path.join(base_dir, "assets", "models")
-        clothing_dir = os.path.join(models_dir, "clothing")
-        os.makedirs(clothing_dir, exist_ok=True)
-
         meta = self.fetch_asset(asset_id)
         raw_obj = meta["obj_path"]
         rbxm_path = meta.get("rbxm_path")
@@ -2630,7 +2621,7 @@ class RobloxWearEngine:
             raise ValueError(f"Cabelo {asset_id} sem .rbxm ou sem cages do corpo para encaixar")
         v_world = engine_to_body_mesh(fit_head_accessory(raw_verts, rbxm_path, self.r15_source_cages, self.body_cages))
 
-        out_obj = hair_fitted_path(asset_id, self.body_type)
+        out_obj = os.fspath(GENERATED_MODELS / "clothing" / f"Hair_fitted_{asset_id}_{self.body_type}.obj")
         with open(out_obj, "w", encoding="utf-8") as f:
             f.write(f"# Isometricon Native Fitted Hair: {asset_id} ({meta['name']})\n")
             for v in v_world:

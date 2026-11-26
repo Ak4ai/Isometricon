@@ -18,10 +18,6 @@ import urllib.error
 # Importa DracoPy para descompactação da geometria
 import DracoPy
 
-# Adiciona o diretório de scripts para comunicar com o Blender
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import blender_client
-
 def load_roblox_cookie():
     """Lê o cookie do Roblox configurado no arquivo .env."""
     env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -249,6 +245,11 @@ def decode_roblox_mesh_to_obj(mesh_bytes, output_obj_path):
 
 def import_and_align_in_blender(obj_path, tex_path=None, name="Jaqueta_Roblox"):
     """Comunica com o Blender ativo para importar, aplicar textura e alinhar ao Torso."""
+    if __package__:
+        from . import blender_client
+    else:
+        import blender_client
+
     escaped_obj = os.path.abspath(obj_path).replace("\\", "\\\\")
     escaped_tex = os.path.abspath(tex_path).replace("\\", "\\\\") if tex_path else ""
 

@@ -1,19 +1,22 @@
 """Preferências e mundos locais, independentes da renderização."""
 from __future__ import annotations
+from dataclasses import fields
+import base64
 import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import time
 import uuid
 
-ROOT = Path(__file__).resolve().parents[2]
+from src.core.paths import saves_path
 ACTIONS = {
     'forward': ('Mover para frente', 87), 'backward': ('Mover para trás', 83),
     'left': ('Mover para a esquerda', 65), 'right': ('Mover para a direita', 68),
     'rotate_left': ('Girar câmera à esquerda', 81), 'rotate_right': ('Girar câmera à direita', 69),
-    'grid': ('Mostrar grade', 71), 'regenerate': ('Gerar outra seed', 82),
+    'grid': ('Mostrar grade', 71), 'regenerate': ('Gerar outro mundo/seed', 82),
     'chat': ('Abrir chat', 84), 'command': ('Abrir comandos', 47),
     'pan_modifier': ('Arrastar câmera (com clique)', 340),
     'zoom_in': ('Aproximar câmera', 61), 'zoom_out': ('Afastar câmera', 45),
@@ -54,7 +57,10 @@ def atomic_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name('.' + path.name + '.' + uuid.uuid4().hex + '.tmp')
     try:
-        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
+        with temporary.open('w', encoding='utf-8') as file:
+            json.dump(data, file, ensure_ascii=False, indent=2, allow_nan=False)
+            file.flush()
+            os.fsync(file.fileno())
         # Windows pode manter o destino aberto brevemente durante indexação/antivírus.
         for attempt in range(5):
             try:
@@ -80,7 +86,7 @@ def seed_value(text):
 
 class Preferences:
     def __init__(self, path=None):
-        self.path = Path(path or ROOT / 'saves' / 'preferences.json')
+        self.path = Path(path or saves_path('preferences.json'))
         self.reset()
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
@@ -134,31 +140,37 @@ class Preferences:
 class WorldLibrary:
     """Terreno é regenerado pela seed; posição, tempo e personagem são persistidos."""
     def __init__(self, directory=None):
-        self.directory = Path(directory or ROOT / 'saves' / 'worlds')
+        self.directory = Path(directory or saves_path('worlds'))
 
     def list(self):
         worlds = []
         for path in self.directory.glob('*.json'):
             try:
-                data = json.loads(path.read_text(encoding='utf-8'))
-                if data.get('version') != 1 or data.get('id') != path.stem:
-                    continue
-                if len(path.stem) != 32 or any(c not in '0123456789abcdef' for c in path.stem):
-                    continue
-                if not isinstance(data.get('seed'), int) or not isinstance(data.get('name'), str):
-                    continue
-                position = data.get('position')
-                if position is not None and (len(position) != 3 or not all(math.isfinite(float(v)) for v in position)):
-                    continue
-                if not math.isfinite(float(data.get('played', 0))):
-                    continue
-                worlds.append(data)
-            except (OSError, ValueError, TypeError, AttributeError):
+                worlds.append(self._read(path.stem))
+            except (OSError, ValueError):
                 continue
         return sorted(worlds, key=lambda w: str(w.get('saved_at', '')), reverse=True)
 
-    def create(self, name, seed, terrain=None):
-        """Um mundo novo; ``terrain``: as opções de criação do relevo (``src.world.terrain_options``)."""
+    def _read(self, world_id):
+        if not isinstance(world_id, str) or len(world_id) != 32 or any(c not in '0123456789abcdef' for c in world_id):
+            raise ValueError('Identificador de mundo inválido.')
+        try:
+            data = json.loads((self.directory / (world_id + '.json')).read_text(encoding='utf-8'))
+        except RecursionError as error:
+            raise ValueError('O save tem dados aninhados em excesso.') from error
+        if (not isinstance(data, dict) or data.get('version') != 1 or data.get('id') != world_id
+                or type(data.get('seed')) is not int or not isinstance(data.get('name'), str)):
+            raise ValueError('Cabeçalho do mundo inválido.')
+        return data
+
+    def load(self, world_id):
+        world = self._read(world_id)
+        validate_world_state(world)
+        world['played'] = float(world.get('played', 0))
+        return world
+
+    def create(self, name, seed, terrain=None, *, write=True):
+        """Um mundo novo; ``terrain``: as opções de criação (ver ``src.world.terrain_options``)."""
         if not name.strip():
             raise ValueError('Dê um nome ao mundo.')
         world = dict(version=1, id=uuid.uuid4().hex, name=name.strip()[:64],
@@ -166,7 +178,8 @@ class WorldLibrary:
         if terrain is not None:
             from src.world.terrain_options import clean
             world['terrain'] = clean(terrain)
-        self.save(world)
+        if write:
+            self.save(world)
         return world
 
     def save(self, world):
@@ -181,3 +194,136 @@ class WorldLibrary:
             raise ValueError('Identificador de mundo inválido.')
         (self.directory / (world_id + '.png')).unlink(missing_ok=True)
         (self.directory / (world_id + '.json')).unlink()
+
+
+def _number(value):
+    """Os saves anteriores também aceitam números em strings."""
+    try:
+        return not isinstance(value, bool) and math.isfinite(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _vector3(value, check):
+    return isinstance(value, (list, tuple)) and len(value) == 3 and all(check(item) for item in value)
+
+
+def _position(value, *, integral=False):
+    # O render usa float32: fora desta faixa, nem os centros dos voxels são representáveis.
+    limit = 2**23 - 1
+    if integral:
+        return _vector3(value, lambda item: type(item) is int and abs(item) <= limit)
+    return _vector3(value, lambda item: _number(item) and abs(float(item)) <= limit)
+
+
+def _validate_character(data):
+    from src.clothing.character_save import HAIR_PLACEMENT, NOT_SAVED, WORN
+    from src.clothing.customization import AvatarCustomization
+
+    if not isinstance(data, dict) or data.get('versao', 1) != 1:
+        raise ValueError('Personagem do mundo inválido.')
+    for section in ('aparencia', 'veste', 'cabelo'):
+        if data.get(section) is not None and not isinstance(data[section], dict):
+            raise ValueError('Personagem do mundo inválido.')
+    worn = data.get('veste') or {}
+    for name in WORN:
+        value = worn.get(name)
+        if value is None:
+            continue
+        if name == 'extra_ids':
+            if isinstance(value, list) and all(type(item) in (int, str) for item in value):
+                continue
+        elif type(value) in (int, str):
+            continue
+        elif name == 'shoes_id' and isinstance(value, list) and len(value) == 2:
+            if all(type(item) in (int, str) for item in value):
+                continue
+        raise ValueError('Equipamento do personagem inválido.')
+
+    known = {field.name for field in fields(AvatarCustomization)} - set(NOT_SAVED)
+    appearance = data.get('aparencia') or {}
+    for name, value in appearance.items():
+        if name not in known:
+            continue
+        if name == 'skin_color_rgb' or name in ('hair_color', 'iris_color', 'iris_color_other', 'eyebrow_color'):
+            if _vector3(value, lambda item: type(item) in (int, float) and _number(item)) or (name != 'skin_color_rgb' and (value is None or isinstance(value, str))):
+                continue
+        elif name in HAIR_PLACEMENT:
+            if type(value) in (int, float) and _number(value):
+                continue
+        elif name in ('has_3d_nose', 'hsr_mirror'):
+            if isinstance(value, bool) or (name == 'has_3d_nose' and value is None):
+                continue
+        elif name in ('hsr_hide', 'hsr_show'):
+            if isinstance(value, list) and all(type(item) is int and item >= 0 for item in value):
+                continue
+        elif name in ('body_adjust', 'makeup'):
+            check = (lambda item: type(item) in (int, float) and _number(item)) if name == 'body_adjust' else (
+                lambda item: isinstance(item, str))
+            if isinstance(value, dict) and all(check(item) for item in value.values()):
+                continue
+        elif value is None or isinstance(value, str):
+            continue
+        raise ValueError(f'Aparência do personagem inválida ({name}).')
+
+    for name, value in (data.get('cabelo') or {}).items():
+        if name in HAIR_PLACEMENT and not _number(value):
+            raise ValueError('Posicionamento do cabelo inválido.')
+
+
+def validate_world_state(world):
+    """Valida o estado que os subsistemas vão consumir, antes de substituir o mundo ativo."""
+    position = world.get('position')
+    if ((position is not None and not _position(position)) or not _number(world.get('played', 0))
+            or type(world.get('seed')) is not int):
+        raise ValueError('Posição, seed ou tempo de jogo inválido.')
+    for key in ('terrain', 'combat', 'ambiente', 'nevoa_explorada'):
+        section = world.get(key)
+        if section is not None and not isinstance(section, dict):
+            raise ValueError(f'Seção inválida no mundo ({key}).')
+    for key in ('terrain', 'ambiente'):
+        if any(not _number(value) for value in (world.get(key) or {}).values()):
+            raise ValueError(f'Opções inválidas no mundo ({key}).')
+
+    for cell, encoded in (world.get('nevoa_explorada') or {}).items():
+        try:
+            _, _ = (int(part) for part in cell.split(','))
+            if not isinstance(encoded, str) or len(encoded) != 44 or len(base64.b64decode(encoded, validate=True)) != 32:
+                raise ValueError
+        except (ValueError, TypeError) as error:
+            raise ValueError('Mapa explorado do mundo inválido.') from error
+
+    combat = world.get('combat') or {}
+    if (any(combat.get(key) is not None and not isinstance(combat[key], str) for key in ('weapon', 'armor'))
+            or (combat.get('hp') is not None and not _number(combat['hp']))):
+        raise ValueError('Ficha de combate do mundo inválida.')
+    character = world.get('character')
+    if character is not None:
+        _validate_character(character)
+
+    for key in ('npcs', 'structures'):
+        items = world.get(key)
+        if items is not None and (not isinstance(items, list) or any(not isinstance(item, dict) for item in items)):
+            raise ValueError(f'Lista inválida no mundo ({key}).')
+    for npc in world.get('npcs') or ():
+        if ((npc.get('posicao') is not None and not _position(npc['posicao']))
+                or (npc.get('yaw') is not None and not _number(npc['yaw']))
+                or (npc.get('id') is not None and (not isinstance(npc['id'], str)
+                    or re.fullmatch(r'[A-Za-z0-9_-]{1,96}', npc['id']) is None))):
+            raise ValueError('NPC do mundo inválido.')
+        if npc.get('personagem') is not None:
+            _validate_character(npc['personagem'])
+        choice = npc.get('modelo')
+        if choice is not None and (not isinstance(choice, dict) or (choice and (
+                not isinstance(choice.get('arquivo'), str) or not _number(choice.get('altura'))
+                or type(choice.get('giro')) is not int
+                or (choice.get('perfil') is not None and not isinstance(choice['perfil'], str))))):
+            raise ValueError('Modelo do NPC inválido.')
+    for structure in world.get('structures') or ():
+        entry = structure.get('entry')
+        doors = structure.get('open_doors', [])
+        if (not isinstance(entry, dict) or not isinstance(entry.get('kind'), str)
+                or not _position(structure.get('origin'), integral=True)
+                or type(structure.get('rotation', 0)) is not int
+                or not isinstance(doors, list) or not all(_position(door, integral=True) for door in doors)):
+            raise ValueError('Construção do mundo inválida.')

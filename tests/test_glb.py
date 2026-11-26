@@ -78,6 +78,46 @@ def test_nested_nodes_multiply_their_transforms():
     assert low[1] == pytest.approx(11.0)
 
 
+def test_without_scene_child_inherits_its_parent_transform():
+    builder = GlbBuilder()
+    child = one_box(builder, translation=(0.0, 1.0, 0.0))
+    parent = builder.add_node(translation=(0.0, 10.0, 0.0), children=[child])
+    document, blob = glb._split_glb(builder.build([parent]))
+    del document["scenes"]
+    document.pop("scene", None)
+    document["buffers"][0]["uri"] = "data:;base64," + base64.b64encode(blob).decode()
+    low, _ = parse_model(json.dumps(document).encode()).bounds()
+    assert low[1] == pytest.approx(11.0)
+
+
+def test_mesh_instances_count_even_when_primitives_are_skipped(monkeypatch):
+    data, _ = build()
+    document, blob = glb._split_glb(data)
+    document["buffers"][0]["uri"] = "data:;base64," + base64.b64encode(blob).decode()
+    document["meshes"].append({"primitives": [{"mode": 0}, {"mode": 1}]})
+    document["nodes"].extend([{"mesh": 1}, {"mesh": 1}])
+    document["scenes"][0]["nodes"].extend([1, 2])
+    monkeypatch.setattr(glb, "MAX_MESH_PARTS", 4)
+    with pytest.raises(ModelError, match="limite de partes"):
+        parse_model(json.dumps(document).encode())
+
+
+def test_empty_mesh_is_rejected_before_bounds():
+    data, _ = build()
+    document, blob = glb._split_glb(data)
+    document["buffers"][0]["uri"] = "data:;base64," + base64.b64encode(blob).decode()
+    for accessor in document["accessors"]:
+        accessor["count"] = 0
+    with pytest.raises(ModelError, match="triângulos"):
+        parse_model(json.dumps(document).encode())
+
+
+def test_transforms_cannot_create_nonfinite_vertices():
+    data, _ = build({"translation": (1e100, 0.0, 0.0)})
+    with pytest.raises(ModelError, match="inválidos"):
+        parse_model(data)
+
+
 def test_a_mirrored_node_keeps_faces_outwards():
     data, _ = build({"scale": (-1.0, 1.0, 1.0)})
     sub = parse_model(data).submeshes[0]
@@ -220,3 +260,53 @@ def test_custom_model_without_a_gpu():
     low, high = model.bounds()
     assert model.name == "amostra" and model.triangles == 84 and model.parts == []
     assert high[1] - low[1] == pytest.approx(1.5) and model.is_loading is False
+
+
+def test_accessor_without_buffer_is_bounded_before_allocating(monkeypatch):
+    data, _ = build()
+    document, _ = glb._split_glb(data)
+    position = document["meshes"][0]["primitives"][0]["attributes"]["POSITION"]
+    entry = document["accessors"][position]
+    del entry["bufferView"]
+    monkeypatch.setattr(glb, "MAX_VERTICES", 64)
+    entry["count"] = 65
+    from types import SimpleNamespace
+
+    numpy_calls = vars(glb.np) | {"zeros": lambda *args, **kwargs: pytest.fail("alocou antes de validar")}
+    monkeypatch.setattr(glb, "np", SimpleNamespace(**numpy_calls))
+    with pytest.raises(ModelError, match="accessor excede"):
+        parse_model(json.dumps(document).encode())
+
+
+def test_triangle_limit_is_checked_before_decoding_attributes(monkeypatch):
+    data, _ = build()
+    monkeypatch.setattr(glb, "MAX_TRIANGLES", 5)
+    monkeypatch.setattr(glb._Reader, "accessor", lambda *args: pytest.fail("decodificou antes de validar"))
+    with pytest.raises(ModelError, match="triângulos"):
+        parse_model(data)
+
+
+def test_repeated_mesh_references_use_one_model_wide_budget(monkeypatch):
+    builder = GlbBuilder()
+    first = one_box(builder)
+    second = builder.add_node(mesh=0)
+    monkeypatch.setattr(glb, "MAX_TRIANGLES", 20)
+    with pytest.raises(ModelError, match="triângulos"):
+        parse_model(builder.build([first, second]))
+
+
+def test_cyclic_node_hierarchy_is_rejected():
+    data, _ = build()
+    document, blob = glb._split_glb(data)
+    document["nodes"][0]["children"] = [0]
+    document["buffers"][0]["uri"] = "data:;base64," + base64.b64encode(blob).decode()
+    with pytest.raises(ModelError, match="ciclo"):
+        parse_model(json.dumps(document).encode())
+
+
+def test_json_structure_is_bounded_before_object_construction(monkeypatch):
+    data, _ = build()
+    monkeypatch.setattr(glb, "MAX_JSON_STRUCTURE", 20)
+    monkeypatch.setattr(glb.json, "loads", lambda *args: pytest.fail("carregou antes de validar"))
+    with pytest.raises(ModelError, match="JSON.*limite"):
+        parse_model(data)

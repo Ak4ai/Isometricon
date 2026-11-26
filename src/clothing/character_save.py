@@ -13,6 +13,8 @@ import json
 import os
 from typing import Any, Dict, Optional
 
+from src.core.paths import saves_path
+
 from .customization import (
     AvatarCustomization,
     BodyType,
@@ -26,8 +28,7 @@ from .customization import (
     MouthStyle,
 )
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SAVE_PATH = os.path.join(PROJECT_ROOT, "saves", "personagem.json")
+SAVE_PATH = os.fspath(saves_path("personagem.json"))
 VERSION = 1
 
 # What the model wears, and the hair's manual placement.

@@ -19,6 +19,7 @@ import numpy as np
 import OpenGL.GL as gl
 
 from src.camera import IsometricCamera
+from src.core.paths import RESOURCE_ROOT, saves_path
 from src.editor.editor_hud import PANEL_HEIGHT, PANEL_WIDTH, EditorHud
 from src.editor.map_project import MapProject, PlacedObject
 from src.editor.material_atlas import MaterialAtlas
@@ -33,7 +34,6 @@ from src.math import mat4_translate, vec3
 from src.rendering.mesh import TexturedMesh
 from src.world import BlockType
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = ("build", "erase", "paint", "stamp", "select")
 TOOL_LABELS = {"build": "Construir", "erase": "Apagar", "paint": "Pintar",
                "stamp": "Carimbar", "select": "Selecionar"}
@@ -83,10 +83,10 @@ class MapEditor:
     ) -> None:
         self.create_gl = bool(create_gl)
         self.camera = camera
-        self.save_path = os.path.abspath(map_path or os.path.join(PROJECT_ROOT, "saves", "mapa.json"))
+        self.save_path = os.path.abspath(map_path or saves_path("mapa.json"))
         self.export_dir = EXPORT_OBJECTS
         self.export_path = os.path.join(EXPORT_OBJECTS, "objeto.json")
-        self.library_dir = os.path.abspath(library_dir or os.path.join(PROJECT_ROOT, "assets", "objects"))
+        self.library_dir = os.path.abspath(library_dir or RESOURCE_ROOT / "assets" / "objects")
         self.project = MapProject(VoxelObject((16, 16, 16), "mapa", "map"), name="mapa")
         self._sync_aliases()
         self.atlas = MaterialAtlas(create_gl=self.create_gl)

@@ -383,3 +383,23 @@ def test_schem_opens_the_construction_panel(tool):
     assert run("/schem place")[0] and len(tool.layer) == 1
     ok, message, _ = run("/schem list")
     assert ok and "casa" in message and "formas" in message
+
+
+def test_import_releases_partial_mesh_when_door_meshing_fails(monkeypatch):
+    from src.interactive.schematic_tool import StructureMeshes
+    from src.rendering import mesh as rendering_mesh
+    from src.world.structure_mesher import StructureMesher
+
+    house = make_schematic({(0, 0, 0): "minecraft:oak_door[half=lower]"}, 1, 1, 1)
+    body = FakeMesh()
+    monkeypatch.setattr(rendering_mesh, "TexturedMesh", lambda *_: body)
+
+    def arrays(*args, **kwargs):
+        if kwargs.get("cull") is False:
+            raise ValueError("limite de quadriláteros")
+        return [], []
+
+    monkeypatch.setattr(StructureMesher, "build_arrays", arrays)
+    with pytest.raises(ValueError, match="limite"):
+        StructureMeshes(house, None)
+    assert body.deleted

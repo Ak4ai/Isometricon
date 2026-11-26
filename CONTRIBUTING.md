@@ -89,7 +89,11 @@ git push -u origin HEAD
 Quando a equipe atingir um marco ou Milestone:
 1. Abra o arquivo [`VERSION.txt`](VERSION.txt) na raiz e atualize o número de versão (ex: de `0.1.0` para `0.2.0`).
 2. Envie o commit para a `main` via Pull Request.
-3. O GitHub Actions iniciará automaticamente a pipeline de release e publicará os 3 pacotes compilados (Windows Portable, Windows Installer e Linux) na aba **[Releases](https://github.com/Ak4ai/Isometricon/releases)**.
+3. O GitHub Actions compila e valida os três pacotes. PRs que alteram o empacotamento também executam essa validação.
+4. Após confirmar as permissões de redistribuição descritas em [Procedência dos assets](docs/PROCEDENCIA-ASSETS.md),
+   execute manualmente o workflow de release na `main` com `publish` habilitado. A publicação usa os três
+   pacotes validados na mesma execução. Se a versão já tiver uma release, a execução falha e os arquivos
+   existentes são preservados. Uma falha de upload pode deixar um rascunho para revisão na aba Releases.
 
 ---
 

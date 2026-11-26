@@ -1,9 +1,11 @@
 """Gerenciador dinâmico de mundo (WorldManager) para carregamento contínuo/infinito de chunks."""
 
+import logging
 import math
 import queue
 import threading
 from collections import deque
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 import numpy as np
@@ -14,6 +16,16 @@ from src.world.chunk import Chunk3D
 from src.world.mesher import ChunkMeshData, ChunkMesher, blocks_around
 from src.world.terrain import TerrainGenerator
 from src.world.water import TICK as WATER_TICK, WaterSimulation
+
+LOGGER = logging.getLogger(__name__)
+COLUMN_ATTEMPTS = 2  # uma nova tentativa por visita à coluna
+
+
+@dataclass(frozen=True)
+class ColumnFinished:
+    positions: list[tuple[int, int, int]]
+    outcome: str
+
 
 WATER_CELLS_PER_FRAME = 64  # células de água avaliadas por quadro (até ~8 ms nas encostas): a onda leva alguns quadros
 
@@ -59,6 +71,7 @@ class WorldManager:
 
         self.mesher = ChunkMesher(atlas=atlas, ambient_occlusion=True)
         self._last_center: Tuple[int, int] | None = None
+        self._last_distance = render_distance
         # Revisão barata para consumidores que precisam reagir a streaming sem
         # observar o dicionário interno enquanto a worker o modifica.
         self._chunk_revision = 0
@@ -69,6 +82,7 @@ class WorldManager:
         self._stop_event = threading.Event()
         self._worker_busy = threading.Event()
         self._in_progress: Set[Tuple[int, int, int]] = set()
+        self._failed_columns: Set[Tuple[int, int, int]] = set()
         self._worker_thread: Optional[threading.Thread] = None
         # Água com as regras do Minecraft (src/world/water.py). ``_water_levels`` é a altura da superfície de cada
         # célula de água corrente, que a malha usa; a fonte fica de fora (cheia).
@@ -131,13 +145,12 @@ class WorldManager:
             except queue.Empty:
                 continue
 
-            if positions is None or self._stop_event.is_set():
-                break
-
             self._worker_busy.set()
             try:
+                if positions is None or self._stop_event.is_set():
+                    break
                 if isinstance(positions, tuple) and positions[0] == "remesh":
-                    # a água mudou: refaz as malhas aqui, fora do quadro (era um travamento de ~15 ms por chunk)
+                    # A água mudou: o recálculo de malhas fica fora do quadro.
                     for key in positions[1]:
                         if self._stop_event.is_set():
                             break
@@ -145,39 +158,59 @@ class WorldManager:
                             chunk = self.chunks.get(key)
                         if chunk is None:
                             continue
-                        mesh_data = self.mesher.build(chunk, self.neighbor_at, self._water_levels, around=self.blocks_around(key))
+                        mesh_data = self.mesher.build(chunk, self.neighbor_at, self._water_levels,
+                                                      around=self.blocks_around(key))
                         if not self._stop_event.is_set():
                             self._result_queue.put((key, chunk, mesh_data))
                         time.sleep(0.0005)
                     continue
-                # Descarta requisições obsoletas se o jogador já se afastou muito
-                if self._last_center is not None:
-                    ccx, ccz = self._last_center
-                    if all(
-                        abs(pos[0] - ccx) > self.render_distance + 1
-                        or abs(pos[2] - ccz) > self.render_distance + 1
-                        for pos in positions
-                    ):
-                        continue
 
-                # 1. Gera o relevo procedural e as cavernas 3D
-                new_chunks = self._generate_columns(positions)
-
-                with self._chunks_lock:
-                    self._apply_clearings(new_chunks)  # sob a trava: não perde um corte feito agora
-                    self.chunks.update(new_chunks)
-                    self._chunk_revision += 1
-
-                # 2. Constrói a malha e envia cada chunk concluído individualmente
-                for key, chunk in new_chunks.items():
-                    if self._stop_event.is_set():
+                outcome = "skipped"
+                for attempt in range(COLUMN_ATTEMPTS):
+                    if self._stop_event.is_set() or not self._wanted(positions):
                         break
-                    mesh_data = self.mesher.build(chunk, self.neighbor_at, self._water_levels, around=self.blocks_around(key))
-                    if not self._stop_event.is_set():
-                        self._result_queue.put((key, chunk, mesh_data))
-                    time.sleep(0.0005)  # Cede cooperativamente o GIL para a thread de renderização
+                    new_chunks = {}
+                    try:
+                        new_chunks = self._generate_columns(positions)   # com as camadas altas da coluna (copas da taiga)
+                        if not all(position in new_chunks for position in positions):
+                            raise ValueError("O gerador não retornou a base da coluna pedida.")
+                        with self._chunks_lock:
+                            if self._stop_event.is_set() or not self._wanted(positions):
+                                break
+                            self._apply_clearings(new_chunks)
+                            self.chunks.update(new_chunks)
+                            self._chunk_revision += 1
+
+                        pending = []
+                        for key, chunk in new_chunks.items():
+                            if self._stop_event.is_set():
+                                break
+                            mesh = self.mesher.build(chunk, self.neighbor_at, self._water_levels,
+                                                     around=self.blocks_around(key))
+                            pending.append((key, chunk, mesh))
+                            time.sleep(0.0005)  # cede o GIL à thread gráfica
+                        if not self._stop_event.is_set():
+                            for item in pending:
+                                self._result_queue.put(item)
+                        outcome = "loaded"
+                        break
+                    except Exception:
+                        # Nenhuma malha foi enviada. Retira só os chunks desta tentativa.
+                        with self._chunks_lock:
+                            removed = False
+                            for key, chunk in new_chunks.items():
+                                if self.chunks.get(key) is chunk:
+                                    del self.chunks[key]
+                                    removed = True
+                            if removed:
+                                self._chunk_revision += 1
+                        if attempt + 1 == COLUMN_ATTEMPTS:
+                            outcome = "failed"
+                            LOGGER.warning("Streaming não conseguiu carregar %s.", positions, exc_info=True)
+                if not self._stop_event.is_set():
+                    self._result_queue.put(ColumnFinished(positions, outcome))
             except Exception:
-                pass
+                LOGGER.warning("O streaming não conseguiu refazer uma malha.", exc_info=True)
             finally:
                 self._worker_busy.clear()
                 self._request_queue.task_done()
@@ -188,6 +221,13 @@ class WorldManager:
         layers = getattr(self.generator, "column_layers", lambda: (0,))()
         keys = [(cx, cy, cz) for cx, _, cz in positions for cy in layers]
         return self.generator.generate_region(keys)
+
+    def _wanted(self, positions) -> bool:
+        if self._last_center is None:
+            return False
+        cx, cz = self._last_center
+        return any(abs(x - cx) <= self.render_distance and abs(z - cz) <= self.render_distance
+                   for x, _, z in positions)
 
     def blocks_around(self, key: Tuple[int, int, int]) -> np.ndarray:
         """O cubo 18³ de IDs em volta do chunk (ele e a borda dos vizinhos), para a malha (ver mesher.blocks_around)."""
@@ -212,6 +252,7 @@ class WorldManager:
         center_cx = int(math.floor(focus_x / size))
         center_cz = int(math.floor(focus_z / size))
         self._last_center = (center_cx, center_cz)
+        self._last_distance = self.render_distance
 
         target_columns = [
             (cx, 0, cz)
@@ -242,18 +283,36 @@ class WorldManager:
             if self._worker_thread is None or not self._worker_thread.is_alive():
                 self._start_worker()
 
+        size = Chunk3D.SIZE
+        center_cx = int(math.floor(focus_x / size))
+        center_cz = int(math.floor(focus_z / size))
+        rescan = False
         if not self._result_queue.empty():
             uploads = 0
             max_uploads_per_frame = 1  # Amortiza em 1 chunk/frame: elimina micro-travamentos (<0.5ms)
-            while not self._result_queue.empty() and uploads < max_uploads_per_frame:
+            # Limita também o descarte de resultados obsoletos para que a fila não tome um quadro inteiro.
+            for _ in range(8):
+                if uploads == max_uploads_per_frame:
+                    break
                 try:
                     item = self._result_queue.get_nowait()
                 except queue.Empty:
                     break
 
+                if isinstance(item, ColumnFinished):
+                    for position in item.positions:
+                        self._in_progress.discard(position)
+                        x, _, z = position
+                        if abs(x - center_cx) <= self.render_distance and abs(z - center_cz) <= self.render_distance:
+                            if item.outcome == "failed":
+                                self._failed_columns.add(position)
+                            elif position not in self.chunks:
+                                rescan = True
+                    self._result_queue.task_done()
+                    continue
+
                 key, chunk, data = item
-                self._in_progress.discard((key[0], 0, key[2]))
-                if key not in self.chunks:
+                if self.chunks.get(key) is not chunk:
                     self._result_queue.task_done()
                     continue  # descarregado enquanto a malha era feita
                 if self.create_gl_meshes and data.face_count == 0 and key in self.meshes:
@@ -283,14 +342,12 @@ class WorldManager:
         if not self.has_pending_streaming_work():
             self._simulate_water(focus_x, focus_z)
 
-        size = Chunk3D.SIZE
-        center_cx = int(math.floor(focus_x / size))
-        center_cz = int(math.floor(focus_z / size))
-
-        if self._last_center == (center_cx, center_cz):
+        if (not rescan and self._last_center == (center_cx, center_cz)
+                and self._last_distance == self.render_distance):
             return
 
         self._last_center = (center_cx, center_cz)
+        self._last_distance = self.render_distance
 
         # 2. Determina colunas ativas dentro do raio de visão
         target_columns: Set[Tuple[int, int]] = {
@@ -298,6 +355,8 @@ class WorldManager:
             for cx in range(center_cx - self.render_distance, center_cx + self.render_distance + 1)
             for cz in range(center_cz - self.render_distance, center_cz + self.render_distance + 1)
         }
+
+        self._failed_columns.intersection_update((cx, 0, cz) for cx, cz in target_columns)
 
         # 3. Descarrega chunks fora do raio de visão
         with self._chunks_lock:
@@ -310,7 +369,6 @@ class WorldManager:
                     mesh, _ = self.meshes.pop(key)
                     self._pending_mesh_deletions.append(mesh)
                 self.chunks.pop(key, None)
-                self._in_progress.discard((key[0], 0, key[2]))
                 origin_x = key[0] * Chunk3D.SIZE
                 origin_y = key[1] * Chunk3D.SIZE
                 origin_z = key[2] * Chunk3D.SIZE
@@ -329,9 +387,8 @@ class WorldManager:
             pos = (cx, 0, cz)
             with self._chunks_lock:
                 already_loaded = pos in self.chunks
-            if not already_loaded and pos not in self._in_progress:
+            if not already_loaded and pos not in self._in_progress and pos not in self._failed_columns:
                 new_positions.append(pos)
-                self._in_progress.add(pos)
 
         if new_positions:
             # Ordena por proximidade do jogador (chunks mais próximos chegam primeiro)
@@ -339,12 +396,14 @@ class WorldManager:
 
             if self.async_loading:
                 # Envia colunas individualmente para streaming fluido e contínuo
+                self._in_progress.update(new_positions)
                 for pos in new_positions:
                     self._request_queue.put([pos])
             else:
                 # Modo síncrono para testes ou execução local
                 new_chunks = self._generate_columns(new_positions)
                 with self._chunks_lock:
+                    self._apply_clearings(new_chunks)
                     self.chunks.update(new_chunks)
                     self._chunk_revision += 1
 
@@ -642,6 +701,7 @@ class WorldManager:
                 break
 
         self._in_progress.clear()
+        self._failed_columns.clear()
 
         # Libera malhas pendentes de exclusão
         for mesh in self._pending_mesh_deletions:

@@ -36,7 +36,9 @@ def test_explicit_choice_is_preserved(system, backend):
 
 
 def test_default_arguments_use_runtime_environment(monkeypatch):
-    monkeypatch.delenv("PYOPENGL_PLATFORM", raising=False)
+    # Registra a chave mesmo se não existia: a função sob teste vai criá-la.
+    monkeypatch.setenv("PYOPENGL_PLATFORM", "")
+    monkeypatch.delenv("PYOPENGL_PLATFORM")
     monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     monkeypatch.setattr(sys, "platform", "linux")
     configure_opengl_platform()

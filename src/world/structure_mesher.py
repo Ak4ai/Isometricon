@@ -95,6 +95,11 @@ class StructureMesher:
         vertices = []
         indices = []
         vertex_offset = 0
+        quad_limit = schematic.max_mesh_quads
+
+        def check_budget(quads: int) -> None:
+            if quad_limit is not None and vertex_offset // 4 + quads > quad_limit:
+                raise ValueError(f"A malha do schematic excede o limite de {quad_limit} quadriláteros.")
 
         tints = getattr(schematic, "tints", None)   # a cor de cada célula (objetos do editor); sem ela, branco
 
@@ -114,6 +119,7 @@ class StructureMesher:
                         key = (name, "north")
                         if key not in uv_cache:
                             uv_cache[key] = uv_lookup(name, "north")
+                        check_budget(2)
                         plane = np.array(quad_vertices(box, block_pos - 0.5, uv_cache[key]), dtype=np.float32).reshape(-1, 11)
                         if tints is not None:
                             plane[:, 8:11] = tint
@@ -129,6 +135,7 @@ class StructureMesher:
                         key = (name, face_key)
                         if key not in uv_cache:
                             uv_cache[key] = uv_lookup(name, face_key)
+                        check_budget(1)
                         quad = box_face_quad(box, face, block_pos - 0.5, uv_cache[key])
                         amount = chest_open.get((int(x), int(y), int(z)), 0.0) if chest_open else 0.0
                         if amount > 0.0 and is_chest_lid(box):
@@ -151,6 +158,7 @@ class StructureMesher:
                 key = (block, face_key)
                 if key not in uv_cache:
                     uv_cache[key] = uv_lookup(block, face_key)
+                check_budget(1)
                 u0, v0, u1, v1 = uv_cache[key]
                 us, vs = (u0, u1), (v0, v1)
                 for corner, (cu, cv) in zip(corners, uv_order):

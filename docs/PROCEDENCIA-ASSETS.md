@@ -1,0 +1,14 @@
+
+# Procedência dos recursos distribuídos
+
+Revisão em 25/11/2026, sobre os recursos rastreados na base `ae61320`. A licença MIT na raiz e o requisito SR-003 cobrem o código-fonte do Isometricon. Para recursos de terceiros, a equipe precisa identificar a licença ou a autorização do titular aplicável a cada arquivo.
+
+| Recursos | Evidência de procedência | Permissão de redistribuição |
+| --- | --- | --- |
+| Roupas, calçados, cabelos e acessórios em `assets/models/clothing/` | A Wiki registra 115 itens do catálogo Roblox, com arquivos de origem e derivados ajustados. Também identifica um cabelo feito pela equipe e referências de cage distintas. [Catálogo e arquivos necessários](wiki/Scripts-do-Projeto.md) · [Criação de personagem](wiki/Criacao-de-Personagem.md) | Titulares e permissões fora da plataforma pendentes por item, incluindo texturas, malhas, cages e conversões. Os termos limitam o uso de conteúdo próprio da Roblox aos seus serviços e os termos da Creator Store tratam de assets para uso no Roblox Studio. [Termos da Roblox, § 9.2](https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use) · [Termos da Creator Store](https://en.help.roblox.com/hc/en-gb/articles/21308223046932-Creator-Store-Terms) |
+| 1110 PNGs em `assets/textures/blocks/` | O histórico identifica a coleção como texturas de Minecraft. O script de ladrilhos de baús pode extrair arquivos de um `client.jar` ou de um pacote de texturas. A fonte exata e a versão de cada PNG precisam ser confirmadas. [Commit 68fb401](https://github.com/Ak4ai/Isometricon/commit/68fb401) · [Script de ladrilhos](../scripts/make_chest_tiles.py) | Diretrizes de Minecraft restringem a redistribuição de arquivos do jogo e reservam os direitos sobre os recursos oficiais. Pacotes de texturas independentes precisam ser avaliados sob seus próprios termos. [Diretrizes de Uso do Minecraft](https://www.minecraft.net/en-us/usage-guidelines) |
+| Seis construções em `assets/schematics/` | A extensão Sponge identifica o formato de dados. O histórico registra a inclusão e a integração das amostras, com autoria ou licença ainda a confirmar para cada construção. [Integração das construções](https://github.com/Ak4ai/Isometricon/commit/219d6f2) | Pendente por arquivo, inclusive para as amostras numeradas e para os recursos incluídos nas próprias construções. |
+
+O empacotamento inclui a árvore de assets. Um teste bem-sucedido do pacote valida a execução no Windows. A autorização para redistribuir os recursos embutidos segue pendente.
+
+Antes de publicar, inventariar arquivo ou grupo, fonte original, titular, licença ou autorização aplicável, atribuição exigida e permissão para cópias modificadas. Para conteúdo sem permissão confirmada, obter autorização ou empacotar uma alternativa de procedência confirmada. Confirmar com os autores do projeto a origem das amostras de construções e as permissões já obtidas, se houver.

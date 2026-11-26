@@ -6,20 +6,23 @@ personagem montado, como sempre.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
-import shutil
+import tempfile
 from typing import Any, Dict, List, Optional
 
-from .glb import ModelError, load_model
+from src.core.paths import saves_path
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODELS_DIR = os.path.join(PROJECT_ROOT, "saves", "modelos")
-CHOICE_PATH = os.path.join(PROJECT_ROOT, "saves", "modelo.json")
+from .glb import ModelError, parse_model, read_model_bytes
+
+MODELS_DIR = os.fspath(saves_path("modelos"))
+CHOICE_PATH = os.fspath(saves_path("modelo.json"))
 VERSION = 1
 DEFAULT_CHOICE: Dict[str, Any] = {"arquivo": None, "altura": 1.8, "giro": 0, "perfil": None, "reparar": True}
 MIN_HEIGHT, MAX_HEIGHT = 0.3, 6.0
+_DOS_DEVICES = {"CON", "PRN", "AUX", "NUL", *(f"{dev}{index}" for dev in ("COM", "LPT") for index in range(1, 10))}
 
 
 def safe_name(text: str) -> str:
@@ -50,13 +53,48 @@ def import_model(source: str, directory: str = MODELS_DIR) -> str:
     """Confere ``source`` (``ModelError`` se não serve), copia para a pasta e devolve o nome guardado."""
     if not os.path.isfile(source):
         raise ModelError(f"Não achei o arquivo '{source}'.")
-    load_model(source)   # lê tudo antes de guardar: um arquivo ruim não entra na lista
-    name = safe_name(source)
-    os.makedirs(directory, exist_ok=True)
-    target = os.path.join(directory, name + ".glb")
-    if os.path.abspath(source) != os.path.abspath(target):
-        shutil.copyfile(source, target)
-    return name
+    data = read_model_bytes(source)
+    parse_model(data)  # valide os mesmos bytes que serão publicados na biblioteca
+    base = safe_name(source)[:80]
+    if base.upper() in _DOS_DEVICES:
+        base = f"modelo_{base}"
+    signature = hashlib.sha256(data).hexdigest()
+    temporary = None
+    try:
+        os.makedirs(directory, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=directory, suffix=".tmp", delete=False) as handle:
+            temporary = handle.name
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        for name in (base, f"{base}-{signature}"):
+            target = os.path.join(directory, name + ".glb")
+            try:
+                # No Windows, rename falha se o destino existe. No POSIX, o
+                # hard link dá a mesma garantia sem expor um arquivo parcial.
+                if os.name == "nt":
+                    os.rename(temporary, target)
+                    temporary = None
+                else:
+                    os.link(temporary, target)
+                return name
+            except FileExistsError:
+                with open(target, "rb") as existing:
+                    block_size = 1024 * 1024
+                    if os.fstat(existing.fileno()).st_size == len(data) and all(
+                        existing.read(block_size) == data[offset:offset + block_size]
+                        for offset in range(0, len(data), block_size)
+                    ):
+                        return name
+        raise ModelError("O identificador do modelo já existe com conteúdo diferente.")
+    except OSError as error:
+        raise ModelError(f"Não consegui guardar o modelo: {error}") from error
+    finally:
+        if temporary is not None:
+            try:
+                os.remove(temporary)
+            except OSError:
+                pass
 
 
 def clamp_height(value: float) -> float:
