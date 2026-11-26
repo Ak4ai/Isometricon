@@ -1,4 +1,22 @@
 #version 330 core
+#ifdef SHADOW_HALF
+// Sombra em meia resolução (Configurações > Gráficos): os 4 pixels de cada quadrado 2x2 dividem os raios do sol e
+// juntam o resultado pelas derivadas finas (dFdxFine/dFdyFine trocam valores entre os pixels do quadrado).
+#extension GL_ARB_derivative_control : enable
+#endif
+#ifdef EARLY_Z
+// A passada de cor depois da pré-passada de profundidade (src/main.py): o teste de profundidade vem antes do shader.
+// Com os descartes do shader a placa (Intel) deixava o teste para depois e cada fragmento escondido pagava os raios
+// do sol. Aqui não escreve profundidade, então descartar continua certo.
+#extension GL_ARB_shader_image_load_store : enable
+layout(early_fragment_tests) in;
+#endif
+#ifdef SHADOW_ACCUM
+// Sombra acumulada (Configurações > Gráficos; ver src/rendering/shadow_accum.py): cada pixel grava a sombra que achou
+// numa textura, e o quadro seguinte continua dela com poucos raios novos. Só na passada de cor com EARLY_Z (um
+// fragmento por pixel).
+#extension GL_ARB_shader_image_load_store : enable
+#endif
 
 // =============================================================================
 // Isometricon - Textured World Fragment Shader (GLSL 330 core)
@@ -18,6 +36,7 @@ uniform sampler2D u_TextureAtlas;
 uniform vec3 u_LightDir;     // Direção da luz do sol
 uniform vec3 u_LightColor;   // Cor da luz do sol
 uniform vec3 u_AmbientColor; // Luz ambiente
+uniform int u_DebugView = 0;  // modo apresentação: 0 normal, 1 só a textura (albedo), 2 só a iluminação
 
 // Vitiligo: how much of the skin has lost its colour (0 = none), which pattern, and the skin's own
 // colour (only what has that colour is skin: eyes, mouth and eyebrows on the head's texture are not).
@@ -63,6 +82,10 @@ uniform float u_ShadowHorizonRise;
 // (0 baixa: um raio; 1 média: cone borrado de 8 e nítido de 3; 2 alta: 12 e 6).
 uniform int u_ShadowSteps;
 uniform int u_ShadowQuality;
+// O ar em volta de cada célula (empty_distances em sun_shadows.py): n quer dizer que o cubo de células a menos de n
+// passos dela (em x, y e z) está todo vazio. O raio, no ar, pula esse cubo de uma vez em vez de andar célula a célula:
+// entre os troncos altos da taiga ele quase não parava cedo e andava as 56 células.
+uniform sampler3D u_ShadowEmpty;
 
 float shadowCell(vec3 worldPos)
 {
@@ -226,9 +249,11 @@ float traceSun(vec3 worldPos, vec3 dir)
     bool useHorizon = stepDir.y > 0 && safe.y >= u_ShadowHorizonRise * length(safe.xz);
     float light = 1.0;
     float tEnter = 0.0;                                       // onde o raio entrou na célula atual
+    float maxAxis = max(abs(safe.x), max(abs(safe.y), abs(safe.z)));
+    int walked = 0;                                           // células andadas (um pulo conta as que pulou)
     for (int i = 0; i < 56; i++)
     {
-        if (i >= u_ShadowSteps)
+        if (walked >= u_ShadowSteps)
             break;
         if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, size)))
             return light;                                     // saiu da janela (para cima ou para longe): sol livre
@@ -236,6 +261,25 @@ float traceSun(vec3 worldPos, vec3 dir)
         if (useHorizon && float(cell.y) >= dot(texelFetch(u_ShadowHorizon, cell.xz, 0), quadrant) * 255.0 - 0.5)
             return light;
         float value = texelFetch(u_ShadowMask, cell, 0).r;
+        if (value < 0.1 && i > 0)
+        {
+            // no ar: o cubo de raio (n - 1) células em volta desta está vazio; o raio vai direto até a borda dele
+            int empty = int(texelFetch(u_ShadowEmpty, cell, 0).r * 255.0 + 0.5);
+            if (empty >= 2)
+            {
+                float t = tEnter + (float(empty - 1) - 0.001) / maxAxis;
+                vec3 p = q + safe * t;
+                cell = ivec3(floor(p));
+                frac = p - floor(p);
+                tMax = t + vec3(safe.x > 0.0 ? 1.0 - frac.x : frac.x,
+                                safe.y > 0.0 ? 1.0 - frac.y : frac.y,
+                                safe.z > 0.0 ? 1.0 - frac.z : frac.z) * tDelta;
+                tEnter = t;
+                walked += empty - 1;
+                continue;
+            }
+        }
+        walked += 1;
         float tExit = min(tMax.x, min(tMax.y, tMax.z));
         if (value > 0.94)
             return 0.0;
@@ -336,6 +380,11 @@ vec3 snapToTexel(vec3 worldPos, vec3 worldNormal)
 }
 
 // Ruído de gradiente intercalado: um valor estável 0..1 por pixel da tela, para girar o cone da sombra borrada.
+// O giro vale por bloco de u_ShadowSpinTile pixels (Configurações > Gráficos > Granulado da penumbra): 1 x 1 é o
+// granulado mais fino; blocos maiores deixam a penumbra em manchas, mas a placa sombreia os pixels em grupos que andam
+// juntos (32 na NVIDIA) e, com os vizinhos atirando os raios para o mesmo lado, o grupo para de esperar o raio mais
+// longo (na RTX 3050, taiga: 24,8 ms com 1 x 1, 22,4 com 2 x 2, ~19 com 8 x 4).
+uniform vec2 u_ShadowSpinTile = vec2(1.0);
 float interleavedNoise(vec2 pixel)
 {
     return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
@@ -394,6 +443,188 @@ float softSun(vec3 origin, vec3 sunDir, float spin, int rays, bool umbra)
     return (first + rest) / float(rays);
 }
 
+#ifdef SHADOW_ACCUM
+layout(rgba16f) uniform writeonly image2D u_AccumOut;    // (borrada, nítida, quadros da borrada, quadros da nítida)
+layout(rgba32f) uniform writeonly image2D u_AccumPosOut; // (o ponto do mundo, 1 = gravado)
+uniform sampler2D u_AccumPrev;          // as mesmas duas do quadro anterior
+uniform sampler2D u_AccumPrevPos;
+uniform mat4 u_AccumPrevClip;           // mundo -> recorte do quadro anterior
+uniform bool u_AccumHistory;            // há um quadro anterior (falso depois de mudar o tamanho)
+uniform int u_AccumFrame;
+
+// Quantos quadros entram na média: mais é mais liso e demora mais para seguir o sol e um bloco posto (60 fps: 16
+// quadros são ~1/4 de segundo).
+const float ACCUM_SOFT_FRAMES = 16.0;
+const float ACCUM_SHARP_FRAMES = 12.0;
+const int ACCUM_SOFT_RAYS = 3;          // raios novos por quadro, do cone borrado e do nítido
+const int ACCUM_SHARP_RAYS = 2;
+
+// A sombra do ponto como ``sunVisibility``, mas somada ao longo dos quadros. O ponto é procurado na tela do quadro
+// anterior: no pixel de lá e, se ele guardou outro ponto, nos 8 em volta (na borda de um bloco o pixel tem um
+// fragmento de cada face, com o MSAA, e só um deles fica gravado: o outro acha a sua face no vizinho). Achado (mesmo
+// plano, a menos de 2,5 pixels), a média de lá continua com ACCUM_SOFT_RAYS raios borrados e ACCUM_SHARP_RAYS
+// nítidos; senão o cone inteiro é traçado, como sem a opção.
+// O cone borrado gira a cada volta (pelo ângulo de ouro): com o tempo cobre o disco todo, mais liso que os 12 raios
+// parados de antes. O nítido passa pelos mesmos raios fixos, ACCUM_SHARP_RAYS por quadro.
+// Os dois cones, inteiros ou não, saem de um laço só, com um traceSun só e o número de voltas variável: com um laço
+// para cada caso (como softSun e sunCone) o compilador desenrola tudo, o shader incha e a placa roda menos pixels de
+// uma vez (RTX 3050, taiga: 10 ms com os laços de sempre só presentes, sem rodar, contra 4 sem eles).
+float sunAccumulated(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir, float pixelWorld)
+{
+    bool high = u_ShadowQuality >= 2;
+    int softRays = high ? 12 : 8;
+    int sharpRays = high ? 6 : 3;
+    vec4 prev = vec4(0.0);
+    vec3 prevPos = exactPos;
+    if (u_AccumHistory)
+    {
+        vec4 clip = u_AccumPrevClip * vec4(exactPos, 1.0);
+        ivec2 size = textureSize(u_AccumPrevPos, 0);
+        ivec2 center = ivec2(floor((clip.xy / clip.w * 0.5 + 0.5) * vec2(size)));
+        for (int i = 0; i < 9; i++)
+        {
+            ivec2 texel = center + (i == 0 ? ivec2(0) : ivec2((i - 1) % 3 - 1, (i - 1) / 3 - 1));
+            if (i == 5 || any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, size)))
+                continue;                     // (i == 5 é o centro de novo)
+            vec4 p = texelFetch(u_AccumPrevPos, texel, 0);
+            vec3 d = p.xyz - exactPos;
+            if (p.w > 0.5 && abs(dot(d, worldNormal)) < 0.02 && length(d) < 2.5 * pixelWorld + 0.01)
+            {
+                prev = texelFetch(u_AccumPrev, texel, 0);
+                prevPos = p.xyz;
+                break;
+            }
+        }
+    }
+    bool softMiss = prev.z < 0.5;
+    float sharpN = prev.w;
+    if (distance(snapToTexel(prevPos, worldNormal), snappedPos) > 0.001)
+        sharpN = min(sharpN, 1.0);            // outro texel (a câmera andou): a média do vizinho vale pouco
+    bool sharpMiss = sharpN < 0.5;
+    // a nítida só conta onde a borrada não é quase sol pleno (ver sunVisibility); decide pela do quadro anterior
+    bool wantSharp = softMiss || prev.x < 0.95;
+    int softCount = softMiss ? softRays : ACCUM_SOFT_RAYS;
+    int sharpCount = wantSharp ? (sharpMiss ? sharpRays : ACCUM_SHARP_RAYS) : 0;
+    int softFirst = softMiss ? 0 : u_AccumFrame * ACCUM_SOFT_RAYS;
+    int sharpFirst = sharpMiss ? 0 : u_AccumFrame * ACCUM_SHARP_RAYS;
+    float spin = interleavedNoise(floor(gl_FragCoord.xy)) * 6.2831853
+               + fract(float(softFirst / softRays) * 0.618034) * 6.2831853;   // cada volta pelo cone, girada
+    vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(sunDir, t1);
+    vec3 softFrom = exactPos + worldNormal * 0.04;
+    vec3 sharpFrom = snappedPos + worldNormal * 0.04;
+    float softLit = 0.0, sharpLit = 0.0;
+    for (int j = 0; j < softCount + sharpCount; j++)
+    {
+        bool isSoft = j < softCount;
+        int k = isSoft ? (softFirst + j) % softRays : (sharpFirst + j - softCount) % sharpRays;
+        float r = isSoft ? sqrt((float(k) + 0.5) / float(softRays)) * 0.15 : sqrt((float(k) + 0.5) / float(sharpRays)) * 0.08;
+        float a = float(k) * 2.3999632 + (isSoft ? spin : 0.0);
+        float lit = traceSun(isSoft ? softFrom : sharpFrom, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+        if (isSoft)
+            softLit += lit;
+        else
+            sharpLit += lit;
+    }
+    float soft, softN;
+    if (softMiss)
+    {
+        soft = softLit / float(softCount);
+        softN = float(softRays) / float(ACCUM_SOFT_RAYS);    // vale os quadros que estes raios levariam
+    }
+    else
+    {
+        float n = min(prev.z, ACCUM_SOFT_FRAMES - 1.0);
+        soft = mix(prev.x, softLit / float(softCount), 1.0 / (n + 1.0));
+        softN = n + 1.0;
+    }
+    float sharp = prev.y;
+    if (sharpCount > 0)
+    {
+        if (sharpMiss)
+        {
+            sharp = sharpLit / float(sharpCount);
+            sharpN = float(sharpRays) / float(ACCUM_SHARP_RAYS);
+        }
+        else
+        {
+            float n = min(sharpN, ACCUM_SHARP_FRAMES - 1.0);
+            sharp = mix(sharp, sharpLit / float(sharpCount), 1.0 / (n + 1.0));
+            sharpN = n + 1.0;
+        }
+    }
+    ivec2 pixel = ivec2(gl_FragCoord.xy);
+    imageStore(u_AccumOut, pixel, vec4(soft, sharp, softN, sharpN));
+    imageStore(u_AccumPosOut, pixel, vec4(exactPos, 1.0));
+    return sharpN > 0.5 ? mix(sharp, soft, smoothstep(0.1, 0.9, soft)) : soft;
+}
+#endif
+
+#ifdef SHADOW_HALF
+// A parte deste pixel dos raios do cone borrado e do nítido: o raio k fica com o pixel (k mod 4) do quadrado 2x2, e
+// os quatro giram o cone do mesmo jeito, então juntos traçam o cone inteiro. Devolve (soma e número dos borrados,
+// soma e número dos nítidos).
+vec4 sunSlice(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
+{
+    int q = (int(gl_FragCoord.x) & 1) + 2 * (int(gl_FragCoord.y) & 1);
+    bool high = u_ShadowQuality >= 2;
+    int softRays = high ? 12 : 8;
+    int sharpRays = high ? 6 : 3;
+    vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(sunDir, t1);
+    float spin = interleavedNoise(floor(gl_FragCoord.xy / max(u_ShadowSpinTile, vec2(2.0)))) * 6.2831853;
+    vec4 sums = vec4(0.0);
+    for (int k = q; k < 12; k += 4)
+    {
+        if (k >= softRays)
+            break;
+        float r = sqrt((float(k) + 0.5) / float(softRays)) * 0.15;
+        float a = float(k) * 2.3999632 + spin;
+        sums.x += traceSun(exactPos + worldNormal * 0.04, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+        sums.y += 1.0;
+    }
+    for (int k = q; k < 6; k += 4)
+    {
+        if (k >= sharpRays)
+            break;
+        float r = sqrt((float(k) + 0.5) / float(sharpRays)) * 0.08;
+        float a = float(k) * 2.3999632;
+        sums.z += traceSun(snappedPos + worldNormal * 0.04, normalize(sunDir + (t1 * cos(a) + t2 * sin(a)) * r));
+        sums.w += 1.0;
+    }
+    return sums;
+}
+
+// O valor do vizinho do lado e do de cima/baixo no quadrado 2x2.
+vec4 quadX(vec4 v)
+{
+    vec4 d = dFdxFine(v);
+    return (int(gl_FragCoord.x) & 1) == 0 ? v + d : v - d;
+}
+vec4 quadY(vec4 v)
+{
+    vec4 d = dFdyFine(v);
+    return (int(gl_FragCoord.y) & 1) == 0 ? v + d : v - d;
+}
+
+// Junta os raios dos 4 pixels do quadrado. Só entram os vizinhos na mesma face (mesma normal e mesmo plano): na borda
+// de um bloco cada lado fica com os seus raios. ``key`` é (normal, posição no eixo da normal); zero se o pixel não
+// traçou a sua parte.
+float sunFromQuad(vec4 sums, vec4 key)
+{
+    vec4 dH = quadX(sums), kH = quadX(key);
+    vec4 dV = quadY(sums), kV = quadY(key);
+    vec4 dD = quadY(dH), kD = quadY(kH);
+    vec4 total = sums;
+    if (dot(kH.xyz, key.xyz) > 0.99 && abs(kH.w - key.w) < 0.05) total += dH;
+    if (dot(kV.xyz, key.xyz) > 0.99 && abs(kV.w - key.w) < 0.05) total += dV;
+    if (dot(kD.xyz, key.xyz) > 0.99 && abs(kD.w - key.w) < 0.05) total += dD;
+    float soft = total.y > 0.0 ? total.x / total.y : 1.0;
+    float sharp = total.w > 0.0 ? total.z / total.w : soft;
+    return mix(sharp, soft, smoothstep(0.1, 0.9, soft));
+}
+#endif
+
 // Fração da luz do sol que chega ao ponto (1 = sol inteiro). A nitidez muda ao longo da sombra:
 // - a sombra nítida sai do ponto preso ao texel, em degraus de pixel;
 // - a borrada sai do ponto exato, com mais raios, cone mais largo e girado por pixel (sem degraus);
@@ -404,7 +635,7 @@ float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDi
     if (u_ShadowQuality <= 0)
         return traceSun(snappedPos + worldNormal * 0.04, sunDir);   // baixa: um raio, sombra nítida em pixel
     bool high = u_ShadowQuality >= 2;
-    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(gl_FragCoord.xy) * 6.2831853,
+    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(floor(gl_FragCoord.xy / u_ShadowSpinTile)) * 6.2831853,
                          high ? 12 : 8, indoor);
     if (indoor && soft <= 0.0)
         return 0.0;                                            // dentro do cômodo, longe das aberturas: sombra
@@ -661,6 +892,46 @@ bool sightCarved()
     return (1.0 - keep) * u_SightActive > roomDither();
 }
 
+// Buraco das folhas: ao ar livre, a copa das árvores entre a câmera e o personagem some num círculo em volta dele (só
+// as folhas: o tronco e o chão ficam). Como o corredor da câmera, a decisão é pelo centro do bloco (o corte sai em
+// degraus de bloco); a distância é medida na perpendicular à linha da câmera, então o círculo é redondo na tela. O raio
+// vem de leaf_hole_radius em src/world/sight.py (uma fração da tela: acompanha o zoom). As folhas são reconhecidas pela
+// região da textura delas no atlas do terreno, como a água; nas construções, que usam outro atlas, fica desligado.
+uniform float u_LeafHole;        // raio do buraco, em blocos; 0 desligado
+uniform vec4 u_LeafRect0;        // a região da folha de carvalho no atlas (u0, v0, u1, v1)
+uniform vec4 u_LeafRect1;        // e a da folha de pinheiro
+
+bool inRect(vec2 uv, vec4 r)
+{
+    return uv.x >= r.x - 1e-4 && uv.x <= r.z + 1e-4 && uv.y >= r.y - 1e-4 && uv.y <= r.w + 1e-4;
+}
+
+bool leafHole()
+{
+    if (u_LeafHole <= 0.001 || u_KeepVisible)
+        return false;
+    if (!inRect(v_TexCoord, u_LeafRect0) && !inRect(v_TexCoord, u_LeafRect1))
+        return false;
+    vec3 worldPos = (u_SightInvModel * vec4(v_FragPos, 1.0)).xyz;
+    vec3 worldNormal = normalize(mat3(u_SightInvModel) * v_Normal);
+    vec3 cell = floor(worldPos - worldNormal * 0.05);
+    vec3 center = (u_SightModel * vec4(cell + 0.5, 1.0)).xyz;
+    vec3 line = u_CameraPos - u_SightTarget;
+    vec3 dir = line / max(length(line), 1e-4);
+    float t = dot(center - u_SightTarget, dir);         // 0 no personagem, positivo para o lado da câmera
+    if (t < -3.0)
+        return false;                                   // bem atrás do personagem: fica
+    float off = length(center - u_SightTarget - dir * t);
+    // a borda é larga: os blocos da beirada vão ficando opacos aos poucos (pontilhado cada vez mais cheio), em vez de
+    // passar de transparente a opaco de um bloco para o outro
+    float band = max(2.0, u_LeafHole * 0.4);
+    float keep = smoothstep(u_LeafHole - band, u_LeafHole, off);  // 0 no meio, 1 fora
+    // e para trás também: do personagem até 3 blocos atrás dele as folhas voltam aos poucos (sem um corte seco em volta
+    // da cabeça)
+    float front = smoothstep(-3.0, 0.0, t);
+    return (1.0 - keep) * front > roomDither();
+}
+
 // O quanto de um personagem está entre este ponto (espaço desenhado) e o sol: 0 nada, 1 tudo. A borda é nítida (3x3
 // texels só para não serrilhar); a opacidade cai com a distância, ao longo do raio, até a parte do corpo que faz a
 // sombra: forte junto aos pés, esmaecendo para a cabeça.
@@ -726,6 +997,147 @@ float fogWarCover(vec3 world, float wisps)
     return 1.0 - seen;
 }
 
+#ifdef MIST
+// Só existe nesta variante do shader (main.py liga o MIST com a neblina acima de 0): compilada sempre, mesmo sem
+// uso, deixava todo o shader mais pesado (~10 ms por quadro na taiga).
+// A neblina de ambientação (src/rendering/mist.py, /mestre > Neblina): a neblina de cena, baixa e rente ao chão. Soma
+// a densidade dela no caminho do ponto desenhado até a câmera (até a altura em que ela acaba), em MIST_STEPS passos.
+// A densidade é maior rente ao chão (o mapa u_MistMap dá a altura do chão de cada coluna) e rareia até u_MistHeight
+// blocos acima dele; tufos de ruído derivam com o vento; manchas largas deixam só u_MistCover do mapa coberto; e no
+// modo "água e árvores" ela só se junta onde o mapa diz que é perto da água ou entre os troncos.
+uniform float u_MistAmount = 0.0;     // 0 desligada
+uniform float u_MistCover;            // 0..1 do mapa
+uniform float u_MistHeight;           // blocos acima do chão
+uniform int u_MistWhere;              // 0 em toda parte, 1 perto da água e das árvores
+uniform float u_MistWind;             // 0..1
+uniform vec3 u_MistColor;
+uniform sampler2D u_MistMap;          // [z][x] a partir de u_MistOrigin: (altura do chão, perto da água/árvore)
+uniform vec2 u_MistOrigin;
+uniform float u_MistSize;
+uniform float u_MistTop;              // a maior altura de chão do mapa + a altura da neblina (mundo)
+uniform mat4 u_MistInvModel;          // do espaço desenhado para o mundo
+uniform vec3 u_MistToCamera;          // do ponto para a câmera, no espaço desenhado (unitário)
+uniform float u_MistRays = 0.0;       // os feixes de luz: 0 a neblina toda na mesma luz; 1 o sol entra em feixes
+uniform vec3 u_MistSunColor;          // a cor da luz do sol na hora
+const int MIST_STEPS = 14;
+
+// as manchas da cobertura: largas e lentas, então uma conta por pixel basta (no meio do caminho do raio)
+float mistPatch(vec2 xz, vec2 drift)
+{
+    if (u_MistCover >= 0.999)
+        return 1.0;
+    if (u_MistCover <= 0.001)
+        return 0.0;
+    float n = 0.65 * valueNoise(vec3(xz * 0.021 + drift * 0.08, 5.3)) + 0.35 * valueNoise(vec3(xz * 0.047, 9.1));
+    float cut = mix(0.72, 0.28, u_MistCover);     // o limiar deixa ~u_MistCover do chão dentro delas
+    return smoothstep(cut - 0.06, cut + 0.06, n);
+}
+
+float mistDensity(vec3 w, vec2 drift)
+{
+    vec2 m = texture(u_MistMap, (w.xz - u_MistOrigin + 0.5) / u_MistSize).rg;
+    float h = max(w.y - m.r, 0.0) / max(u_MistHeight, 0.5);
+    if (h >= 1.0)
+        return 0.0;
+    float vertical = pow(1.0 - h, 1.7);
+    float region = u_MistWhere == 1 ? smoothstep(0.08, 0.7, m.g) : 1.0;
+    float wisps = 0.6 * valueNoise(vec3(w.xz * 0.13 + drift, w.y * 0.22 + u_Time * 0.04))
+                + 0.4 * valueNoise(vec3(w.xz * 0.31 + drift * 1.7, w.y * 0.45 - u_Time * 0.06));
+    return vertical * region * (0.25 + 1.3 * wisps * wisps);
+}
+
+#ifdef MIST_RAYS
+// O sol chega a este ponto da neblina? Uma marcha curta rumo ao sol na máscara das sombras (troncos e folhas tapam):
+// a neblina iluminada brilha e a da sombra fica apagada, e o contraste entre as duas desenha os feixes.
+float mistSunReach(vec3 w, vec3 sun)
+{
+    for (int k = 1; k <= 8; ++k)
+    {
+        vec3 q = w + sun * (float(k) * 2.0);
+        if (!insideShadowWindow(q))
+            return 1.0;                                  // saiu da janela das sombras: céu livre
+        if (shadowCell(q) > 0.94)
+            return 0.0;
+    }
+    return 1.0;
+}
+#endif
+
+vec3 mistGrade(vec3 color)
+{
+    vec3 p = (u_MistInvModel * vec4(v_FragPos, 1.0)).xyz;
+    vec3 d = normalize(mat3(u_MistInvModel) * u_MistToCamera);
+    float length_ = 60.0;
+    if (d.y > 0.02)
+        length_ = clamp((u_MistTop - p.y) / d.y, 0.0, 90.0);
+    if (length_ <= 0.0)
+        return color;
+    float ds = length_ / float(MIST_STEPS);
+    // começa num ponto sorteado do primeiro passo (sem faixas); o pontilhado some no filtro da tela
+    float jitter = roomDither();
+    vec2 drift = u_Time * u_MistWind * vec2(0.9, 0.35);
+    float spread = mistPatch((p + d * length_ * 0.3).xz, drift);
+    if (spread <= 0.001)
+        return color;
+    float amount = u_MistAmount * u_MistAmount;
+    float k = spread * ds * mix(0.04, 0.42, amount);
+    vec3 sun = normalize(mat3(u_MistInvModel) * u_LightDir);
+    bool rays = u_MistRays > 0.001 && u_ShadowStrength > 0.001;
+    // olhando contra o sol a neblina acende mais (a luz espalhada para a frente)
+    float forward = pow(max(dot(-sun, d), 0.0), 3.0);
+    vec3 sunGlow = u_MistColor * (0.55 + 0.45 * u_MistSunColor) * (0.55 + 0.9 * forward);
+    float through = 1.0;
+    vec3 gathered = vec3(0.0);
+    float lit = 1.0;                                     // o teste do sol vale para dois passos seguidos
+    // da câmera para o ponto: o que fica mais perto da câmera tapa o resto
+    for (int i = MIST_STEPS - 1; i >= 0; --i)
+    {
+        vec3 w = p + d * ds * (float(i) + jitter);
+        float a = 1.0 - exp(-mistDensity(w, drift) * k);
+        if (a < 0.0005)
+            continue;
+        vec3 light = u_MistColor;
+#ifdef MIST_RAYS
+        if (rays)
+        {
+            if ((i & 1) == 1 || i == 0)
+                lit = mistSunReach(w, sun);
+            light = mix(u_MistColor, mix(u_MistColor * 0.26, u_MistColor * 0.8 + sunGlow * 1.5, lit), u_MistRays);
+        }
+#endif
+        gathered += through * a * light;
+        through *= 1.0 - a;
+    }
+    // a neblina nunca cobre tudo: no máximo 94% com ela no máximo
+    float cover = 1.0 - through;
+    if (cover < 0.0005)
+        return color;
+    float limit = min(cover, 0.94 * u_MistAmount);
+    return mix(color, gathered / cover, limit);
+}
+#endif
+
+#ifdef EDGE_FOG
+// A névoa na borda do mundo carregado (Configurações > Gráficos): com poucos chunks o fim do terreno vira um
+// buraco; aqui o terreno some numa névoa da cor do fundo antes de acabar, em volta do personagem.
+uniform vec4 u_EdgeRect;        // x mín, z mín, x máx, z máx (mundo) dos chunks carregados
+uniform vec2 u_EdgePlayer;      // x, z (mundo) do personagem
+uniform float u_EdgeRadius;     // onde a névoa fecha de vez, em blocos
+uniform vec3 u_EdgeColor;       // a cor do fundo da tela
+uniform mat4 u_EdgeInvModel;    // do espaço desenhado de volta ao mundo
+
+vec3 edgeFog(vec3 color)
+{
+    vec2 w = (u_EdgeInvModel * vec4(v_FragPos, 1.0)).xz;
+    // tufos lentos: a borda da névoa não fica uma linha reta nem um círculo perfeito
+    float wisp = sin(w.x * 0.21 + u_Time * 0.15) * sin(w.y * 0.17 - u_Time * 0.11) * 3.0;
+    float d = min(min(w.x - u_EdgeRect.x, u_EdgeRect.z - w.x), min(w.y - u_EdgeRect.y, u_EdgeRect.w - w.y)) + wisp;
+    float square = 1.0 - smoothstep(1.0, 8.0, d);
+    float round_ = smoothstep(u_EdgeRadius * 0.65, u_EdgeRadius, length(w - u_EdgePlayer) + wisp);
+    return mix(color, u_EdgeColor, clamp(max(square, round_), 0.0, 1.0));
+}
+#endif
+
 vec3 envGrade(vec3 color, vec3 albedo)
 {
     color *= u_EnvTint;
@@ -755,6 +1167,10 @@ vec3 envGrade(vec3 color, vec3 albedo)
         float grain = fract(sin(dot(gl_FragCoord.xy + fract(u_Time * 7.13) * 97.0, vec2(12.9898, 78.233))) * 43758.5453);
         color += (grain - 0.5) * 0.07 * smoothstep(0.45, 1.0, amount);
     }
+#ifdef MIST
+    if (u_MistAmount > 0.001)
+        color = mistGrade(color);
+#endif
     if (u_FogWar > 0)
     {
         // o que ninguém viu: uma névoa quase opaca, mais clara e mais escura nos tufos, com volume e grão
@@ -770,6 +1186,9 @@ vec3 envGrade(vec3 color, vec3 albedo)
             color += (grain - 0.5) * 0.05 * cover;
         }
     }
+#ifdef EDGE_FOG
+    color = edgeFog(color);
+#endif
     return color;
 }
 
@@ -832,6 +1251,8 @@ void main()
 
     if (sightCarved())
         discard;
+    if (leafHole())
+        discard;
 
     bool above_player = v_FragPos.y > u_PlayerY + 0.05;
 
@@ -881,12 +1302,21 @@ void main()
     vec3 worldPos = v_FragPos;
     vec3 worldNormal = norm;
     float waterAbove = 0.0;           // blocos de água sobre este fragmento (0 fora da água)
+#ifdef SHADOW_HALF
+    vec4 halfSums = vec4(0.0);        // a parte deste pixel dos raios (sunSlice) e a face dele (sunFromQuad)
+    vec4 halfKey = vec4(0.0);
+#endif
     if (u_WorldStyle) {
         float contact = 0.0;
         if (u_ShadowStrength > 0.001)
         {
             worldNormal = normalize(mat3(u_ShadowInvModel) * norm);
             vec3 exactPos = (u_ShadowInvModel * vec4(v_FragPos, 1.0)).xyz;
+#ifdef SHADOW_ACCUM
+            // o tamanho de um pixel no mundo, para achar o ponto no quadro anterior (no contorno de um bloco a
+            // derivada pega o vizinho e fica grande: limitada)
+            float pixelWorld = min(max(length(dFdx(exactPos)), length(dFdy(exactPos))), 0.5);
+#endif
             worldPos = snapToTexel(exactPos, worldNormal);
             contact = contactOcclusion(worldPos, worldNormal);
             if (!water)
@@ -905,9 +1335,28 @@ void main()
                 {
                     // o ar em frente da face é o espaço do jogador: o teto o tapa, a não ser junto às aberturas
                     bool indoor = u_RoomActive > 0.001 && roomCell(worldPos + worldNormal * 0.04) > 0.9;
+#ifdef SHADOW_ACCUM
+                    if (u_ShadowQuality >= 1)
+                        sunVis = sunAccumulated(worldPos, exactPos, worldNormal, sunDirWorld, pixelWorld);
+                    else
+#endif
+#ifdef SHADOW_HALF
+                    if (u_ShadowQuality >= 1 && !indoor)
+                    {
+                        halfSums = sunSlice(worldPos, exactPos, worldNormal, sunDirWorld);
+                        halfKey = vec4(worldNormal, dot(exactPos, worldNormal));
+                    }
+                    else
+#endif
                     sunVis = sunVisibility(worldPos, exactPos, worldNormal, sunDirWorld, indoor);
                 }
             }
+#ifdef SHADOW_HALF
+            // fora dos ifs de cada pixel: as derivadas pedem os 4 pixels do quadrado no mesmo caminho
+            float quadSun = sunFromQuad(halfSums, halfKey);
+            if (halfKey != vec4(0.0))
+                sunVis = quadSun;
+#endif
         }
         if (u_CharShadowStrength > 0.001 && dot(norm, lightDir) > 0.02)  // a sombra do personagem, em qualquer face
         {
@@ -1007,9 +1456,13 @@ void main()
         vec3 color = mix(body * lighting, sky * mix(0.55, 1.0, sunVis), fresnel) + vec3(1.0, 0.95, 0.82) * glint;
         float alpha = clamp(mix(0.22, 0.90, deep) + fresnel * 0.40 + glint, 0.0, 1.0);
         FragColor = vec4(envGrade(color * roomFactor, body), alpha * u_Alpha);
+        if (u_DebugView == 1) FragColor.rgb = body;
+        else if (u_DebugView == 2) FragColor.rgb = lighting * 0.8;
         return;
     }
 
     vec3 result = envGrade(lighting * albedo * roomFactor, albedo * roomFactor);
     FragColor = vec4(result, texColor.a * u_Alpha);
+    if (u_DebugView == 1) FragColor.rgb = albedo;
+    else if (u_DebugView == 2) FragColor.rgb = lighting * 0.8;
 }

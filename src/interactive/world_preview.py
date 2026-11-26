@@ -22,8 +22,18 @@ CELL = 8           # o meio lado de um bloco na prévia, antes de reduzir pela m
 PLANTS = {int(BlockType.SHORT_GRASS): (78, 140, 52), int(BlockType.POPPY): (196, 52, 40),
           int(BlockType.DANDELION): (232, 204, 64), int(BlockType.RED_MUSHROOM): (190, 60, 50),
           int(BlockType.BROWN_MUSHROOM): (150, 112, 82)}
+PLANTS.update({int(BlockType.CACTUS): (80, 130, 60), int(BlockType.DEAD_BUSH): (150, 110, 60),
+               int(BlockType.FERN): (70, 120, 60), int(BlockType.LARGE_FERN_LOWER): (70, 120, 60),
+               int(BlockType.LARGE_FERN_UPPER): (70, 120, 60), int(BlockType.SWEET_BERRY_BUSH): (60, 110, 60)})
 COLORS = {int(BlockType.GRASS): (104, 158, 70), int(BlockType.DIRT): (134, 96, 62),
           int(BlockType.STONE): (128, 128, 124), int(BlockType.WATER): (64, 116, 168)}
+# os blocos dos biomas (deserto e taiga)
+COLORS.update({int(BlockType.SAND): (219, 205, 160), int(BlockType.SANDSTONE): (206, 188, 140),
+               int(BlockType.TAIGA_GRASS): (84, 128, 70), int(BlockType.PODZOL): (110, 80, 48),
+               int(BlockType.SPRUCE_LOG): (92, 64, 40), int(BlockType.SEQUOIA_LOG): (120, 64, 44),
+               int(BlockType.SPRUCE_LOG_X): (92, 64, 40), int(BlockType.SPRUCE_LOG_Z): (92, 64, 40),
+               int(BlockType.SEQUOIA_LOG_X): (120, 64, 44), int(BlockType.SEQUOIA_LOG_Z): (120, 64, 44),
+               int(BlockType.SPRUCE_LEAVES): (52, 96, 60)})
 GRASS_SIDE = (122, 100, 64)
 SHADE = (1.0, 0.80, 0.64)      # topo, face +x, face +z
 

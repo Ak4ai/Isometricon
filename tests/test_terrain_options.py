@@ -112,3 +112,57 @@ def test_previa_na_thread_fica_com_o_ultimo_pedido():
             break
         time.sleep(0.01)
     assert worker.image() == 3 and seen[-1] == 3
+
+
+# ---------------------------------------------------------------- biomas
+
+def _digest(generator):
+    import hashlib
+    chunks = generator.generate_region([(cx, cy, 0) for cx in range(-1, 2) for cy in range(-1, 2)])
+    return hashlib.sha256(b"".join(chunks[k].blocks.tobytes() for k in sorted(chunks))).hexdigest()
+
+
+def test_planicie_igual_a_de_antes():
+    # gravado antes dos biomas: um mundo sem bioma (ou com as opções padrão) não pode mudar um bloco
+    assert _digest(make_generator(329436, None)) == "a0b063f5f3c8e4d36c8a382b8d6ef4b569e05896e11b1d79157d5c3dae7ae9dd"
+    assert _digest(make_generator(329436, defaults())) == "a0b063f5f3c8e4d36c8a382b8d6ef4b569e05896e11b1d79157d5c3dae7ae9dd"
+
+
+def test_bioma_nas_opcoes():
+    import pytest
+    from src.world.terrain_options import water_default
+    assert clean({"bioma": "deserto"})["bioma"] == "deserto"
+    assert clean({"bioma": "lua"})["bioma"] == "planicie"
+    assert clean({})["bioma"] == "planicie"
+    assert water_default("deserto") == 5 and water_default("taiga") == 20
+    assert make_generator(1, {"bioma": "taiga"}).biome == "taiga"
+    assert make_generator(1, None).biome == "planicie"
+    with pytest.raises(ValueError):
+        TerrainGenerator(biome="lua")
+
+
+def test_escolher_o_bioma_na_criacao(tmp_path):
+    menus = _menus(tmp_path)
+    menus.go('create')
+    menus.render(1320, 876)
+    actions = [a for _, a in menus.hits]
+    assert {'biome:planicie', 'biome:deserto', 'biome:taiga'} <= set(actions)
+    menus.activate('biome:deserto')
+    assert menus.terrain['bioma'] == 'deserto' and menus.terrain['agua'] == 5
+    menus.activate('biome:taiga')
+    assert menus.terrain['bioma'] == 'taiga' and menus.terrain['agua'] == 20
+    menus.fields['name'] = 'Pinheiros'
+    menus.activate('create_world')
+    assert menus.result[1]['terrain']['bioma'] == 'taiga'
+    menus.go('create')
+    menus.activate('biome:deserto')
+    menus.activate('terrain_defaults')
+    assert menus.terrain['bioma'] == 'planicie'
+
+
+def test_previa_do_deserto_tem_areia():
+    from src.interactive.world_preview import COLORS, build
+    image = build(777, dict(defaults(), bioma='deserto', cavernas=0)).convert('RGB')
+    sand = COLORS[int(BlockType.SAND)]
+    pixels = set(map(tuple, np.asarray(image).reshape(-1, 3).tolist()))
+    assert any(max(abs(p[i] - sand[i]) for i in range(3)) < 40 for p in pixels)

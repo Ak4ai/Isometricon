@@ -114,6 +114,27 @@ class WorldManager:
         )
         self._worker_thread.start()
 
+    @property
+    def render_distance(self) -> int:
+        return self._render_distance
+
+    @render_distance.setter
+    def render_distance(self, value: int) -> None:
+        """Trocar o raio (Configurações > Gráficos) refaz a grade no próximo update, mesmo parado: sem isso o update
+        só recalculava ao mudar de chunk, e a opção parecia não fazer nada."""
+        value = int(value)
+        if value != getattr(self, "_render_distance", None):
+            self._render_distance = value
+            self._last_center = None
+
+    def loaded_rect(self, focus_x: float, focus_z: float) -> Tuple[float, float, float, float]:
+        """O quadrado (x mín, z mín, x máx, z máx, em blocos) dos chunks carregados em volta do foco: a grade que o
+        update mantém. A névoa da borda (EDGE_FOG) fecha antes dele."""
+        size = Chunk3D.SIZE
+        cx, cz = int(math.floor(focus_x / size)), int(math.floor(focus_z / size))
+        r = self.render_distance
+        return ((cx - r) * size, (cz - r) * size, (cx + r + 1) * size, (cz + r + 1) * size)
+
     def _worker_loop(self) -> None:
         """Loop de execução da worker thread que gera chunks e calcula malhas na CPU."""
         import time
@@ -150,7 +171,7 @@ class WorldManager:
                         break
                     new_chunks = {}
                     try:
-                        new_chunks = self.generator.generate_region(positions)
+                        new_chunks = self._generate_columns(positions)   # com as camadas altas da coluna (copas da taiga)
                         if not all(position in new_chunks for position in positions):
                             raise ValueError("O gerador não retornou a base da coluna pedida.")
                         with self._chunks_lock:
@@ -194,6 +215,13 @@ class WorldManager:
                 self._worker_busy.clear()
                 self._request_queue.task_done()
 
+    def _generate_columns(self, positions) -> Dict[Tuple[int, int, int], Chunk3D]:
+        """Gera as colunas pedidas (pelo chunk do chão, ``(cx, 0, cz)``) com todas as camadas que o gerador diz que a
+        coluna tem (na taiga, as copas altas passam da camada do chão)."""
+        layers = getattr(self.generator, "column_layers", lambda: (0,))()
+        keys = [(cx, cy, cz) for cx, _, cz in positions for cy in layers]
+        return self.generator.generate_region(keys)
+
     def _wanted(self, positions) -> bool:
         if self._last_center is None:
             return False
@@ -232,7 +260,7 @@ class WorldManager:
             for cz in range(center_cz - self.render_distance, center_cz + self.render_distance + 1)
         ]
 
-        new_chunks = self.generator.generate_region(target_columns)
+        new_chunks = self._generate_columns(target_columns)
         self._apply_clearings(new_chunks)
         with self._chunks_lock:
             self.chunks.update(new_chunks)
@@ -373,7 +401,7 @@ class WorldManager:
                     self._request_queue.put([pos])
             else:
                 # Modo síncrono para testes ou execução local
-                new_chunks = self.generator.generate_region(new_positions)
+                new_chunks = self._generate_columns(new_positions)
                 with self._chunks_lock:
                     self._apply_clearings(new_chunks)
                     self.chunks.update(new_chunks)

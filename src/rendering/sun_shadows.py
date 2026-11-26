@@ -3,15 +3,21 @@
 O shader do mundo, para cada pixel, anda de ``u_ShadowSteps`` passos na direção do sol e olha, nesta textura,
 se há um bloco no caminho. A janela é a mesma de ``src/world/room_reveal.py`` (48x32x48 células em volta do
 jogador), então não custa uma varredura nova: usa-se a janela que o rastreador já calculou.
+
+Com a distância das sombras acima de 1 chunk (Configurações > Gráficos), a janela é outra, maior e só das sombras
+(``far_window_size``): lida dos chunks carregados numa thread, refeita quando o jogador se afasta do meio dela ou o
+mundo muda.
 """
 
-from typing import Optional
+import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, Tuple
 
 import numpy as np
 import OpenGL.GL as gl
 
 from src.world.block import BlockType
-from src.world.room_reveal import WINDOW, RoomRevealTracker
+from src.world.room_reveal import WINDOW, RoomRevealTracker, extract_window_cells
 from src.world.shadow_shapes import TABLE
 
 SHADOW_UNIT = 3  # unidade de textura da máscara de sombra (0 atlas, 2 máscara do espaço)
@@ -19,6 +25,8 @@ HORIZON_UNIT = 4  # unidade do mapa de alturas por quadrante (column_horizons)
 SHAPES_UNIT = 10  # unidade da tabela das formas dos blocos parciais (shadow_shapes)
 PLANTS_UNIT = 11  # unidade dos desenhos das plantas (shadow_shapes.plant_masks)
 SHAPE_IDS_UNIT = 12  # unidade da textura 3D com o número da forma de cada célula parcial
+EMPTY_UNIT = 14      # unidade da textura 3D do ar vazio em volta de cada célula (empty_distances)
+EMPTY_MAX = 8        # o maior pulo do raio, em células
 
 
 SOFT_SPREAD = 0.15  # o raio do disco do cone borrado do shader (softSun); a nítida (0.08) cabe dentro dele
@@ -32,8 +40,10 @@ SOLID_VALUE, PARTIAL_VALUE, PLANT_VALUE, WATER_VALUE = 255, 224, 192, 128
 DETAIL_CUBES, DETAIL_SHAPES, DETAIL_PLANTS, DETAIL_FULL = 0, 1, 2, 3
 # O capim: está em quase todo bloco de grama, e contando como obstáculo sobe o mapa de alturas das colunas
 # (column_horizons) em um bloco no chão todo; o raio de cada pixel do chão, que parava no primeiro passo, tem de
-# andar várias células. Só no detalhe completo.
-HEAVY_PLANTS = ("minecraft:short_grass",)
+# andar várias células. Só no detalhe completo. Vale para a cobertura do chão de todo bioma: na taiga são as
+# samambaias e o arbusto de frutinhas (deixá-los de fora custava ~1 ms por quadro a mais que na planície).
+HEAVY_PLANTS = ("minecraft:short_grass", "minecraft:fern", "minecraft:large_fern[half=lower]",
+                "minecraft:large_fern[half=upper]", "minecraft:sweet_berry_bush[age=3]")
 
 
 def detail_shapes(shapes: np.ndarray, detail: int) -> np.ndarray:
@@ -133,6 +143,50 @@ def cone_rise(sun_direction, spread: float = SOFT_SPREAD) -> float:
     return max(float(rise.min()) * 0.98, 0.0)
 
 
+FAR_HEIGHT = 56        # a altura da janela grande (as sequoias passam de 30 blocos)
+FAR_BELOW = 16         # células dela abaixo do pé do jogador
+FAR_RECENTER = 8       # o jogador andou isto do meio dela: refaz
+FAR_MIN_INTERVAL = 0.5  # segundos entre duas leituras por o mundo ter mudado
+
+
+def far_window_size(distance: int) -> Tuple[int, int, int]:
+    """O tamanho da janela das sombras para ``distance`` chunks em volta: 1 é a janela do cômodo (48 x 48); cada
+    chunk a mais soma 16 blocos para cada lado."""
+    distance = max(1, int(distance))
+    if distance == 1:
+        return WINDOW
+    side = WINDOW[0] + 32 * (distance - 1)
+    return side, FAR_HEIGHT, side
+
+
+def far_window_origin(position, size) -> Tuple[int, int, int]:
+    x, y, z = (int(np.floor(float(v))) for v in position)
+    return x - size[0] // 2, y - FAR_BELOW, z - size[2] // 2
+
+
+def empty_distances(values: np.ndarray, cap: int = EMPTY_MAX) -> np.ndarray:
+    """[x, y, z] uint8: para cada célula, o maior n (até ``cap``) tal que o cubo de células a menos de n passos dela em
+    x, y e z (distância de Chebyshev) só tem ar. 0 numa célula ocupada (sólido, parcial, planta ou água: o raio tem de
+    passar por ela célula a célula). Fora da janela conta como ar (o sol está livre lá)."""
+    from scipy.ndimage import distance_transform_cdt
+    occupied = values > 0
+    if not occupied.any():
+        return np.full(values.shape, cap, dtype=np.uint8)
+    distance = distance_transform_cdt(~occupied, metric='chessboard')
+    return np.minimum(distance, cap).astype(np.uint8)
+
+
+def prepare_window(window, detail: int, rise: float):
+    """O que sobe para a GPU, no formato das texturas: a máscara (z, y, x), os números das formas (z, y, x, 2), os
+    horizontes das colunas (z, x, 4) e o ar vazio em volta de cada célula (z, y, x)."""
+    values = mask_values(window, detail)
+    data = np.ascontiguousarray(values.transpose(2, 1, 0))
+    ids = np.ascontiguousarray(shape_texels(window, detail).transpose(2, 1, 0, 3))
+    horizons = np.ascontiguousarray(column_horizons(values, rise).astype(np.uint8).transpose(1, 0, 2))
+    empty = np.ascontiguousarray(empty_distances(values).transpose(2, 1, 0))
+    return data, ids, horizons, empty
+
+
 class SunShadowRenderer:
     """Mantém a textura de blocos sólidos e os uniforms das sombras."""
 
@@ -146,45 +200,110 @@ class SunShadowRenderer:
         self.detail = DETAIL_PLANTS  # o que faz sombra pela forma (ver set_detail)
         self.steps = 56    # até quantas células o raio procura o que tapa o sol
         self.strength = float(strength)  # 0 sem sombra, 1 sombra inteira
+        self.spin_tile = (1.0, 1.0)  # o bloco de pixels que gira o cone junto (Granulado da penumbra)
         self.texture_id = 0
         self.horizon_id = 0  # textura 2D RGBA: column_horizons + 1, um quadrante por canal
         self.shapes_id = 0   # textura 2D RGBA32F: a tabela das formas (shadow_shapes.TABLE)
         self.plants_id = 0   # textura 2D R8: os desenhos das plantas
         self.shape_ids_id = 0  # textura 3D RG8: o número da forma de cada célula parcial
+        self.empty_id = 0      # textura 3D R8: o ar vazio em volta de cada célula (empty_distances)
         self._shapes_revision = -1
         self._uploaded = None  # as células da janela que estão na GPU
         self._origin = (0, 0, 0)
+        self._size = WINDOW    # o tamanho da janela na GPU (as texturas são alocadas nele)
+        self.distance = 1      # chunks em volta do jogador com sombra (1: a janela do cômodo)
+        self._executor = None  # a leitura da janela grande, fora do quadro
+        self._job = None
+        self._far_key = None   # (distância, detalhe, origem, revisão do mundo, construções) da janela grande pronta
+        self._far_time = -1e9
 
     def set_detail(self, detail: int, shader=None) -> None:
         """Troca o detalhe da sombra: refaz a máscara e, se dado o shader do mundo, troca a variante dele (no leve,
         sem o caminho das formas)."""
         detail = max(DETAIL_CUBES, min(DETAIL_FULL, int(detail)))
         if shader is not None:
-            shader.set_defines(() if detail == DETAIL_CUBES else ("SHADOW_SHAPES",))
+            shader.set_define("SHADOW_SHAPES", detail != DETAIL_CUBES)
         if detail != self.detail:
             self.detail = detail
             self._uploaded = None     # a mesma janela, outra máscara
+            self._far_key = None
 
-    def update(self, tracker: RoomRevealTracker) -> None:
-        """Envia a janela de blocos sólidos para a GPU quando o rastreador calculou uma nova."""
-        mask = tracker.mask
-        if not self.enabled or mask is None or mask.window is None or mask.window is self._uploaded:
+    def set_distance(self, distance: int) -> None:
+        """Até quantos chunks em volta há sombra (Configurações > Gráficos > Distância das sombras)."""
+        distance = max(1, min(8, int(distance)))
+        if distance != self.distance:
+            self.distance = distance
+            self._uploaded = None
+            self._far_key = None
+
+    def update(self, tracker: RoomRevealTracker, position=None, chunks=None, revision=None, structures=()) -> None:
+        """Envia a janela de blocos sólidos para a GPU: a que o rastreador calculou ou, com a distância acima de 1
+        chunk (e os chunks dados), a janela grande das sombras."""
+        if not self.enabled:
             return
+        if self.distance > 1 and chunks is not None and position is not None:
+            self._update_far(position, chunks, revision, list(structures))
+            return
+        mask = tracker.mask
+        if mask is None or mask.window is None or mask.window is self._uploaded:
+            return
+        self._upload(mask.window, mask.origin, WINDOW, *prepare_window(mask.window, self.detail, self.rise))
+
+    def _update_far(self, position, chunks, revision, structures) -> None:
+        if self._job is not None:
+            if not self._job.done():
+                return
+            job, self._job = self._job, None
+            key, window, origin, size, arrays = job.result()
+            if key[:2] == (self.distance, self.detail):
+                self._upload(window, origin, size, *arrays)
+                self._far_key = key
+        size = far_window_size(self.distance)
+        built = self._far_key
+        x, y, z = (float(v) for v in position)
+        if built is not None:
+            ox, oy, oz = built[2]
+            off = max(abs(x - (ox + size[0] / 2)), abs(z - (oz + size[2] / 2)), abs(y - (oy + FAR_BELOW)))
+            same_world = built[3] == revision and built[4] == self._structure_key(structures)
+            if off < FAR_RECENTER and (same_world or time.monotonic() - self._far_time < FAR_MIN_INTERVAL):
+                return
+            origin = built[2] if off < FAR_RECENTER else far_window_origin(position, size)
+        else:
+            origin = far_window_origin(position, size)
+        self._far_time = time.monotonic()
+        key = (self.distance, self.detail, origin, revision, self._structure_key(structures))
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sun-shadows")
+        detail, rise = self.detail, self.rise
+
+        def build():
+            window = extract_window_cells(origin, chunks, structures, size)
+            return key, window, origin, size, prepare_window(window, detail, rise)
+
+        self._job = self._executor.submit(build)
+
+    @staticmethod
+    def _structure_key(structures):
+        return tuple((id(s), s.origin, getattr(s, "revision", 0)) for s in structures)
+
+    def _upload(self, window, origin, size, data, ids, horizons, empty) -> None:
+        if tuple(size) != tuple(self._size):
+            self.delete()
+            self._size = tuple(size)
         self._ensure_texture()
-        sx, sy, sz = WINDOW
+        sx, sy, sz = self._size
         # a janela é [x, y, z]; a textura 3D quer (profundidade z, altura y, largura x)
-        values = mask_values(mask.window, self.detail)
-        data = np.ascontiguousarray(values.transpose(2, 1, 0))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHADOW_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.texture_id)
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
         gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, data)
-        ids = np.ascontiguousarray(shape_texels(mask.window, self.detail).transpose(2, 1, 0, 3))
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
         gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RG, gl.GL_UNSIGNED_BYTE, ids)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + EMPTY_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_3D, self.empty_id)
+        gl.glTexSubImage3D(gl.GL_TEXTURE_3D, 0, 0, 0, 0, sx, sy, sz, gl.GL_RED, gl.GL_UNSIGNED_BYTE, empty)
         # [x, z, 4] -> a textura 2D quer (altura z, largura x, canais)
-        horizons = np.ascontiguousarray((column_horizons(values, self.rise)).astype(np.uint8).transpose(1, 0, 2))
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
         gl.glTexSubImage2D(gl.GL_TEXTURE_2D, 0, 0, 0, sx, sz, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, horizons)
@@ -202,8 +321,8 @@ class SunShadowRenderer:
                             gl.GL_UNSIGNED_BYTE, masks)
             self._shapes_revision = TABLE.revision
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        self._uploaded = mask.window
-        self._origin = mask.origin
+        self._uploaded = window
+        self._origin = origin
 
     def _ensure_texture(self) -> None:
         if self.texture_id:
@@ -215,7 +334,7 @@ class SunShadowRenderer:
                             (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
                             (gl.GL_TEXTURE_WRAP_R, gl.GL_CLAMP_TO_EDGE)):
             gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
-        sx, sy, sz = WINDOW
+        sx, sy, sz = self._size
         gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1)
         gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx), dtype=np.uint8))
@@ -228,6 +347,15 @@ class SunShadowRenderer:
             gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
         gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_RG8, sx, sy, sz, 0, gl.GL_RG, gl.GL_UNSIGNED_BYTE,
                         np.zeros((sz, sy, sx, 2), dtype=np.uint8))
+        self.empty_id = gl.glGenTextures(1)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + EMPTY_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_3D, self.empty_id)
+        for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST), (gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST),
+                            (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE), (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
+                            (gl.GL_TEXTURE_WRAP_R, gl.GL_CLAMP_TO_EDGE)):
+            gl.glTexParameteri(gl.GL_TEXTURE_3D, name, value)
+        gl.glTexImage3D(gl.GL_TEXTURE_3D, 0, gl.GL_R8, sx, sy, sz, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE,
+                        np.zeros((sz, sy, sx), dtype=np.uint8))
         self.horizon_id = gl.glGenTextures(1)
         gl.glActiveTexture(gl.GL_TEXTURE0 + HORIZON_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.horizon_id)
@@ -267,8 +395,11 @@ class SunShadowRenderer:
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.plants_id)
         gl.glActiveTexture(gl.GL_TEXTURE0 + SHAPE_IDS_UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_3D, self.shape_ids_id)
+        gl.glActiveTexture(gl.GL_TEXTURE0 + EMPTY_UNIT)
+        gl.glBindTexture(gl.GL_TEXTURE_3D, self.empty_id)
         gl.glActiveTexture(gl.GL_TEXTURE0)
         shader.set_int("u_ShadowMask", SHADOW_UNIT)
+        shader.set_int("u_ShadowEmpty", EMPTY_UNIT)
         shader.set_int("u_ShadowShapeIds", SHAPE_IDS_UNIT)
         shader.set_int("u_ShadowShapes", SHAPES_UNIT)
         shader.set_int("u_ShadowPlants", PLANTS_UNIT)
@@ -276,8 +407,9 @@ class SunShadowRenderer:
         shader.set_float("u_ShadowHorizonRise", self.rise)
         shader.set_int("u_ShadowSteps", int(self.steps))
         shader.set_int("u_ShadowQuality", int(self.quality))
+        shader.set_vec2("u_ShadowSpinTile", *self.spin_tile)
         shader.set_vec3("u_ShadowOrigin", float(self._origin[0]), float(self._origin[1]), float(self._origin[2]))
-        shader.set_vec3("u_ShadowSize", float(WINDOW[0]), float(WINDOW[1]), float(WINDOW[2]))
+        shader.set_vec3("u_ShadowSize", *(float(v) for v in self._size))
         shader.set_float("u_ShadowStrength", self.strength)
 
     @staticmethod
@@ -286,7 +418,16 @@ class SunShadowRenderer:
 
     def delete(self) -> None:
         if self.texture_id:
-            gl.glDeleteTextures(2, [self.texture_id, self.horizon_id])
-            self.texture_id = 0
-            self.horizon_id = 0
+            ids = [t for t in (self.texture_id, self.horizon_id, self.shape_ids_id, self.shapes_id, self.plants_id,
+                               self.empty_id) if t]
+            gl.glDeleteTextures(len(ids), ids)
+            self.texture_id = self.horizon_id = self.shape_ids_id = self.shapes_id = self.plants_id = 0
+            self.empty_id = 0
+            self._shapes_revision = -1
         self._uploaded = None
+
+    def shutdown(self) -> None:
+        self.delete()
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None

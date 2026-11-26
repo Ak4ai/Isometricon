@@ -28,11 +28,17 @@ GRAPHICS = {
     'fxaa': (False, (False, True)),                    # antisserrilhado rápido, uma passada sobre a imagem pronta
     'render_scale': (1.0, (0.5, 0.67, 0.75, 0.85, 1.0)),  # resolução interna da cena (a interface fica nítida)
     'render_distance': (2, (1, 2, 3, 4, 5, 6)),        # chunks carregados em volta do jogador
+    'edge_fog': (True, (True, False)),                 # névoa na borda dos chunks carregados (esconde o fim do mundo)
     'shadows': ('high', ('off', 'low', 'medium', 'high')),  # qualidade da sombra do sol (raios por pixel)
     'shadow_range': (56, (16, 32, 56)),                # até quantas células o raio do sol procura o que tapa
-    'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o capim
+    'shadow_detail': (2, (0, 1, 2, 3)),                # o que faz sombra pela forma: 0 leve (cubos) .. 3 com o mato do chão
     'shadow_strength': (1.0, (0.25, 0.5, 0.75, 1.0)),  # o quanto a sombra escurece
+    'shadow_distance': (1, (1, 2, 3, 4, 5, 6)),        # até quantos chunks em volta do jogador há sombra do sol
+    'shadow_accum': (True, (False, True)),             # a sombra do sol somada entre quadros (shadow_accum.py)
+    'shadow_half': (False, (False, True)),             # sombra calculada em meia resolução (quadrados 2x2)
+    'shadow_grain': (1, (1, 2, 4, 8)),                 # o bloco de pixels que gira o cone da penumbra junto
     'fps_limit': (0, (0, 30, 60, 120, 144)),           # 0 sem limite
+    'gpu': ('high', ('high', 'low', 'auto')),          # a placa de vídeo (src/core/gpu_preference.py)
 }
 DEFAULTS = {'bindings': {k: v[1] for k, v in ACTIONS.items()}, 'vsync': True,
             'sensitivity': 1.0, 'invert_rotation': False, 'reduce_motion': False,
@@ -275,9 +281,14 @@ def validate_world_state(world):
         section = world.get(key)
         if section is not None and not isinstance(section, dict):
             raise ValueError(f'Seção inválida no mundo ({key}).')
+    from src.world.terrain_options import BIOMES
     for key in ('terrain', 'ambiente'):
-        if any(not _number(value) for value in (world.get(key) or {}).values()):
-            raise ValueError(f'Opções inválidas no mundo ({key}).')
+        for name, value in (world.get(key) or {}).items():
+            if key == 'terrain' and name == 'bioma':
+                if value not in BIOMES:      # o bioma é o único texto das opções do terreno
+                    raise ValueError(f'Opções inválidas no mundo ({key}).')
+            elif not _number(value):
+                raise ValueError(f'Opções inválidas no mundo ({key}).')
 
     for cell, encoded in (world.get('nevoa_explorada') or {}).items():
         try:

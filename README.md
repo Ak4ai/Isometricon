@@ -262,6 +262,31 @@ botões clicáveis para as ferramentas e ações principais. Detalhes em
 | Mover miniatura | `Clique no destino` *(Equipe B)* |
 | Pausar / retomar | `ESC` |
 
+### 🎞️ Modo apresentação
+
+Os slides da disciplina por cima do terreno ao vivo; a cena de fundo de cada slide ilustra o assunto
+(wireframe no face culling, só textura / só luz nos shaders, giros e zoom na câmera, contadores de faces e chunks).
+Alguns slides abrem a tela do jogo de que falam, para quem apresenta mexer com o mouse: o painel do /mestre
+(iluminação, névoa), a tela de criação do personagem, uma luta de verdade contra dois inimigos e o painel de
+construções. Ao trocar de slide a tela fecha; nada é gravado e os inimigos da luta somem.
+
+```bash
+python src/main.py --apresentacao            # começa no slide 1, sempre com a mesma seed de fundo
+python src/main.py --apresentacao --slide=7  # começa no slide 7 (--seed N troca o terreno)
+python src/main.py --apresentacao --janela   # em janela em vez de tela cheia
+```
+
+| Ação | Tecla |
+|------|-------|
+| Próximo slide (ou próximo passo do pipeline) | `→`, `Espaço`, `Page Down` |
+| Slide anterior | `←`, `Page Up` |
+| Primeiro / último | `Home` / `End` |
+| Esconder / mostrar os cartões | `H` |
+| Tela cheia / janela | `F11` |
+| Sair da apresentação (o jogo continua) | `ESC` |
+
+Os textos ficam em `src/interactive/presentation_slides.py`.
+
 ### 🧪 Executando os Testes Unitários
 ```bash
 pytest -v

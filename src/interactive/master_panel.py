@@ -12,12 +12,14 @@ from typing import List, Optional, Tuple
 from PIL import Image, ImageDraw
 
 from src.interactive import combat_style as style
-from src.rendering.ambience import CLOCK_SPEEDS, PRESETS, Ambience
+from src.rendering.ambience import CLOCK_SPEEDS, MIST_PRESETS, PRESETS, Ambience
 
 WIDTH = 340
 LEFT, TOP = 16, 16
 PAD = 22
-HEIGHT = 0   # a altura do pergaminho (o fim do conteúdo); calculada abaixo, na primeira vez
+HEIGHTS = {}  # a altura do pergaminho de cada aba (o fim do conteúdo); medida na primeira vez que a aba é desenhada
+# as abas: (id, rótulo). A aba aberta não vai para o save.
+TABS = (('luz', 'Luz'), ('neblina', 'Neblina'), ('guerra', 'Guerra'), ('cenas', 'Cenas'))
 Rect = Tuple[float, float, float, float]
 
 # (campo, rótulo, mínimo, máximo, texto do valor)
@@ -25,10 +27,22 @@ SLIDERS = (
     ('brightness', 'Claridade', 0, 200, lambda v: f'{v}%'),
     ('temperature', 'Cor da luz', -100, 100,
      lambda v: 'neutra' if v == 0 else f'{"quente" if v > 0 else "fria"} {abs(v)}'),
-    ('fog', 'Névoa', 0, 100, lambda v: 'sem' if v == 0 else f'{v}%'),
     ('saturation', 'Cores', 0, 200, lambda v: f'{v}%'),
     ('torch', 'Luz do grupo', 0, 100, lambda v: 'apagada' if v == 0 else f'{v}%'),
 )
+# a neblina de ambientação (aba Neblina) e, embaixo dela, a névoa de distância de antes
+MIST_SLIDERS = (
+    ('mist', 'Neblina', 0, 100, lambda v: 'sem' if v == 0 else f'{v}%'),
+    ('mist_cover', 'Cobertura', 0, 100, lambda v: 'o mapa todo' if v == 100 else f'{v}% do mapa'),
+    ('mist_height', 'Altura', 1, 40, lambda v: f'até {v} bloco' + ('s' if v > 1 else '')),
+    ('mist_wind', 'Vento', 0, 100, lambda v: 'parado' if v == 0 else f'{v}%'),
+    ('mist_rays', 'Feixes de luz', 0, 100, lambda v: 'desligados (pesados)' if v == 0 else f'{v}%'),
+)
+FOG_SLIDERS = (
+    ('fog', 'Névoa de distância', 0, 100, lambda v: 'sem' if v == 0 else f'{v}%'),
+)
+WHERE_LABELS = ('Em toda parte', 'Água e árvores')
+TONE_LABELS = ('Fria', 'Neutra', 'Quente')
 CLOCK_LABELS = ('Parado', '1×', '10×', '60×')
 WAR_LABELS = ('Sem', 'Revela', 'Em volta')
 WAR_HINTS = ('o mundo todo à vista', 'o explorado fica limpo', 'a névoa fecha atrás de você')
@@ -54,6 +68,7 @@ class MasterPanel:
         self.on_change = None                       # chamado quando o mestre muda algo (o main grava o mundo)
         self.on_recover = None                      # "Recobrir": cobre de novo o explorado (o main liga)
         self.scale = 1.0                            # numa janela baixa, o painel encolhe para caber
+        self.tab = 'luz'                            # a aba aberta (TABS)
         if create_gl:
             from src.rendering.hud_quad import HudQuad
             self.quad = HudQuad()
@@ -129,7 +144,8 @@ class MasterPanel:
         if name == 'hour':
             value = round(t * 24 * 4) / 4 % 24.0      # de 15 em 15 minutos
         else:
-            low, high = next((lo, hi) for key, _, lo, hi, _ in SLIDERS + WAR_SLIDERS if key == name)
+            low, high = next((lo, hi) for key, _, lo, hi, _ in SLIDERS + WAR_SLIDERS + MIST_SLIDERS + FOG_SLIDERS
+                             if key == name)
             value = int(round(low + (high - low) * t))
             if name in ('brightness', 'saturation') and abs(value - 100) <= 3:
                 value = 100                             # o neutro "gruda"
@@ -144,8 +160,20 @@ class MasterPanel:
         if action == 'close':
             self.close()
             return
+        if action.startswith('tab:'):
+            self.tab = action[4:]
+            self.hover = None
+            self._signature = None                  # redesenha na aba nova
+            return
         if action == 'reset':
             a.reset()
+        elif action.startswith('where:'):
+            a.mist_where = int(action[6:])
+        elif action.startswith('tone:'):
+            a.mist_tone = int(action[5:])
+        elif action.startswith('mist:'):
+            for key, value in dict(MIST_PRESETS)[action[5:]].items():
+                setattr(a, key, value)
         elif action.startswith('clock:'):
             a.clock = int(action[6:])
         elif action.startswith('war:'):
@@ -182,7 +210,7 @@ class MasterPanel:
         """O pergaminho do painel; ``self.hits`` em pixels da janela."""
         a = self.ambience
         hits: List[Tuple[Rect, str]] = []
-        height = HEIGHT or 900
+        height = HEIGHTS.get(self.tab, 900)
         sheet, pad = style.card(WIDTH, height)
         draw = ImageDraw.Draw(sheet)
         ox, oy = pad, pad                    # do papel para a imagem
@@ -231,9 +259,32 @@ class MasterPanel:
         hit(close, 'close')
         style.write(draw, (x0, y + 22), 'Ambientação', 26, style.INK, heading=True)
         style.rule(draw, x0, x0 + 90, y + 64)
+        gap = 8
 
-        # o relógio
-        y += 80
+        # as abas
+        y += 78
+        tw = (x1 - x0 - gap * (len(TABS) - 1)) / len(TABS)
+        for i, (key, label) in enumerate(TABS):
+            bx = x0 + i * (tw + gap)
+            chip((bx, y, bx + tw, y + 30), label, 'tab:' + key, selected=self.tab == key)
+        y += 44
+        draw.line((x0, y, x1, y), fill=(*style.LINE, 255))
+        y += 16
+        y = {'luz': self._light_tab, 'neblina': self._mist_tab, 'guerra': self._war_tab,
+             'cenas': self._scenes_tab}[self.tab](draw, sheet, chip, track, x0, x1, y, hit=hit)
+        if height != int(y - oy):            # a primeira vez: mede o conteúdo e refaz no tamanho certo
+            HEIGHTS[self.tab] = int(y - oy)
+            return self.draw_image()
+        self.height = height
+        self.hits = hits
+        self.image = sheet
+        self.offset = (LEFT - pad, TOP - pad)
+        return sheet
+
+    def _light_tab(self, draw, sheet, chip, track, x0, x1, y, hit=None):
+        """Aba Luz: a hora e o relógio, a claridade, a cor da luz, as cores e a luz do grupo."""
+        a = self.ambience
+        gap = 8
         style.write(draw, (x0, y), 'Hora do dia', 15, style.INK)
         clock = a.clock_text()
         w = style.measure(clock, 28, heading=True)
@@ -274,8 +325,52 @@ class MasterPanel:
             value = getattr(a, key)
             track(y, key, (value - low) / (high - low), label, text(value))
             y += 45
+        return y + 14
 
-        # a névoa de guerra: o que o grupo ainda não viu fica coberto
+    def _mist_tab(self, draw, sheet, chip, track, x0, x1, y, hit=None):
+        """Aba Neblina: a neblina de ambientação (quanto, onde, até que altura, vento, tom, presets) e a névoa de
+        distância de antes."""
+        a = self.ambience
+        gap = 8
+        for key, label, low, high, text in MIST_SLIDERS:
+            value = getattr(a, key)
+            track(y, key, (value - low) / (high - low), label, text(value))
+            y += 45
+        style.write(draw, (x0, y), 'Onde', 15, style.INK)
+        y += 26
+        ow = (x1 - x0 - gap) / 2
+        for i, label in enumerate(WHERE_LABELS):
+            bx = x0 + i * (ow + gap)
+            chip((bx, y, bx + ow, y + 30), label, f'where:{i}', selected=a.mist_where == i)
+        y += 42
+        style.write(draw, (x0, y), 'Tom', 15, style.INK)
+        y += 26
+        ow = (x1 - x0 - gap * 2) / 3
+        for i, label in enumerate(TONE_LABELS):
+            bx = x0 + i * (ow + gap)
+            chip((bx, y, bx + ow, y + 30), label, f'tone:{i}', selected=a.mist_tone == i)
+        y += 42
+        style.write(draw, (x0, y), 'Presets da neblina', 15, style.INK)
+        y += 26
+        ow = (x1 - x0 - gap) / 2
+        for i, (name, _) in enumerate(MIST_PRESETS):
+            col, row = i % 2, i // 2
+            bx, by = x0 + col * (ow + gap), y + row * 36
+            chip((bx, by, bx + ow, by + 30), name, 'mist:' + name)
+        y += -(-len(MIST_PRESETS) // 2) * 36 + 8
+        draw.line((x0, y, x1, y), fill=(*style.LINE, 255))
+        y += 14
+        for key, label, low, high, text in FOG_SLIDERS:
+            value = getattr(a, key)
+            track(y, key, (value - low) / (high - low), label, text(value))
+            y += 45
+        return y + 14
+
+    def _war_tab(self, draw, sheet, chip, track, x0, x1, y, hit=None):
+        """Aba Guerra: a névoa de guerra (o que o grupo ainda não viu fica coberto)."""
+        a = self.ambience
+        gap = 8
+        cw = (x1 - x0 - gap * 3) / 4
         style.write(draw, (x0, y), 'Névoa de guerra', 15, style.INK)
         hint = WAR_HINTS[a.fog_war]
         style.write(draw, (x1 - style.measure(hint, 12), y + 3), hint, 12, style.MUTED)
@@ -303,8 +398,11 @@ class MasterPanel:
             bx = x0 + i * (ow + gap)
             chip((bx, y, bx + ow, y + 30), label, f'objects:{i}', selected=a.war_objects == i)
         y += 44
-        draw.line((x0, y, x1, y), fill=(*style.LINE, 255))
-        y += 14
+        return y + 14
+
+    def _scenes_tab(self, draw, sheet, chip, track, x0, x1, y, hit=None):
+        """Aba Cenas: as cenas prontas (mexem na luz, na névoa e na neblina de uma vez) e o padrão."""
+        gap = 8
         style.write(draw, (x0, y), 'Cenas prontas', 15, style.INK)
         y += 26
         cw = (x1 - x0 - gap * 2) / 3
@@ -314,16 +412,7 @@ class MasterPanel:
             chip((bx, by, bx + cw, by + 30), name, 'preset:' + name)
         y += -(-len(PRESETS) // 3) * 36 + 4
         chip((x0, y, x1, y + 32), 'Restaurar o padrão', 'reset')
-        y += 32 + 20
-        if height != int(y - oy):            # a primeira vez: mede o conteúdo e refaz no tamanho certo
-            globals()['HEIGHT'] = int(y - oy)
-            return self.draw_image()
-        self.height = height
-        image = sheet
-        self.hits = hits
-        self.image = image
-        self.offset = (LEFT - pad, TOP - pad)
-        return image
+        return y + 32 + 20
 
     def render(self, width: int, height: int) -> None:
         if not self.is_open:

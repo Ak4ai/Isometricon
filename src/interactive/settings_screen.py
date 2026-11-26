@@ -73,12 +73,19 @@ def value_text(key: str, value) -> str:
         return f'{round(value * 100)}%'
     if key == 'render_distance':
         return f'{value} chunk' + ('s' if value != 1 else '')
+    if key == 'shadow_grain':
+        return {1: 'Fino', 2: 'Médio (2 x 2)', 4: 'Grosso (4 x 2)', 8: 'Bem grosso (8 x 4)'}[value]
+    if key == 'shadow_distance':
+        return '1 chunk (perto)' if value == 1 else f'{value} chunks'
     if key == 'shadows':
         return {'off': 'Desligadas', 'low': 'Baixa', 'medium': 'Média', 'high': 'Alta'}[value]
     if key == 'shadow_detail':
         return ('Leve', 'Formas', 'Plantas', 'Completa')[value]
     if key == 'shadow_range':
         return {16: 'Curto', 32: 'Médio', 56: 'Longo'}.get(value, str(value))
+    if key == 'gpu':
+        return {'high': 'Dedicada (mais forte)', 'low': 'Integrada (economiza bateria)',
+                'auto': 'O Windows decide'}[value]
     if key == 'fps_limit':
         return 'Sem limite' if not value else f'{value} FPS'
     if key == 'sensitivity':
@@ -120,6 +127,13 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Mostra no canto superior esquerdo quantos quadros por segundo o jogo está desenhando, lido a cada '
                 'meio segundo.',
                 [('Custo', 'Nenhum')]),
+            Row('gpu', 'Placa de vídeo', 'Em notebooks com duas placas, qual o jogo usa', 'gauge', 'choice', None,
+                'gpu',
+                'Notebooks com duas placas (uma integrada, Intel ou AMD, e uma dedicada, NVIDIA ou AMD) põem os '
+                'programas na integrada, mais fraca. Na dedicada o jogo roda bem mais rápido; na integrada a bateria '
+                'dura mais. O jogo grava a escolha nas configurações de gráficos do Windows e vale na próxima vez que '
+                'ele abrir. Com uma placa só, não muda nada.',
+                [('Custo', 'Nenhum (a dedicada gasta mais bateria)')]),
             Row('fps_limit', 'Limite de FPS', 'Teto de quadros por segundo', 'gauge', 'choice', None, 'fps_limit',
                 'Segura o jogo num número fixo de quadros por segundo. Economiza bateria e deixa a placa mais fria, '
                 'e o ritmo dos quadros fica mais estável.',
@@ -142,6 +156,11 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Quantos chunks (16 × 16 blocos) em volta do personagem ficam carregados e desenhados. Mais distância '
                 'mostra mais mundo, mas gera e guarda mais terreno.',
                 [('Custo', 'Alto acima de 3 (memória e geração)')]),
+            Row('edge_fog', 'Névoa na borda', 'Esconde o fim do terreno carregado numa névoa', 'cloud',
+                'toggle', None, 'edge_fog',
+                'Com pouca distância de render o terreno acaba perto do personagem e aparece o vazio. Com a névoa, o '
+                'chão vai sumindo numa bruma da cor do fundo antes de acabar, como numa cidade coberta de neblina.',
+                [('Custo', 'Quase nenhum')]),
             Row('shadows', 'Sombras do sol', 'Qualidade da sombra que o sol projeta', 'sun', 'choice', 'Sombras',
                 'shadows',
                 'Alta: penumbra suave e borda nítida junto aos blocos (até 18 raios por pixel). Média: a mesma sombra '
@@ -153,13 +172,42 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'Leve: cada bloco faz sombra de cubo inteiro, como antes (lajes, escadas e cercas viram cubos; placas '
                 'e plantas não fazem sombra). Formas: lajes, escadas, cercas, placas e lanternas fazem sombra pelo '
                 'formato. Plantas: também mudas, flores e cogumelos, pelo desenho das folhas. Completa: também o '
-                'capim do chão, o mais pesado.',
-                [('Custo', 'Baixo a alto (o capim é o mais pesado)')]),
+                'mato do chão (capim, samambaias, arbustos), o mais pesado.',
+                [('Custo', 'Baixo a alto (o mato do chão é o mais pesado)')]),
             Row('shadow_range', 'Alcance da sombra', 'Até onde o raio procura o que tapa o sol', 'range', 'choice',
                 None, 'shadow_range',
                 'Com o sol baixo, um morro distante pode sombrear o personagem. O alcance diz até quantos blocos o raio '
                 'do sol procura: Curto 16, Médio 32, Longo 56. Sombras compridas somem no curto.',
                 [('Custo', 'Baixo a médio')]),
+            Row('shadow_distance', 'Distância das sombras', 'Até quantos chunks em volta há sombra do sol', 'range',
+                'choice', None, 'shadow_distance',
+                'A sombra do sol só existe numa área em volta do personagem; fora dela tudo fica no sol. 1 chunk é '
+                'a área de sempre (48 × 48 blocos). Mais chunks mostram as sombras das árvores e dos morros lá longe '
+                '(até a distância de render), mas a área é refeita quando o personagem anda e ocupa mais memória de '
+                'vídeo.',
+                [('Custo', 'Médio a alto acima de 3 (um tranco curto a cada 8 blocos andados)')]),
+            Row('shadow_accum', 'Sombra acumulada', 'Soma a sombra de um quadro para o outro', 'gauge', 'toggle',
+                None, 'shadow_accum',
+                'A borda da sombra é feita de até 18 raios por pixel. Ligada, cada pixel guarda o que achou e, no quadro '
+                'seguinte, soma só 3 a 5 raios novos: a mesma sombra (a penumbra fica até mais lisa) por bem menos '
+                'trabalho, principalmente debaixo das árvores altas da taiga. Quando o sol anda ou um bloco é posto, a '
+                'sombra acompanha em cerca de um quarto de segundo. Vale para as qualidades Média e Alta; com ela, a '
+                'Sombra em meia resolução não é usada.',
+                [('Custo', 'Diminui bastante na penumbra'), ('Visual', 'igual; muda com um leve atraso')]),
+            Row('shadow_half', 'Sombra em meia resolução', 'Calcula a sombra em quadrados de 2 x 2 pixels', 'scale',
+                'toggle', None, 'shadow_half',
+                'Os quatro pixels de cada quadrado dividem os raios do sol (cada um traça só a sua parte) e juntam o '
+                'resultado. As texturas e as bordas dos blocos continuam nítidas; só a sombra perde um pouco de '
+                'precisão no contorno. Pesa bem menos onde quase tudo é penumbra, como debaixo das árvores altas da '
+                'taiga. Vale para as qualidades Média e Alta.',
+                [('Custo', 'Diminui (até ~3x menos raios)'), ('Visual', 'contorno da sombra um pouco mais mole')]),
+            Row('shadow_grain', 'Granulado da penumbra', 'O tamanho do pontilhado na borda borrada da sombra', 'leaf',
+                'choice', None, 'shadow_grain',
+                'A borda borrada da sombra é feita de raios espalhados, girados de um ponto para outro; o resultado é um '
+                'pontilhado. Fino gira a cada pixel e fica quase invisível. Nos maiores, blocos de pixels giram juntos: '
+                'o pontilhado vira manchas quadradas, mas a placa trabalha mais solta (os pixels vizinhos andam no mesmo '
+                'passo). Vale para as qualidades Média e Alta.',
+                [('Custo', 'Fino o normal; Bem grosso até ~20% mais rápido'), ('Visual', 'manchas na penumbra')]),
             Row('shadow_strength', 'Intensidade da sombra', 'O quanto a sombra escurece', 'contrast', 'choice', None,
                 'shadow_strength',
                 'Só o escuro da sombra: 100% é a sombra inteira, 25% é um sombreado leve. Não muda o desempenho.',
@@ -259,6 +307,8 @@ def _icon(draw: ImageDraw.ImageDraw, kind: str, x: float, y: float, s: float, co
         line([(.3, .63), (.7, .63)])
     elif kind == 'motion':
         line([(.08, .5), (.92, .5)]); line([(.08, .28), (.6, .28)], 1); line([(.08, .72), (.6, .72)], 1)
+    elif kind == 'cloud':   # faixas de névoa (a névoa na borda do mundo)
+        line([(.1, .3), (.7, .3)]); line([(.3, .5), (.9, .5)]); line([(.1, .7), (.65, .7)])
     elif kind == 'text':
         line([(.15, .15), (.85, .15)]); line([(.5, .15), (.5, .88)])
     else:

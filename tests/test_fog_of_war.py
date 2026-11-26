@@ -31,6 +31,7 @@ def test_painel_escolhe_o_modo_e_recobre():
     panel = MasterPanel(Ambience(), create_gl=False)
     panel.on_recover = lambda: recovered.append(1)
     panel.open()
+    panel.tab = 'guerra'                              # a névoa de guerra fica na aba Guerra
     panel.draw_image()
     for action in ('war:1', 'recover'):
         rect = next(r for r, a in panel.hits if a == action)
@@ -43,6 +44,7 @@ def test_painel_escolhe_o_modo_e_recobre():
 def test_painel_encolhido_acerta_os_cliques():
     panel = MasterPanel(Ambience(), create_gl=False)
     panel.open()
+    panel.tab = 'guerra'
     panel.draw_image()
     rect = next(r for r, a in panel.hits if a == 'war:2')
     panel.scale = 0.5                                 # numa janela baixa o painel é desenhado pela metade

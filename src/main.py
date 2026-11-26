@@ -29,38 +29,12 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 
 
 # ---------------------------------------------------------------------------
-# Forçar GPU dedicada (NVIDIA Optimus / AMD PowerXpress) ANTES do OpenGL/GLFW
-# No Windows, os drivers verificam esses símbolos exportados pelo executável.
-# Como Python não exporta esses símbolos nativamente, usamos ctypes para
-# carregar as DLLs de hint dos fabricantes antes de qualquer contexto GL.
+# A placa de vídeo (Configurações > Gráficos > Placa de vídeo), antes de qualquer OpenGL: num notebook com duas placas
+# o Windows dá a integrada a todo programa que não pede a outra. Ver src/core/gpu_preference.py.
 # ---------------------------------------------------------------------------
-if sys.platform == "win32":
-    import ctypes
+from src import gpu_preference
 
-    # Hint de variável de ambiente para pilhas de driver com suporte a GPU Switchable
-    os.environ.setdefault("SHIM_MCCOMPAT", "0x800000001")
-
-    # --- NVIDIA Optimus ---
-    # O driver NVIDIA expõe a DLL NvOptimusEnablement via nvapi64.
-    # Simplesmente carregar a DLL já sinaliza ao driver que queremos GPU discreta.
-    try:
-        _nv = ctypes.WinDLL("nvapi64.dll")
-        # Exportar o símbolo mágico que o driver verifica
-        _NvOptimusEnablement = ctypes.c_ulong(0x00000001)
-    except OSError:
-        pass  # NVIDIA não instalada ou não disponível
-
-    # --- AMD PowerXpress ---
-    # Mesmo mecanismo: carregar a DLL de hint do driver AMD.
-    try:
-        _amd = ctypes.WinDLL("amdxx64.dll")
-        _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
-    except OSError:
-        try:
-            _amd = ctypes.WinDLL("atiadlxx.dll")
-            _AmdPowerXpressRequestHighPerformance = ctypes.c_int(0x00000001)
-        except OSError:
-            pass  # AMD não instalada ou não disponível
+gpu_preference.ensure(gpu_preference.saved_choice())
 
 # Inicializa o pacote e seleciona o backend antes de importar OpenGL.
 import src
@@ -257,9 +231,18 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 2. Inicializar janela GLFW e contexto OpenGL 3.3 Core
     # ------------------------------------------------------------------
+    # --resolucao=1920x1080: o tamanho da janela (para capturar os slides em Full HD)
+    window_size = (1280, 720)
+    for arg in sys.argv[1:]:
+        if arg.startswith("--resolucao="):
+            try:
+                width_text, height_text = arg.split("=", 1)[1].lower().split("x")
+                window_size = (max(320, int(width_text)), max(240, int(height_text)))
+            except ValueError:
+                pass
     window = Window(
-        width=1280,
-        height=720,
+        width=window_size[0],
+        height=window_size[1],
         title=f"Isometricon {version_info.full_version} - Inicializando...",
         vsync=True,
     )
@@ -291,7 +274,10 @@ def main() -> None:
     shader = Shader(shader_vert, shader_frag)
     argv = sys.argv[1:]
     explicit_editor = "--map-editor" in argv or "--editor-mapa" in argv
-    terrain_requested = "--terrain" in argv
+    # --apresentacao: os slides da disciplina por cima do terreno ao vivo (ver src/interactive/presentation.py)
+    presentation_requested = "--apresentacao" in argv
+    terrain_requested = "--terrain" in argv or presentation_requested
+    presentation_start = 1
     map_path = None
     world_object_path = None
     for arg in argv:
@@ -302,6 +288,11 @@ def main() -> None:
             map_path = arg.split("=", 1)[1]
         elif arg.startswith(("--object=", "--objeto=")):
             world_object_path = arg.split("=", 1)[1]
+        elif arg.startswith("--slide="):
+            try:
+                presentation_start = int(arg.split("=", 1)[1])
+            except ValueError:
+                pass
     terrain_demo = terrain_requested
     char_demo = "--char" in argv or "--character" in argv
 
@@ -364,6 +355,9 @@ def main() -> None:
             chat_text = arg.split("=", 1)[1]
             open_chat = True
 
+    if presentation_requested and custom_seed is None:
+        from src.interactive.presentation import PRESENTATION_SEED
+        custom_seed = PRESENTATION_SEED   # sempre o mesmo terreno de fundo nos slides
     editor_mode = explicit_editor or (map_path is not None and not terrain_requested)
     if editor_mode:
         terrain_demo = False
@@ -394,7 +388,7 @@ def main() -> None:
         selected_world = menus.result[1]
     show_menu = "--menu" in sys.argv or (
         not editor_mode
-        and not any(flag in sys.argv for flag in ("--terrain", "--char", "--character", "--frames"))
+        and not any(flag in sys.argv for flag in ("--terrain", "--apresentacao", "--char", "--character", "--frames"))
         and not any(a.startswith("--frames=") for a in sys.argv)
     )
     if show_menu and package_smoke is None:
@@ -465,9 +459,20 @@ def main() -> None:
         water_uv = atlas.uv_table[int(BlockType.WATER)].reshape(-1, 2)
         water_rect = (float(water_uv[:, 0].min()), float(water_uv[:, 1].min()),
                       float(water_uv[:, 0].max()), float(water_uv[:, 1].max()))
+        # e as das folhas: o buraco das folhas (leafHole no shader) as reconhece por elas
+        leaf_rects = []
+        for leaf in (BlockType.LEAVES, BlockType.SPRUCE_LEAVES):
+            leaf_uv = atlas.uv_table[int(leaf)].reshape(-1, 2)
+            leaf_rects.append((float(leaf_uv[:, 0].min()), float(leaf_uv[:, 1].min()),
+                               float(leaf_uv[:, 0].max()), float(leaf_uv[:, 1].max())))
         from src.world.terrain_options import make_generator
         # as opções de criação do mundo (tela "Uma nova aventura"); sem elas, o relevo de sempre
         active_terrain = {"options": selected_world.get("terrain") if selected_world else None}
+        biome_arg = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--bioma=")), "")
+        if biome_arg:   # --bioma=taiga: abre o modo terreno nesse bioma (para ver e tirar prints)
+            from src.world.terrain_options import defaults, water_default
+            active_terrain["options"] = dict(active_terrain["options"] or defaults(), bioma=biome_arg,
+                                             agua=water_default(biome_arg))
         generator = make_generator(active_seed["value"], active_terrain["options"])
         world_manager = WorldManager(generator=generator,
                                      render_distance=menus.preferences.data['render_distance'], atlas=atlas)
@@ -553,6 +558,8 @@ def main() -> None:
         from src.world.room_reveal import RoomRevealTracker
         from src.rendering.sun_shadows import SunShadowRenderer
         shadow_renderer = SunShadowRenderer()
+        from src.rendering.shadow_accum import ShadowAccumulator
+        shadow_accum = ShadowAccumulator()   # a sombra do sol somada entre quadros (Configurações > Sombra acumulada)
         from src.rendering.cast_shadow import CharacterShadowMap
         character_shadows = CharacterShadowMap()   # a sombra do personagem e dos NPCs em qualquer face de bloco
         # a cena do jogo num framebuffer próprio: MSAA, escala de resolução e FXAA mudam na hora (Configurações)
@@ -612,7 +619,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = shadow_renderer = scene_target = None
+        room_tracker = room_renderer = shadow_renderer = shadow_accum = scene_target = None
         character_shadows = None
         interact_prompt = None
         context_cursor = None
@@ -626,7 +633,7 @@ def main() -> None:
         atlas = None
         world_manager = None
         schematic_tool = None
-        room_tracker = room_renderer = shadow_renderer = scene_target = None
+        room_tracker = room_renderer = shadow_renderer = shadow_accum = scene_target = None
         character_shadows = None
         interact_prompt = None
         context_cursor = None
@@ -692,6 +699,10 @@ def main() -> None:
     master_panel = MasterPanel(ambience) if terrain_demo else None
     from src.rendering.fog_of_war import FogOfWar
     fog_war = FogOfWar()   # o explorado (névoa de guerra do /mestre), guardado no mundo
+    from src.rendering.mist import MistField
+    early_z = {"ok": "--no-early-z" not in sys.argv}   # a passada de cor com o teste de profundidade antecipado
+    accum_state = {"on": False, "ok": True}            # a sombra acumulada: pedida nas Configurações; a placa aceita
+    mist_field = MistField()   # o mapa da neblina de ambientação (/mestre > Neblina)
     fog_war.explored.load(selected_world.get("nevoa_explorada") if isinstance(selected_world, dict) else None)
     if master_panel is not None:
         master_panel.on_recover = fog_war.explored.clear
@@ -776,6 +787,9 @@ def main() -> None:
     elif terrain_demo:
         cam_target = vec3(0.5, float(start_surface_y) + 1.0, 0.5)
         cam_ortho = 4.5
+        zoom_arg = next((a.partition("=")[2] for a in sys.argv[1:] if a.startswith("--zoom=")), "")
+        if zoom_arg:   # --zoom=12: começa com a câmera mais afastada (meia-altura visível, em blocos)
+            cam_ortho = float(zoom_arg)
     elif char_demo:
         cam_target = vec3(0.0, 0.95, 0.0)
         cam_ortho = 1.18
@@ -795,6 +809,143 @@ def main() -> None:
         camera.perspective = True
         camera.pitch = math.radians(30.0)
         camera.yaw = math.radians(45.0)
+
+    # Modo apresentação: a câmera parte da isométrica exata dos slides (yaw 45°, pitch 35,264°, ortográfica);
+    # a de antes volta quando o Esc encerra a apresentação.
+    presentation = None
+    presentation_view: dict = {}
+    if terrain_demo and presentation_requested:
+        from src.interactive.presentation import BASE_ZOOM, Presentation
+        presentation = Presentation(start=presentation_start - 1)
+        for arg in argv:      # --step=N: abre o slide já no passo N (1 é o primeiro), para capturar cada passo
+            if arg.startswith("--step="):
+                try:
+                    presentation.step = min(max(int(arg.split("=", 1)[1]) - 1, 0), presentation.slide.steps - 1)
+                except ValueError:
+                    pass
+        presentation.fullscreen = "--janela" not in argv   # tela cheia por padrão; F11 alterna
+        presentation_view.update(
+            saved=(camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees),
+            base_yaw=45.0, base_ortho=camera.ortho_size * BASE_ZOOM, slide=presentation.index, targets=None, drawn=0,
+            faces=(0, 0), faces_at=-10.0, footer=None, footer_key=None)
+        camera.perspective = False
+        camera.pitch = math.radians(IsometricCamera.DEFAULT_PITCH_DEGREES)
+        camera.yaw = math.radians(45.0)
+
+    def show_presentation_screen(want: str) -> None:
+        """Abre por trás do slide a tela do jogo que ele pede (e fecha a do slide anterior).
+
+        Quem apresenta mexe nela com o mouse; nada é gravado: a tela de criação não salva o personagem e os
+        inimigos da luta de demonstração somem ao trocar de slide."""
+        had = presentation_view.get("screen", "")
+        if had == want:
+            return
+        presentation_view["screen"] = want
+        if had == "editor" and character_editor.is_open:
+            character_editor.close()
+            character_editor.autosave = presentation_view["editor_autosave"]
+        elif had == "mestre" and master_panel is not None:
+            master_panel.close()
+        elif had == "combate":
+            combat.clear(keep_npcs=True)
+        if want == "editor" and not character_editor.is_open:
+            presentation_view["editor_autosave"] = character_editor.autosave
+            character_editor.autosave = False
+            character_editor.open()
+        elif want == "mestre" and master_panel is not None:
+            master_panel.open()
+        elif want == "combate" and player_token is not None:
+            combat.clear(keep_npcs=True)
+            position = [float(v) for v in player_token.position]
+            first = combat.spawn("zumbi", 1, position)[0]
+            combat.spawn("esqueleto", 1, position)
+            combat.start(position, first)
+
+    def presentation_solid(x: int, y: int, z: int) -> bool:
+        return is_solid(voxel_provider.get_block_at(x, y, z))
+
+    def presentation_place(name: str):
+        """O ponto de pé do lugar ``name``; a construção é posta na primeira vez (sem gravar no mundo)."""
+        from src.interactive.presentation_places import CAVE, ENTRIES, choose_site, find_cave_spot, find_floor_spot
+        places = presentation_view.setdefault("places", {})
+        if name in places:
+            return places[name][1]
+        home = presentation_view["home"]
+        spot, placed = None, None
+        if name == CAVE:
+            spot = find_cave_spot(presentation_solid, lambda x, z: world_manager.get_height(x, z), home)
+        elif schematic_tool is not None and name in ENTRIES:
+            entry = ENTRIES[name]
+            try:
+                schematic = schematic_tool.schematic_for(entry)
+            except Exception as error:   # o .schem pode ter sumido da pasta
+                print(f"[Apresentação] {name}: {error}")
+                schematic = None
+            if schematic is not None:
+                taken = [p.bounds() for p, _ in places.values() if p is not None]
+                wet = lambda x, z: voxel_provider.get_block_at(
+                    x, world_manager.get_height(x, z) + 1, z) == int(BlockType.WATER)
+                origin = choose_site(lambda x, z: world_manager.get_height(x, z), wet, home,
+                                     (schematic.width, schematic.length), taken)
+                saving, schematic_tool.on_change = schematic_tool.on_change, (lambda: None)
+                try:                                  # a construção da apresentação não vai para o save
+                    schematic_tool.load_entry(entry, origin)
+                    schematic_tool.confirm()
+                finally:
+                    schematic_tool.on_change = saving
+                placed = schematic_tool.layer.structures[-1]
+                lo, hi = placed.bounds()
+                spot = find_floor_spot(presentation_solid, lo, hi, roofed=entry["kind"] == "schem")
+                if spot is None:
+                    spot = (lo[0] - 1.5, float(lo[1]), (lo[2] + hi[2]) / 2.0)
+        places[name] = (placed, spot)
+        return spot
+
+    def go_to_presentation_place(name: str) -> None:
+        """Leva o personagem ao lugar do passo do slide (ou de volta ao começo, com ``name`` vazio)."""
+        if presentation_view.get("at", "") == name or player_token is None:
+            return
+        presentation_view["at"] = name
+        spot = presentation_place(name) if name else presentation_view["home"]
+        if spot is None:
+            chat_console.add_message(f"[Apresentação] Não achei onde mostrar: {name}", (255, 170, 85))
+            return
+        player_token.position[:] = [float(v) for v in spot]
+        camera.target[:] = player_token.position
+
+    def set_presentation_biome(biome: str) -> None:
+        """Refaz o terreno no bioma do slide (vazio: o do jogo). A seed é a mesma; os lugares postos saem (a troca
+        repõe as construções salvas) e voltam no chão novo quando o slide pedir. Nada vai para o save."""
+        pv = presentation_view
+        if pv.get("biome", "") == biome or player_token is None:
+            return
+        pv["biome"] = biome
+        from src.world.terrain_options import defaults, water_default
+        original = active_terrain["options"]
+        options = original if not biome else dict(original or defaults(), bioma=biome, agua=water_default(biome))
+        go_to_presentation_place("")
+        pv.pop("places", None)                     # o restore abaixo já tira as construções da apresentação
+        regenerate_terrain(active_seed["value"], options, keep_world_structures=True)
+        pv["home"] = tuple(float(v) for v in player_token.position)   # o começo, no chão novo
+        pv["at"] = ""
+
+    def end_presentation() -> None:
+        """Esc na apresentação: a câmera volta a ser a do jogo e o HUD normal reaparece."""
+        show_presentation_screen("")
+        set_presentation_biome("")
+        go_to_presentation_place("")
+        if schematic_tool is not None:   # as construções postas só para a apresentação saem do mundo
+            saving, schematic_tool.on_change = schematic_tool.on_change, (lambda: None)
+            try:
+                for placed, _ in presentation_view.pop("places", {}).values():
+                    if placed is not None:
+                        schematic_tool.remove(placed)
+            finally:
+                schematic_tool.on_change = saving
+        camera.yaw, camera.pitch, camera.ortho_size, camera.perspective, camera.fov_degrees = (
+            presentation_view["saved"])
+        presentation_view["targets"] = None
+        window.set_fullscreen(False)   # de volta ao jogo como ele estava
 
     map_editor = None
     if editor_mode:
@@ -1024,6 +1175,30 @@ def main() -> None:
         print(f"[Terrain] Mundo regenerado. Nova Seed: {seed}")
 
 
+    def regenerate_terrain(new_seed: int, options, keep_world_structures: bool = False) -> None:
+        """Refaz o terreno com outra seed ou outras opções (o R, e a apresentação ao trocar de bioma).
+
+        ``keep_world_structures``: num mundo do menu, as construções dele voltam (a seed não mudou)."""
+        world_manager.delete()
+        room_tracker.reset()
+        world_manager.generator = make_generator(new_seed, options)
+        # Reposiciona o token no topo do novo relevo
+        new_surface = world_manager.get_height(player_token.position[0], player_token.position[2])
+        player_token.position[1] = float(new_surface) + 1.0
+        world_manager.load_initial_region(player_token.position[0], player_token.position[2])
+        combat.clear()                     # os inimigos ficavam no relevo antigo
+        fog_war.explored.clear()           # o explorado era de outro relevo
+        if cloud_fog is not None:
+            cloud_fog.field.reset()
+        # o relevo muda: as construções da seed anterior saem; sem mundo do menu, voltam as salvas da seed nova
+        from src.world.structure_save import SeedStore, restore as restore_structures, seed_store_path
+        saved = SeedStore(seed_store_path(new_seed)).read() if menus.world is None else (
+            (menus.world.get("structures") or []) if keep_world_structures else [])
+        for warning in restore_structures(schematic_tool, saved):
+            chat_console.add_message("[Schem] " + warning, (255, 85, 85))
+        if construction_panel is not None:
+            construction_panel.close()
+
     def handle_camera_key(
         key: int,
         scancode: int,
@@ -1036,6 +1211,12 @@ def main() -> None:
             keys_pressed[menus.preferences.canonical(key)] = False
         if menus.active:
             return menus.key(key, action, mods)
+
+        # A apresentação fica com as setas, espaço, PageUp/Down, Home/End, H e Esc; o resto segue para o jogo
+        if presentation is not None and presentation.active and presentation.key(key, action):
+            if not presentation.active:
+                end_presentation()
+            return True
 
         # O editor de mapa consome os atalhos próprios; Q/E, WASD e o chat continuam
         # disponíveis para a câmera e para o console.
@@ -1354,9 +1535,19 @@ def main() -> None:
     frame_marks = []  # (seção, tempo) do quadro atual, com --frametimes
     frame_sections = []
 
+    # --gpu-times (com --frametimes): o tempo que a PLACA leva em cada trecho, por consultas de carimbo de tempo do
+    # OpenGL (o tempo do processador só mostra onde ele espera a placa, não quanto ela trabalha em cada etapa)
+    gpu_times = "--gpu-times" in sys.argv and bool(frametimes_path)
+    gpu_marks = []          # (nome, consulta) do quadro atual
+    gpu_frames = []         # as listas de cada quadro, lidas no fim
+
     def mark(name):
         if frametimes_path:
             frame_marks.append((name, time.perf_counter()))
+            if gpu_times:
+                query = int(np.asarray(gl.glGenQueries(1)).ravel()[0])
+                gl.glQueryCounter(query, gl.GL_TIMESTAMP)
+                gpu_marks.append((name, query))
     # O que a inicialização deixou (módulos, atlas, roupas) vive até o fim: congelado, sai da varredura da
     # geração 2 do coletor, que passava por tudo isso a cada poucos segundos (15-17 ms de quadro parado).
     # O que sobrevive a uma varredura completa também é congelado: a próxima passa só pelo que é novo. A contagem
@@ -1369,6 +1560,10 @@ def main() -> None:
     from src.core.game_storage import GRAPHICS
     frame_limiter = FrameLimiter()
     graphics_applied = {"key": None}
+    edge_fog = {"on": True}   # Configurações > Gráficos > Névoa na borda
+
+    # Granulado da penumbra (Configurações): o valor salvo -> o bloco de pixels (largura, altura) que gira o cone junto
+    SPIN_TILES = {1: (1.0, 1.0), 2: (2.0, 2.0), 4: (4.0, 2.0), 8: (8.0, 4.0)}
 
     def apply_graphics():
         prefs = menus.preferences.data
@@ -1378,12 +1573,24 @@ def main() -> None:
         graphics_applied["key"] = key
         if world_manager is not None:
             world_manager.render_distance = int(prefs["render_distance"])
+        edge_fog["on"] = bool(prefs.get("edge_fog", True))
         if shadow_renderer is not None:
             shadow_renderer.enabled = prefs["shadows"] != "off"
             shadow_renderer.quality = {"low": 0, "medium": 1, "high": 2}.get(prefs["shadows"], 2)
             shadow_renderer.steps = int(prefs["shadow_range"])
             shadow_renderer.set_detail(int(prefs["shadow_detail"]), shader)
             shadow_renderer.strength = float(prefs["shadow_strength"])
+            shadow_renderer.set_distance(int(prefs.get("shadow_distance", 1)))
+            shadow_renderer.spin_tile = SPIN_TILES.get(int(prefs.get("shadow_grain", 1)), (1.0, 1.0))
+            cone = prefs["shadows"] in ("medium", "high")
+            accum_state["on"] = bool(prefs.get("shadow_accum", True)) and cone
+            # com a acumulada ligada a meia resolução não vale: a acumulada já traça poucos raios por quadro
+            half = bool(prefs.get("shadow_half", False)) and cone and not accum_state["on"]
+            try:
+                shader.set_define("SHADOW_HALF", half)
+            except RuntimeError as error:      # a placa não tem as derivadas finas: fica a sombra inteira
+                print(f"[Render] Sombra em meia resolução indisponível: {error}")
+                shader.set_define("SHADOW_HALF", False)
 
 
     fps_overlay = FpsOverlay()
@@ -1391,7 +1598,75 @@ def main() -> None:
     def coords_on_screen() -> bool:
         """As coordenadas do canto de cima à esquerda: ligadas em Configurações > Geral e sem o painel do /mestre ali."""
         return (coordinate_overlay is not None and menus.preferences.data.get('show_coords', True)
-                and not (master_panel is not None and master_panel.is_open))
+                and not (master_panel is not None and master_panel.is_open) and not presenting())
+
+    def presenting() -> bool:
+        return presentation is not None and presentation.active
+
+    def update_presentation(dt: float) -> None:
+        """Leva a câmera, suavemente, ao que a cena do slide pede (giro, zoom, ortográfica ou perspectiva)."""
+        pv = presentation_view
+        presentation.update(dt)
+        if pv["slide"] != presentation.index:   # o giro continua de onde parou em vez de voltar ao início
+            pv["slide"] = presentation.index
+            pv["base_yaw"] = math.degrees(camera.yaw)
+        show_presentation_screen(presentation.slide.scene.screen)
+        set_presentation_biome(presentation.slide.scene.biome)
+        if "home" not in pv and player_token is not None:
+            pv["home"] = tuple(float(v) for v in player_token.position)
+        places = presentation.slide.scene.places
+        go_to_presentation_place(places[min(presentation.step, len(places) - 1)] if places else "")
+        targets = presentation.camera_targets(pv["base_yaw"], pv["base_ortho"])
+        pv["targets"] = targets
+        if character_editor.is_open:   # a tela de criação cuida da câmera (gira em volta do personagem)
+            return
+        k = 1.0 - math.exp(-6.0 * dt)
+        current = math.degrees(camera.yaw)
+        camera.yaw = math.radians(current + ((targets.yaw_degrees - current + 180.0) % 360.0 - 180.0) * k)
+        camera.ortho_size += (targets.ortho_size - camera.ortho_size) * k
+        camera.perspective = targets.perspective
+        camera.fov_degrees = 40.0 if targets.perspective else pv["saved"][4]   # com 18° quase não se distingue
+
+    def draw_presentation() -> None:
+        """Os cartões do slide (um quad por cartão) e o número do slide, por cima de tudo."""
+        from src.interactive.presentation import face_stats
+        from src.interactive.presentation_card import render_footer, render_slide
+        from src.rendering.hud_quad import HudQuad
+        pv = presentation_view
+        if window.is_fullscreen != presentation.fullscreen:
+            window.set_fullscreen(presentation.fullscreen)
+        slide = presentation.slide
+        live = {}
+        if "faces" in slide.scene.counters:
+            if window.time - pv["faces_at"] > 1.0:   # soma os chunks carregados no máximo uma vez por segundo
+                pv["faces"] = face_stats([c.blocks for c in list(world_manager.chunks.values())],
+                                         [m.index_count for m, _ in list(world_manager.meshes.values())])
+                pv["faces_at"] = window.time
+            live["faces"] = pv["faces"]
+        if "chunks" in slide.scene.counters:
+            live["chunks"] = (pv["drawn"], len(world_manager.meshes))
+        if presentation.card_visible:
+            pieces = render_slide(slide, presentation.step, window.width, window.height, live)
+            quads = pv.setdefault("quads", [])
+            shown = pv.setdefault("shown", [])
+            while len(quads) < len(pieces):
+                quads.append(HudQuad())
+                shown.append(None)
+            for i, (x, y, image) in enumerate(pieces):
+                if shown[i] is not image:           # a imagem vem do cache: só envia à GPU quando mudou
+                    quads[i].set_image(image)
+                    shown[i] = image
+                quads[i].draw(x, y, window.width, window.height)
+        if pv["footer"] is None:
+            pv["footer"] = HudQuad()
+        if pv["footer_key"] != presentation.index:
+            pv["footer"].set_image(render_footer(presentation.index, len(presentation.slides), window.width))
+            pv["footer_key"] = presentation.index
+        # com a tela de criação aberta o canto de baixo à esquerda tem os botões dela: o número vai para a direita;
+        # no combate o chat ocupa o canto de baixo à esquerda: o número sobe para o canto de cima
+        footer_x = window.width - pv["footer"].size[0] - 16 if character_editor.is_open else 16
+        footer_y = 4 if slide.scene.screen == "combate" else window.height - pv["footer"].size[1] - 12
+        pv["footer"].draw(footer_x, footer_y, window.width, window.height)
 
     # o diamante do canto de cima à direita enquanto a roupa se ajusta ou uma importação roda
     loading_indicator = LoadingIndicator(lambda: skin_command_handler.busy_status)
@@ -1412,6 +1687,9 @@ def main() -> None:
                 frame_sections.append({n: (t - frame_marks[i - 1][1]) * 1000.0
                                        for i, (n, t) in enumerate(frame_marks) if i})
             frame_marks.clear()
+            if gpu_marks:
+                gpu_frames.append(list(gpu_marks))
+                gpu_marks.clear()
             mark("start")
         if menus.active:
             window.poll_events()
@@ -1442,6 +1720,8 @@ def main() -> None:
         if menus.world is not None:
             menus.world['played'] += dt
         camera.update(dt)
+        if presenting():
+            update_presentation(dt)
         if menus.preferences.data['reduce_motion']:
             camera.current_rotation = float(camera.board_rotation)
         chat_console.update(dt)
@@ -1870,7 +2150,7 @@ def main() -> None:
             mark("room_tracker")
             room_renderer.update(dt, room_tracker)
             mark("room_renderer")
-            shadow_renderer.update(room_tracker)
+            shadow_renderer.update(room_tracker, player_token.position, loaded_chunks, chunk_revision, room_structures)
             mark("shadows")
             if construction_panel is not None and construction_panel.is_open:
                 # o bloco que o mouse aponta (terreno e construções) e as células ocupadas pelo jogador
@@ -1892,6 +2172,7 @@ def main() -> None:
                             int(np.floor(float(player_token.position[0]))),
                             int(np.floor(float(player_token.position[2]))),
                             skip_water=True,
+                            skip_foliage=True,  # a copa de uma árvore não faz do chão embaixo dela uma caverna
                         )
                     ) + 0.25
                 )
@@ -1923,7 +2204,30 @@ def main() -> None:
                             (float(player_token.position[0]), float(player_token.position[2])))
             fog_war.apply(shader, *fog_war_args)
             grid_renderer.fog_war = lambda grid_shader, args=fog_war_args: fog_war.apply(grid_shader, *args)
+            # a neblina de ambientação: ao ar livre (numa caverna ou num cômodo a de fora não entra)
+            mist_on = ambience.mist > 0 and not underground_mode and room_renderer.level <= 0.001
+            shader.set_define("MIST", mist_on)
+            shader.set_define("MIST_RAYS", mist_on and ambience.mist_rays > 0)
+            if mist_on:
+                layers = getattr(world_manager.generator, "column_layers", lambda: (0,))()
+                mist_field.update(float(player_token.position[0]), float(player_token.position[2]), chunk_revision,
+                                  loaded_chunks.get, layers)
+                mist_field.apply(shader, fog_war_args[1],
+                                 np.asarray(camera._camera_position(), dtype=np.float64) - np.asarray(camera.target, dtype=np.float64),
+                                 ambience.mist_height)
+            else:
+                shader.set_float("u_MistAmount", 0.0)
             gl.glClearColor(*ambience.background(), 1.0)
+            edge_on = edge_fog["on"] and world_manager is not None and not underground_mode
+            shader.set_define("EDGE_FOG", edge_on)
+            shader.use()       # a troca de variante devolve o programa que estava em uso, e aqui não é o do mundo
+            if edge_on:
+                px, pz = float(player_token.position[0]), float(player_token.position[2])
+                shader.set_vec4("u_EdgeRect", *world_manager.loaded_rect(px, pz))
+                shader.set_vec2("u_EdgePlayer", px, pz)
+                shader.set_float("u_EdgeRadius", world_manager.render_distance * 16.0 + 10.0)
+                shader.set_vec3("u_EdgeColor", *ambience.background())
+                shader.set_mat4("u_EdgeInvModel", np.asarray(fog_war_args[1], dtype=np.float32))
             if character_shadows is not None:
                 shadow_casters = []
                 if shadow_renderer.enabled and not character_editor.is_open:
@@ -1968,13 +2272,28 @@ def main() -> None:
             # Ao ar livre o corredor só liga quando algo bloqueia a vista do peito ou da cabeça (se só as pernas ficam
             # atrás de um degrau, não abre buraco); ligado, corta o cilindro inteiro, dos pés para cima, e os pés
             # aparecem. Num cômodo fica sempre ligado (só corta o que tapa o cômodo: ver o shader).
-            from src.world.sight import sight_needed
+            from src.world.sight import leaf_hole_radius, sight_cover, sight_needed
             sight_world_dir = np.linalg.inv(np.asarray(model, dtype=np.float64))[:3, :3] @ (
                 np.array(camera._camera_position(), dtype=np.float64) - sight_target[:3])
             window_cells = room_tracker.mask.window if room_tracker.mask is not None else None
+
+            def sight_blocked_far() -> bool:
+                """De longe: uma árvore alta lá na frente, fora da janela em volta do personagem (nos chunks)."""
+                from src.world.sight import CHEST, HEAD, START, sight_blocked_world
+                d = sight_world_dir / max(float(np.linalg.norm(sight_world_dir)), 1e-9)
+                if d[1] <= 0.05:
+                    return False
+                layers = getattr(world_manager.generator, "column_layers", lambda: (0,))()
+                top = (max(layers) + 1) * 16          # acima disso não há bloco: o raio pode parar
+                for rise in (CHEST, HEAD):
+                    start = (feet[0], feet[1] + rise, feet[2])
+                    if sight_blocked_world(loaded_chunks.get, start, d, START, min((top - start[1]) / d[1], 240.0)):
+                        return True
+                return False
             outdoors_target = 1.0 if (
                 room_renderer.level > 0.001 or window_cells is None
-                or sight_needed(window_cells.solid, room_tracker.mask.origin, feet, sight_world_dir)) else 0.0
+                or sight_needed(sight_cover(window_cells), room_tracker.mask.origin, feet, sight_world_dir)
+                or sight_blocked_far()) else 0.0
             story_state["sight"] += (outdoors_target - story_state["sight"]) * (1.0 - 0.5 ** (max(dt, 0.0) / 0.10))
             if abs(outdoors_target - story_state["sight"]) < 0.01:
                 story_state["sight"] = outdoors_target
@@ -2031,7 +2350,14 @@ def main() -> None:
                     shader.set_bool("u_WaterMode", player_token.in_water)
                     shader.set_int("u_CutawayPass", 0)
                     shader.set_int("u_WaterPass", 1)
-                    world_manager.render(shader, model, view_projection)
+                    # ao ar livre, a copa entre a câmera e o personagem abre num círculo (num cômodo ou numa caverna,
+                    # os cortes de lá cuidam da vista)
+                    shader.set_float("u_LeafHole", 0.0 if underground_mode or room_renderer.level > 0.001
+                                     else leaf_hole_radius(camera.ortho_size))
+                    shader.set_vec4("u_LeafRect0", *leaf_rects[0])
+                    shader.set_vec4("u_LeafRect1", *leaf_rects[1])
+                    presentation_view["drawn"] = world_manager.render(shader, model, view_projection)
+                    shader.set_float("u_LeafHole", 0.0)             # as construções usam outro atlas
                     room_renderer.draw_terrain_caps(shader, model)  # as faces que o corte deixou sem tampa
                 shader.set_int("u_WaterPass", 0)
                 schematic_tool.draw(shader, model, window.time, preview=False)
@@ -2041,14 +2367,49 @@ def main() -> None:
             # profundidade antecipado da placa, e sem ele cada fragmento escondido pagaria os raios do sol. A 1ª
             # passada só escreve a profundidade; a 2ª, sem escrever, sombreia só o que ficou na frente. Vale para o
             # terreno e para as construções (de dentro de uma casa, quase tudo na tela é parede, piso e móvel dela).
+            # Apresentação: o wireframe do face culling e os modos "só textura" / "só luz" valem para o mundo
+            slide_targets = presentation_view.get("targets") if presenting() else None
+            wireframe = slide_targets is not None and slide_targets.wireframe
+            shader.set_int("u_DebugView", slide_targets.debug_view if slide_targets is not None else 0)
+            if wireframe:
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+            mark("sight_and_cuts")
             shader.set_bool("u_DepthOnly", True)
             gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
             draw_solids()
+            mark("depth_prepass")
             gl.glColorMask(gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE)
             shader.set_bool("u_DepthOnly", False)
             gl.glDepthFunc(gl.GL_LEQUAL)
             gl.glDepthMask(gl.GL_FALSE)
+            if early_z["ok"]:
+                try:
+                    shader.set_define("EARLY_Z", True)   # a variante com o teste de profundidade antes do shader
+                except RuntimeError as error:            # a placa não aceita: segue sem
+                    early_z["ok"] = False
+                    print(f"[Render] Sem teste de profundidade antecipado: {error}")
+            # a sombra acumulada (src/rendering/shadow_accum.py): precisa do teste antecipado (um fragmento por pixel)
+            # e da cena no framebuffer dela (as texturas têm o tamanho da cena)
+            accum_now = (accum_state["on"] and accum_state["ok"] and early_z["ok"] and shadow_accum is not None
+                         and scene_target is not None and scene_target.active and shadow_renderer is not None
+                         and shadow_renderer.active)
+            if accum_now:
+                try:
+                    shader.set_define("SHADOW_ACCUM", True)
+                    shader.use()
+                    shadow_accum.begin(shader, scene_target.size, projection @ view @ model)
+                except Exception as error:             # a placa não aceita: segue com a sombra de sempre
+                    accum_state["ok"] = accum_now = False
+                    shader.set_define("SHADOW_ACCUM", False)
+                    print(f"[Render] Sem sombra acumulada: {error}")
+            elif shadow_accum is not None:
+                shadow_accum.reset()                   # sem ela neste quadro, o histórico fica velho
+            shader.use()       # a variante pode ter trocado com outro programa em uso (as tampas, as construções)
             draw_solids()
+            if accum_now:
+                shadow_accum.end()
+                shader.set_define("SHADOW_ACCUM", False)
+            shader.set_define("EARLY_Z", False)
             gl.glDepthMask(gl.GL_TRUE)
             gl.glDepthFunc(gl.GL_LESS)
             mark("story_and_world_draw")
@@ -2099,6 +2460,9 @@ def main() -> None:
                 world_manager.render(shader, model, view_projection)
                 gl.glDepthMask(gl.GL_TRUE)
                 mark("water_pass")
+            if wireframe:
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+            shader.set_int("u_DebugView", 0)
             gl.glDisable(gl.GL_BLEND)
             shader.set_int("u_WaterPass", 0)
             shader.set_float("u_SightActive", 0.0)
@@ -2111,6 +2475,10 @@ def main() -> None:
                                  tuple((model @ np.array([float(v) for v in player_token.position] + [1.0]))[:3]))
             grid_renderer.render(projection, view, model)
             mark("grid_draw")
+            if presenting() and presentation.slide.scene.chunk_outline and selection_box is not None:
+                # slide "Voxel e chunk": o contorno do chunk 16³ para onde a câmera olha
+                low = tuple(int(math.floor(float(v) / 16.0)) * 16 for v in camera.target)
+                selection_box.render(projection, view, model, low, tuple(v + 15 for v in low), (1.0, 0.85, 0.25))
 
             if construction_panel is not None and construction_panel.is_open and selection_box is not None:
                 # a caixa da construção selecionada (amarela) e a do holograma (verde se cabe, vermelha se não)
@@ -2275,7 +2643,7 @@ def main() -> None:
                 chest_dim["quad"].set_image(Image.new("RGBA", (1, 1), (0, 0, 0, 255)))
             chest_dim["quad"].draw(0, 0, window.width, window.height, size=(window.width, window.height),
                                    opacity=chest_session.dim)
-        if menus.preferences.data.get('show_fps'):   # Configurações > Mostrar FPS (desligado por padrão)
+        if menus.preferences.data.get('show_fps') and not presenting():   # Configurações > Mostrar FPS
             # sob as coordenadas, quando elas estão na tela (uma linha de 18 pixels mais a folga)
             fps_overlay.render(window.width, window.height,
                                FpsOverlay.MARGIN + (22 if coords_on_screen() else 0))
@@ -2284,7 +2652,9 @@ def main() -> None:
         chat_console.set_left(character_editor_panel_width + 16 if character_editor.is_open
                               else master_panel.right + 16 if master_panel is not None and master_panel.is_open
                               else 16)
-        if map_editor is None or chat_console.is_open:
+        # na apresentação o chat só aparece no slide do combate (o registro da luta faz parte da interface dela)
+        if (map_editor is None or chat_console.is_open) and (
+                not presenting() or presentation.slide.scene.screen == "combate"):
             chat_console.render(window.width, window.height)
         loading_indicator.render(window.width, window.height)
         if context_cursor is not None:
@@ -2307,6 +2677,9 @@ def main() -> None:
                 context_cursor.render(window.get_cursor_pos_framebuffer(), window.width, window.height,
                                       prompt_at, interact_key_name(), verb, opacity=cursor_opacity(cursor_idle()))
 
+        if presenting():
+            draw_presentation()
+
         # --------------------------------------------------------------
         # Captura de screenshot e limite de frames (para testes e automação)
         # --------------------------------------------------------------
@@ -2328,6 +2701,20 @@ def main() -> None:
                     handle.write(",".join(names) + chr(10))
                     for row in frame_sections:
                         handle.write(",".join(f"{row.get(n, 0.0):.3f}" for n in names) + chr(10))
+                if gpu_frames:
+                    import ctypes
+                    rows = []
+                    for marks in gpu_frames:
+                        stamps = []
+                        for name, query in marks:
+                            value = ctypes.c_uint64(0)
+                            gl.glGetQueryObjectui64v(query, gl.GL_QUERY_RESULT, ctypes.byref(value))
+                            stamps.append((name, value.value))
+                        rows.append({n: (t - stamps[i - 1][1]) / 1e6 for i, (n, t) in enumerate(stamps) if i})
+                    with open(frametimes_path + ".gpu.csv", "w", encoding="utf-8") as handle:
+                        handle.write(",".join(names) + chr(10))
+                        for row in rows:
+                            handle.write(",".join(f"{row.get(n, 0.0):.3f}" for n in names) + chr(10))
             break
 
         mark("rest_draw")
@@ -2361,7 +2748,9 @@ def main() -> None:
     if room_renderer is not None:
         room_renderer.delete()
     if shadow_renderer is not None:
-        shadow_renderer.delete()
+        shadow_renderer.shutdown()
+    if shadow_accum is not None:
+        shadow_accum.delete()
     if character_shadows is not None:
         character_shadows.delete()
     if scene_target is not None:

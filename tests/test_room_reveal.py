@@ -490,3 +490,10 @@ def test_stepping_out_of_a_door_switches_to_the_room_on_the_other_side(monkeypat
     assert interior(tracker.mask, 13, 13) and not interior(tracker.mask, 7, 13)
     tracker.update(0.01, (12.5, 3.0, 13.5), chunks, 0)               # andando na B: o mesmo cômodo, sem refazer
     assert interior(tracker.mask, 13, 13) and not interior(tracker.mask, 7, 13)
+
+
+def test_spruce_leaves_do_not_make_a_room():
+    def tree(b):
+        b[10:17, 7, 10:17] = BlockType.SPRUCE_LEAVES
+    chunks = world(tree)
+    assert not room_at(chunks, (13.5, 3.0, 13.5)).active

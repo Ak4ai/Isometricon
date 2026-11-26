@@ -1,7 +1,7 @@
 """Terreno por value noise 2D: somente CPU e coordenadas mundiais."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from hashlib import blake2b
 from math import floor, isfinite
@@ -33,6 +33,39 @@ def _fade(t: float) -> float:
     return t * t * t * (t * (t * 6 - 15) + 10)
 
 
+def _value_noise(seed: int, px: np.ndarray, pz: np.ndarray) -> np.ndarray:
+    """Uma oitava de value noise em [-1, 1] nos pontos (px, pz) (floats): para as manchas do chão dos biomas."""
+    ix, iz = np.floor(px), np.floor(pz)
+    u, v = _fade(px - ix), _fade(pz - iz)
+    ix, iz = ix.astype(np.int64), iz.astype(np.int64)
+    corners = np.stack([np.stack([ix, iz], -1), np.stack([ix + 1, iz], -1),
+                        np.stack([ix, iz + 1], -1), np.stack([ix + 1, iz + 1], -1)]).reshape(-1, 2)
+    unique, inverse = np.unique(corners, axis=0, return_inverse=True)
+    values = np.array([_lattice(seed, int(x), int(z)) for x, z in unique])
+    a, b, c, d = values[inverse.reshape(4, *ix.shape)]
+    near, far = a + u * (b - a), c + u * (d - c)
+    return near + v * (far - near)
+
+
+# (blocos do chão onde nascem, ((limite acumulado do sorteio, planta), ...)), por bioma
+VEGETATION = {
+    # 14% capim, 1,5% papoula, 1,5% dente-de-leão, 0,4% de cada cogumelo (o de sempre)
+    'planicie': ((int(BlockType.GRASS),),
+                 ((0.140, BlockType.SHORT_GRASS), (0.155, BlockType.POPPY), (0.170, BlockType.DANDELION),
+                  (0.174, BlockType.RED_MUSHROOM), (0.178, BlockType.BROWN_MUSHROOM))),
+    # 1% arbusto seco, 0,4% cacto
+    'deserto': ((int(BlockType.SAND),), ((0.010, BlockType.DEAD_BUSH), (0.014, BlockType.CACTUS))),
+    # 10% samambaia, 2% samambaia grande, 1% arbusto de frutinhas
+    'taiga': ((int(BlockType.TAIGA_GRASS), int(BlockType.PODZOL)),
+              ((0.100, BlockType.FERN), (0.120, BlockType.LARGE_FERN_LOWER), (0.130, BlockType.SWEET_BERRY_BUSH))),
+}
+
+DESERT_SAND_DEPTH = 4       # blocos de areia abaixo do topo, no deserto
+DESERT_SANDSTONE_DEPTH = 3  # e de arenito abaixo da areia
+PODZOL_SCALE = 14.0         # tamanho das manchas de podzol na taiga (blocos)
+PODZOL_THRESHOLD = 0.35
+
+
 @dataclass(frozen=True)
 class TerrainGenerator:
     """Configuração imutável; mesma seed/configuração reproduz o mesmo mundo.
@@ -58,6 +91,7 @@ class TerrainGenerator:
     allow_sparse_depth: bool = True
     vegetation: bool = False   # capim, flores e cogumelos sobre a grama (o jogo liga; os testes antigos não)
     vegetation_density: float = 1.0   # quantas vezes a quantidade de sempre de plantas (0 a 2: tela de criação)
+    biome: str = 'planicie'           # 'planicie', 'deserto' ou 'taiga' (src/world/terrain_options.BIOMES)
 
     def __post_init__(self) -> None:
         for name in ('seed', 'base_height', 'octaves', 'dirt_depth', 'sea_level'):
@@ -83,6 +117,8 @@ class TerrainGenerator:
         if isinstance(density, (bool, np.bool_)) or not isinstance(density, Real) or not isfinite(density)                 or not 0.0 <= density <= 2.0:
             raise ValueError('vegetation_density deve estar em [0, 2].')
         object.__setattr__(self, 'vegetation_density', float(density))
+        if self.biome not in ('planicie', 'deserto', 'taiga'):
+            raise ValueError("biome deve ser 'planicie', 'deserto' ou 'taiga'.")
         if self.amplitude < 0 or self.frequency <= 0:
             raise ValueError('amplitude >= 0 e frequency > 0 são necessárias.')
         if self.octaves < 1 or self.dirt_depth < 0:
@@ -107,6 +143,16 @@ class TerrainGenerator:
         c, d = self._lattice_value(ix, iz + 1), self._lattice_value(ix + 1, iz + 1)
         near, far = a + u * (b - a), c + u * (d - c)
         return near + v * (far - near)
+
+    def column_layers(self) -> tuple[int, ...]:
+        """As camadas de chunks (chunk_y) de cada coluna do mundo: a do chão e, na taiga, as de cima, onde chegam as
+        copas das árvores altas."""
+        if not (self.vegetation and self.biome == 'taiga' and self.vegetation_density > 0):
+            return (0,)
+        from src.world.chunk import Chunk3D
+        from src.world.trees import MAX_TOP
+        top = self.base_height + int(np.ceil(self.amplitude)) + 1 + MAX_TOP
+        return tuple(range(0, top // Chunk3D.SIZE + 1))
 
     def get_height(self, world_x: int, world_z: int) -> int:
         """Retorna Y sólido em [base+floor(-amplitude), base+floor(amplitude)]."""
@@ -162,8 +208,24 @@ class TerrainGenerator:
         y = (origin_y + local)[None, :, None]                                                         # [1, y, 1]
         blocks = np.full((size, size, size), int(BlockType.AIR), dtype=chunk.blocks.dtype)
         blocks[np.broadcast_to(y <= surface, blocks.shape)] = int(BlockType.STONE)
-        blocks[np.broadcast_to((y >= surface - self.dirt_depth) & (y <= surface), blocks.shape)] = int(BlockType.DIRT)
-        top = np.where(surface < self.sea_level, int(BlockType.DIRT), int(BlockType.GRASS))
+        if self.biome == 'deserto':
+            # areia, arenito embaixo dela, pedra embaixo de tudo; areia também no fundo da água
+            sand_floor = surface - DESERT_SAND_DEPTH
+            blocks[np.broadcast_to((y >= sand_floor - DESERT_SANDSTONE_DEPTH) & (y < sand_floor),
+                                   blocks.shape)] = int(BlockType.SANDSTONE)
+            blocks[np.broadcast_to((y >= sand_floor) & (y <= surface), blocks.shape)] = int(BlockType.SAND)
+            top = np.full(surface.shape, int(BlockType.SAND))
+        else:
+            blocks[np.broadcast_to((y >= surface - self.dirt_depth) & (y <= surface), blocks.shape)] =                 int(BlockType.DIRT)
+            if self.biome == 'taiga':
+                xs = (origin_x + local[:, None]).astype(np.float64) / PODZOL_SCALE
+                zs = (origin_z + local[None, :]).astype(np.float64) / PODZOL_SCALE
+                xs, zs = np.broadcast_arrays(xs, zs)
+                patch = _value_noise(self.seed + 7, xs, zs)[:, None, :] > PODZOL_THRESHOLD
+                land = np.where(patch, int(BlockType.PODZOL), int(BlockType.TAIGA_GRASS))
+            else:
+                land = int(BlockType.GRASS)
+            top = np.where(surface < self.sea_level, int(BlockType.DIRT), land)
         at_top = np.broadcast_to(y == surface, blocks.shape)
         blocks[at_top] = np.broadcast_to(top, blocks.shape)[at_top]
         blocks[np.broadcast_to((y > surface) & (y <= self.sea_level), blocks.shape)] = int(BlockType.WATER)
@@ -195,6 +257,9 @@ class TerrainGenerator:
             )
             carver.carve_region(chunks, self)
         if self.vegetation and chunks:
+            if self.biome == 'taiga':
+                from src.world.trees import stamp_trees
+                stamp_trees(self, chunks)       # antes das plantas baixas: a samambaia não tira o lugar do tronco
             self.plant_vegetation(chunks)
         return chunks
 
@@ -210,27 +275,55 @@ class TerrainGenerator:
         return (h >> np.uint64(11)).astype(np.float64) / float(1 << 53)
 
     def plant_vegetation(self, chunks: dict) -> None:
-        """Põe capim, flores e cogumelos no ar logo acima da grama, nos chunks dados (depois das cavernas)."""
+        """Põe as plantas do bioma no ar logo acima do chão, nos chunks dados (depois das cavernas).
+
+        Planície: capim, flores e cogumelos sobre a grama. Deserto: arbustos secos e cactos de 1 a 3 blocos sobre a
+        areia (um cacto nunca encosta em outro). Taiga: samambaias, samambaias grandes e arbustos de frutinhas."""
         size = Chunk3D.SIZE
-        # (limite acumulado, planta): 14% capim, 1,5% papoula, 1,5% dente-de-leão, 0,4% de cada cogumelo
-        table = ((0.140, BlockType.SHORT_GRASS), (0.155, BlockType.POPPY), (0.170, BlockType.DANDELION),
-                 (0.174, BlockType.RED_MUSHROOM), (0.178, BlockType.BROWN_MUSHROOM))
+        ground, table = VEGETATION[self.biome]
+        limits = np.array([limit for limit, _ in table]) * self.vegetation_density
+        cactus_limit = next((limits[i] for i, (_, kind) in enumerate(table) if kind == BlockType.CACTUS), None)
+
+        def put(cx, cy, cz, lx, ly, lz, value) -> bool:
+            """Põe ``value`` no ar da célula (sobe para o chunk de cima se passar do topo); False se não deu."""
+            target = chunks.get((cx, cy + ly // size, cz))
+            if target is None or target.blocks[lx, ly % size, lz] != int(BlockType.AIR):
+                return False
+            target.blocks[lx, ly % size, lz] = int(value)
+            return True
+
         with np.errstate(over='ignore'):
             for (cx, cy, cz), chunk in chunks.items():
-                grass = np.argwhere(chunk.blocks == int(BlockType.GRASS))
-                if len(grass) == 0 or self.vegetation_density <= 0:
+                if self.vegetation_density <= 0:
+                    break
+                floor_cells = np.argwhere(np.isin(chunk.blocks, ground))
+                if len(floor_cells) == 0:
                     continue
-                rolls = self._plant_roll(grass[:, 0] + cx * size, grass[:, 2] + cz * size)
-                limits = np.array([limit for limit, _ in table]) * self.vegetation_density
+                wx, wz = floor_cells[:, 0] + cx * size, floor_cells[:, 2] + cz * size
+                rolls = self._plant_roll(wx, wz)
                 picks = np.searchsorted(limits, rolls, side='right')
-                for (lx, ly, lz), pick in zip(grass, picks):
+                for (lx, ly, lz), pick, x, z in zip(floor_cells, picks, wx, wz):
                     if pick >= len(table):
                         continue
-                    target, ty = chunk, int(ly) + 1
-                    if ty >= size:
-                        target, ty = chunks.get((cx, cy + 1, cz)), 0
-                        if target is None:
+                    kind = table[pick][1]
+                    if kind == BlockType.CACTUS:
+                        # nenhum vizinho pode também sortear cacto: assim dois cactos nunca se encostam, mesmo na
+                        # borda do chunk (a conta do vizinho é a mesma de qualquer lado)
+                        near = self._plant_roll(np.array([x + 1, x - 1, x, x]), np.array([z, z, z + 1, z - 1]))
+                        if (near < cactus_limit).any():
                             continue
-                    if target.blocks[lx, ty, lz] == int(BlockType.AIR):
-                        target.blocks[lx, ty, lz] = int(table[pick][1])
+                        height = 1 + int(self._plant_roll2(np.array([x]), np.array([z]))[0] * 3)
+                        for k in range(1, height + 1):
+                            if not put(cx, cy, cz, lx, int(ly) + k, lz, BlockType.CACTUS):
+                                break
+                    elif kind == BlockType.LARGE_FERN_LOWER:
+                        above = chunks.get((cx, cy + (int(ly) + 2) // size, cz))
+                        if above is not None and above.blocks[lx, (int(ly) + 2) % size, lz] == int(BlockType.AIR)                                 and put(cx, cy, cz, lx, int(ly) + 1, lz, BlockType.LARGE_FERN_LOWER):
+                            put(cx, cy, cz, lx, int(ly) + 2, lz, BlockType.LARGE_FERN_UPPER)
+                    else:
+                        put(cx, cy, cz, lx, int(ly) + 1, lz, kind)
+
+    def _plant_roll2(self, xs: np.ndarray, zs: np.ndarray) -> np.ndarray:
+        """Um segundo sorteio por coluna, independente do primeiro (a altura do cacto)."""
+        return replace(self, seed=self.seed + 1)._plant_roll(xs, zs)
 

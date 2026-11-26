@@ -21,7 +21,7 @@ from typing import Dict, Iterable, Optional, Tuple
 import numpy as np
 from scipy import ndimage
 
-from src.world.block import SHAPED_BLOCK_NAMES, SHAPED_LUT, BlockType
+from src.world.block import FOLIAGE, OPAQUE_BLOCKS, SHAPED_BLOCK_NAMES, SHAPED_LUT, BlockType
 from src.world.chunk import Chunk3D
 
 WINDOW = (48, 32, 48)          # células em x, y, z
@@ -42,8 +42,8 @@ EDGE = 64                      # sólido que só encosta no espaço pela quina: 
 OBJECT = 192                   # sólido com o espaço logo acima (móvel, degrau, piso): não é parede, não some na frente
 
 # Blocos que não contam como teto (a copa de uma árvore não faz um cômodo)
-_NOT_ROOF = (int(BlockType.LEAVES),)
-_OPAQUE = tuple(int(b) for b in (BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD))
+_NOT_ROOF = tuple(int(b) for b in FOLIAGE)
+_OPAQUE = tuple(int(b) for b in OPAQUE_BLOCKS)
 # O que o personagem atravessa: ar, água e os enfeites com forma (plantas, tochas, escadas de mão, fogo)
 _PASSABLE = (int(BlockType.AIR), int(BlockType.WATER), *(int(b) for b in SHAPED_BLOCK_NAMES))
 
@@ -105,16 +105,20 @@ def extract_window_cells(
     origin: Tuple[int, int, int],
     chunks: Dict[Tuple[int, int, int], Chunk3D],
     structures: Iterable = (),
+    size: Tuple[int, int, int] = WINDOW,
 ) -> WindowCells:
     """Copia para a janela o que é sólido no terreno e nas construções.
+
+    ``size``: o tamanho da janela (o padrão é a do cômodo; as sombras do sol podem pedir uma maior).
 
     Sólido é o que o personagem não atravessa (tudo menos ar e água); teto é o sólido que fecha
     um espaço por cima (sólido sem a folhagem). Abaixo de y = 0 é o chão do mundo, sólido.
     """
     structures = list(structures)
     ox, oy, oz = origin
-    sx, sy, sz = WINDOW
-    blocks = np.zeros(WINDOW, dtype=np.uint8)
+    sx, sy, sz = size
+    shape = tuple(size)
+    blocks = np.zeros(shape, dtype=np.uint8)
     size = Chunk3D.SIZE
     for (cx, cy, cz), chunk in chunks.items():
         x0, y0, z0 = cx * size, cy * size, cz * size
@@ -127,7 +131,7 @@ def extract_window_cells(
 
     solid = ~np.isin(blocks, _PASSABLE)
     roof = solid & ~np.isin(blocks, _NOT_ROOF)
-    owner = np.full(WINDOW, -1, dtype=np.int8)
+    owner = np.full(shape, -1, dtype=np.int8)
     culls = np.isin(blocks, _OPAQUE)
 
     floor_rows = max(0, min(sy, -oy))  # as camadas com y < 0
@@ -136,7 +140,7 @@ def extract_window_cells(
         roof[:, :floor_rows, :] = True
         culls[:, :floor_rows, :] = True
     occupied = solid | SHAPED_LUT[blocks]   # os enfeites do terreno são desenhados, mas não são parede
-    details = np.zeros(WINDOW, dtype=bool)
+    details = np.zeros(shape, dtype=bool)
     from src.world.shadow_shapes import terrain_shapes
     shapes = terrain_shapes()[blocks]      # os enfeites do terreno (capim, flores, tocha) também fazem sombra
     terrain_solid = solid.copy()

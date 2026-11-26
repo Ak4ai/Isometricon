@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 
-from src.world.block import BlockType
+from src.world.block import SURFACE_BLOCKS, BlockType
 from src.world.chunk import Chunk3D, _coordinate
 
 _BACKGROUND_YIELD_INTERVAL = 1
@@ -257,7 +257,11 @@ class CaveCarver:
         if len(ix) == 0:
             return
         _stamp(chunks, bxs[ix], bys[iy], bzs[iz], int(BlockType.AIR), create=False,
-               only=(int(BlockType.STONE), int(BlockType.DIRT), int(BlockType.GRASS)))
+               only=_CARVABLE)
+
+
+# o que o túnel abre: a pedra, o arenito e o chão de cima de qualquer bioma
+_CARVABLE = tuple(sorted({int(BlockType.STONE), int(BlockType.SANDSTONE), *(int(b) for b in SURFACE_BLOCKS)}))
 
 
 def _stamp(chunks, xs, ys, zs, value, *, create, only=None) -> None:

@@ -32,6 +32,25 @@ class BlockType(IntEnum):
     LADDER_EAST = 15
     LADDER_WEST = 16
     FIRE = 17
+    # Deserto e taiga (src/world/terrain.py, ``biome``)
+    SAND = 18
+    SANDSTONE = 19
+    CACTUS = 20
+    DEAD_BUSH = 21
+    SPRUCE_LOG = 22
+    SPRUCE_LEAVES = 23
+    PODZOL = 24
+    TAIGA_GRASS = 25
+    FERN = 26
+    LARGE_FERN_LOWER = 27
+    LARGE_FERN_UPPER = 28
+    SWEET_BERRY_BUSH = 29
+    SEQUOIA_LOG = 30         # a casca avermelhada das sequoias da taiga
+    # Troncos deitados (os galhos): os anéis ficam na ponta, virados para x ou para z
+    SPRUCE_LOG_X = 31
+    SPRUCE_LOG_Z = 32
+    SEQUOIA_LOG_X = 33
+    SEQUOIA_LOG_Z = 34
 
 
 BLOCK_COLORS: Mapping[BlockType, tuple[float, float, float]] = MappingProxyType({
@@ -53,6 +72,23 @@ BLOCK_COLORS: Mapping[BlockType, tuple[float, float, float]] = MappingProxyType(
     BlockType.LADDER_EAST: (0.60, 0.45, 0.25),
     BlockType.LADDER_WEST: (0.60, 0.45, 0.25),
     BlockType.FIRE: (1.0, 0.55, 0.10),
+    BlockType.SAND: (0.86, 0.81, 0.63),
+    BlockType.SANDSTONE: (0.81, 0.74, 0.55),
+    BlockType.CACTUS: (0.31, 0.51, 0.24),
+    BlockType.DEAD_BUSH: (0.59, 0.43, 0.24),
+    BlockType.SPRUCE_LOG: (0.36, 0.25, 0.16),
+    BlockType.SPRUCE_LEAVES: (0.20, 0.38, 0.24),
+    BlockType.PODZOL: (0.43, 0.31, 0.19),
+    BlockType.TAIGA_GRASS: (0.33, 0.50, 0.27),
+    BlockType.FERN: (0.27, 0.47, 0.24),
+    BlockType.LARGE_FERN_LOWER: (0.27, 0.47, 0.24),
+    BlockType.LARGE_FERN_UPPER: (0.27, 0.47, 0.24),
+    BlockType.SWEET_BERRY_BUSH: (0.24, 0.43, 0.24),
+    BlockType.SEQUOIA_LOG: (0.47, 0.25, 0.17),
+    BlockType.SPRUCE_LOG_X: (0.36, 0.25, 0.16),
+    BlockType.SPRUCE_LOG_Z: (0.36, 0.25, 0.16),
+    BlockType.SEQUOIA_LOG_X: (0.47, 0.25, 0.17),
+    BlockType.SEQUOIA_LOG_Z: (0.47, 0.25, 0.17),
 })
 
 
@@ -71,9 +107,25 @@ def get_block_color(block_type: BlockType | int) -> tuple[float, float, float]:
     return BLOCK_COLORS[_as_block_type(block_type)]
 
 
-_OPAQUE_BLOCKS = frozenset({
+# Os cubos que escondem a face do vizinho (o malhador e a revelação de cômodos usam esta lista; não copie)
+OPAQUE_BLOCKS = frozenset({
     BlockType.DIRT, BlockType.GRASS, BlockType.STONE, BlockType.WOOD,
+    BlockType.SAND, BlockType.SANDSTONE, BlockType.SPRUCE_LOG, BlockType.PODZOL, BlockType.TAIGA_GRASS,
+    BlockType.SEQUOIA_LOG, BlockType.SPRUCE_LOG_X, BlockType.SPRUCE_LOG_Z, BlockType.SEQUOIA_LOG_X,
+    BlockType.SEQUOIA_LOG_Z,
 })
+# O tronco deitado de cada tronco em pé, por eixo (os galhos das árvores)
+LYING_LOGS = MappingProxyType({
+    BlockType.SPRUCE_LOG: {"x": BlockType.SPRUCE_LOG_X, "z": BlockType.SPRUCE_LOG_Z},
+    BlockType.SEQUOIA_LOG: {"x": BlockType.SEQUOIA_LOG_X, "z": BlockType.SEQUOIA_LOG_Z},
+})
+_OPAQUE_BLOCKS = OPAQUE_BLOCKS
+OPAQUE_LUT = np.zeros(256, dtype=bool)
+OPAQUE_LUT[[int(b) for b in OPAQUE_BLOCKS]] = True
+# As copas: não escondem faces e não contam como teto de cômodo
+FOLIAGE = frozenset({BlockType.LEAVES, BlockType.SPRUCE_LEAVES})
+# O topo do chão de cada bioma (o que uma entrada de caverna pode abrir)
+SURFACE_BLOCKS = frozenset({BlockType.GRASS, BlockType.DIRT, BlockType.SAND, BlockType.PODZOL, BlockType.TAIGA_GRASS})
 
 
 def is_opaque(block_type: BlockType | int) -> bool:
@@ -99,6 +151,12 @@ SHAPED_BLOCK_NAMES: Mapping[BlockType, str] = MappingProxyType({
     BlockType.LADDER_EAST: "ladder[facing=east]",
     BlockType.LADDER_WEST: "ladder[facing=west]",
     BlockType.FIRE: "fire",
+    BlockType.CACTUS: "cactus",
+    BlockType.DEAD_BUSH: "dead_bush",
+    BlockType.FERN: "fern",
+    BlockType.LARGE_FERN_LOWER: "large_fern[half=lower]",
+    BlockType.LARGE_FERN_UPPER: "large_fern[half=upper]",
+    BlockType.SWEET_BERRY_BUSH: "sweet_berry_bush[age=3]",
 })
 
 # Para onde a escada de mão "olha"; a parede em que ela está presa fica do lado oposto
@@ -113,7 +171,8 @@ LADDER_BY_FACING: Mapping[str, BlockType] = MappingProxyType({v: k for k, v in L
 # Direção (x, z) de quem está na escada até a parede em que ela está presa
 _LADDER_WALL = {"north": (0, 1), "south": (0, -1), "east": (-1, 0), "west": (1, 0)}
 
-_PASSABLE_BLOCKS = frozenset({BlockType.AIR, BlockType.WATER, *SHAPED_BLOCK_NAMES})
+# o cacto tem forma (é mais fino que a célula) mas não se atravessa
+_PASSABLE_BLOCKS = frozenset({BlockType.AIR, BlockType.WATER, *SHAPED_BLOCK_NAMES}) - {BlockType.CACTUS}
 
 
 def is_shaped(block_type: BlockType | int) -> bool:

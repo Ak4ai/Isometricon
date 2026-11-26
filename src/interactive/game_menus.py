@@ -222,6 +222,11 @@ class GameMenus:
                 self.preview_seed = seed_value('')
             elif action == 'terrain_defaults':
                 self.terrain = terrain_options.defaults()
+            elif action.startswith('biome:'):
+                # trocar o bioma põe a água no padrão dele (o deserto quase seco); a barra continua mandando depois
+                biome = action[6:]
+                self.terrain['bioma'] = biome
+                self.terrain['agua'] = terrain_options.water_default(biome)
             elif action.startswith('slider:'):
                 self.field = None
             elif action.startswith('field:'):
@@ -553,7 +558,14 @@ class GameMenus:
             draw.line((x, 374, column, 374), fill=LINE)
             for i, (key, label, _, hint) in enumerate(terrain_options.OPTIONS):
                 slider(390 + i * 64, key, label, hint, column)
-            self.draw_preview(image, draw, text, (648, 138, end, 690))
+            # o bioma: três botões em cima da prévia (o escolhido em destaque)
+            third = (end - 648 - 2 * 12) / 3
+            for i, biome in enumerate(terrain_options.BIOMES):
+                left = 648 + i * (third + 12)
+                button(138, terrain_options.BIOME_LABELS[biome], 'biome:' + biome,
+                       primary=self.terrain.get('bioma', terrain_options.DEFAULT_BIOME) == biome,
+                       bx=left, ex=left + third)
+            self.draw_preview(image, draw, text, (648, 200, end, 690))
             button(720, 'Voltar', 'back', bx=x, ex=x+180)
             button(720, 'Padrões', 'terrain_defaults', bx=x+200, ex=x+380)
             if not self.fields['seed'].strip():
