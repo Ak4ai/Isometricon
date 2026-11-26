@@ -36,8 +36,32 @@ def load_roblox_cookie():
                 return line.split("=", 1)[1].strip().strip('"').strip("'")
     return content.strip().strip('"').strip("'")
 
+# Por que o último download falhou: (código HTTP ou None, texto do erro). Quem recebe ``None`` de
+# ``fetch_roblox_asset`` pergunta a ``download_failure_message`` o que dizer ao usuário.
+last_fetch_error = (None, "")
+
+
+def download_failure_message(asset_id, error=None, cookie=...):
+    """Uma frase para o chat dizendo por que o item não baixou e o que fazer."""
+    code, text = error if error is not None else last_fetch_error
+    if cookie is ...:
+        cookie = load_roblox_cookie()
+    if code in (401, 403):
+        if not cookie:
+            return (f"o Roblox só entrega o item {asset_id} a quem está logado, e não achei o cookie. Coloque a linha "
+                    "ROBLOSECURITY=<cookie> no arquivo .env da pasta do jogo.")
+        return (f"o Roblox recusou o cookie do .env ao baixar o item {asset_id}; ele provavelmente venceu. "
+                "Pegue um novo e atualize o ROBLOSECURITY no .env.")
+    if code == 404:
+        return f"o item {asset_id} não existe ou não está disponível no Roblox."
+    if code == 429:
+        return "o Roblox pediu para esperar (muitos pedidos seguidos). Tente de novo em um minuto."
+    return f"não consegui baixar o item {asset_id} do Roblox ({text or 'sem resposta'}). Confira a internet e tente de novo."
+
+
 def fetch_roblox_asset(asset_id):
     """Baixa o payload de qualquer asset autenticado do Roblox."""
+    global last_fetch_error
     cookie = load_roblox_cookie()
     url = f"https://assetdelivery.roblox.com/v1/asset/?id={asset_id}"
     req = urllib.request.Request(url, headers={
@@ -48,6 +72,7 @@ def fetch_roblox_asset(asset_id):
         with urllib.request.urlopen(req) as resp:
             return resp.read()
     except Exception as e:
+        last_fetch_error = (getattr(e, "code", None), str(e))
         print(f"[ERRO] Falha ao baixar asset {asset_id}: {e}")
         return None
 

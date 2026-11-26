@@ -21,7 +21,7 @@ import urllib.request
 import numpy as np
 
 # Importa decodificadores do projeto
-from scripts.import_roblox_clothing import fetch_roblox_asset, decode_roblox_mesh_to_obj
+from scripts.import_roblox_clothing import fetch_roblox_asset, decode_roblox_mesh_to_obj, download_failure_message
 
 TOP_ASSET_TYPES = {64, 65, 67, 68}        # T-Shirt, Shirt, Jacket, Sweater
 BOTTOM_ASSET_TYPES = {66, 69, 70, 71, 72} # Pants, Shorts, LeftShoe, RightShoe, Dress/Skirt
@@ -1162,6 +1162,8 @@ class RobloxWearEngine:
         type_id = meta.get("AssetTypeId", 65)
 
         raw_data = fetch_roblox_asset(asset_id)
+        if raw_data is None:
+            raise RuntimeError(download_failure_message(asset_id))   # com o motivo, em vez de um erro de None
         rbxm_path = os.path.join(output_dir, f"{asset_name}_{asset_id}.rbxm")
         if raw_data:
             try:
