@@ -2122,6 +2122,7 @@ def main() -> None:
             gl.glClearColor(*ambience.background(), 1.0)
             edge_on = edge_fog["on"] and world_manager is not None and not underground_mode
             shader.set_define("EDGE_FOG", edge_on)
+            shader.use()       # a troca de variante devolve o programa que estava em uso, e aqui não é o do mundo
             if edge_on:
                 px, pz = float(player_token.position[0]), float(player_token.position[2])
                 shader.set_vec4("u_EdgeRect", *world_manager.loaded_rect(px, pz))
