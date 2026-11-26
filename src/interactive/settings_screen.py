@@ -73,6 +73,8 @@ def value_text(key: str, value) -> str:
         return f'{round(value * 100)}%'
     if key == 'render_distance':
         return f'{value} chunk' + ('s' if value != 1 else '')
+    if key == 'shadow_grain':
+        return {1: 'Fino', 2: 'Médio (2 x 2)', 4: 'Grosso (4 x 2)', 8: 'Bem grosso (8 x 4)'}[value]
     if key == 'shadow_distance':
         return '1 chunk (perto)' if value == 1 else f'{value} chunks'
     if key == 'shadows':
@@ -186,6 +188,13 @@ def rows(tab: str, draft: dict, gl_ready: bool = False) -> List[Row]:
                 'precisão no contorno. Pesa bem menos onde quase tudo é penumbra, como debaixo das árvores altas da '
                 'taiga. Vale para as qualidades Média e Alta.',
                 [('Custo', 'Diminui (até ~3x menos raios)'), ('Visual', 'contorno da sombra um pouco mais mole')]),
+            Row('shadow_grain', 'Granulado da penumbra', 'O tamanho do pontilhado na borda borrada da sombra', 'leaf',
+                'choice', None, 'shadow_grain',
+                'A borda borrada da sombra é feita de raios espalhados, girados de um ponto para outro; o resultado é um '
+                'pontilhado. Fino gira a cada pixel e fica quase invisível. Nos maiores, blocos de pixels giram juntos: '
+                'o pontilhado vira manchas quadradas, mas a placa trabalha mais solta (os pixels vizinhos andam no mesmo '
+                'passo). Vale para as qualidades Média e Alta.',
+                [('Custo', 'Fino o normal; Bem grosso até ~20% mais rápido'), ('Visual', 'manchas na penumbra')]),
             Row('shadow_strength', 'Intensidade da sombra', 'O quanto a sombra escurece', 'contrast', 'choice', None,
                 'shadow_strength',
                 'Só o escuro da sombra: 100% é a sombra inteira, 25% é um sombreado leve. Não muda o desempenho.',

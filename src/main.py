@@ -1437,9 +1437,19 @@ def main() -> None:
     frame_marks = []  # (seção, tempo) do quadro atual, com --frametimes
     frame_sections = []
 
+    # --gpu-times (com --frametimes): o tempo que a PLACA leva em cada trecho, por consultas de carimbo de tempo do
+    # OpenGL (o tempo do processador só mostra onde ele espera a placa, não quanto ela trabalha em cada etapa)
+    gpu_times = "--gpu-times" in sys.argv and bool(frametimes_path)
+    gpu_marks = []          # (nome, consulta) do quadro atual
+    gpu_frames = []         # as listas de cada quadro, lidas no fim
+
     def mark(name):
         if frametimes_path:
             frame_marks.append((name, time.perf_counter()))
+            if gpu_times:
+                query = int(np.asarray(gl.glGenQueries(1)).ravel()[0])
+                gl.glQueryCounter(query, gl.GL_TIMESTAMP)
+                gpu_marks.append((name, query))
     # O que a inicialização deixou (módulos, atlas, roupas) vive até o fim: congelado, sai da varredura da
     # geração 2 do coletor, que passava por tudo isso a cada poucos segundos (15-17 ms de quadro parado).
     # O que sobrevive a uma varredura completa também é congelado: a próxima passa só pelo que é novo. A contagem
@@ -1452,6 +1462,9 @@ def main() -> None:
     from src.core.game_storage import GRAPHICS
     frame_limiter = FrameLimiter()
     graphics_applied = {"key": None}
+
+    # Granulado da penumbra (Configurações): o valor salvo -> o bloco de pixels (largura, altura) que gira o cone junto
+    SPIN_TILES = {1: (1.0, 1.0), 2: (2.0, 2.0), 4: (4.0, 2.0), 8: (8.0, 4.0)}
 
     def apply_graphics():
         prefs = menus.preferences.data
@@ -1468,6 +1481,7 @@ def main() -> None:
             shadow_renderer.set_detail(int(prefs["shadow_detail"]), shader)
             shadow_renderer.strength = float(prefs["shadow_strength"])
             shadow_renderer.set_distance(int(prefs.get("shadow_distance", 1)))
+            shadow_renderer.spin_tile = SPIN_TILES.get(int(prefs.get("shadow_grain", 1)), (1.0, 1.0))
             half = bool(prefs.get("shadow_half", False)) and prefs["shadows"] in ("medium", "high")
             try:
                 shader.set_define("SHADOW_HALF", half)
@@ -1570,6 +1584,9 @@ def main() -> None:
                 frame_sections.append({n: (t - frame_marks[i - 1][1]) * 1000.0
                                        for i, (n, t) in enumerate(frame_marks) if i})
             frame_marks.clear()
+            if gpu_marks:
+                gpu_frames.append(list(gpu_marks))
+                gpu_marks.clear()
             mark("start")
         if menus.active:
             window.poll_events()
@@ -2240,9 +2257,11 @@ def main() -> None:
             shader.set_int("u_DebugView", slide_targets.debug_view if slide_targets is not None else 0)
             if wireframe:
                 gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+            mark("sight_and_cuts")
             shader.set_bool("u_DepthOnly", True)
             gl.glColorMask(gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE, gl.GL_FALSE)
             draw_solids()
+            mark("depth_prepass")
             gl.glColorMask(gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE, gl.GL_TRUE)
             shader.set_bool("u_DepthOnly", False)
             gl.glDepthFunc(gl.GL_LEQUAL)
@@ -2546,6 +2565,20 @@ def main() -> None:
                     handle.write(",".join(names) + chr(10))
                     for row in frame_sections:
                         handle.write(",".join(f"{row.get(n, 0.0):.3f}" for n in names) + chr(10))
+                if gpu_frames:
+                    import ctypes
+                    rows = []
+                    for marks in gpu_frames:
+                        stamps = []
+                        for name, query in marks:
+                            value = ctypes.c_uint64(0)
+                            gl.glGetQueryObjectui64v(query, gl.GL_QUERY_RESULT, ctypes.byref(value))
+                            stamps.append((name, value.value))
+                        rows.append({n: (t - stamps[i - 1][1]) / 1e6 for i, (n, t) in enumerate(stamps) if i})
+                    with open(frametimes_path + ".gpu.csv", "w", encoding="utf-8") as handle:
+                        handle.write(",".join(names) + chr(10))
+                        for row in rows:
+                            handle.write(",".join(f"{row.get(n, 0.0):.3f}" for n in names) + chr(10))
             break
 
         mark("rest_draw")

@@ -198,6 +198,7 @@ class SunShadowRenderer:
         self.detail = DETAIL_PLANTS  # o que faz sombra pela forma (ver set_detail)
         self.steps = 56    # até quantas células o raio procura o que tapa o sol
         self.strength = float(strength)  # 0 sem sombra, 1 sombra inteira
+        self.spin_tile = (1.0, 1.0)  # o bloco de pixels que gira o cone junto (Granulado da penumbra)
         self.texture_id = 0
         self.horizon_id = 0  # textura 2D RGBA: column_horizons + 1, um quadrante por canal
         self.shapes_id = 0   # textura 2D RGBA32F: a tabela das formas (shadow_shapes.TABLE)
@@ -404,6 +405,7 @@ class SunShadowRenderer:
         shader.set_float("u_ShadowHorizonRise", self.rise)
         shader.set_int("u_ShadowSteps", int(self.steps))
         shader.set_int("u_ShadowQuality", int(self.quality))
+        shader.set_vec2("u_ShadowSpinTile", *self.spin_tile)
         shader.set_vec3("u_ShadowOrigin", float(self._origin[0]), float(self._origin[1]), float(self._origin[2]))
         shader.set_vec3("u_ShadowSize", *(float(v) for v in self._size))
         shader.set_float("u_ShadowStrength", self.strength)

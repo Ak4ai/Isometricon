@@ -374,6 +374,11 @@ vec3 snapToTexel(vec3 worldPos, vec3 worldNormal)
 }
 
 // Ruído de gradiente intercalado: um valor estável 0..1 por pixel da tela, para girar o cone da sombra borrada.
+// O giro vale por bloco de u_ShadowSpinTile pixels (Configurações > Gráficos > Granulado da penumbra): 1 x 1 é o
+// granulado mais fino; blocos maiores deixam a penumbra em manchas, mas a placa sombreia os pixels em grupos que andam
+// juntos (32 na NVIDIA) e, com os vizinhos atirando os raios para o mesmo lado, o grupo para de esperar o raio mais
+// longo (na RTX 3050, taiga: 24,8 ms com 1 x 1, 22,4 com 2 x 2, ~19 com 8 x 4).
+uniform vec2 u_ShadowSpinTile = vec2(1.0);
 float interleavedNoise(vec2 pixel)
 {
     return fract(52.9829189 * fract(dot(pixel, vec2(0.06711056, 0.00583715))));
@@ -444,7 +449,7 @@ vec4 sunSlice(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDir)
     int sharpRays = high ? 6 : 3;
     vec3 t1 = normalize(cross(sunDir, vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(sunDir, t1);
-    float spin = interleavedNoise(floor(gl_FragCoord.xy * 0.5)) * 6.2831853;
+    float spin = interleavedNoise(floor(gl_FragCoord.xy / max(u_ShadowSpinTile, vec2(2.0)))) * 6.2831853;
     vec4 sums = vec4(0.0);
     for (int k = q; k < 12; k += 4)
     {
@@ -507,7 +512,7 @@ float sunVisibility(vec3 snappedPos, vec3 exactPos, vec3 worldNormal, vec3 sunDi
     if (u_ShadowQuality <= 0)
         return traceSun(snappedPos + worldNormal * 0.04, sunDir);   // baixa: um raio, sombra nítida em pixel
     bool high = u_ShadowQuality >= 2;
-    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(gl_FragCoord.xy) * 6.2831853,
+    float soft = softSun(exactPos + worldNormal * 0.04, sunDir, interleavedNoise(floor(gl_FragCoord.xy / u_ShadowSpinTile)) * 6.2831853,
                          high ? 12 : 8, indoor);
     if (indoor && soft <= 0.0)
         return 0.0;                                            // dentro do cômodo, longe das aberturas: sombra
