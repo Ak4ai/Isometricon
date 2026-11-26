@@ -148,7 +148,7 @@ SLIDES: tuple[Slide, ...] = (
                    "Personagem montado na tela de criação, com roupas e animação",
                    "NPCs e combate por turnos no tabuleiro",
                    "Construções, portas, baús e editor de mapas",
-                   "Ambientação do mestre: hora do dia, névoa e névoa de guerra"),
+                   "Ambientação do mestre: hora do dia, neblina com feixes de luz e névoa de guerra"),
             ),
             corner("br", "Nesta apresentação",
                    _t("Cada slide é uma parte do jogo; as etiquetas dizem quais recursos de "
@@ -161,7 +161,7 @@ SLIDES: tuple[Slide, ...] = (
         (
             corner("tl", "Ferramentas",
                    _b("Python e NumPy", "GLFW (janela e entrada)", "PyOpenGL e GLSL 330 core",
-                      "Pillow (texturas e interface)", "pytest (~1500 testes automatizados)"), big=True, width=0.32),
+                      "Pillow (texturas e interface)", "pytest (~1650 testes automatizados)"), big=True, width=0.32),
             corner("tr", "IA generativa",
                    _b("GitHub Copilot", "Claude Code", "ChatGPT Codex"),
                    _t("Apoio para ler o código, testar e revisar; a conferência é nossa."), width=0.30),
@@ -257,7 +257,7 @@ SLIDES: tuple[Slide, ...] = (
                    _f("C_final = (C_amb + d·C_luz) ⊙ (C_textura ⊙ C_base)"),
                    _b("Luz ambiente + luz direcional do sol (Half-Lambert)",
                       "A hora do dia move o sol e muda a cor da luz (/mestre)",
-                      "Sombras do terreno: raios até o sol numa textura 3D dos blocos",
+                      "Sombras do terreno: raios até o sol numa textura 3D dos blocos, com penumbra (slide seguinte)",
                       "Sombra dos personagens: mapa de sombra visto do sol"),
                    cg("Iluminação difusa", "Luz direcional", "Ray marching", "Shadow mapping",
                       "Textura 3D"),
@@ -267,6 +267,25 @@ SLIDES: tuple[Slide, ...] = (
         SceneCue(spin=2.0, views=(0, 0, 1, 2), screen="mestre", biome="taiga"),
     ),
     Slide(
+        "Sombra do sol em tempo real",
+        (
+            right(
+                "Sombra do sol em tempo real",
+                _b("Cada pixel lança raios até o sol pela grade de voxels (DDA); atalhos: mapa de horizonte "
+                   "e distância até o vazio, que pulam o ar livre",
+                   "Penumbra: um cone de 12 raios borrados e 6 nítidos; perto do bloco vale a borda nítida, "
+                   "longe dele a borrada",
+                   "Acumulação temporal: o pixel guarda a sombra e o quadro seguinte o acha pela matriz do "
+                   "anterior; só 5 raios novos em vez de até 18",
+                   "Pré-passada de profundidade e teste antecipado: só o fragmento da frente paga os raios"),
+                cg("Ray marching", "Sombras suaves", "Reprojeção temporal", "Textura 3D", "Z-buffer"),
+                _t("Na taiga, numa RTX 3050: de 24,6 para 10 ms na passada de cor (40 para 95 fps), com "
+                   "a imagem praticamente igual. Cada ajuste é uma opção em Configurações > Gráficos."),
+            ),
+        ),
+        SceneCue(spin=2.0, biome="taiga"),
+    ),
+    Slide(
         "Água e névoa",
         (
             right(
@@ -274,8 +293,9 @@ SLIDES: tuple[Slide, ...] = (
                 _b("Água translúcida com ondas na normal, reflexo do céu e Fresnel",
                    "Névoa de distância e névoa de guerra em nuvens de blocos que se desfazem",
                    "Névoa na borda: o fim dos chunks carregados some numa bruma da cor do fundo",
-                   "Pré-passada de profundidade antes do sombreamento caro"),
-                cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Animação", "Z-buffer"),
+                   "Neblina do mestre: marcha no volume rente ao chão, mais densa junto da água e das "
+                   "árvores, com feixes de luz entre os troncos"),
+                cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Ray marching", "Animação"),
                 _t("No painel do /mestre: a névoa de guerra (explorado ou em volta) e as cenas prontas."),
             ),
         ),
@@ -364,8 +384,12 @@ SLIDES: tuple[Slide, ...] = (
             corner("tl", "Na CPU", _t("Face culling, malha numa thread à parte, 1 chunk enviado à GPU "
                                       "por quadro. A distância de render (1 a 6 chunks) carrega e "
                                       "descarrega na hora."), width=0.30),
-            corner("tr", "Na GPU", _t("Z-buffer, back-face culling e pré-passada de profundidade. O mato "
-                                      "do chão fica fora da sombra do sol: +15% de fps na taiga."),
+            corner("tr", "Na GPU", _t("Z-buffer, back-face culling, pré-passada de profundidade e sombra "
+                                      "acumulada entre quadros. O mato do chão fica fora da sombra do sol: "
+                                      "+15% de fps na taiga."),
+                   width=0.30),
+            corner("br", "Escolha da placa", _t("Em notebook com duas placas o jogo pede a dedicada ao "
+                                                "Windows; dá para trocar em Configurações."),
                    width=0.30),
             corner("bl", "Frustum culling", _t("O chunk sai se os 8 cantos estão fora de um mesmo plano."),
                    Block("bars", ("chunks",)), width=0.34),
@@ -379,8 +403,8 @@ SLIDES: tuple[Slide, ...] = (
                 "Conclusão",
                 _b("Modelagem: voxels, ruído procedural e malhas importadas",
                    "Transformações: câmera, tabuleiro, personagens e esqueleto",
-                   "Iluminação: luz difusa, sombras por raio e por mapa de sombra, água e névoa",
-                   "Desempenho: face culling, frustum culling e trabalho em thread"),
+                   "Iluminação: luz difusa, sombras por raio com penumbra acumulada e por mapa de sombra, água e névoa",
+                   "Desempenho: face culling, frustum culling, thread à parte e sombra acumulada"),
                 _t("Código, wiki e testes: github.com/Ak4ai/Isometricon"),
                 _sub("Obrigado!"),
             ),
