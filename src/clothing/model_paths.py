@@ -33,4 +33,3 @@ def garment_cache_dir(source: str, folder: str) -> str:
     if directory == RESOURCE_MODELS / "clothing":
         directory = GENERATED_MODELS / "clothing"
     return os.fspath(directory / folder)
-

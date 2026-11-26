@@ -41,4 +41,3 @@ def test_clothing_resources_and_user_files_are_independent(monkeypatch, tmp_path
     generated_item.write_bytes(b"generated")
     assert model_paths.model_file(*relative) == str(generated_item)
     assert model_paths.clothing_files("*.rbxm") == [generated_item]
-
