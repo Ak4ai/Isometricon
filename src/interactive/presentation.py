@@ -73,7 +73,7 @@ class Presentation:
     def key(self, key: int, action: int) -> bool:
         if not self.active or action not in (glfw.PRESS, glfw.REPEAT):
             return False
-        if key in (glfw.KEY_RIGHT, glfw.KEY_SPACE, glfw.KEY_PAGE_DOWN):
+        if key in (glfw.KEY_RIGHT, glfw.KEY_PAGE_DOWN):
             self.next()
         elif key in (glfw.KEY_LEFT, glfw.KEY_PAGE_UP):
             self.prev()

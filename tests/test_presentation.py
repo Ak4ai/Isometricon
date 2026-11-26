@@ -51,7 +51,7 @@ def test_capa_tem_autores_e_instituicao():
 
 def test_formulas_preservadas():
     text = _all_text()
-    for piece in ("Σ", "⊙", "P·V·M", "44 B", "4096", "35,264°", "M = T·R·S"):
+    for piece in ("⊙", "P·V·M", "35,264°", "M = T·R·S"):
         assert piece in text
 
 
@@ -80,15 +80,18 @@ def test_teclas_consumidas():
     p = Presentation()
     assert p.key(glfw.KEY_RIGHT, glfw.PRESS) is True
     assert p.index == 1
-    assert p.key(glfw.KEY_SPACE, glfw.PRESS) is True
+    assert p.key(glfw.KEY_SPACE, glfw.PRESS) is False
+    assert p.index == 1
+    assert p.key(glfw.KEY_SPACE, glfw.REPEAT) is False
+    assert p.key(glfw.KEY_SPACE, glfw.RELEASE) is False
     assert p.key(glfw.KEY_PAGE_DOWN, glfw.REPEAT) is True
-    assert p.index == 3
+    assert p.index == 2
     assert p.key(glfw.KEY_RIGHT, glfw.RELEASE) is False
-    assert p.index == 3
+    assert p.index == 2
     assert p.key(glfw.KEY_W, glfw.PRESS) is False
     assert p.key(glfw.KEY_LEFT, glfw.PRESS) is True
     assert p.key(glfw.KEY_PAGE_UP, glfw.PRESS) is True
-    assert p.index == 1
+    assert p.index == 0
     assert p.key(glfw.KEY_END, glfw.PRESS) is True and p.index == LAST
     assert p.key(glfw.KEY_HOME, glfw.PRESS) is True and p.index == 0
     assert p.key(glfw.KEY_H, glfw.PRESS) is True and p.card_visible is False

@@ -278,7 +278,8 @@ python src/main.py --apresentacao --janela   # em janela em vez de tela cheia
 
 | Ação | Tecla |
 |------|-------|
-| Próximo slide (ou próximo passo do pipeline) | `→`, `Espaço`, `Page Down` |
+| Próximo slide (ou próximo passo do pipeline) | `→`, `Page Down` |
+| Pular no jogo | `Espaço` |
 | Slide anterior | `←`, `Page Up` |
 | Primeiro / último | `Home` / `End` |
 | Esconder / mostrar os cartões | `H` |
