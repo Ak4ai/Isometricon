@@ -28,6 +28,9 @@ def isolated_environment(data_dir: Path, mesa_dir: Path | None) -> dict[str, str
         search_paths.insert(0, mesa_dir)
     env["PATH"] = os.pathsep.join(map(str, search_paths))
     env["ISOMETRICON_DATA_DIR"] = str(data_dir)
+    # O teste verifica o empacotamento, não a escolha de placa: sem isto o jogo grava a preferência do Windows e se
+    # reabre sozinho (o processo que o teste espera termina antes de dizer qual OpenGL usa)
+    env["ISOMETRICON_NO_GPU_PREF"] = "1"
     # Permite chamar o binario pelo smoke de outro pacote PyInstaller sem herdar sua extracao.
     env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     if mesa_dir is not None:

@@ -281,9 +281,14 @@ def validate_world_state(world):
         section = world.get(key)
         if section is not None and not isinstance(section, dict):
             raise ValueError(f'Seção inválida no mundo ({key}).')
+    from src.world.terrain_options import BIOMES
     for key in ('terrain', 'ambiente'):
-        if any(not _number(value) for value in (world.get(key) or {}).values()):
-            raise ValueError(f'Opções inválidas no mundo ({key}).')
+        for name, value in (world.get(key) or {}).items():
+            if key == 'terrain' and name == 'bioma':
+                if value not in BIOMES:      # o bioma é o único texto das opções do terreno
+                    raise ValueError(f'Opções inválidas no mundo ({key}).')
+            elif not _number(value):
+                raise ValueError(f'Opções inválidas no mundo ({key}).')
 
     for cell, encoded in (world.get('nevoa_explorada') or {}).items():
         try:
