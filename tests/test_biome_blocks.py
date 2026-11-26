@@ -11,6 +11,19 @@ from src.world.mesher import ChunkMesher
 HAS_TEXTURES = os.path.isfile(os.path.join("assets", "textures", "blocks", "sand.png"))
 
 
+def _has_minecraft_models() -> bool:
+    """A forma do cacto vem dos modelos do Minecraft (a cópia local ou o client.jar de quem tem o jogo): sem eles o
+    bloco é um cubo, como no CI."""
+    try:
+        from src.rendering.mc_models import MinecraftModels
+        return MinecraftModels.find() is not None
+    except Exception:
+        return False
+
+
+HAS_MODELS = _has_minecraft_models()
+
+
 def test_blocos_dos_biomas():
     assert is_solid(BlockType.CACTUS) and is_shaped(BlockType.CACTUS)
     assert not is_solid(BlockType.DEAD_BUSH) and not is_solid(BlockType.FERN)
@@ -35,7 +48,7 @@ def test_atlas_tem_textura_de_cada_bloco_novo():
         assert name in atlas.tile_rects
 
 
-@pytest.mark.skipif(not HAS_TEXTURES, reason="texturas da Mojang só na máquina de quem tem o jogo")
+@pytest.mark.skipif(not (HAS_TEXTURES and HAS_MODELS), reason="modelos e texturas da Mojang só na máquina de quem tem o jogo")
 def test_cacto_usa_lado_e_topo():
     from src.rendering.atlas import TextureAtlas
     from src.world.mesher import _shaped_template
