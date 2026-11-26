@@ -22,7 +22,7 @@ def _all_text():
 
 
 def test_slides_com_titulos_acentuados():
-    assert 12 <= len(SLIDES) <= 18
+    assert 12 <= len(SLIDES) <= 22
     titles = " | ".join(s.title for s in SLIDES)
     for word in ("Isometricon", "Ferramentas", "Pipeline", "Mundo", "Câmera", "Iluminação", "Personagens",
                  "Interação", "Otimizações", "Conclusão"):

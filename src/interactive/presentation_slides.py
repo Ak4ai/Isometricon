@@ -267,20 +267,34 @@ SLIDES: tuple[Slide, ...] = (
         SceneCue(spin=2.0, views=(0, 0, 1, 2), screen="mestre", biome="taiga"),
     ),
     Slide(
-        "Sombra do sol em tempo real",
+        "Sombra do sol: raios e penumbra",
         (
             right(
-                "Sombra do sol em tempo real",
-                _b("Cada pixel lança raios até o sol pela grade de voxels (DDA); atalhos: mapa de horizonte "
-                   "e distância até o vazio, que pulam o ar livre",
-                   "Penumbra: um cone de 12 raios borrados e 6 nítidos; perto do bloco vale a borda nítida, "
-                   "longe dele a borrada",
-                   "Acumulação temporal: o pixel guarda a sombra e o quadro seguinte o acha pela matriz do "
-                   "anterior; só 5 raios novos em vez de até 18",
-                   "Pré-passada de profundidade e teste antecipado: só o fragmento da frente paga os raios"),
-                cg("Ray marching", "Sombras suaves", "Reprojeção temporal", "Textura 3D", "Z-buffer"),
-                _t("Na taiga, numa RTX 3050: de 24,6 para 10 ms na passada de cor (40 para 95 fps), com "
-                   "a imagem praticamente igual. Cada ajuste é uma opção em Configurações > Gráficos."),
+                "Sombra do sol: raios e penumbra",
+                _b("Cada pixel lança raios até o sol pela grade de voxels (DDA), contra uma textura 3D dos blocos",
+                   "Atalhos: o mapa de horizonte por quadrante e a distância até o vazio pulam o ar livre",
+                   "Penumbra: um cone de 12 raios borrados e 6 nítidos, girado a cada pixel",
+                   "Perto do bloco vale a borda nítida, em degraus de pixel; longe dele, a borrada, lisa"),
+                cg("Ray marching", "Sombras suaves", "Textura 3D", "Amostragem estocástica"),
+                _t("Cada ajuste é uma opção em Configurações > Gráficos: qualidade, alcance do raio, "
+                   "distância das sombras e o granulado da penumbra."),
+            ),
+        ),
+        SceneCue(spin=2.0, biome="taiga"),
+    ),
+    Slide(
+        "Sombra do sol: acumulação",
+        (
+            right(
+                "Sombra do sol: acumulação",
+                _b("O mundo quase não muda entre quadros: refazer 18 raios por pixel a cada um é desperdício",
+                   "O pixel guarda a sombra numa textura; no quadro seguinte o mesmo ponto é achado pela "
+                   "matriz do quadro anterior",
+                   "Só 5 raios novos entram na média (~16 quadros); sem histórico, traça o cone inteiro",
+                   "Pré-passada de profundidade: só o fragmento da frente paga os raios"),
+                cg("Reprojeção temporal", "Acúmulo de amostras", "Framebuffer próprio", "Z-buffer"),
+                _t("Na taiga, numa RTX 3050: de 24,6 para 10 ms na passada de cor (40 para 95 fps), com a "
+                   "imagem praticamente igual. A sombra acompanha o sol e os blocos em ~1/4 de segundo."),
             ),
         ),
         SceneCue(spin=2.0, biome="taiga"),
