@@ -2,8 +2,8 @@
 
 O baú do Minecraft é uma entidade: a textura dele é uma folha 64x64 fora de ``textures/block``. Este script recorta dela
 as peças que o ``_chest`` de ``src/world/block_shapes.py`` usa (corpo, tampa, topo e fecho) em ladrilhos de 16x16 e os
-grava em ``assets/textures/blocks``. A arte é da Mojang (ou do pacote de texturas de quem usa): os ladrilhos ficam
-fora do git (ver ``.gitignore``) e, sem eles, o jogo desenha o baú como uma caixa de tábuas.
+grava em ``assets/textures/blocks``. Os ladrilhos do projeto saem do pacote Trailers Vision (open source) e ficam no
+git; rode de novo ao trocar de pacote. Sem eles, o jogo desenha o baú como uma caixa de tábuas.
 
 Uso:
     python scripts/make_chest_tiles.py FONTE [--saida PASTA]
