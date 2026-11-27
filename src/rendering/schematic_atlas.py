@@ -142,6 +142,12 @@ class SchematicAtlas:
             else:
                 candidates.extend([log_base, f"stripped_{clean}", f"{clean}_side"])
 
+        # A placa na parede usa a textura da placa de pé, quando o pacote tem (o Trailers Vision tem)
+        for wall, own in (("_wall_hanging_sign", "_hanging_sign"), ("_wall_sign", "_sign")):
+            if clean.endswith(wall):
+                candidates.append(clean[: -len(wall)] + own)
+                break
+
         # Blocos derivados (degrau, laje, cerca, placa, botão...) usam a textura do material
         base = clean
         for suffix in _DERIVED_SUFFIXES:

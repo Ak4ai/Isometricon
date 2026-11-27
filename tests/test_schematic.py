@@ -156,6 +156,15 @@ def test_atlas_stairs_use_base_material(atlas):
     assert atlas.get_uv("minecraft:oak_stairs[facing=east]", "top") == atlas.uv_map["oak_planks"]
 
 
+def test_atlas_wall_sign_uses_the_sign_texture_without_models():
+    # como no CI, sem o client.jar: só o palpite pelo nome do arquivo
+    atlas = SchematicAtlas(models=None)
+    uv = atlas.uv_map
+    for wall, own in (("cherry_wall_sign", "cherry_sign"), ("oak_wall_hanging_sign", "oak_hanging_sign")):
+        expected = uv.get(own, uv["cherry_planks" if wall.startswith("cherry") else "oak_planks"])
+        assert atlas.get_uv(f"minecraft:{wall}[facing=east]", "north") == expected, wall
+
+
 def test_atlas_derived_blocks_use_material_texture():
     atlas = SchematicAtlas()
     uv = atlas.uv_map
