@@ -233,10 +233,12 @@ SLIDES: tuple[Slide, ...] = (
             right(
                 "Câmera e transformações",
                 _f("p_clip = P·V·M·p_local", "M = T·R·S"),
-                _b("Isométrica: yaw 45°, pitch 35,264°; projeção ortográfica ou perspectiva",
-                   "Pan move o alvo (translação); zoom muda o ortho_size (escala)",
-                   "Q/E giram o tabuleiro 90° com interpolação suave",
-                   "Frustum culling: o chunk fora da visão nem é desenhado"),
+                _b("**Projeção ortográfica e perspectiva** — a cena alterna as duas · *Aula 18*",
+                   "**Look-at** — isométrica: yaw 45°, pitch 35,264° (arctan 1/√2) · *Aula 19*",
+                   "**Translação, escala e rotação** — pan, zoom e Q/E · *Aulas 9 a 12*",
+                   "**Composição de matrizes** — o giro é em volta do alvo, não da origem · *Aula 14*",
+                   "**Interpolação** — Q/E giram 90° de forma suave",
+                   "**Frustum culling** — chunk fora da visão não é desenhado · *Assarsson e Möller, 2000*"),
                 cg("Projeção ortográfica", "Perspectiva", "Look-at", "Rotação", "Translação",
                    "Escala", "Interpolação", "Frustum culling"),
             ),
@@ -248,10 +250,12 @@ SLIDES: tuple[Slide, ...] = (
         (
             right("Iluminação e sombras",
                    _f("C_final = (C_amb + d·C_luz) ⊙ (C_textura ⊙ C_base)"),
-                   _b("Luz ambiente + luz direcional do sol (Half-Lambert)",
-                      "A hora do dia move o sol e muda a cor da luz (/mestre)",
-                      "Sombras do terreno: raios até o sol numa textura 3D dos blocos, com penumbra (slide seguinte)",
-                      "Sombra dos personagens: mapa de sombra visto do sol"),
+                   _b("**Modelo de iluminação** — ambiente + difusa nos blocos (sem especular) · *Aula 26, Phong*",
+                      "**Half-Lambert** — difusa suavizada · *Mitchell et al., Valve, 2006*",
+                      "**Luz direcional (w = 0)** — o sol; a hora do dia move e muda a cor · *Aula 26*",
+                      "**Ray marching** — sombra do terreno, com penumbra (slide seguinte)",
+                      "**Shadow mapping** — sombra dos personagens vista do sol; dobra no degrau e sobe na "
+                      "parede (a sombra planar da aula só cai no plano) · *Williams, 1978*"),
                    cg("Iluminação difusa", "Luz direcional", "Ray marching", "Shadow mapping",
                       "Textura 3D"),
                    _t("No painel do /mestre, à esquerda: arraste a hora do dia e veja o sol, a cor da luz e as "
@@ -264,10 +268,13 @@ SLIDES: tuple[Slide, ...] = (
         (
             right(
                 "Sombra do sol: raios e penumbra",
-                _b("Cada pixel lança raios até o sol pela grade de voxels (DDA), contra uma textura 3D dos blocos",
-                   "Atalhos: o mapa de horizonte por quadrante e a distância até o vazio pulam o ar livre",
-                   "Penumbra: um cone de 12 raios borrados e 6 nítidos, girado a cada pixel",
-                   "Perto do bloco vale a borda nítida, em degraus de pixel; longe dele, a borrada, lisa"),
+                _b("**DDA de voxels** — raio do pixel até o sol, bloco a bloco, numa textura 3D · "
+                   "*Amanatides e Woo, 1987*; parente do traçado de reta da *Aula 5*",
+                   "**Luz de área por amostragem** — cone de 12 raios borrados e 6 nítidos · "
+                   "*Aula 26, sombra suave*; *Cook et al., 1984*",
+                   "**Interleaved gradient noise** — gira o cone a cada pixel · *Jimenez, 2014*",
+                   "**Mapa de horizonte e salto de espaço vazio** — pulam o ar livre",
+                   "Perto do bloco vale a borda nítida; longe dele, a borrada"),
                 cg("Ray marching", "Sombras suaves", "Textura 3D", "Amostragem estocástica"),
                 _t("Cada ajuste é uma opção em Configurações > Gráficos: qualidade, alcance do raio, "
                    "distância das sombras e o granulado da penumbra."),
@@ -281,10 +288,12 @@ SLIDES: tuple[Slide, ...] = (
             right(
                 "Sombra do sol: acumulação",
                 _b("O mundo quase não muda entre quadros: refazer 18 raios por pixel a cada um é desperdício",
-                   "O pixel guarda a sombra numa textura; no quadro seguinte o mesmo ponto é achado pela "
-                   "matriz do quadro anterior",
-                   "Só 5 raios novos entram na média (~16 quadros); sem histórico, traça o cone inteiro",
-                   "Pré-passada de profundidade: só o fragmento da frente paga os raios"),
+                   "**Reprojeção temporal** — acha o mesmo ponto no quadro anterior pela matriz P·V antiga · "
+                   "*Nehab et al., 2007*",
+                   "**Acúmulo de amostras** — 5 raios novos por quadro, média de ~16 quadros",
+                   "**Framebuffer próprio** — guarda o histórico da sombra numa textura",
+                   "**Pré-passada de profundidade (Z-buffer)** — só o fragmento da frente paga os raios · "
+                   "*Catmull, 1974*"),
                 cg("Reprojeção temporal", "Acúmulo de amostras", "Framebuffer próprio", "Z-buffer"),
                 _t("Na taiga, numa RTX 3050: de 24,6 para 10 ms na passada de cor (40 para 95 fps), com a "
                    "imagem praticamente igual. A sombra acompanha o sol e os blocos em ~1/4 de segundo."),
@@ -297,11 +306,13 @@ SLIDES: tuple[Slide, ...] = (
         (
             right(
                 "Água e névoa",
-                _b("Água translúcida com ondas na normal, reflexo do céu e Fresnel",
-                   "Névoa de distância e névoa de guerra em nuvens de blocos que se desfazem",
-                   "Névoa na borda: o fim dos chunks carregados some numa bruma da cor do fundo",
-                   "Neblina do mestre: marcha no volume rente ao chão, mais densa junto da água e das "
-                   "árvores, com feixes de luz entre os troncos"),
+                _b("**Ondas na normal + reflexo do céu** — a superfície da água · *Aula 27, lago*",
+                   "**Fresnel** — reflete mais o céu em ângulo raso · *Aula 27*; *Schlick, 1994*",
+                   "**Brilho especular** — o sol refletido nas ondas · *Aula 26, Phong*",
+                   "**Transparência e blending (canal alfa)** — água translúcida · *Aula 7*",
+                   "**Névoa** — de distância, de guerra (nuvens de blocos) e na borda dos chunks",
+                   "**Ray marching volumétrico** — neblina do mestre rente ao chão, com feixes de luz "
+                   "entre os troncos"),
                 cg("Transparência e blending", "Reflexão", "Fresnel", "Névoa", "Ray marching", "Animação"),
                 _t("No painel do /mestre: a névoa de guerra (explorado ou em volta) e as cenas prontas."),
             ),
@@ -314,10 +325,10 @@ SLIDES: tuple[Slide, ...] = (
             side(
                 "r",
                 "Câmera dentro dos cômodos",
-                _b("O jogo acha o espaço fechado em volta do personagem (inundação do ar coberto)",
-                   "A máscara vai à GPU como textura 3D",
-                   "O que tapa a vista (teto, andar de cima, terra) some com dither",
-                   "O lado de fora escurece; a transição é suave"),
+                _b("**Flood fill** — acha o ar coberto em volta do personagem",
+                   "**Textura 3D** — a máscara do cômodo vai à GPU",
+                   "**Cutaway + dither de Bayer 4×4** — teto, andar de cima e terra somem · *Bayer, 1973*",
+                   "**Interpolação** — o lado de fora escurece de forma suave"),
                 cg("Textura 3D", "Dither", "Recorte (cutaway)", "Interpolação"),
                 Block("places", ("Sala de teste (3 andares)", "Caverna do terreno", "Casa medieval")),
                 _t("→ leva ao próximo lugar."),
