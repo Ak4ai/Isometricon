@@ -21,7 +21,8 @@ FONT_CANDIDATES = (
     "C:/Windows/Fonts/segoeui.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
 )
-BOLD_CANDIDATES = ("C:/Windows/Fonts/cambriab.ttf",)
+BOLD_CANDIDATES = ("C:/Windows/Fonts/cambriab.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf")
+ITALIC_CANDIDATES = ("C:/Windows/Fonts/cambriai.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf")
 MONO_CANDIDATES = ("C:/Windows/Fonts/consola.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
 
 INK = (46, 58, 52)
@@ -36,9 +37,10 @@ Live = tuple[tuple[str, tuple[int, int]], ...]   # ("faces", (desenhadas, possí
 
 
 @lru_cache(maxsize=64)
-def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+def _font(size: int, bold: bool = False, italic: bool = False) -> ImageFont.ImageFont:
     size = max(int(size), 8)
-    for path in (BOLD_CANDIDATES if bold else ()) + FONT_CANDIDATES:
+    styled = BOLD_CANDIDATES if bold else ITALIC_CANDIDATES if italic else ()
+    for path in styled + FONT_CANDIDATES:
         if os.path.isfile(path):
             try:
                 return ImageFont.truetype(path, size)
@@ -72,6 +74,38 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, width: float) -> list[str]
     return lines
 
 
+def styled_words(text: str) -> list[tuple[str, str]]:
+    """As palavras da linha com o estilo de cada uma: ``**negrito**`` (o método), ``*itálico*`` (a referência, de onde
+    o método vem: a aula ou a literatura) e o resto normal. Os asteriscos não aparecem no cartão."""
+    words: list[tuple[str, str]] = []
+    style, i, word = "regular", 0, ""
+
+    def flush() -> None:
+        nonlocal word
+        if word:
+            words.append((word, style))
+            word = ""
+
+    while i < len(text):
+        if text.startswith("**", i):
+            flush()
+            style = "regular" if style == "bold" else "bold"
+            i += 2
+        elif text[i] == "*":
+            flush()
+            style = "regular" if style == "italic" else "italic"
+            i += 1
+        elif text[i] == " ":
+            flush()
+            words.append((" ", style))
+            i += 1
+        else:
+            word += text[i]
+            i += 1
+    flush()
+    return words
+
+
 def _number(value: int) -> str:
     return f"{value:,}".replace(",", ".")
 
@@ -98,6 +132,42 @@ class _Layout:
                     draw.text((x, y), part, font=font, fill=color)
                 y += int(font.size * 1.28)
 
+        def rich_line(line: str, color, indent: int = 0) -> None:
+            """Uma linha com trechos em negrito e itálico (ver ``styled_words``), quebrada por palavra."""
+            nonlocal y
+            fonts = {"regular": regular, "bold": _font(body, bold=True), "italic": _font(body, italic=True)}
+            colors = {"regular": color, "bold": color, "italic": MUTED}
+            chunks: list[list[tuple[str, str]]] = [[]]   # palavras inteiras, cada uma com um ou mais estilos
+            for text, style in styled_words(line):
+                if text == " ":
+                    chunks.append([])
+                else:
+                    chunks[-1].append((text, style))
+            chunks = [c for c in chunks if c]
+            space = probe.textlength(" ", font=regular)
+
+            def chunk_w(chunk) -> float:
+                return sum(probe.textlength(t, font=fonts[s]) for t, s in chunk)
+
+            rows, current, current_w = [], [], 0.0
+            for chunk in chunks:
+                w = chunk_w(chunk)
+                if current and current_w + space + w > width - indent:
+                    rows.append((current, current_w))
+                    current, current_w = [], 0.0
+                current_w = w if not current else current_w + space + w
+                current.append(chunk)
+            rows.append((current, current_w))
+            for row, row_w in rows:
+                if draw is not None:
+                    x = x0 + (width - row_w) / 2 if self.center else x0 + indent
+                    for k, chunk in enumerate(row):
+                        x += space if k else 0
+                        for t, s in chunk:
+                            draw.text((x, y), t, font=fonts[s], fill=colors[s])
+                            x += probe.textlength(t, font=fonts[s])
+                y += int(regular.size * 1.28)
+
         if self.panel.title:
             size = int(body * (1.7 if self.panel.big else 1.25))
             text_line(self.panel.title, _font(size, bold=True), INK if self.panel.big else ACCENT)
@@ -114,14 +184,16 @@ class _Layout:
                 text_line(block.content[0], bold, ACCENT)
             elif kind == "text":
                 for line in block.content:
-                    text_line(line, regular, INK if not self.center else MUTED)
+                    color = INK if not self.center else MUTED
+                    rich_line(line, color) if "*" in line else text_line(line, regular, color)
             elif kind == "bullets":
                 for line in block.content:
                     if draw is not None and not self.center:
                         r = max(body // 7, 2)
                         cy = y + regular.size * 0.62
                         draw.ellipse((x0 + 4, cy - r, x0 + 4 + 2 * r, cy + r), fill=ACCENT)
-                    text_line(line, regular, INK, indent=0 if self.center else body)
+                    indent = 0 if self.center else body
+                    rich_line(line, INK, indent) if "*" in line else text_line(line, regular, INK, indent)
             elif kind == "formula":
                 for line in block.content:
                     size = int(body * 1.15)
@@ -196,12 +268,16 @@ class _Layout:
         h, gap = int(font.size * 1.9), int(self.body * 0.4)
         for i, name in enumerate(places):
             here = i == self.step
-            label = ("▶ " if here else "") + name
             if draw is not None:
                 draw.rounded_rectangle((x0, y, x0 + self.width, y + h), 8,
                                        fill=(122, 156, 112) if here else (226, 216, 190),
                                        outline=(160, 140, 96), width=2)
-                draw.text((x0 + self.body * 0.7, y + (h - font.size) / 2 - 1), label, font=font,
+                left = x0 + self.body * 0.7
+                if here:   # a seta desenhada: a fonte em negrito não tem o "▶" e mostrava um quadrado
+                    s, cy = font.size * 0.32, y + h / 2
+                    draw.polygon([(left, cy - s), (left, cy + s), (left + 1.6 * s, cy)], fill=(255, 255, 255))
+                    left += 1.6 * s + self.body * 0.4
+                draw.text((left, y + (h - font.size) / 2 - 1), name, font=font,
                           fill=(255, 255, 255) if here else (130, 120, 100))
             y += h + gap
         return y

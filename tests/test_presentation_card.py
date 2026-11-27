@@ -135,3 +135,29 @@ def test_trecho_de_codigo_cabe_no_cartao():
     slide = _slide("Blocos: modelos e sombras")
     x, y, im = card.render_slide(slide, 0, *FULL_HD)[0]
     assert x + im.width - card.SHADOW <= FULL_HD[0]
+
+
+def test_negrito_e_referencia_nos_topicos():
+    words = card.styled_words("**Fresnel** — reflete mais · *Schlick, 1994*")
+    assert ("Fresnel", "bold") in words and ("reflete", "regular") in words
+    assert ("Schlick,", "italic") in words and ("1994", "italic") in words
+    assert not any("*" in text for text, _ in words)      # os asteriscos não vão para o cartão
+    assert card.styled_words("sem marcação") == [("sem", "regular"), (" ", "regular"), ("marcação", "regular")]
+
+
+def test_topico_com_negrito_e_desenhado_sem_asteriscos():
+    # a mesma linha com e sem marcação ocupa quase a mesma largura: os asteriscos não são desenhados
+    plain = Panel((0.0, 0.0, 0.5, 0.9), (Block("bullets", ("Fresnel — reflete mais · Schlick, 1994",)),))
+    marked = Panel((0.0, 0.0, 0.5, 0.9), (Block("bullets", ("**Fresnel** — reflete mais · *Schlick, 1994*",)),))
+    a = card.render_panel(plain, 0, *FULL_HD)[2]
+    b = card.render_panel(marked, 0, *FULL_HD)[2]
+    assert a.size == b.size
+
+
+def test_slides_8_a_13_citam_o_metodo_em_negrito():
+    for slide in SLIDES[7:13]:
+        bullets = [line for p in slide.panels for blk in p.blocks if blk.kind == "bullets" for line in blk.content]
+        marked = [line for line in bullets if line.startswith("**")]
+        assert len(marked) >= 4, slide.title
+        for line in marked:
+            assert line.count("**") == 2 and line.count("*") % 2 == 0, line   # marcação fechada
