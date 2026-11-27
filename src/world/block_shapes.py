@@ -517,8 +517,8 @@ _FULL_LANTERNS = ("sea_lantern", "jack_o_lantern")
 TURNS_FROM_SOUTH = {"south": 0, "west": 1, "north": 2, "east": 3}
 
 
-# Os ladrilhos do baú (``chest_<variante>_<tipo>_<peça>.png``) saem de ``textures/entity/chest`` do jogo pelo
-# ``scripts/make_chest_tiles.py`` e ficam fora do git (arte da Mojang); sem eles o baú volta à caixa de tábuas.
+# Os ladrilhos do baú (``chest_<variante>_<tipo>_<peça>.png``) saem de ``textures/entity/chest`` do pacote Trailers
+# Vision pelo ``scripts/make_chest_tiles.py`` e ficam no git; sem eles o baú volta à caixa de tábuas.
 _CHEST_TILES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                                 "assets", "textures", "blocks")
 

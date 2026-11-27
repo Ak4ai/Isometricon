@@ -1,0 +1,4 @@
+Texturas de bloco: Trailers Vision - Java 26.3 (pacote de texturas open source), copia de 11/11/2026.
+Substitui o Bare Bones, que nao e mais usado no jogo.
+O Bare Bones original continua em backup/textures_blocks_barebones (fora do git).
+Peças do baú (chest_*.png): recortadas de textures/entity/chest do mesmo pacote por scripts/make_chest_tiles.py.
